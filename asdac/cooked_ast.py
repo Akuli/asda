@@ -22,7 +22,7 @@ CallFunction = _astclass('CallFunction', ['function', 'args'])
 class Type:
 
     def __repr__(self):
-        return '<chef type %r>' % self.name
+        return '<cooked ast type %r>' % self.name
 
 
 class BuiltinType(Type):
