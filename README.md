@@ -55,7 +55,15 @@ interpreter to work like I want it to work.
 
 I thought about the name of the programming language for a while. My previous
 programming language was called Ö (that's not O, that's Ö), and even though
-there's an Ö key on the keyboard (next to the Ä key), some people found that
-hard to type for some reason. On the other hand, it's very easy to type asda. I
-also searched for "asda programming language" and I didn't find anything
-relevant.
+there's an Ö key on the keyboard right next to the Ä key, some people found Ö
+difficult to type for some reason. On the other hand, it's very easy to type
+asda. I also searched for "asda programming language" and I didn't find
+anything relevant.
+
+### Is there any documentation?
+
+Not yet, but there's [an examples directory](examples/).
+
+### Are there any tests?
+
+Not yet.
