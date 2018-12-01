@@ -17,7 +17,7 @@ Here `let greeting = "Hello World!"` creates a variable of type `Str`, because
 without a variable. The compiler checks the types at compile time, so this code
 doesn't compile (but the compiler produces a good error message):
 
-```
+```js
 print(123)
 ```
 
