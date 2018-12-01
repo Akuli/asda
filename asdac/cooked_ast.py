@@ -147,8 +147,6 @@ class _Chef:
                              % (varname, chef.local_vars[varname].name,
                                 cooked_value.type.name)),
                             raw_statement.location)
-                    print(chef.local_vars[varname])
-                    print(cooked_value.type)
                     return SetVar(
                         raw_statement.location, None,
                         varname, chef.level, cooked_value)
