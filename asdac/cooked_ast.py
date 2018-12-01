@@ -139,13 +139,23 @@ class _Chef:
 
             while True:
                 if varname in chef.local_vars:
+                    if cooked_value.type != chef.local_vars[varname]:
+                        # TODO: is it possible to set the location to only the
+                        # stuff on the right side of the = sign?
+                        raise common.CompileError(
+                            ("'%s' is of type %s, can't assign %s to it"
+                             % (varname, chef.local_vars[varname].name,
+                                cooked_value.type.name)),
+                            raw_statement.location)
+                    print(chef.local_vars[varname])
+                    print(cooked_value.type)
                     return SetVar(
                         raw_statement.location, None,
                         varname, chef.level, cooked_value)
                 if chef.parent_chef is None:
                     raise common.CompileError(
                         "variable not found: %s" % varname,
-                        raw_expression.location)
+                        raw_statement.location)
 
                 chef = chef.parent_chef
 
