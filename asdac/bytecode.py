@@ -1,6 +1,6 @@
 import functools
 
-from . import common, chef
+from . import common, cooked_ast
 
 
 CREATE_FUNCTION = b'f'
@@ -58,16 +58,16 @@ class _BytecodeWriter:
         self.write_uint8(len(call.args))
 
     def do_expression(self, expression):
-        if isinstance(expression, chef.StrConstant):
+        if isinstance(expression, cooked_ast.StrConstant):
             self._write(STR_CONSTANT)
             self.write_string(expression.python_string)
-        elif isinstance(expression, chef.IntConstant):
+        elif isinstance(expression, cooked_ast.IntConstant):
             self._write(INT_CONSTANT)
             # TODO: how about bignums and negatives and stuff?
             self.write_uint64(expression.python_int)
-        elif isinstance(expression, chef.CallFunction):
+        elif isinstance(expression, cooked_ast.CallFunction):
             self.do_function_call(expression)
-        elif isinstance(expression, chef.LookupVar):
+        elif isinstance(expression, cooked_ast.LookupVar):
             self._write(LOOKUP_VAR)
             self.write_uint8(expression.level)
 
@@ -88,21 +88,21 @@ class _BytecodeWriter:
         assert not self.local_vars, "cannot call do_body() more than once"
 
         for statement in statements:
-            if isinstance(statement, chef.CreateLocalVar):
-                assert statement.name not in self.local_vars
-                self.local_vars[statement.name] = len(self.local_vars)
+            if isinstance(statement, cooked_ast.CreateLocalVar):
+                assert statement.varname not in self.local_vars
+                self.local_vars[statement.varname] = len(self.local_vars)
 
         self.write_uint16(len(self.local_vars))
 
         for statement in statements:
-            if isinstance(statement, chef.CreateLocalVar):
+            if isinstance(statement, cooked_ast.CreateLocalVar):
                 self.do_expression(statement.initial_value)
                 self._write(SET_VAR)
-                self.write_uint16(self.local_vars[statement.name])
-            elif isinstance(statement, chef.CallFunction):
+                self.write_uint16(self.local_vars[statement.varname])
+            elif isinstance(statement, cooked_ast.CallFunction):
                 self.do_function_call(statement)
                 self._write(POP_ONE)
-            elif isinstance(statement, chef.SetVar):
+            elif isinstance(statement, cooked_ast.SetVar):
                 # FIXME: nonlocal variables???
                 self.do_expression(statement.value)
                 self._write(SET_VAR)

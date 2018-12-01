@@ -7,14 +7,14 @@ import textwrap
 
 import colorama
 
-from . import bytecode, chef, common, raw_ast, tokenizer
+from . import bytecode, common, cooked_ast, raw_ast, tokenizer
 
 
 def source2bytecode(infile, outfile):
     assert isinstance(infile.name, str)     # can be e.g. '<stdin>'
     tokens = tokenizer.tokenize(infile.name, infile.read())
     raw = raw_ast.parse(tokens)
-    cooked = chef.cook(raw)
+    cooked = cooked_ast.cook(raw)
 
     # if any of the steps above fail, raise an exception here and leave the
     # output file untouched

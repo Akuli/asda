@@ -1,4 +1,3 @@
-# TODO: rename this file to cooked_ast.py
 import abc
 import collections
 
@@ -15,7 +14,7 @@ IntConstant = _astclass('IntConstant', ['python_int'])
 SetVar = _astclass('SetVar', ['varname', 'level', 'value'])
 LookupVar = _astclass('LookupVar', ['varname', 'level'])
 CreateFunction = _astclass('CreateFunction', ['name', 'body'])
-CreateLocalVar = _astclass('CreateLocalVar', ['name', 'initial_value'])
+CreateLocalVar = _astclass('CreateLocalVar', ['varname', 'initial_value'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
 
 
