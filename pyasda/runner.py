@@ -11,6 +11,14 @@ def _create_subscope(parent_scope, how_many_local_vars):
                   parent_scope.parent_scopes + [parent_scope])
 
 
+def _create_function_object(code, definition_scope):
+    def python_func():
+        scope = _create_subscope(definition_scope, code.how_many_local_vars)
+        _run(code, scope)
+
+    return objects.Function([], None, python_func)
+
+
 def _run(code, scope):
     stack = []
     for opcode, *args in code.opcodes:
@@ -19,8 +27,12 @@ def _run(code, scope):
         # TODO: two kinds of function calls, void and returning?
         elif opcode == bytecode_reader.CALL_FUNCTION:
             [how_many_args] = args
-            call_args = stack[-how_many_args:]
-            del stack[-how_many_args:]
+            # python's negative slices are dumb
+            if how_many_args == 0:
+                call_args = []
+            else:
+                call_args = stack[-how_many_args:]
+                del stack[-how_many_args:]
             stack[-1] = stack[-1].run(call_args)
         elif opcode == bytecode_reader.LOOKUP_VAR:
             level, index = args
@@ -34,8 +46,13 @@ def _run(code, scope):
             scope.local_vars[index] = stack.pop()
         elif opcode == bytecode_reader.POP_ONE:
             del stack[-1]
+        elif opcode == bytecode_reader.CREATE_FUNCTION:
+            name, body = args
+            stack.append(_create_function_object(body, scope))
         else:
-            assert False, magic
+            assert False, opcode
+
+    assert not stack
 
 
 def run_file(code):

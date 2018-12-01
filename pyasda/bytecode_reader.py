@@ -68,6 +68,10 @@ class _BytecodeReader:
                 opcode.append((SET_VAR, index))
             elif magic == POP_ONE:
                 opcode.append((POP_ONE,))
+            elif magic == CREATE_FUNCTION:
+                name = self.read_string()
+                body = self.read_body()
+                opcode.append((CREATE_FUNCTION, name, body))
             else:
                 assert False, magic
 

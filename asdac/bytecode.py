@@ -67,6 +67,10 @@ class _BytecodeWriter:
             self.write_uint64(expression.python_int)
         elif isinstance(expression, cooked_ast.CallFunction):
             self.do_function_call(expression)
+        elif isinstance(expression, cooked_ast.CreateFunction):
+            self._write(CREATE_FUNCTION)
+            self.write_string(expression.name)
+            _BytecodeWriter(self._write, self).do_body(expression.body)
         elif isinstance(expression, cooked_ast.LookupVar):
             self._write(LOOKUP_VAR)
             self.write_uint8(expression.level)
