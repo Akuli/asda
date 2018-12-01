@@ -9,16 +9,19 @@ SET_VAR = b'V'
 STR_CONSTANT = b'"'
 INT_CONSTANT = b'1'
 CALL_FUNCTION = b'('
+POP_ONE = b'P'
 
 
 class _BytecodeReader:
 
     def __init__(self, read_callback):
-        self._read_callback = read_callback
+        self._maybe_read = read_callback    # no error on eof, returns b''
         self.local_vars = []
+        self.stack = []
 
+    # errors on eof
     def _read(self, size):
-        result = self._read_callback(size)
+        result = self._maybe_read(size)
         assert len(result) == size
         return result
 
@@ -46,38 +49,37 @@ class _BytecodeReader:
             self.read_string()      # the type
         self.local_vars[:] = [None] * how_many_vars
 
-        for junk in range(self.read_uint16()):
-            magic = self._read(1)
-            if magic == SET_VAR:
-                index = self.read_uint16()
-                self.local_vars[index] = self.read_expression()
+        while True:
+            magic = self._maybe_read(1)
+            if not magic:
+                break
+
+            if magic == STR_CONSTANT:
+                self.stack.append(objects.AsdaString(self.read_string()))
             elif magic == CALL_FUNCTION:
-                self.read_function_call()
+                how_many_args = self.read_uint8()
+                args = self.stack[-how_many_args:]
+                del self.stack[-how_many_args:]
+                func = self.stack.pop()
+                self.stack.append(func.run(args))
+            elif magic == LOOKUP_VAR:
+                level = self.read_uint8()
+                index = self.read_uint16()
+                if level == 0:
+                    self.stack.append(objects.BUILTINS[index])
+                elif level == 1:
+                    self.stack.append(self.local_vars[index])
+                else:
+                    assert False
+            elif magic == SET_VAR:
+                index = self.read_uint16()
+                self.local_vars[index] = self.stack.pop()
+            elif magic == POP_ONE:
+                self.stack.pop()
             else:
                 assert False, magic
 
-    def read_function_call(self):
-        func = self.read_expression()
-        how_many_args = self.read_uint8()
-        args = [self.read_expression() for junk in range(how_many_args)]
-        return func.run(args)
-
-    def read_expression(self):
-        magic = self._read(1)
-        if magic == STR_CONSTANT:
-            return objects.AsdaString(self.read_string())
-        elif magic == CALL_FUNCTION:
-            return self.read_function_call()
-        elif magic == LOOKUP_VAR:
-            level = self.read_uint8()
-            index = self.read_uint16()
-            if level == 0:
-                return objects.BUILTINS[index]
-            if level == 1:
-                return self.local_vars[index]
-            assert False
-        else:
-            assert False, magic
+        assert not self.stack
 
 
 def read_bytecode(read_callback):

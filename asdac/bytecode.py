@@ -9,6 +9,7 @@ SET_VAR = b'V'
 STR_CONSTANT = b'"'
 INT_CONSTANT = b'1'
 CALL_FUNCTION = b'('
+POP_ONE = b'P'
 
 
 class _BytecodeWriter:
@@ -49,11 +50,11 @@ class _BytecodeWriter:
         self.write_string(type_.name)
 
     def do_function_call(self, call):
-        self._write(CALL_FUNCTION)
         self.do_expression(call.function)
-        self.write_uint8(len(call.args))
         for arg in call.args:
             self.do_expression(arg)
+        self._write(CALL_FUNCTION)
+        self.write_uint8(len(call.args))
 
     def do_expression(self, expression):
         if isinstance(expression, chef.StrConstant):
@@ -96,18 +97,18 @@ class _BytecodeWriter:
         for name in sorted(self.local_vars, key=self.local_vars.get):
             self.do_type(vartypes[name])
 
-        self.write_uint16(len(statements))
         for statement in statements:
             if isinstance(statement, chef.CreateLocalVar):
+                self.do_expression(statement.initial_value)
                 self._write(SET_VAR)
                 self.write_uint16(self.local_vars[statement.name])
-                self.do_expression(statement.initial_value)
             elif isinstance(statement, chef.CallFunction):
                 self.do_function_call(statement)
+                self._write(POP_ONE)
             elif isinstance(statement, chef.SetVar):
+                self.do_expression(statement.value)
                 self._write(SET_VAR)
                 self.write_uint16(self.local_vars[statement.varname])
-                self.do_expression(statement.value)
             else:
                 assert False, statement
 
