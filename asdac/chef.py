@@ -12,6 +12,7 @@ def _astclass(name, fields):
 
 StrConstant = _astclass('StrConstant', ['python_string'])
 IntConstant = _astclass('IntConstant', ['python_int'])
+SetVar = _astclass('SetVar', ['varname', 'level', 'value'])
 LookupVar = _astclass('LookupVar', ['varname', 'level'])
 CreateFunction = _astclass('CreateFunction', ['name', 'body'])
 CreateLocalVar = _astclass('CreateLocalVar', ['name', 'initial_value'])
@@ -131,6 +132,23 @@ class _Chef:
             self.local_vars[raw_statement.varname] = value.type
             return CreateLocalVar(raw_statement.location, None,
                                   raw_statement.varname, value)
+
+        if isinstance(raw_statement, raw_ast.SetVar):
+            cooked_value = self.cook_expression(raw_statement.value)
+            varname = raw_statement.varname
+            chef = self
+
+            while True:
+                if varname in chef.local_vars:
+                    return SetVar(
+                        raw_statement.location, None,
+                        varname, chef.level, cooked_value)
+                if chef.parent_chef is None:
+                    raise common.CompileError(
+                        "variable not found: %s" % varname,
+                        raw_expression.location)
+
+                chef = chef.parent_chef
 
         if isinstance(raw_statement, raw_ast.FuncCall):
             return self.cook_function_call(raw_statement)

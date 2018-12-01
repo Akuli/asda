@@ -13,6 +13,7 @@ def _astclass(name, fields):
 Integer = _astclass('Integer', ['python_int'])
 String = _astclass('String', ['python_string'])
 Let = _astclass('Let', ['varname', 'value'])
+SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['varname'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
@@ -23,6 +24,7 @@ If = _astclass('If', ['condition', 'if_body', 'else_body'])
 class _TokenIterator:
 
     def __init__(self, token_iterable):
+        # more_itertools.peekable is awesome
         self._iterator = more_itertools.peekable(token_iterable)
 
     def _check_token(self, token, kind, value):
@@ -32,10 +34,15 @@ class _TokenIterator:
         if kind is not None and token.kind != kind:
             raise error("expected %s, got %r" % (kind, token.value))
 
-    def coming_up(self, kind=None, value=None):
+    def coming_up(self, kind=None, value=None, *, how_soon=1):
+        head = self._iterator[:how_soon]
+        if len(head) < how_soon:
+            return False
+        assert len(head) == how_soon
+
         try:
-            self._check_token(self._iterator.peek(), kind, value)
-        except (StopIteration, common.CompileError):
+            self._check_token(head[-1], kind, value)
+        except common.CompileError:
             return False
         return True
 
@@ -45,11 +52,7 @@ class _TokenIterator:
         return result
 
     def eof(self):
-        try:
-            self._iterator.peek()
-            return False
-        except StopIteration:
-            return True
+        return (not self._iterator)
 
 
 class _Parser:
@@ -110,8 +113,8 @@ class _Parser:
         varname = self.tokens.next_token('id')
         self.tokens.next_token('op', '=')
         value = self.parse_expression()
-        semicolon = self.tokens.next_token('newline')
-        return Let(let.location + semicolon.location, varname.value, value)
+        self.tokens.next_token('newline')
+        return Let(let.location + value.location, varname.value, value)
 
     def parse_block(self):
         self.tokens.next_token('indent')
@@ -149,9 +152,21 @@ class _Parser:
         location = func.location + close_paren.location
         return FuncDefinition(location, name.value, body)
 
+    def parse_assignment(self):
+        name = self.tokens.next_token('id')
+        self.tokens.next_token('op', '=')
+        value = self.parse_expression()
+        self.tokens.next_token('newline')
+        return SetVar(name.location + value.location, name.value, value)
+
     def parse_statement(self):
         if self.tokens.coming_up('keyword', 'let'):
             return self.parse_let_statement()
+
+        if (
+          self.tokens.coming_up('id') and
+          self.tokens.coming_up('op', '=', how_soon=2)):
+            return self.parse_assignment()
 
         if self.tokens.coming_up('keyword', 'if'):
             return self.parse_if_statement()
@@ -163,8 +178,8 @@ class _Parser:
         result = self.parse_expression()
         if not isinstance(result, FuncCall):
             raise common.CompileError(
-                "expected a let, an if, a function definition or a function "
-                "call", result.location)
+                "expected a let, a variable assignment, an if, a function "
+                "definition or a function call", result.location)
         self.tokens.next_token('newline')
         return result
 

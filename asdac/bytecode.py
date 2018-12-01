@@ -104,6 +104,10 @@ class _BytecodeWriter:
                 self.do_expression(statement.initial_value)
             elif isinstance(statement, chef.CallFunction):
                 self.do_function_call(statement)
+            elif isinstance(statement, chef.SetVar):
+                self._write(SET_VAR)
+                self.write_uint16(self.local_vars[statement.varname])
+                self.do_expression(statement.value)
             else:
                 assert False, statement
 
