@@ -10,6 +10,7 @@ STR_CONSTANT = b'"'
 INT_CONSTANT = b'1'
 CALL_FUNCTION = b'('
 POP_ONE = b'P'
+END_OF_BODY = b'E'
 
 
 class _BytecodeWriter:
@@ -86,16 +87,12 @@ class _BytecodeWriter:
             "loop over it twice")
         assert not self.local_vars, "cannot call do_body() more than once"
 
-        vartypes = {}
         for statement in statements:
             if isinstance(statement, chef.CreateLocalVar):
                 assert statement.name not in self.local_vars
                 self.local_vars[statement.name] = len(self.local_vars)
-                vartypes[statement.name] = statement.initial_value.type
 
         self.write_uint16(len(self.local_vars))
-        for name in sorted(self.local_vars, key=self.local_vars.get):
-            self.do_type(vartypes[name])
 
         for statement in statements:
             if isinstance(statement, chef.CreateLocalVar):
@@ -106,11 +103,13 @@ class _BytecodeWriter:
                 self.do_function_call(statement)
                 self._write(POP_ONE)
             elif isinstance(statement, chef.SetVar):
+                # FIXME: nonlocal variables???
                 self.do_expression(statement.value)
                 self._write(SET_VAR)
                 self.write_uint16(self.local_vars[statement.varname])
             else:
                 assert False, statement
+        self._write(END_OF_BODY)
 
 
 def create_bytecode(cooked, write_callback):

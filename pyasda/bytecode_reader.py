@@ -1,3 +1,4 @@
+import collections
 import functools
 
 from . import objects
@@ -6,18 +7,20 @@ from . import objects
 CREATE_FUNCTION = b'f'
 LOOKUP_VAR = b'v'
 SET_VAR = b'V'
-STR_CONSTANT = b'"'
-INT_CONSTANT = b'1'
+STR_CONSTANT = b'"'     # only used in bytecode files
+INT_CONSTANT = b'1'     # only used in bytecode files
+CONSTANT = b'C'         # not used at all in bytecode files
 CALL_FUNCTION = b'('
 POP_ONE = b'P'
+END_OF_BODY = b'E'      # only used in bytecode files
+
+Code = collections.namedtuple('Code', ['how_many_local_vars', 'opcodes'])
 
 
 class _BytecodeReader:
 
     def __init__(self, read_callback):
         self._maybe_read = read_callback    # no error on eof, returns b''
-        self.local_vars = []
-        self.stack = []
 
     # errors on eof
     def _read(self, size):
@@ -42,44 +45,33 @@ class _BytecodeReader:
         utf8 = self._read(length)
         return utf8.decode('utf-8')
 
-    # TODO: don't run the code right away for defining functions and stuff
     def read_body(self):
-        how_many_vars = self.read_uint16()
-        for junk in range(how_many_vars):
-            self.read_string()      # the type
-        self.local_vars[:] = [None] * how_many_vars
+        how_many_local_vars = self.read_uint16()
+        opcode = []
 
         while True:
             magic = self._maybe_read(1)
-            if not magic:
+            if magic == END_OF_BODY:
                 break
 
             if magic == STR_CONSTANT:
-                self.stack.append(objects.AsdaString(self.read_string()))
+                string_object = objects.AsdaString(self.read_string())
+                opcode.append((CONSTANT, string_object))
             elif magic == CALL_FUNCTION:
-                how_many_args = self.read_uint8()
-                args = self.stack[-how_many_args:]
-                del self.stack[-how_many_args:]
-                func = self.stack.pop()
-                self.stack.append(func.run(args))
+                opcode.append((CALL_FUNCTION, self.read_uint8()))
             elif magic == LOOKUP_VAR:
                 level = self.read_uint8()
                 index = self.read_uint16()
-                if level == 0:
-                    self.stack.append(objects.BUILTINS[index])
-                elif level == 1:
-                    self.stack.append(self.local_vars[index])
-                else:
-                    assert False
+                opcode.append((LOOKUP_VAR, level, index))
             elif magic == SET_VAR:
                 index = self.read_uint16()
-                self.local_vars[index] = self.stack.pop()
+                opcode.append((SET_VAR, index))
             elif magic == POP_ONE:
-                self.stack.pop()
+                opcode.append((POP_ONE,))
             else:
                 assert False, magic
 
-        assert not self.stack
+        return Code(how_many_local_vars, opcode)
 
 
 def read_bytecode(read_callback):
@@ -88,7 +80,8 @@ def read_bytecode(read_callback):
         raise ValueError("doesn't look like a compiled asda file")
 
     reader = _BytecodeReader(read_callback)
-    reader.read_body()
+    result = reader.read_body()
 
     if read_callback(1) != b'':
         raise ValueError("junk at the end of the compiled file")
+    return result
