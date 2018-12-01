@@ -1,16 +1,14 @@
-import enum
 import functools
 
 from . import common, chef
 
 
-class _MagicCodes(enum.Enum):
-    CREATE_FUNCTION = b'f'
-    LOOKUP_VAR = b'v'
-    SET_VAR = b'V'
-    STR_CONSTANT = b'"'
-    INT_CONSTANT = b'1'
-    CALL_FUNCTION = b'('
+CREATE_FUNCTION = b'f'
+LOOKUP_VAR = b'v'
+SET_VAR = b'V'
+STR_CONSTANT = b'"'
+INT_CONSTANT = b'1'
+CALL_FUNCTION = b'('
 
 
 class _BytecodeWriter:
@@ -46,15 +44,12 @@ class _BytecodeWriter:
         self.write_uint32(len(utf8))
         self._write(utf8)
 
-    def write_magic(self, code: _MagicCodes):
-        self._write(code.value)
-
     def do_type(self, type_):
         # FIXME
         self.write_string(type_.name)
 
     def do_function_call(self, call):
-        self.write_magic(_MagicCodes.CALL_FUNCTION)
+        self._write(CALL_FUNCTION)
         self.do_expression(call.function)
         self.write_uint8(len(call.args))
         for arg in call.args:
@@ -62,16 +57,16 @@ class _BytecodeWriter:
 
     def do_expression(self, expression):
         if isinstance(expression, chef.StrConstant):
-            self.write_magic(_MagicCodes.STR_CONSTANT)
+            self._write(STR_CONSTANT)
             self.write_string(expression.python_string)
         elif isinstance(expression, chef.IntConstant):
-            self.write_magic(_MagicCodes.INT_CONSTANT)
+            self._write(INT_CONSTANT)
             # TODO: how about bignums and negatives and stuff?
             self.write_uint64(expression.python_int)
         elif isinstance(expression, chef.CallFunction):
             self.do_function_call(expression)
         elif isinstance(expression, chef.LookupVar):
-            self.write_magic(_MagicCodes.LOOKUP_VAR)
+            self._write(LOOKUP_VAR)
             self.write_uint8(expression.level)
 
             level_difference = self.level - expression.level
@@ -98,13 +93,13 @@ class _BytecodeWriter:
                 vartypes[statement.name] = statement.initial_value.type
 
         self.write_uint16(len(self.local_vars))
-        for name, index in self.local_vars.items():
+        for name in sorted(self.local_vars, key=self.local_vars.get):
             self.do_type(vartypes[name])
-            self.write_uint16(index)
 
+        self.write_uint16(len(statements))
         for statement in statements:
             if isinstance(statement, chef.CreateLocalVar):
-                self.write_magic(_MagicCodes.SET_VAR)
+                self._write(SET_VAR)
                 self.write_uint16(self.local_vars[statement.name])
                 self.do_expression(statement.initial_value)
             elif isinstance(statement, chef.CallFunction):

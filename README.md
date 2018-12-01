@@ -7,7 +7,7 @@ This is my attempt at making a statically typed programming language.
 
 Create a file called `hello.asda` with this content:
 
-```
+```js
 let greeting = "Hello World!"
 print(greeting)
 ```
@@ -36,8 +36,17 @@ $ python3 -m pip install --user -r requirements.txt
 $ python3 -m asdac hello.asda
 ```
 
-This will create a bytecode file to `asda-compiled/hello.asdac`. Unfortunately
-I haven't made an interpreter to run those files yet.
+This will create a bytecode file to `asda-compiled/hello.asdac`. Run it with
+`pyasda`:
+
+```
+$ python3 -m pyasda asda-compiled/hello.asdac
+Hello World!
+```
+
+`pyasda` is a "temporary" interpreter for the compiled asda files. I'm planning
+to write an interpreter in C later, but first I want to get the python
+interpreter to work like I want it to work.
 
 
 ## FAQ
