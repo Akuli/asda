@@ -17,7 +17,7 @@ SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['varname'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
-FuncDefinition = _astclass('FuncDefinition', ['funcname', 'body'])
+FuncDefinition = _astclass('FuncDefinition', ['funcname', 'args', 'body'])
 If = _astclass('If', ['condition', 'if_body', 'else_body'])
 
 
@@ -88,7 +88,7 @@ class _Parser:
             elif self.tokens.coming_up('op', '('):
                 # function call
                 self.tokens.next_token('op', '(')
-                args = self.parse_commasep_expression_list()
+                args = self.parse_commasep_list(self.parse_expression)
                 last_paren = self.tokens.next_token('op', ')')
                 result = FuncCall(first_token.location + last_paren.location,
                                   result, args)
@@ -97,14 +97,14 @@ class _Parser:
 
         return result
 
-    def parse_commasep_expression_list(self):
+    def parse_commasep_list(self, parse_callback):
         if not self.expression_coming_up():
             return []
 
-        result = [self.parse_expression()]
+        result = [parse_callback()]
         while self.tokens.coming_up('op', ','):
             self.tokens.next_token('op', ',')
-            result.append(self.parse_expression())
+            result.append(parse_callback())
 
         return result
 
@@ -139,18 +139,25 @@ class _Parser:
 
         return If(condition, if_body, else_body)
 
+    def parse_arg_spec(self):
+        # TODO: update this when not all type names are id tokens
+        typename = self.tokens.next_token('id')
+        varname = self.tokens.next_token('id')
+        return (typename.value, typename.location,
+                varname.value, varname.location)
+
     def parse_func_definition(self):
         func = self.tokens.next_token('keyword', 'func')
         name = self.tokens.next_token('id')
         self.tokens.next_token('op', '(')
-        # TODO: arguments
+        args = self.parse_commasep_list(self.parse_arg_spec)
         close_paren = self.tokens.next_token('op', ')')
         body = _Parser(self.tokens).parse_block()
 
         # the location of a function definition is just the first line, because
         # the body can get quite long
         location = func.location + close_paren.location
-        return FuncDefinition(location, name.value, body)
+        return FuncDefinition(location, name.value, args, body)
 
     def parse_assignment(self):
         name = self.tokens.next_token('id')

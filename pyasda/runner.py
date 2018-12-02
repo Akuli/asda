@@ -12,11 +12,13 @@ def _create_subscope(parent_scope, how_many_local_vars):
 
 
 def _create_function_object(code, definition_scope):
-    def python_func():
+    def python_func(*args):
         scope = _create_subscope(definition_scope, code.how_many_local_vars)
+        for index, arg in enumerate(args):
+            scope.local_vars[index] = arg
         _run(code, scope)
 
-    return objects.Function([], None, python_func)
+    return objects.Function(python_func)
 
 
 def _run(code, scope):

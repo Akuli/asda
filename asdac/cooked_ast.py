@@ -1,4 +1,3 @@
-import abc
 import collections
 
 from . import raw_ast, common
@@ -13,7 +12,7 @@ StrConstant = _astclass('StrConstant', ['python_string'])
 IntConstant = _astclass('IntConstant', ['python_int'])
 SetVar = _astclass('SetVar', ['varname', 'level', 'value'])
 LookupVar = _astclass('LookupVar', ['varname', 'level'])
-CreateFunction = _astclass('CreateFunction', ['name', 'body'])
+CreateFunction = _astclass('CreateFunction', ['name', 'args', 'body'])
 CreateLocalVar = _astclass('CreateLocalVar', ['varname', 'initial_value'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
 
@@ -40,8 +39,8 @@ TYPES = {
 
 class FunctionType(Type):
 
-    def __init__(self, name, *argtypes, returntype=None):
-        self.argtypes = argtypes
+    def __init__(self, name, argtypes=(), returntype=None):
+        self.argtypes = list(argtypes)
         self.returntype = returntype    # None for void functions
 
         self.name = '%s(%s)' % (
@@ -73,7 +72,7 @@ class _Chef:
                 function.location)
 
         args = [self.cook_expression(arg) for arg in raw_func_call.args]
-        if tuple(arg.type for arg in args) != function.type.argtypes:
+        if [arg.type for arg in args] != function.type.argtypes:
             if args:
                 message_end = "arguments of types: " + ', '.join(
                     arg.type.name for arg in args)
@@ -85,6 +84,15 @@ class _Chef:
 
         return CallFunction(raw_func_call.location, function.type.returntype,
                             function, args)
+
+    def get_chef_for_varname(self, varname):
+        chef = self
+        while True:
+            if varname in chef.local_vars:
+                return chef
+            if chef.parent_chef is None:
+                return None
+            chef = chef.parent_chef
 
     def cook_expression(self, raw_expression):
         if isinstance(raw_expression, raw_ast.String):
@@ -104,25 +112,21 @@ class _Chef:
             return call
 
         if isinstance(raw_expression, raw_ast.GetVar):
-            varname = raw_expression.varname
-            chef = self
-
-            while True:
-                if varname in chef.local_vars:
-                    return LookupVar(
-                        raw_expression.location, chef.local_vars[varname],
-                        varname, chef.level)
-                if chef.parent_chef is None:
-                    raise common.CompileError(
-                        "variable not found: %s" % varname,
-                        raw_expression.location)
-
-                chef = chef.parent_chef
+            chef = self.get_chef_for_varname(raw_expression.varname)
+            if chef is None:
+                raise common.CompileError(
+                   "variable not found: %s" % raw_expression.varname,
+                   raw_expression.location)
+            return LookupVar(
+                raw_expression.location,
+                chef.local_vars[raw_expression.varname],
+                raw_expression.varname, chef.level)
 
         raise NotImplementedError("oh no: " + str(raw_expression))
 
     def cook_statement(self, raw_statement):
         if isinstance(raw_statement, raw_ast.Let):
+            # TODO: error if the variable is defined in an outer scope, or not?
             if raw_statement.varname in self.local_vars:
                 raise common.CompileError(
                     ("there's already a variable named '%s'"
@@ -162,20 +166,36 @@ class _Chef:
             return self.cook_function_call(raw_statement)
 
         if isinstance(raw_statement, raw_ast.FuncDefinition):
-            if raw_statement.funcname in self.local_vars:
+            if self.get_chef_for_varname(raw_statement.funcname) is not None:
                 raise common.CompileError(
                     ("there's already a variable named '%s'"
                      % raw_statement.funcname), raw_statement.location)
-            functype = FunctionType(raw_statement.funcname)
+
+            args = []
+            for typename, typeloc, argname, argnameloc in raw_statement.args:
+                if typename not in TYPES:
+                    raise common.CompileError(
+                        "unknown type '%s'" % typename, typeloc)
+                if self.get_chef_for_varname(argname) is not None:
+                    raise common.CompileError(
+                        "there's already a variable named '%s'" % argname,
+                        argnameloc)
+
+                args.append((argname, TYPES[typename]))
+
+            functype = FunctionType(raw_statement.funcname,
+                                    [arg[1] for arg in args])
 
             # TODO: allow functions to call themselves
             subchef = _Chef(self)
+            subchef.local_vars.update(dict(args))
             body = list(map(subchef.cook_statement, raw_statement.body))
             self.local_vars[raw_statement.funcname] = functype
+
             return CreateLocalVar(
                 raw_statement.location, functype, raw_statement.funcname,
                 CreateFunction(raw_statement.location, functype,
-                               raw_statement.funcname, body))
+                               raw_statement.funcname, args, body))
 
         assert False, raw_statement
 
@@ -183,7 +203,7 @@ class _Chef:
 def cook(raw_ast_statements):
     builtin_chef = _Chef(None)
     builtin_chef.local_vars.update({
-        'print': FunctionType('print', TYPES['Str']),
+        'print': FunctionType('print', [TYPES['Str']]),
         'TRUE': TYPES['Bool'],
         'FALSE': TYPES['Bool'],
     })

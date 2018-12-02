@@ -9,17 +9,9 @@ types = {
 }
 
 
+# TODO: keep track of arg types and return type
 class FunctionType(AsdaType):
-
-    def __init__(self, argtypes, returntype):
-        self.argtypes = list(argtypes)
-        self.returntype = returntype
-
-    def __eq__(self, other):
-        if not isinstance(other, FunctionType):
-            return NotImplemented
-        return (self.argtypes == other.argtypes and
-                self.returntype == other.returntype)
+    pass
 
 
 class AsdaObject:
@@ -41,8 +33,8 @@ class AsdaString(AsdaObject):
 
 class Function(AsdaObject):
 
-    def __init__(self, argtypes, returntype, python_func):
-        super().__init__(FunctionType(argtypes, returntype))
+    def __init__(self, python_func):
+        super().__init__(FunctionType())
         self.python_func = python_func
 
     def run(self, args):
@@ -50,8 +42,7 @@ class Function(AsdaObject):
 
 
 BUILTINS = [
-    Function([types['Str']], None,
-             lambda arg: print(arg.python_string)),
-    types['Bool'],  # TRUE
-    types['Bool'],  # FALSE
+    Function(lambda arg: print(arg.python_string)),
+    types['Bool'],      # TRUE
+    types['Bool'],      # FALSE
 ]

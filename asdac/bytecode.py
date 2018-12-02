@@ -61,16 +61,23 @@ class _BytecodeWriter:
         if isinstance(expression, cooked_ast.StrConstant):
             self._write(STR_CONSTANT)
             self.write_string(expression.python_string)
+
         elif isinstance(expression, cooked_ast.IntConstant):
             self._write(INT_CONSTANT)
             # TODO: how about bignums and negatives and stuff?
             self.write_uint64(expression.python_int)
+
         elif isinstance(expression, cooked_ast.CallFunction):
             self.do_function_call(expression)
+
         elif isinstance(expression, cooked_ast.CreateFunction):
             self._write(CREATE_FUNCTION)
             self.write_string(expression.name)
-            _BytecodeWriter(self._write, self).do_body(expression.body)
+            writer = _BytecodeWriter(self._write, self)
+            for index, (argname, argtype) in enumerate(expression.args):
+                writer.local_vars[argname] = index
+            writer.do_body(expression.body)
+
         elif isinstance(expression, cooked_ast.LookupVar):
             self._write(LOOKUP_VAR)
             self.write_uint8(expression.level)
@@ -82,6 +89,7 @@ class _BytecodeWriter:
             for lel in range(level_difference):
                 writer = writer.parent_writer
             self.write_uint16(writer.local_vars[expression.varname])
+
         else:
             assert False, expression
 
@@ -89,7 +97,6 @@ class _BytecodeWriter:
         assert iter(statements) is not statements, (
             "statements must not be an iterator because this thing needs to "
             "loop over it twice")
-        assert not self.local_vars, "cannot call do_body() more than once"
 
         for statement in statements:
             if isinstance(statement, cooked_ast.CreateLocalVar):
@@ -113,6 +120,7 @@ class _BytecodeWriter:
                 self.write_uint16(self.local_vars[statement.varname])
             else:
                 assert False, statement
+
         self._write(END_OF_BODY)
 
 

@@ -1,6 +1,5 @@
-func hello():
-    print("Hello World!")
+func print_twice(Str message):
+    print(message)
+    print(message)
 
-hello()
-hello()
-hello()
+print_twice("Hello World!")
