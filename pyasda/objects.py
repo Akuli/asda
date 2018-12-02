@@ -41,8 +41,11 @@ class Function(AsdaObject):
         return self.python_func(*args)
 
 
+TRUE = AsdaObject(types['Bool'])
+FALSE = AsdaObject(types['Bool'])
+
 BUILTINS = [
     Function(lambda arg: print(arg.python_string)),
-    types['Bool'],      # TRUE
-    types['Bool'],      # FALSE
+    TRUE,
+    FALSE,
 ]

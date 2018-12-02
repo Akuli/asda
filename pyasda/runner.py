@@ -1,5 +1,7 @@
 import collections
 
+import more_itertools
+
 from . import bytecode_reader, objects
 
 
@@ -23,7 +25,9 @@ def _create_function_object(code, definition_scope):
 
 def _run(code, scope):
     stack = []
-    for opcode, *args in code.opcodes:
+    opcodes = more_itertools.seekable(code.opcodes)
+
+    for opcode, *args in opcodes:
         if opcode == bytecode_reader.CONSTANT:
             [constant] = args
             stack.append(constant)
@@ -71,6 +75,18 @@ def _run(code, scope):
             value = stack.pop()
             assert not stack
             return value
+
+        elif opcode == bytecode_reader.NEGATION:
+            stack[-1] = {objects.TRUE: objects.FALSE,
+                         objects.FALSE: objects.TRUE}[stack[-1]]
+
+        elif opcode == bytecode_reader.JUMP_IF:
+            [opcode_index] = args
+            boolean = stack.pop()
+            assert boolean is objects.TRUE or boolean is objects.FALSE
+            if boolean is objects.TRUE:
+                assert 0 <= opcode_index <= len(code.opcodes)
+                opcodes.seek(opcode_index)
 
         else:
             assert False, opcode

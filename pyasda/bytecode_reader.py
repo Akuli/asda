@@ -15,6 +15,8 @@ CALL_RETURNING_FUNCTION = b')'
 POP_ONE = b'P'
 VOID_RETURN = b'r'
 VALUE_RETURN = b'R'
+NEGATION = b'!'
+JUMP_IF = b'J'
 END_OF_BODY = b'E'      # only used in bytecode files
 
 Code = collections.namedtuple('Code', ['how_many_local_vars', 'opcodes'])
@@ -81,6 +83,11 @@ class _BytecodeReader:
                 opcode.append((VOID_RETURN,))
             elif magic == VALUE_RETURN:
                 opcode.append((VALUE_RETURN,))
+            elif magic == JUMP_IF:
+                where2jump = self.read_uint16()
+                opcode.append((JUMP_IF, where2jump))
+            elif magic == NEGATION:
+                opcode.append((NEGATION,))
             else:
                 assert False, magic
 

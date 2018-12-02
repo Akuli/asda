@@ -20,7 +20,7 @@ FuncCall = _astclass('FuncCall', ['function', 'args'])
 FuncDefinition = _astclass('FuncDefinition', ['funcname', 'args',
                                               'return_type', 'body'])
 Return = _astclass('Return', ['value'])
-If = _astclass('If', ['condition', 'if_body', 'else_body'])
+If = _astclass('If', ['condition', 'body'])
 
 
 class _TokenIterator:
@@ -128,18 +128,12 @@ class _Parser:
         self.tokens.next_token('dedent')
         return body
 
+    # TODO: else and elif
     def parse_if_statement(self):
-        self.tokens.next_token('keyword', 'if')
+        if_keyword = self.tokens.next_token('keyword', 'if')
         condition = self.parse_expression()
-        if_body = self.parse_block()
-
-        if self.tokens.coming_up('keyword', 'else'):
-            self.tokens.next_token('keyword', 'else')
-            else_body = self.parse_block()
-        else:
-            else_body = []
-
-        return If(condition, if_body, else_body)
+        body = self.parse_block()
+        return If(if_keyword.location + condition.location, condition, body)
 
     # TODO: update this when not all type names are id tokens
     def parse_type(self):

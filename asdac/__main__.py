@@ -22,7 +22,7 @@ def source2bytecode(infile, outfile):
 
     with open(outfile, 'wb') as file:
         file.write(b'asda')
-        bytecode.create_bytecode(cooked, file.write)
+        file.write(bytecode.create_bytecode(cooked))
 
 
 def main():

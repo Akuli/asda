@@ -17,6 +17,7 @@ CreateLocalVar = _astclass('CreateLocalVar', ['varname', 'initial_value'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
 VoidReturn = _astclass('VoidReturn', [])
 ValueReturn = _astclass('ValueReturn', ['value'])
+If = _astclass('If', ['condition', 'body'])
 
 
 # subclasses must add a name attribute
@@ -236,6 +237,15 @@ class _Chef:
                          % (self.return_type.name, value.type.name)),
                         value.location)
                 return ValueReturn(raw_statement.location, None, value)
+
+        if isinstance(raw_statement, raw_ast.If):
+            condition = self.cook_expression(raw_statement.condition)
+            if condition.type != TYPES['Bool']:
+                raise common.CompileError(
+                    "expected Bool, got " + condition.type.name,
+                    condition.location)
+            body = list(map(self.cook_statement, raw_statement.body))
+            return If(raw_statement.location, None, condition, body)
 
         assert False, raw_statement
 
