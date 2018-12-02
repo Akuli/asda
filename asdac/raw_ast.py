@@ -1,4 +1,5 @@
 import collections
+import enum
 import functools
 
 import more_itertools
@@ -17,7 +18,9 @@ SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['varname'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
-FuncDefinition = _astclass('FuncDefinition', ['funcname', 'args', 'body'])
+FuncDefinition = _astclass('FuncDefinition', ['funcname', 'args',
+                                              'return_type', 'body'])
+Return = _astclass('Return', ['value'])
 If = _astclass('If', ['condition', 'if_body', 'else_body'])
 
 
@@ -57,7 +60,7 @@ class _TokenIterator:
 
 class _Parser:
 
-    def __init__(self, tokens: _TokenIterator):
+    def __init__(self, tokens):
         self.tokens = tokens
 
     # be sure to change this if you change parse_expression!
@@ -139,12 +142,16 @@ class _Parser:
 
         return If(condition, if_body, else_body)
 
+    # TODO: update this when not all type names are id tokens
+    def parse_type(self):
+        typename = self.tokens.next_token('id')
+        return (typename.value, typename.location)
+
     def parse_arg_spec(self):
         # TODO: update this when not all type names are id tokens
-        typename = self.tokens.next_token('id')
+        typeinfo = self.parse_type()
         varname = self.tokens.next_token('id')
-        return (typename.value, typename.location,
-                varname.value, varname.location)
+        return typeinfo + (varname.value, varname.location)
 
     def parse_func_definition(self):
         func = self.tokens.next_token('keyword', 'func')
@@ -152,12 +159,19 @@ class _Parser:
         self.tokens.next_token('op', '(')
         args = self.parse_commasep_list(self.parse_arg_spec)
         close_paren = self.tokens.next_token('op', ')')
+
+        if self.tokens.coming_up('op', '->'):
+            self.tokens.next_token('op', '->')
+            return_type = self.parse_type()
+        else:
+            return_type = None
+
         body = _Parser(self.tokens).parse_block()
 
         # the location of a function definition is just the first line, because
         # the body can get quite long
         location = func.location + close_paren.location
-        return FuncDefinition(location, name.value, args, body)
+        return FuncDefinition(location, name.value, args, return_type, body)
 
     def parse_assignment(self):
         name = self.tokens.next_token('id')
@@ -165,6 +179,17 @@ class _Parser:
         value = self.parse_expression()
         self.tokens.next_token('newline')
         return SetVar(name.location + value.location, name.value, value)
+
+    def parse_return(self):
+        return_keyword = self.tokens.next_token('keyword', 'return')
+        if self.tokens.coming_up('newline'):
+            value = None
+            location = return_keyword.location
+        else:
+            value = self.parse_expression()
+            location = return_keyword.location + value.location
+        self.tokens.next_token('newline')
+        return Return(location, value)
 
     def parse_statement(self):
         if self.tokens.coming_up('keyword', 'let'):
@@ -180,6 +205,9 @@ class _Parser:
 
         if self.tokens.coming_up('keyword', 'func'):
             return self.parse_func_definition()
+
+        if self.tokens.coming_up('keyword', 'return'):
+            return self.parse_return()
 
         # function call statement
         result = self.parse_expression()

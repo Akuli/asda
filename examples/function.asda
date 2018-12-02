@@ -1,5 +1,6 @@
-func print_twice(Str message):
+func print_and_return(Str message) -> Str:
     print(message)
-    print(message)
+    return message
+    print("if you see this, something is broken")
 
-print_twice("Hello World!")
+print_and_return(print_and_return("Hello World!"))

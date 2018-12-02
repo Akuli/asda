@@ -15,6 +15,8 @@ LookupVar = _astclass('LookupVar', ['varname', 'level'])
 CreateFunction = _astclass('CreateFunction', ['name', 'args', 'body'])
 CreateLocalVar = _astclass('CreateLocalVar', ['varname', 'initial_value'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
+VoidReturn = _astclass('VoidReturn', [])
+ValueReturn = _astclass('ValueReturn', ['value'])
 
 
 # subclasses must add a name attribute
@@ -55,7 +57,12 @@ class FunctionType(Type):
 
 class _Chef:
 
-    def __init__(self, parent_chef):
+    def __init__(self, parent_chef, can_return, return_type):
+        if not can_return:
+            assert return_type is None
+        self.can_return = can_return
+        self.return_type = return_type
+
         self.parent_chef = parent_chef
         if parent_chef is None:
             self.level = 0
@@ -124,6 +131,12 @@ class _Chef:
 
         raise NotImplementedError("oh no: " + str(raw_expression))
 
+    def cook_type(self, typename):
+        if typename not in TYPES:
+            raise common.CompileError(
+                "unknown type '%s'" % typename, typeloc)
+        return TYPES[typename]
+
     def cook_statement(self, raw_statement):
         if isinstance(raw_statement, raw_ast.Let):
             # TODO: error if the variable is defined in an outer scope, or not?
@@ -145,8 +158,6 @@ class _Chef:
             while True:
                 if varname in chef.local_vars:
                     if cooked_value.type != chef.local_vars[varname]:
-                        # TODO: is it possible to set the location to only the
-                        # stuff on the right side of the = sign?
                         raise common.CompileError(
                             ("'%s' is of type %s, can't assign %s to it"
                              % (varname, chef.local_vars[varname].name,
@@ -173,21 +184,24 @@ class _Chef:
 
             args = []
             for typename, typeloc, argname, argnameloc in raw_statement.args:
-                if typename not in TYPES:
-                    raise common.CompileError(
-                        "unknown type '%s'" % typename, typeloc)
+                type_ = self.cook_type(typename)
                 if self.get_chef_for_varname(argname) is not None:
                     raise common.CompileError(
                         "there's already a variable named '%s'" % argname,
                         argnameloc)
 
-                args.append((argname, TYPES[typename]))
+                args.append((argname, type_))
 
-            functype = FunctionType(raw_statement.funcname,
-                                    [arg[1] for arg in args])
+            if raw_statement.return_type is None:
+                return_type = None
+            else:
+                return_type = self.cook_type(raw_statement.return_type[0])
+
+            functype = FunctionType(
+                raw_statement.funcname, [arg[1] for arg in args], return_type)
 
             # TODO: allow functions to call themselves
-            subchef = _Chef(self)
+            subchef = _Chef(self, True, return_type)
             subchef.local_vars.update(dict(args))
             body = list(map(subchef.cook_statement, raw_statement.body))
             self.local_vars[raw_statement.funcname] = functype
@@ -197,14 +211,38 @@ class _Chef:
                 CreateFunction(raw_statement.location, functype,
                                raw_statement.funcname, args, body))
 
+        if isinstance(raw_statement, raw_ast.Return):
+            if not self.can_return:
+                raise common.CompileError(
+                    "return outside function", raw_statement.location)
+
+            if self.return_type is None:
+                if raw_statement.value is not None:
+                    raise common.CompileError(
+                        "cannot return a value from a void function",
+                        raw_statement.value.location)
+                return VoidReturn(raw_statement.location, None)
+            else:
+                if raw_statement.value is None:
+                    raise common.CompileError(
+                        "missing return value", raw_statement.location)
+                value = self.cook_expression(raw_statement.value)
+                if value.type != self.return_type:
+                    raise common.CompileError(
+                        ("should return %s, not %s"
+                         % (self.return_type.name, value.type.name)),
+                        value.location)
+                return ValueReturn(raw_statement.location, None, value)
+
         assert False, raw_statement
 
 
 def cook(raw_ast_statements):
-    builtin_chef = _Chef(None)
+    builtin_chef = _Chef(None, False, None)
     builtin_chef.local_vars.update({
         'print': FunctionType('print', [TYPES['Str']]),
         'TRUE': TYPES['Bool'],
         'FALSE': TYPES['Bool'],
     })
-    return map(_Chef(builtin_chef).cook_statement, raw_ast_statements)
+    file_chef = _Chef(builtin_chef, False, None)
+    return map(file_chef.cook_statement, raw_ast_statements)

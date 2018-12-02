@@ -8,8 +8,11 @@ LOOKUP_VAR = b'v'
 SET_VAR = b'V'
 STR_CONSTANT = b'"'
 INT_CONSTANT = b'1'
-CALL_FUNCTION = b'('
+CALL_VOID_FUNCTION = b'('
+CALL_RETURNING_FUNCTION = b')'
 POP_ONE = b'P'
+VOID_RETURN = b'r'
+VALUE_RETURN = b'R'
 END_OF_BODY = b'E'
 
 
@@ -54,7 +57,8 @@ class _BytecodeWriter:
         self.do_expression(call.function)
         for arg in call.args:
             self.do_expression(arg)
-        self._write(CALL_FUNCTION)
+        self._write(CALL_VOID_FUNCTION if call.type is None
+                    else CALL_RETURNING_FUNCTION)
         self.write_uint8(len(call.args))
 
     def do_expression(self, expression):
@@ -112,12 +116,19 @@ class _BytecodeWriter:
                 self.write_uint16(self.local_vars[statement.varname])
             elif isinstance(statement, cooked_ast.CallFunction):
                 self.do_function_call(statement)
-                self._write(POP_ONE)
+                if statement.type is not None:
+                    # not a void function, ignore return value
+                    self._write(POP_ONE)
             elif isinstance(statement, cooked_ast.SetVar):
                 # FIXME: nonlocal variables???
                 self.do_expression(statement.value)
                 self._write(SET_VAR)
                 self.write_uint16(self.local_vars[statement.varname])
+            elif isinstance(statement, cooked_ast.VoidReturn):
+                self._write(VOID_RETURN)
+            elif isinstance(statement, cooked_ast.ValueReturn):
+                self.do_expression(statement.value)
+                self._write(VALUE_RETURN)
             else:
                 assert False, statement
 

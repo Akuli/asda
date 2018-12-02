@@ -10,8 +10,11 @@ SET_VAR = b'V'
 STR_CONSTANT = b'"'     # only used in bytecode files
 INT_CONSTANT = b'1'     # only used in bytecode files
 CONSTANT = b'C'         # not used at all in bytecode files
-CALL_FUNCTION = b'('
+CALL_VOID_FUNCTION = b'('
+CALL_RETURNING_FUNCTION = b')'
 POP_ONE = b'P'
+VOID_RETURN = b'r'
+VALUE_RETURN = b'R'
 END_OF_BODY = b'E'      # only used in bytecode files
 
 Code = collections.namedtuple('Code', ['how_many_local_vars', 'opcodes'])
@@ -57,8 +60,10 @@ class _BytecodeReader:
             if magic == STR_CONSTANT:
                 string_object = objects.AsdaString(self.read_string())
                 opcode.append((CONSTANT, string_object))
-            elif magic == CALL_FUNCTION:
-                opcode.append((CALL_FUNCTION, self.read_uint8()))
+            elif magic == CALL_VOID_FUNCTION:
+                opcode.append((CALL_VOID_FUNCTION, self.read_uint8()))
+            elif magic == CALL_RETURNING_FUNCTION:
+                opcode.append((CALL_RETURNING_FUNCTION, self.read_uint8()))
             elif magic == LOOKUP_VAR:
                 level = self.read_uint8()
                 index = self.read_uint16()
@@ -72,6 +77,10 @@ class _BytecodeReader:
                 name = self.read_string()
                 body = self.read_body()
                 opcode.append((CREATE_FUNCTION, name, body))
+            elif magic == VOID_RETURN:
+                opcode.append((VOID_RETURN,))
+            elif magic == VALUE_RETURN:
+                opcode.append((VALUE_RETURN,))
             else:
                 assert False, magic
 
