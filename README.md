@@ -5,7 +5,16 @@ This is my attempt at making a statically typed programming language.
 
 ## Hello World!
 
-Create a file called `hello.asda` with this content:
+Make sure that you have Python 3 with pip installed. Then you can download the
+compiler and the interpreter, and install their dependencies:
+
+```
+$ git clone https://github.com/Akuli/asda
+$ cd asda
+$ python3 -m pip install --user -r requirements.txt
+```
+
+Next, create a file called `hello.asda` with this content:
 
 ```js
 let greeting = "Hello World!"
@@ -21,16 +30,7 @@ doesn't compile (but the compiler produces a good error message):
 print(123)
 ```
 
-Anyway, to compile your `hello.asda`, make sure that you have Python 3 with pip
-installed. Then you can download the compiler and install its dependencies...
-
-```
-$ git clone https://github.com/Akuli/asda
-$ cd asda
-$ python3 -m pip install --user -r requirements.txt
-```
-
-...and compile the code:
+Anyway, run this to compile your `hello.asda`:
 
 ```
 $ python3 -m asdac hello.asda
