@@ -120,5 +120,7 @@ def create_bytecode(cooked, write_callback):
     builtin_writer = _BytecodeWriter(None, None)
     builtin_writer.local_vars.update({
         'print': 0,
+        'TRUE': 1,
+        'FALSE': 2,
     })
     _BytecodeWriter(write_callback, builtin_writer).do_body(cooked)

@@ -34,6 +34,7 @@ class BuiltinType(Type):
 TYPES = {
     'Str': BuiltinType('Str'),
     'Int': BuiltinType('Int'),
+    'Bool': BuiltinType('Bool'),
 }
 
 
@@ -181,5 +182,9 @@ class _Chef:
 
 def cook(raw_ast_statements):
     builtin_chef = _Chef(None)
-    builtin_chef.local_vars['print'] = FunctionType('print', TYPES['Str'])
+    builtin_chef.local_vars.update({
+        'print': FunctionType('print', TYPES['Str']),
+        'TRUE': TYPES['Bool'],
+        'FALSE': TYPES['Bool'],
+    })
     return map(_Chef(builtin_chef).cook_statement, raw_ast_statements)

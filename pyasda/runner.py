@@ -39,7 +39,7 @@ def _run(code, scope):
             if level == len(scope.parent_scopes):
                 lookup_scope = scope
             else:
-                lookup_scope = scope.parent_scopes[index]
+                lookup_scope = scope.parent_scopes[level]
             stack.append(lookup_scope.local_vars[index])
         elif opcode == bytecode_reader.SET_VAR:
             [index] = args

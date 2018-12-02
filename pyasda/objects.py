@@ -5,6 +5,7 @@ class AsdaType:
 types = {
     'Str': AsdaType(),
     'Int': AsdaType(),
+    'Bool': AsdaType(),
 }
 
 
@@ -51,4 +52,6 @@ class Function(AsdaObject):
 BUILTINS = [
     Function([types['Str']], None,
              lambda arg: print(arg.python_string)),
+    types['Bool'],  # TRUE
+    types['Bool'],  # FALSE
 ]
