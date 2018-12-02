@@ -131,10 +131,10 @@ class _Chef:
 
         raise NotImplementedError("oh no: " + str(raw_expression))
 
-    def cook_type(self, typename):
+    def cook_type(self, typename, location):
         if typename not in TYPES:
             raise common.CompileError(
-                "unknown type '%s'" % typename, typeloc)
+                "unknown type '%s'" % typename, location)
         return TYPES[typename]
 
     def cook_statement(self, raw_statement):
@@ -184,7 +184,7 @@ class _Chef:
 
             args = []
             for typename, typeloc, argname, argnameloc in raw_statement.args:
-                type_ = self.cook_type(typename)
+                type_ = self.cook_type(typename, typeloc)
                 if self.get_chef_for_varname(argname) is not None:
                     raise common.CompileError(
                         "there's already a variable named '%s'" % argname,
@@ -195,7 +195,10 @@ class _Chef:
             if raw_statement.return_type is None:
                 return_type = None
             else:
-                return_type = self.cook_type(raw_statement.return_type[0])
+                # FIXME: the location is wrong because no better location is
+                # available
+                return_type = self.cook_type(raw_statement.return_type,
+                                             raw_statement.location)
 
             functype = FunctionType(
                 raw_statement.funcname, [arg[1] for arg in args], return_type)

@@ -9,7 +9,7 @@ from . import common
 _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
     ('integer', r'[1-9][0-9]*|0'),
     ('id', r'[^\W\d]\w*'),
-    ('op', r'->|[=():.,]'),
+    ('op', r'[=():.,]'),
     ('string', r'"[^"]*?"'),
     ('ignore1', r'^[ \t]*(?:#.*)?\n'),
     ('newline', r'\n'),
@@ -50,7 +50,7 @@ def _raw_tokenize(filename, code):
         elif kind.startswith('ignore'):
             pass
         else:
-            if kind == 'id' and value in {'let', 'if', 'else', 'func',
+            if kind == 'id' and value in {'let', 'if', 'else', 'void',
                                           'return'}:
                 kind = 'keyword'
             yield Token(kind, value, location)

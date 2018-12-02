@@ -1,5 +1,4 @@
 import collections
-import enum
 import functools
 
 import more_itertools
@@ -154,23 +153,21 @@ class _Parser:
         return typeinfo + (varname.value, varname.location)
 
     def parse_func_definition(self):
-        func = self.tokens.next_token('keyword', 'func')
+        if self.tokens.coming_up('keyword', 'void'):
+            return_type = None
+            type_location = self.tokens.next_token('keyword', 'void').location
+        else:
+            return_type, type_location = self.parse_type()
         name = self.tokens.next_token('id')
         self.tokens.next_token('op', '(')
         args = self.parse_commasep_list(self.parse_arg_spec)
         close_paren = self.tokens.next_token('op', ')')
 
-        if self.tokens.coming_up('op', '->'):
-            self.tokens.next_token('op', '->')
-            return_type = self.parse_type()
-        else:
-            return_type = None
-
         body = _Parser(self.tokens).parse_block()
 
-        # the location of a function definition is just the first line, because
-        # the body can get quite long
-        location = func.location + close_paren.location
+        # the location of a function definition is just the first line,
+        # because the body can get quite long
+        location = type_location + close_paren.location
         return FuncDefinition(location, name.value, args, return_type, body)
 
     def parse_assignment(self):
@@ -203,7 +200,11 @@ class _Parser:
         if self.tokens.coming_up('keyword', 'if'):
             return self.parse_if_statement()
 
-        if self.tokens.coming_up('keyword', 'func'):
+        if (
+                (self.tokens.coming_up('id') or
+                 self.tokens.coming_up('keyword', 'void'))
+                and self.tokens.coming_up('id', how_soon=2)
+                and self.tokens.coming_up('op', '(', how_soon=3)):
             return self.parse_func_definition()
 
         if self.tokens.coming_up('keyword', 'return'):
