@@ -1,0 +1,2 @@
+# comments can be on a line of their own
+print("hello")    # or at the end of another line of code like this

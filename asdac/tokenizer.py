@@ -11,10 +11,11 @@ _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
     ('id', r'[^\W\d]\w*'),
     ('op', r'[=():.,]'),
     ('string', r'"[^"]*?"'),
-    ('blankline', r'^[ \t]*\n'),
+    ('ignore1', r'^[ \t]*(?:#.*)?\n'),
     ('newline', r'\n'),
     ('indent', r'^ +'),
-    ('ignoredwhitespace', r'[ \t]+'),
+    ('ignore2', r'[ \t]+'),
+    ('ignore3', r'#.*'),
     ('error', r'.'),
 ])
 
@@ -46,7 +47,7 @@ def _raw_tokenize(filename, code):
 
         if kind == 'error':
             raise common.CompileError("unexpected %s" % value, location)
-        elif kind in {'blankline', 'ignoredwhitespace'}:
+        elif kind.startswith('ignore'):
             pass
         else:
             if kind == 'id' and value in {'let', 'if', 'else', 'func'}:
