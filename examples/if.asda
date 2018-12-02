@@ -1,7 +1,10 @@
 let b = TRUE
 if b:
     print("This should get printed")
-
-b = FALSE
-if b:
+    b = FALSE
+    if b:
+        print("This should also NOT get printed")
+    else:
+        print("This should also get printed")
+else:
     print("This should NOT get printed")

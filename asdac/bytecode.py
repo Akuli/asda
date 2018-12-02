@@ -8,6 +8,8 @@ LOOKUP_VAR = b'v'
 SET_VAR = b'V'
 STR_CONSTANT = b'"'
 INT_CONSTANT = b'1'
+TRUE_CONSTANT = b'T'
+FALSE_CONSTANT = b'F'
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
 POP_ONE = b'P'
@@ -130,13 +132,21 @@ class _BytecodeWriter:
             self.do_expression(statement.value)
             self.write_opcode(VALUE_RETURN)
         elif isinstance(statement, cooked_ast.If):
+            # have fun figuring this out
             self.do_expression(statement.condition)
             self.write_opcode(NEGATION)
             self.write_opcode(JUMP_IF)
-            jump_target_index = len(self.output)
-            for substatement in statement.body:
+            if_body_skip = len(self.output)
+            for substatement in statement.if_body:
                 self.do_statement(substatement)
-            self.output[jump_target_index:jump_target_index] = _uint2bytes(
+            self.write_opcode(TRUE_CONSTANT)
+            self.write_opcode(JUMP_IF)
+            self.output[if_body_skip:if_body_skip] = _uint2bytes(
+                16, self.opcode_number)
+            else_body_skip = len(self.output)
+            for substatement in statement.else_body:
+                self.do_statement(substatement)
+            self.output[else_body_skip:else_body_skip] = _uint2bytes(
                 16, self.opcode_number)
         else:
             assert False, statement
@@ -146,7 +156,8 @@ class _BytecodeWriter:
             if isinstance(statement, cooked_ast.CreateLocalVar):
                 yield statement
             elif isinstance(statement, cooked_ast.If):
-                yield from self._var_creating_statements(statement.body)
+                yield from self._var_creating_statements(statement.if_body)
+                yield from self._var_creating_statements(statement.else_body)
 
     def do_body(self, statements):
         assert iter(statements) is not statements, (

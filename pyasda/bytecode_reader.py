@@ -9,6 +9,8 @@ LOOKUP_VAR = b'v'
 SET_VAR = b'V'
 STR_CONSTANT = b'"'     # only used in bytecode files
 INT_CONSTANT = b'1'     # only used in bytecode files
+TRUE_CONSTANT = b'T'    # only used in bytecode files
+FALSE_CONSTANT = b'F'   # only used in bytecode files
 CONSTANT = b'C'         # not used at all in bytecode files
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
@@ -62,6 +64,10 @@ class _BytecodeReader:
             if magic == STR_CONSTANT:
                 string_object = objects.AsdaString(self.read_string())
                 opcode.append((CONSTANT, string_object))
+            elif magic == TRUE_CONSTANT:
+                opcode.append((CONSTANT, objects.TRUE))
+            elif magic == FALSE_CONSTANT:
+                opcode.append((CONSTANT, objects.FALSE))
             elif magic == CALL_VOID_FUNCTION:
                 opcode.append((CALL_VOID_FUNCTION, self.read_uint8()))
             elif magic == CALL_RETURNING_FUNCTION:
