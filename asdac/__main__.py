@@ -48,10 +48,10 @@ def main():
     }
     if color_dict[args.color]:
         colorama.init()
-        red_prefix = colorama.Fore.RED
-        red_suffix = colorama.Fore.RESET
+        red_start = colorama.Fore.RED
+        red_end = colorama.Fore.RESET
     else:
-        red_prefix = red_suffix = ''
+        red_start = red_end = ''
 
     if args.outfile is None:
         if args.infile is sys.stdin:
@@ -83,7 +83,7 @@ def main():
                     bad_code = re.sub(r'[^\S\n]', replacement, bad_code)
                     bad_code = bad_code.replace('\n', replacement * 3 + '\n')
 
-                gonna_print = before + red_prefix + bad_code + red_suffix + after
+                gonna_print = before + red_start + bad_code + red_end + after
                 eprint()
                 eprint(textwrap.indent(gonna_print, ' ' * 4))
 
