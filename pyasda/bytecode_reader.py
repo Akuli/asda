@@ -29,7 +29,7 @@ class _BytecodeReader:
     def __init__(self, read_callback):
         self._maybe_read = read_callback    # no error on eof, returns b''
 
-    # errors on eof
+    # errors on unexpected eof
     def _read(self, size):
         result = self._maybe_read(size)
         assert len(result) == size
@@ -77,8 +77,9 @@ class _BytecodeReader:
                 index = self.read_uint16()
                 opcode.append((LOOKUP_VAR, level, index))
             elif magic == SET_VAR:
+                level = self.read_uint8()
                 index = self.read_uint16()
-                opcode.append((SET_VAR, index))
+                opcode.append((SET_VAR, level, index))
             elif magic == POP_ONE:
                 opcode.append((POP_ONE,))
             elif magic == CREATE_FUNCTION:

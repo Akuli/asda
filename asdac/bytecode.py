@@ -75,6 +75,15 @@ class _BytecodeWriter:
                           else CALL_RETURNING_FUNCTION)
         self.write_uint8(len(call.args))
 
+    def _get_writer_for_level(self, level):
+        level_difference = self.level - level
+        assert level_difference >= 0
+
+        writer = self
+        for lel in range(level_difference):
+            writer = writer.parent_writer
+        return writer
+
     def do_expression(self, expression):
         if isinstance(expression, cooked_ast.StrConstant):
             self.write_opcode(STR_CONSTANT)
@@ -99,13 +108,7 @@ class _BytecodeWriter:
         elif isinstance(expression, cooked_ast.LookupVar):
             self.write_opcode(LOOKUP_VAR)
             self.write_uint8(expression.level)
-
-            level_difference = self.level - expression.level
-            assert level_difference >= 0
-
-            writer = self
-            for lel in range(level_difference):
-                writer = writer.parent_writer
+            writer = self._get_writer_for_level(expression.level)
             self.write_uint16(writer.local_vars[expression.varname])
 
         else:
@@ -115,6 +118,7 @@ class _BytecodeWriter:
         if isinstance(statement, cooked_ast.CreateLocalVar):
             self.do_expression(statement.initial_value)
             self.write_opcode(SET_VAR)
+            self.write_uint8(self.level)
             self.write_uint16(self.local_vars[statement.varname])
         elif isinstance(statement, cooked_ast.CallFunction):
             self.do_function_call(statement)
@@ -122,10 +126,11 @@ class _BytecodeWriter:
                 # not a void function, ignore return value
                 self.write_opcode(POP_ONE)
         elif isinstance(statement, cooked_ast.SetVar):
-            # FIXME: nonlocal variables???
             self.do_expression(statement.value)
             self.write_opcode(SET_VAR)
-            self.write_uint16(self.local_vars[statement.varname])
+            self.write_uint8(statement.level)
+            writer = self._get_writer_for_level(statement.level)
+            self.write_uint16(writer.local_vars[statement.varname])
         elif isinstance(statement, cooked_ast.VoidReturn):
             self.write_opcode(VOID_RETURN)
         elif isinstance(statement, cooked_ast.ValueReturn):

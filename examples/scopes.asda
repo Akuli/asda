@@ -1,0 +1,7 @@
+let stuff = "old stuff"
+void change_stuff():
+    stuff = "new stuff"
+
+print(stuff)
+change_stuff()
+print(stuff)

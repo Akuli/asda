@@ -51,14 +51,18 @@ def _run(code, scope):
         elif opcode == bytecode_reader.LOOKUP_VAR:
             level, index = args
             if level == len(scope.parent_scopes):
-                lookup_scope = scope
+                var_scope = scope
             else:
-                lookup_scope = scope.parent_scopes[level]
-            stack.append(lookup_scope.local_vars[index])
+                var_scope = scope.parent_scopes[level]
+            stack.append(var_scope.local_vars[index])
 
         elif opcode == bytecode_reader.SET_VAR:
-            [index] = args
-            scope.local_vars[index] = stack.pop()
+            level, index = args
+            if level == len(scope.parent_scopes):
+                var_scope = scope
+            else:
+                var_scope = scope.parent_scopes[level]
+            var_scope.local_vars[index] = stack.pop()
 
         elif opcode == bytecode_reader.POP_ONE:
             del stack[-1]
