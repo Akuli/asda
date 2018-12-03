@@ -120,28 +120,34 @@ class _BytecodeWriter:
             self.write_opcode(SET_VAR)
             self.write_uint8(self.level)
             self.write_uint16(self.local_vars[statement.varname])
+
         elif isinstance(statement, cooked_ast.CallFunction):
             self.do_function_call(statement)
             if statement.type is not None:
                 # not a void function, ignore return value
                 self.write_opcode(POP_ONE)
+
         elif isinstance(statement, cooked_ast.SetVar):
             self.do_expression(statement.value)
             self.write_opcode(SET_VAR)
             self.write_uint8(statement.level)
             writer = self._get_writer_for_level(statement.level)
             self.write_uint16(writer.local_vars[statement.varname])
+
         elif isinstance(statement, cooked_ast.VoidReturn):
             self.write_opcode(VOID_RETURN)
+
         elif isinstance(statement, cooked_ast.ValueReturn):
             self.do_expression(statement.value)
             self.write_opcode(VALUE_RETURN)
+
         elif isinstance(statement, cooked_ast.If):
             # have fun figuring this out
             self.do_expression(statement.condition)
             self.write_opcode(NEGATION)
             self.write_opcode(JUMP_IF)
             if_body_skip = len(self.output)
+
             for substatement in statement.if_body:
                 self.do_statement(substatement)
             self.write_opcode(TRUE_CONSTANT)
@@ -149,10 +155,13 @@ class _BytecodeWriter:
             self.output[if_body_skip:if_body_skip] = _uint2bytes(
                 16, self.opcode_number)
             else_body_skip = len(self.output)
+
             for substatement in statement.else_body:
                 self.do_statement(substatement)
+
             self.output[else_body_skip:else_body_skip] = _uint2bytes(
                 16, self.opcode_number)
+
         else:
             assert False, statement
 
