@@ -1,3 +1,6 @@
+# right now this file looks like a skeleton of boilerplate, but it works
+
+
 class AsdaType:
     pass
 
@@ -9,7 +12,7 @@ types = {
 }
 
 
-# TODO: keep track of arg types and return type
+# TODO: keep track of arg types and return type?
 class FunctionType(AsdaType):
     pass
 

@@ -25,9 +25,6 @@ class _BytecodeWriter:
     def __init__(self, output):
         self.output = output
 
-        self.local_vars = {}     # {name: index}
-        self.opcode_number = 0
-
         # the bytecode doesn't contain jump markers, and it instead jumps by
         # index, it turns out to be much easier to figure out the indexes
         # beforehand
@@ -49,11 +46,6 @@ class _BytecodeWriter:
     write_uint32 = functools.partialmethod(_write_uint, 32)
     write_uint64 = functools.partialmethod(_write_uint, 64)
 
-    def write_opcode(self, op):
-        assert len(op) == 1
-        self.output.extend(op)
-        self.opcode_number += 1
-
     def write_string(self, string):
         utf8 = string.encode('utf-8')
         self.write_uint32(len(utf8))
@@ -65,47 +57,47 @@ class _BytecodeWriter:
 
     def write_op(self, op):
         if isinstance(op, opcoder.StrConstant):
-            self.write_opcode(STR_CONSTANT)
+            self.output.extend(STR_CONSTANT)
             self.write_string(op.python_string)
 
         # TODO: IntConstant
 
         elif isinstance(op, opcoder.BoolConstant):
-            self.write_opcode(
+            self.output.extend(
                 TRUE_CONSTANT if op.python_bool else FALSE_CONSTANT)
 
         elif isinstance(op, opcoder.CreateFunction):
-            self.write_opcode(CREATE_FUNCTION)
+            self.output.extend(CREATE_FUNCTION)
             self.write_string(op.name)
             _BytecodeWriter(self.output).run(op.body_opcode)
 
         elif isinstance(op, opcoder.LookupVar):
-            self.write_opcode(LOOKUP_VAR)
+            self.output.extend(LOOKUP_VAR)
             self.write_uint8(op.level)
             self.write_uint16(op.var)
 
         elif isinstance(op, opcoder.SetVar):
-            self.write_opcode(SET_VAR)
+            self.output.extend(SET_VAR)
             self.write_uint8(op.level)
             self.write_uint16(op.var)
 
         elif isinstance(op, opcoder.CallFunction):
-            self.write_opcode(CALL_RETURNING_FUNCTION if op.returns_a_value
-                              else CALL_VOID_FUNCTION)
+            self.output.extend(CALL_RETURNING_FUNCTION if op.returns_a_value
+                               else CALL_VOID_FUNCTION)
             self.write_uint8(op.nargs)
 
         elif isinstance(op, opcoder.PopOne):
-            self.write_opcode(POP_ONE)
+            self.output.extend(POP_ONE)
 
         elif isinstance(op, opcoder.Return):
-            self.write_opcode(VALUE_RETURN if op.returns_a_value
-                              else VOID_RETURN)
+            self.output.extend(VALUE_RETURN if op.returns_a_value
+                               else VOID_RETURN)
 
         elif isinstance(op, opcoder.Negation):
-            self.write_opcode(NEGATION)
+            self.output.extend(NEGATION)
 
         elif isinstance(op, opcoder.JumpIf):
-            self.write_opcode(JUMP_IF)
+            self.output.extend(JUMP_IF)
             self.write_uint16(self.jumpmarker2index[op.marker])
 
         elif isinstance(op, opcoder.JumpMarker):
@@ -115,9 +107,8 @@ class _BytecodeWriter:
         else:
             assert False, op
 
+    # don't call this more than once
     def run(self, opcode):
-        assert not self.jumpmarker2index
-
         i = 0
         for op in opcode.ops:
             if isinstance(op, opcoder.JumpMarker):

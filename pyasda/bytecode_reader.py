@@ -102,13 +102,7 @@ class _BytecodeReader:
 
 
 def read_bytecode(read_callback):
-    asda = read_callback(4)
-    if asda != b'asda':
-        raise ValueError("doesn't look like a compiled asda file")
-
-    reader = _BytecodeReader(read_callback)
-    result = reader.read_body()
-
+    result = _BytecodeReader(read_callback).read_body()
     if read_callback(1) != b'':
         raise ValueError("junk at the end of the compiled file")
     return result

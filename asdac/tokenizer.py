@@ -57,6 +57,7 @@ def _raw_tokenize(filename, code):
 
 
 def _handle_indents_and_dedents(filename, tokens):
+    # this code took a while to figure out... don't ask me to comment it more
     indent_levels = [0]
     new_line_starting = True
     last_lineno = None

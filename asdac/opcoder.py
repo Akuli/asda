@@ -1,7 +1,6 @@
 from collections import namedtuple
-import functools
 
-from . import common, cooked_ast
+from . import cooked_ast
 
 
 # debugging tip: pprint.pprint(opcode.ops)
@@ -50,7 +49,7 @@ class _OpCoder:
         else:
             self.level = parent_coder.level + 1
 
-        self.local_vars = {}    # {varname: opcode_var_int}
+        self.local_vars = {}    # {varname: opcode var int}
 
     def do_function_call(self, call):
         self.do_expression(call.function)
@@ -171,6 +170,5 @@ def create_opcode(cooked):
     })
 
     output = OpCode(0)
-    file_opcoder = _OpCoder(output, builtin_opcoder)
-    file_opcoder.do_body(cooked)
+    _OpCoder(output, builtin_opcoder).do_body(cooked)
     return output

@@ -37,6 +37,8 @@ class _TokenIterator:
             raise error("expected %s, got %r" % (kind, token.value))
 
     def coming_up(self, kind=None, value=None, *, how_soon=1):
+        # self._iterator[how_soon-1] without a slice raises IndexError if the
+        # iterator ends, but that's undocumented so i don't want to rely on it
         head = self._iterator[:how_soon]
         if len(head) < how_soon:
             return False
@@ -83,12 +85,13 @@ class _Parser:
 
         while True:
             if self.tokens.coming_up('op', '.'):
+                # rest of the code doesn't support the attributes, but this
+                # code worked when i wrote it
                 self.tokens.next_token('op', '.')
                 attribute = self.tokens.next_token('id')
                 result = GetAttr(result.location + attribute.location,
                                  result, attribute.value)
             elif self.tokens.coming_up('op', '('):
-                # function call
                 self.tokens.next_token('op', '(')
                 args = self.parse_commasep_list(self.parse_expression)
                 last_paren = self.tokens.next_token('op', ')')
@@ -128,7 +131,7 @@ class _Parser:
         self.tokens.next_token('dedent')
         return body
 
-    # TODO: else and elif
+    # TODO: elif
     def parse_if_statement(self):
         if_keyword = self.tokens.next_token('keyword', 'if')
         condition = self.parse_expression()

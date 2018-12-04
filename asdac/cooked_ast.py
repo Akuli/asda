@@ -4,7 +4,7 @@ from . import raw_ast, common
 
 
 def _astclass(name, fields):
-    # type is set to None for e.g. calls to void functions
+    # type is set to None for statements
     return collections.namedtuple(name, ['location', 'type'] + fields)
 
 

@@ -15,8 +15,15 @@ def main():
     if args.bytecodefile is sys.stdin:
         args.bytecodefile = sys.stdin.buffer
 
-    opcode = bytecode_reader.read_bytecode(args.bytecodefile.read)
-    runner.run_file(opcode)
+    with args.bytecodefile as file:
+        if file.read(4) != b'asda':
+            print(("%s: '%s' is not a compiled asda file"
+                   % (sys.argv[0], args.bytecodefile.name)),
+                  file=sys.stderr)
+            sys.exit(1)
+
+        opcode = bytecode_reader.read_bytecode(file.read)
+        runner.run_file(opcode)
 
 
 if __name__ == '__main__':
