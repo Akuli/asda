@@ -9,9 +9,16 @@ import colorama
 
 from . import bytecoder, common, cooked_ast, opcoder, raw_ast, tokenizer
 
+eprint = functools.partial(print, file=sys.stderr)
 
-def source2bytecode(infile, outfile):
-    assert isinstance(infile.name, str)     # can be e.g. '<stdin>'
+
+def source2bytecode(infile, outfile_name, quiet):
+    if not quiet:
+        # without printable_outfile_name it's possible to get this:
+        #    Compiling: <stdin> --> -
+        printable_outfile_name = (
+            '<stdout>' if outfile_name == '-' else outfile_name)
+        eprint("Compiling:", infile.name, "-->", printable_outfile_name)
 
     # if you change this, make sure that the last step before opening the file
     # does NOT produce an iterator, so that if something fails, an exception is
@@ -23,9 +30,15 @@ def source2bytecode(infile, outfile):
     opcode = opcoder.create_opcode(cooked)
     bytecode = bytecoder.create_bytecode(opcode)
 
-    with open(outfile, 'wb') as file:
-        file.write(b'asda')
-        file.write(bytecode)
+    # usually argparse.FileType would handle this, but see below
+    if outfile_name == '-':
+        outfile = sys.stdout.buffer
+    else:
+        outfile = open(outfile_name, 'wb')
+
+    with outfile:
+        outfile.write(b'asda')
+        outfile.write(bytecode)
 
 
 def main():
@@ -35,10 +48,12 @@ def main():
         help="source code file")
     parser.add_argument(
         # argparse.FileType('wb') would open the file even if compiling fails
-        # before it's time to write to it
         '-o', '--outfile',
         help=("name of the resulting bytecode file, default is a file in an "
               "asda-compiled subdirectory of where the source file is"))
+    parser.add_argument(
+        '-q', '--quiet', action='store_true',
+        help="display less output")
     parser.add_argument(
         '--color', choices=['auto', 'always', 'never'], default='auto',
         help="should error messages be displayed with colors?")
@@ -61,19 +76,16 @@ def main():
             parser.error(
                 "the -o option is needed when reading source from stdin")
 
-        in_path = os.path.abspath(args.infile.name)
         args.outfile = os.path.join(
-            os.path.dirname(in_path),
+            os.path.dirname(args.infile.name),
             'asda-compiled',
-            os.path.splitext(os.path.basename(in_path))[0] + '.asdac')
+            os.path.splitext(os.path.basename(args.infile.name))[0] + '.asdac')
         os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
 
     try:
         with args.infile:
-            source2bytecode(args.infile, args.outfile)
+            source2bytecode(args.infile, args.outfile, args.quiet)
     except common.CompileError as e:
-        eprint = functools.partial(print, file=sys.stderr)
-
         if e.location is None:
             eprint("error: %s" % e.message)
         else:
