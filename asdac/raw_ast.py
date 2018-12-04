@@ -21,6 +21,7 @@ FuncDefinition = _astclass('FuncDefinition', ['funcname', 'args',
                                               'return_type', 'body'])
 Return = _astclass('Return', ['value'])
 If = _astclass('If', ['condition', 'if_body', 'else_body'])
+While = _astclass('While', ['condition', 'body'])
 
 
 class _TokenIterator:
@@ -144,6 +145,13 @@ class _Parser:
         return If(if_keyword.location + condition.location, condition,
                   if_body, else_body)
 
+    def parse_while(self):
+        while_keyword = self.tokens.next_token('keyword', 'while')
+        condition = self.parse_expression()
+        body = self.parse_block()
+        return While(
+            while_keyword.location + condition.location, condition, body)
+
     # TODO: update this when not all type names are id tokens
     def parse_type(self):
         typename = self.tokens.next_token('id')
@@ -203,6 +211,9 @@ class _Parser:
         if self.tokens.coming_up('keyword', 'if'):
             return self.parse_if_statement()
 
+        if self.tokens.coming_up('keyword', 'while'):
+            return self.parse_while()
+
         if (
                 (self.tokens.coming_up('id') or
                  self.tokens.coming_up('keyword', 'void'))
@@ -217,8 +228,8 @@ class _Parser:
         result = self.parse_expression()
         if not isinstance(result, FuncCall):
             raise common.CompileError(
-                "expected a let, a variable assignment, an if, a function "
-                "definition or a function call", result.location)
+                "expected a let, a variable assignment, an if, a while, "
+                "a function definition or a function call", result.location)
         self.tokens.next_token('newline')
         return result
 

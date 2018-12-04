@@ -50,7 +50,7 @@ def _raw_tokenize(filename, code):
         elif kind.startswith('ignore'):
             pass
         else:
-            if kind == 'id' and value in {'let', 'if', 'else', 'void',
+            if kind == 'id' and value in {'let', 'if', 'else', 'while', 'void',
                                           'return'}:
                 kind = 'keyword'
             yield Token(kind, value, location)
