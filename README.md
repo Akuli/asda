@@ -34,10 +34,10 @@ Anyway, run this to compile your `hello.asda`:
 
 ```
 $ python3 -m asdac hello.asda
+Compiling: hello.asda --> asda-compiled/hello.asdac
 ```
 
-This will create a bytecode file to `asda-compiled/hello.asdac`. Run it with
-`pyasda`:
+This creates a bytecode file. Run it with `pyasda`:
 
 ```
 $ python3 -m pyasda asda-compiled/hello.asdac
@@ -51,6 +51,18 @@ interpreter to work like I want it to work.
 
 ## FAQ
 
+### Can I compile and run with just one command?
+
+```
+$ python3 -m asdac hello.asda -o - | python3 -m pyasda -
+```
+
+### Is there an interactive REPL, like Python's `>>>` prompt?
+
+Not yet, and I'm not sure whether there will ever be one. It would be
+kind of awesome, but I also like how the compiler and the interpreter
+are two separate programs.
+
 ### Why is the programming language named asda?
 
 I thought about the name of the programming language for a while. My previous
@@ -62,8 +74,14 @@ anything relevant.
 
 ### Is there any documentation?
 
-Not yet, but there's [an examples directory](examples/).
+Not yet, but there's [an examples directory](examples/). All of the
+examples should work with asdac and pyasda.
 
 ### Are there any tests?
 
 Not yet.
+
+### How does it work?
+
+I'm sorry, I haven't documented it yet :( If you are actually interested
+in this, you can ask me to document stuff by creating an issue.
