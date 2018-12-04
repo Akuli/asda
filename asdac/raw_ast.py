@@ -22,6 +22,7 @@ FuncDefinition = _astclass('FuncDefinition', ['funcname', 'args',
 Return = _astclass('Return', ['value'])
 If = _astclass('If', ['condition', 'if_body', 'else_body'])
 While = _astclass('While', ['condition', 'body'])
+For = _astclass('For', ['init', 'cond', 'incr', 'body'])
 
 
 class _TokenIterator:
@@ -119,7 +120,6 @@ class _Parser:
         varname = self.tokens.next_token('id')
         self.tokens.next_token('op', '=')
         value = self.parse_expression()
-        self.tokens.next_token('newline')
         return Let(let.location + value.location, varname.value, value)
 
     def parse_block(self):
@@ -151,6 +151,18 @@ class _Parser:
         body = self.parse_block()
         return While(
             while_keyword.location + condition.location, condition, body)
+
+    # for init; cond; incr:
+    #     body
+    def parse_for(self):
+        for_keyword = self.tokens.next_token('keyword', 'for')
+        init = self.parse_statement(end=('op', ';'))
+        cond = self.parse_expression()
+        self.tokens.next_token('op', ';')
+        incr = self.parse_statement(end=None)
+        body = self.parse_block()
+        return For(for_keyword.location + incr.location,
+                   init, cond, incr, body)
 
     # TODO: update this when not all type names are id tokens
     def parse_type(self):
@@ -185,7 +197,6 @@ class _Parser:
         name = self.tokens.next_token('id')
         self.tokens.next_token('op', '=')
         value = self.parse_expression()
-        self.tokens.next_token('newline')
         return SetVar(name.location + value.location, name.value, value)
 
     def parse_return(self):
@@ -196,41 +207,61 @@ class _Parser:
         else:
             value = self.parse_expression()
             location = return_keyword.location + value.location
-        self.tokens.next_token('newline')
         return Return(location, value)
 
-    def parse_statement(self):
+    def parse_statement(self, *, end=('newline',)):
         if self.tokens.coming_up('keyword', 'let'):
-            return self.parse_let_statement()
+            result = self.parse_let_statement()
+            can_be_oneline = True
 
-        if (
-          self.tokens.coming_up('id') and
-          self.tokens.coming_up('op', '=', how_soon=2)):
-            return self.parse_assignment()
+        elif (self.tokens.coming_up('id') and
+              self.tokens.coming_up('op', '=', how_soon=2)):
+            result = self.parse_assignment()
+            can_be_oneline = True
 
-        if self.tokens.coming_up('keyword', 'if'):
-            return self.parse_if_statement()
+        elif self.tokens.coming_up('keyword', 'if'):
+            result = self.parse_if_statement()
+            can_be_oneline = False
 
-        if self.tokens.coming_up('keyword', 'while'):
-            return self.parse_while()
+        elif self.tokens.coming_up('keyword', 'while'):
+            result = self.parse_while()
+            can_be_oneline = False
 
-        if (
-                (self.tokens.coming_up('id') or
-                 self.tokens.coming_up('keyword', 'void'))
-                and self.tokens.coming_up('id', how_soon=2)
-                and self.tokens.coming_up('op', '(', how_soon=3)):
-            return self.parse_func_definition()
+        elif self.tokens.coming_up('keyword', 'for'):
+            result = self.parse_for()
+            can_be_oneline = False
 
-        if self.tokens.coming_up('keyword', 'return'):
-            return self.parse_return()
+        elif ((self.tokens.coming_up('id') or
+               self.tokens.coming_up('keyword', 'void'))
+              and self.tokens.coming_up('id', how_soon=2)
+              and self.tokens.coming_up('op', '(', how_soon=3)):
+            result = self.parse_func_definition()
+            can_be_oneline = False
 
-        # function call statement
-        result = self.parse_expression()
-        if not isinstance(result, FuncCall):
-            raise common.CompileError(
-                "expected a let, a variable assignment, an if, a while, "
-                "a function definition or a function call", result.location)
-        self.tokens.next_token('newline')
+        elif self.tokens.coming_up('keyword', 'return'):
+            result = self.parse_return()
+            can_be_oneline = True
+
+        else:
+            # function call statement
+            result = self.parse_expression()
+            if not isinstance(result, FuncCall):
+                raise common.CompileError(
+                    "expected a let, a variable assignment, an if, a while, "
+                    "a function definition or a function call",
+                    result.location)
+            can_be_oneline = True
+
+        if can_be_oneline:
+            if end is not None:
+                self.tokens.next_token(*end)
+        else:
+            if end != ('newline',):
+                raise common.CompileError(
+                    "expected a one-line statement", result.location)
+
+            # whatever gave the result has already handled the newline
+
         return result
 
 

@@ -153,6 +153,24 @@ class _OpCoder:
             self.output.ops.append(JumpIf(beginning))
             self.output.ops.append(end)
 
+        elif isinstance(statement, cooked_ast.For):
+            self.do_statement(statement.init)
+
+            beginning = JumpMarker()
+            end = JumpMarker()
+
+            self.output.ops.append(beginning)
+            self.do_expression(statement.cond)
+            self.output.ops.append(Negation())
+            self.output.ops.append(JumpIf(end))
+
+            for substatement in statement.body + [statement.incr]:
+                self.do_statement(substatement)
+
+            self.output.ops.append(BoolConstant(True))
+            self.output.ops.append(JumpIf(beginning))
+            self.output.ops.append(end)
+
         else:
             assert False, statement
 

@@ -19,6 +19,7 @@ VoidReturn = _astclass('VoidReturn', [])
 ValueReturn = _astclass('ValueReturn', ['value'])
 If = _astclass('If', ['condition', 'if_body', 'else_body'])
 While = _astclass('While', ['condition', 'body'])
+For = _astclass('For', ['init', 'cond', 'incr', 'body'])
 
 
 # subclasses must add a name attribute
@@ -260,6 +261,16 @@ class _Chef:
 
             body = list(map(self.cook_statement, raw_statement.body))
             return While(raw_statement.location, None, condition, body)
+
+        if isinstance(raw_statement, raw_ast.For):
+            init = self.cook_statement(raw_statement.init)
+            cond = self.cook_expression(raw_statement.cond)
+            if cond.type != TYPES['Bool']:
+                raise common.CompileError(
+                    "expected Bool, got " + cond.type.name, cond.location)
+            incr = self.cook_statement(raw_statement.incr)
+            body = list(map(self.cook_statement, raw_statement.body))
+            return For(raw_statement.location, None, init, cond, incr, body)
 
         assert False, raw_statement
 
