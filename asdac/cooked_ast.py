@@ -253,12 +253,15 @@ class _Chef:
         assert False, raw_statement
 
 
+BUILTINS = [
+    ('print', FunctionType('print', [TYPES['Str']])),
+    ('TRUE', TYPES['Bool']),
+    ('FALSE', TYPES['Bool']),
+]
+
+
 def cook(raw_ast_statements):
     builtin_chef = _Chef(None, False, None)
-    builtin_chef.local_vars.update({
-        'print': FunctionType('print', [TYPES['Str']]),
-        'TRUE': TYPES['Bool'],
-        'FALSE': TYPES['Bool'],
-    })
+    builtin_chef.local_vars.update(dict(BUILTINS))
     file_chef = _Chef(builtin_chef, False, None)
     return map(file_chef.cook_statement, raw_ast_statements)

@@ -7,22 +7,25 @@ import textwrap
 
 import colorama
 
-from . import bytecode, common, cooked_ast, raw_ast, tokenizer
+from . import bytecoder, common, cooked_ast, opcoder, raw_ast, tokenizer
 
 
 def source2bytecode(infile, outfile):
     assert isinstance(infile.name, str)     # can be e.g. '<stdin>'
+
+    # if you change this, make sure that the last step before opening the file
+    # does NOT produce an iterator, so that if something fails, an exception is
+    # likely raised before the output file is opened, and the output file gets
+    # left untouched if it exists
     tokens = tokenizer.tokenize(infile.name, infile.read())
     raw = raw_ast.parse(tokens)
     cooked = cooked_ast.cook(raw)
-
-    # if any of the steps above fail, raise an exception here and leave the
-    # output file untouched
-    cooked = list(cooked)
+    opcode = opcoder.create_opcode(cooked)
+    bytecode = bytecoder.create_bytecode(opcode)
 
     with open(outfile, 'wb') as file:
         file.write(b'asda')
-        file.write(bytecode.create_bytecode(cooked))
+        file.write(bytecode)
 
 
 def main():
