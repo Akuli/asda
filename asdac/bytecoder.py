@@ -16,6 +16,7 @@ CALL_RETURNING_FUNCTION = b')'
 POP_ONE = b'P'
 VOID_RETURN = b'r'
 VALUE_RETURN = b'R'
+YIELD = b'Y'
 NEGATION = b'!'
 JUMP_IF = b'J'
 END_OF_BODY = b'E'
@@ -94,6 +95,9 @@ class _BytecodeWriter:
         elif isinstance(op, opcoder.Return):
             self.output.extend(VALUE_RETURN if op.returns_a_value
                                else VOID_RETURN)
+
+        elif isinstance(op, opcoder.Yield):
+            self.output.extend(YIELD)
 
         elif isinstance(op, opcoder.Negation):
             self.output.extend(NEGATION)

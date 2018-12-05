@@ -1,0 +1,8 @@
+generator[Str] do_stuff():
+    while TRUE:
+        yield "Yay"
+
+let g = do_stuff()
+print(next(g))
+print(next(g))
+print(next(g))

@@ -18,6 +18,7 @@ CALL_RETURNING_FUNCTION = b')'
 POP_ONE = b'P'
 VOID_RETURN = b'r'
 VALUE_RETURN = b'R'
+YIELD = b'Y'
 NEGATION = b'!'
 JUMP_IF = b'J'
 END_OF_BODY = b'E'      # only used in bytecode files
@@ -90,6 +91,8 @@ class _BytecodeReader:
                 opcode.append((VOID_RETURN,))
             elif magic == VALUE_RETURN:
                 opcode.append((VALUE_RETURN,))
+            elif magic == YIELD:
+                opcode.append((YIELD,))
             elif magic == JUMP_IF:
                 where2jump = self.read_uint16()
                 opcode.append((JUMP_IF, where2jump))

@@ -17,6 +17,7 @@ CreateLocalVar = _astclass('CreateLocalVar', ['varname', 'initial_value'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
 VoidReturn = _astclass('VoidReturn', [])
 ValueReturn = _astclass('ValueReturn', ['value'])
+Yield = _astclass('Yield', ['value'])
 If = _astclass('If', ['cond', 'if_body', 'else_body'])
 Loop = _astclass('Loop', ['init', 'cond', 'incr', 'body'])    # while or for
 
@@ -81,6 +82,8 @@ class _Chef:
             self.can_return = True
             self.return_type = None if is_generator else return_or_yield_type
             self.yield_type = return_or_yield_type if is_generator else None
+            if is_generator:
+                assert return_or_yield_type is not None
         else:
             assert not is_function
             assert return_or_yield_type is None
@@ -268,6 +271,19 @@ class _Chef:
                          % (self.return_type.name, value.type.name)),
                         value.location)
                 return ValueReturn(raw_statement.location, None, value)
+
+        if isinstance(raw_statement, raw_ast.Yield):
+            if self.yield_type is None:
+                raise common.CompileError(
+                    "yield outside generator function", raw_statement.location)
+
+            value = self.cook_expression(raw_statement.value)
+            if value.type != self.yield_type:
+                raise common.CompileError(
+                    ("should yield %s, not %s"
+                     % (self.yield_type.name, value.type.name)),
+                    value.location)
+            return Yield(raw_statement.location, None, value)
 
         if isinstance(raw_statement, raw_ast.If):
             cond = self.cook_expression(raw_statement.condition)

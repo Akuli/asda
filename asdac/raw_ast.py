@@ -20,6 +20,7 @@ FuncCall = _astclass('FuncCall', ['function', 'args'])
 FuncDefinition = _astclass('FuncDefinition', [
     'funcname', 'is_generator', 'args', 'return_or_yield_type', 'body'])
 Return = _astclass('Return', ['value'])
+Yield = _astclass('Yield', ['value'])
 If = _astclass('If', ['condition', 'if_body', 'else_body'])
 While = _astclass('While', ['condition', 'body'])
 For = _astclass('For', ['init', 'cond', 'incr', 'body'])
@@ -224,6 +225,12 @@ class _Parser:
             location = return_keyword.location + value.location
         return Return(location, value)
 
+    def parse_yield(self):
+        yield_keyword = self.tokens.next_token('keyword', 'yield')
+        value = self.parse_expression()
+        location = yield_keyword.location + value.location
+        return Yield(location, value)
+
     def parse_statement(self, *, allow_multiline=True):
         if self.tokens.coming_up('keyword', 'let'):
             result = self.parse_let_statement()
@@ -256,6 +263,10 @@ class _Parser:
 
         elif self.tokens.coming_up('keyword', 'return'):
             result = self.parse_return()
+            is_multiline = False
+
+        elif self.tokens.coming_up('keyword', 'yield'):
+            result = self.parse_yield()
             is_multiline = False
 
         else:

@@ -21,10 +21,18 @@ def _create_function_object(code, definition_scope, is_generator):
         runner = _Runner(code, scope)
 
         if not is_generator:
-            return runner.run()
+            yielded, value = runner.run()
+            assert not yielded
+            return value
 
         def get_next_item():
-            return objects.AsdaString('asiodfjoaisdjfioasdjfo')
+            yielded, value = runner.run()
+            assert value is not None
+            if not yielded:
+                # end of iteration
+                assert value is None
+                raise RuntimeError("iteration ended lel")
+            return value
 
         return objects.Generator(get_next_item)
 
@@ -39,6 +47,10 @@ class _Runner:
         self.opcodes = more_itertools.seekable(code.opcodes)
         self.opcodes_len = len(code.opcodes)
 
+    # returns (yielded, result) where result is one of:
+    #   * yielded value
+    #   * returned value
+    #   * None for void return
     def run(self):
         for opcode, *args in self.opcodes:
             #print('  ' * len(self.scope.parent_scopes), opcode, args, self.stack, self.scope.local_vars)
@@ -68,6 +80,7 @@ class _Runner:
                     var_scope = self.scope
                 else:
                     var_scope = self.scope.parent_scopes[level]
+                assert var_scope.local_vars[index] is not None
                 self.stack.append(var_scope.local_vars[index])
 
             elif opcode == bytecode_reader.SET_VAR:
@@ -89,12 +102,16 @@ class _Runner:
 
             elif opcode == bytecode_reader.VOID_RETURN:
                 assert not self.stack
-                return None
+                return (False, None)
 
             elif opcode == bytecode_reader.VALUE_RETURN:
                 value = self.stack.pop()
                 assert not self.stack
-                return value
+                return (False, value)
+
+            elif opcode == bytecode_reader.YIELD:
+                value = self.stack.pop()
+                return (True, value)
 
             elif opcode == bytecode_reader.NEGATION:
                 self.stack[-1] = {objects.TRUE: objects.FALSE,
@@ -112,9 +129,11 @@ class _Runner:
                 assert False, opcode
 
         assert not self.stack
+        return (False, None)
 
 
 def run_file(code):
     global_scope = _Scope(objects.BUILTINS, [])
     file_scope = _create_subscope(global_scope, code.how_many_local_vars)
-    _Runner(code, file_scope).run()
+    result = _Runner(code, file_scope).run()
+    assert result == (False, None)

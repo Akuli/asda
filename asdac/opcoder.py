@@ -30,6 +30,7 @@ SetVar = namedtuple('SetVar', ['level', 'var'])
 CallFunction = namedtuple('CallFunction', ['nargs', 'returns_a_value'])
 PopOne = namedtuple('PopOne', [])
 Return = namedtuple('Return', ['returns_a_value'])
+Yield = namedtuple('Yield', [])
 Negation = namedtuple('Negation', [])
 JumpIf = namedtuple('JumpIf', ['marker'])
 
@@ -121,6 +122,10 @@ class _OpCoder:
         elif isinstance(statement, cooked_ast.ValueReturn):
             self.do_expression(statement.value)
             self.output.ops.append(Return(True))
+
+        elif isinstance(statement, cooked_ast.Yield):
+            self.do_expression(statement.value)
+            self.output.ops.append(Yield())
 
         elif isinstance(statement, cooked_ast.If):
             end_of_if_body = JumpMarker()

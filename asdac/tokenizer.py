@@ -51,7 +51,8 @@ def _raw_tokenize(filename, code):
             pass
         else:
             if kind == 'id' and value in {'let', 'if', 'else', 'while', 'for',
-                                          'void', 'return', 'generator'}:
+                                          'void', 'return', 'generator',
+                                          'yield'}:
                 kind = 'keyword'
             yield Token(kind, value, location)
 
