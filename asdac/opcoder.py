@@ -125,7 +125,7 @@ class _OpCoder:
             end_of_if_body = JumpMarker()
             end_of_else_body = JumpMarker()
 
-            self.do_expression(statement.condition)
+            self.do_expression(statement.cond)
             self.output.ops.append(Negation())
             self.output.ops.append(JumpIf(end_of_if_body))
             for substatement in statement.if_body:
@@ -137,35 +137,21 @@ class _OpCoder:
                 self.do_statement(substatement)
             self.output.ops.append(end_of_else_body)
 
-        elif isinstance(statement, cooked_ast.While):
+        elif isinstance(statement, cooked_ast.Loop):
             beginning = JumpMarker()
             end = JumpMarker()
 
-            self.output.ops.append(beginning)
-            self.do_expression(statement.condition)
-            self.output.ops.append(Negation())
-            self.output.ops.append(JumpIf(end))
-
-            for substatement in statement.body:
-                self.do_statement(substatement)
-
-            self.output.ops.append(BoolConstant(True))
-            self.output.ops.append(JumpIf(beginning))
-            self.output.ops.append(end)
-
-        elif isinstance(statement, cooked_ast.For):
-            self.do_statement(statement.init)
-
-            beginning = JumpMarker()
-            end = JumpMarker()
-
+            if statement.init is not None:
+                self.do_statement(statement.init)
             self.output.ops.append(beginning)
             self.do_expression(statement.cond)
             self.output.ops.append(Negation())
             self.output.ops.append(JumpIf(end))
 
-            for substatement in statement.body + [statement.incr]:
+            for substatement in statement.body:
                 self.do_statement(substatement)
+            if statement.incr is not None:
+                self.do_statement(statement.incr)
 
             self.output.ops.append(BoolConstant(True))
             self.output.ops.append(JumpIf(beginning))

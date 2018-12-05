@@ -17,9 +17,8 @@ CreateLocalVar = _astclass('CreateLocalVar', ['varname', 'initial_value'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
 VoidReturn = _astclass('VoidReturn', [])
 ValueReturn = _astclass('ValueReturn', ['value'])
-If = _astclass('If', ['condition', 'if_body', 'else_body'])
-While = _astclass('While', ['condition', 'body'])
-For = _astclass('For', ['init', 'cond', 'incr', 'body'])
+If = _astclass('If', ['cond', 'if_body', 'else_body'])
+Loop = _astclass('Loop', ['init', 'cond', 'incr', 'body'])    # while or for
 
 
 # subclasses must add a name attribute
@@ -241,26 +240,23 @@ class _Chef:
                 return ValueReturn(raw_statement.location, None, value)
 
         if isinstance(raw_statement, raw_ast.If):
-            condition = self.cook_expression(raw_statement.condition)
-            if condition.type != TYPES['Bool']:
+            cond = self.cook_expression(raw_statement.condition)
+            if cond.type != TYPES['Bool']:
                 raise common.CompileError(
-                    "expected Bool, got " + condition.type.name,
-                    condition.location)
+                    "expected Bool, got " + cond.type.name, cond.location)
 
             if_body = list(map(self.cook_statement, raw_statement.if_body))
             else_body = list(map(self.cook_statement, raw_statement.else_body))
-            return If(raw_statement.location, None, condition,
-                      if_body, else_body)
+            return If(raw_statement.location, None, cond, if_body, else_body)
 
         if isinstance(raw_statement, raw_ast.While):
-            condition = self.cook_expression(raw_statement.condition)
-            if condition.type != TYPES['Bool']:
+            cond = self.cook_expression(raw_statement.condition)
+            if cond.type != TYPES['Bool']:
                 raise common.CompileError(
-                    "expected Bool, got " + condition.type.name,
-                    condition.location)
+                    "expected Bool, got " + cond.type.name, cond.location)
 
             body = list(map(self.cook_statement, raw_statement.body))
-            return While(raw_statement.location, None, condition, body)
+            return Loop(raw_statement.location, None, None, cond, None, body)
 
         if isinstance(raw_statement, raw_ast.For):
             init = self.cook_statement(raw_statement.init)
@@ -270,7 +266,7 @@ class _Chef:
                     "expected Bool, got " + cond.type.name, cond.location)
             incr = self.cook_statement(raw_statement.incr)
             body = list(map(self.cook_statement, raw_statement.body))
-            return For(raw_statement.location, None, init, cond, incr, body)
+            return Loop(raw_statement.location, None, init, cond, incr, body)
 
         assert False, raw_statement
 

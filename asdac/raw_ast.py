@@ -156,10 +156,11 @@ class _Parser:
     #     body
     def parse_for(self):
         for_keyword = self.tokens.next_token('keyword', 'for')
-        init = self.parse_statement(end=('op', ';'))
+        init = self.parse_statement(allow_multiline=False)
+        self.tokens.next_token('op', ';')
         cond = self.parse_expression()
         self.tokens.next_token('op', ';')
-        incr = self.parse_statement(end=None)
+        incr = self.parse_statement(allow_multiline=False)
         body = self.parse_block()
         return For(for_keyword.location + incr.location,
                    init, cond, incr, body)
@@ -209,38 +210,38 @@ class _Parser:
             location = return_keyword.location + value.location
         return Return(location, value)
 
-    def parse_statement(self, *, end=('newline',)):
+    def parse_statement(self, *, allow_multiline=True):
         if self.tokens.coming_up('keyword', 'let'):
             result = self.parse_let_statement()
-            can_be_oneline = True
+            is_multiline = False
 
         elif (self.tokens.coming_up('id') and
               self.tokens.coming_up('op', '=', how_soon=2)):
             result = self.parse_assignment()
-            can_be_oneline = True
+            is_multiline = False
 
         elif self.tokens.coming_up('keyword', 'if'):
             result = self.parse_if_statement()
-            can_be_oneline = False
+            is_multiline = True
 
         elif self.tokens.coming_up('keyword', 'while'):
             result = self.parse_while()
-            can_be_oneline = False
+            is_multiline = True
 
         elif self.tokens.coming_up('keyword', 'for'):
             result = self.parse_for()
-            can_be_oneline = False
+            is_multiline = True
 
         elif ((self.tokens.coming_up('id') or
                self.tokens.coming_up('keyword', 'void'))
               and self.tokens.coming_up('id', how_soon=2)
               and self.tokens.coming_up('op', '(', how_soon=3)):
             result = self.parse_func_definition()
-            can_be_oneline = False
+            is_multiline = True
 
         elif self.tokens.coming_up('keyword', 'return'):
             result = self.parse_return()
-            can_be_oneline = True
+            is_multiline = False
 
         else:
             # function call statement
@@ -250,17 +251,16 @@ class _Parser:
                     "expected a let, a variable assignment, an if, a while, "
                     "a function definition or a function call",
                     result.location)
-            can_be_oneline = True
+            is_multiline = False
 
-        if can_be_oneline:
-            if end is not None:
-                self.tokens.next_token(*end)
-        else:
-            if end != ('newline',):
+        if is_multiline:
+            if not allow_multiline:
                 raise common.CompileError(
                     "expected a one-line statement", result.location)
-
             # whatever gave the result has already handled the newline
+        else:
+            if allow_multiline:
+                self.tokens.next_token('newline')
 
         return result
 
