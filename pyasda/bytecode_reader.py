@@ -5,6 +5,7 @@ from . import objects
 
 
 CREATE_FUNCTION = b'f'
+CREATE_GENERATOR_FUNCTION = b'g'    # only used in bytecode files
 LOOKUP_VAR = b'v'
 SET_VAR = b'V'
 STR_CONSTANT = b'"'     # only used in bytecode files
@@ -68,10 +69,8 @@ class _BytecodeReader:
                 opcode.append((CONSTANT, objects.TRUE))
             elif magic == FALSE_CONSTANT:
                 opcode.append((CONSTANT, objects.FALSE))
-            elif magic == CALL_VOID_FUNCTION:
-                opcode.append((CALL_VOID_FUNCTION, self.read_uint8()))
-            elif magic == CALL_RETURNING_FUNCTION:
-                opcode.append((CALL_RETURNING_FUNCTION, self.read_uint8()))
+            elif magic in {CALL_VOID_FUNCTION, CALL_RETURNING_FUNCTION}:
+                opcode.append((magic, self.read_uint8()))
             elif magic == LOOKUP_VAR:
                 level = self.read_uint8()
                 index = self.read_uint16()
@@ -82,10 +81,11 @@ class _BytecodeReader:
                 opcode.append((SET_VAR, level, index))
             elif magic == POP_ONE:
                 opcode.append((POP_ONE,))
-            elif magic == CREATE_FUNCTION:
+            elif magic in {CREATE_FUNCTION, CREATE_GENERATOR_FUNCTION}:
                 name = self.read_string()
                 body = self.read_body()
-                opcode.append((CREATE_FUNCTION, name, body))
+                opcode.append((CREATE_FUNCTION, name, body,
+                               magic == CREATE_GENERATOR_FUNCTION))
             elif magic == VOID_RETURN:
                 opcode.append((VOID_RETURN,))
             elif magic == VALUE_RETURN:

@@ -17,8 +17,8 @@ SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['varname'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
-FuncDefinition = _astclass('FuncDefinition', ['funcname', 'args',
-                                              'return_type', 'body'])
+FuncDefinition = _astclass('FuncDefinition', [
+    'funcname', 'is_generator', 'args', 'return_or_yield_type', 'body'])
 Return = _astclass('Return', ['value'])
 If = _astclass('If', ['condition', 'if_body', 'else_body'])
 While = _astclass('While', ['condition', 'body'])
@@ -177,11 +177,24 @@ class _Parser:
         return typeinfo + (varname.value, varname.location)
 
     def parse_func_definition(self):
-        if self.tokens.coming_up('keyword', 'void'):
-            return_type = None
-            type_location = self.tokens.next_token('keyword', 'void').location
+        if self.tokens.coming_up('keyword', 'generator'):
+            generator = True
+            generator_keyword = self.tokens.next_token('keyword', 'generator')
+            first_location = generator_keyword.location
+            self.tokens.next_token('op', '[')
+            return_or_yield_type, type_location = self.parse_type()
+            self.tokens.next_token('op', ']')
         else:
-            return_type, type_location = self.parse_type()
+            generator = False
+            if self.tokens.coming_up('keyword', 'void'):
+                void = self.tokens.next_token('keyword', 'void')
+                first_location = void.location
+                return_or_yield_type = None
+                type_location = void.location
+            else:
+                return_or_yield_type, type_location = self.parse_type()
+                first_location = type_location
+
         name = self.tokens.next_token('id')
         self.tokens.next_token('op', '(')
         args = self.parse_commasep_list(self.parse_arg_spec)
@@ -191,8 +204,9 @@ class _Parser:
 
         # the location of a function definition is just the first line,
         # because the body can get quite long
-        location = type_location + close_paren.location
-        return FuncDefinition(location, name.value, args, return_type, body)
+        location = first_location + close_paren.location
+        return FuncDefinition(location, name.value, generator, args,
+                              return_or_yield_type, body)
 
     def parse_assignment(self):
         name = self.tokens.next_token('id')
@@ -232,10 +246,11 @@ class _Parser:
             result = self.parse_for()
             is_multiline = True
 
-        elif ((self.tokens.coming_up('id') or
-               self.tokens.coming_up('keyword', 'void'))
-              and self.tokens.coming_up('id', how_soon=2)
-              and self.tokens.coming_up('op', '(', how_soon=3)):
+        elif self.tokens.coming_up('keyword', 'generator') or (
+                (self.tokens.coming_up('id') or
+                 self.tokens.coming_up('keyword', 'void'))
+                and self.tokens.coming_up('id', how_soon=2)
+                and self.tokens.coming_up('op', '(', how_soon=3)):
             result = self.parse_func_definition()
             is_multiline = True
 

@@ -23,7 +23,8 @@ class OpCode:
 StrConstant = namedtuple('StrConstant', ['python_string'])
 IntConstant = namedtuple('IntConstant', ['python_int'])
 BoolConstant = namedtuple('BoolConstant', ['python_bool'])
-CreateFunction = namedtuple('CreateFunction', ['name', 'body_opcode'])
+CreateFunction = namedtuple('CreateFunction', [
+    'name', 'body_opcode', 'is_generator'])
 LookupVar = namedtuple('LookupVar', ['level', 'var'])
 SetVar = namedtuple('SetVar', ['level', 'var'])
 CallFunction = namedtuple('CallFunction', ['nargs', 'returns_a_value'])
@@ -85,7 +86,7 @@ class _OpCoder:
 
             opcoder.do_body(expression.body)
             self.output.ops.append(CreateFunction(
-                expression.name, function_opcode))
+                expression.name, function_opcode, expression.type.is_generator))
 
         elif isinstance(expression, cooked_ast.LookupVar):
             coder = self._get_coder_for_level(expression.level)

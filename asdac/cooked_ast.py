@@ -43,9 +43,11 @@ TYPES = {
 
 class FunctionType(Type):
 
-    def __init__(self, name, argtypes=(), returntype=None):
+    def __init__(self, name, argtypes=(), return_or_yield_type=None,
+                 is_generator=False):
         self.argtypes = list(argtypes)
-        self.returntype = returntype    # None for void functions
+        self.return_or_yield_type = return_or_yield_type
+        self.is_generator = is_generator
 
         self.name = '%s(%s)' % (
             name, ', '.join(argtype.name for argtype in argtypes))
@@ -54,16 +56,37 @@ class FunctionType(Type):
         if not isinstance(other, FunctionType):
             return NotImplemented
         return (self.argtypes == other.argtypes and
-                self.returntype == other.returntype)
+                self.return_or_yield_type == other.return_or_yield_type and
+                self.is_generator == other.is_generator)
+
+
+class GeneratorType(Type):
+
+    def __init__(self, item_type):
+        self.item_type = item_type
+        self.name = 'Generator[%s]' % item_type.name
+
+    def __eq__(self, other):
+        if not isinstance(other, GeneratorType):
+            return NotImplemented
+        return self.item_type == other.item_type
 
 
 class _Chef:
 
-    def __init__(self, parent_chef, can_return, return_type):
-        if not can_return:
-            assert return_type is None
-        self.can_return = can_return
-        self.return_type = return_type
+    def __init__(self, parent_chef, is_function=False, is_generator=False,
+                 return_or_yield_type=None):
+        # there's no can_yield, just check whether yield_type is not None
+        if is_function:
+            self.can_return = True
+            self.return_type = None if is_generator else return_or_yield_type
+            self.yield_type = return_or_yield_type if is_generator else None
+        else:
+            assert not is_function
+            assert return_or_yield_type is None
+            self.can_return = False
+            self.return_type = None
+            self.yield_type = None
 
         self.parent_chef = parent_chef
         if parent_chef is None:
@@ -91,8 +114,12 @@ class _Chef:
                 "cannot call %s with %s" % (function.type.name, message_end),
                 raw_func_call.location)
 
-        return CallFunction(raw_func_call.location, function.type.returntype,
-                            function, args)
+        if function.type.is_generator:
+            returning = GeneratorType(function.type.return_or_yield_type)
+        else:
+            returning = function.type.return_or_yield_type
+
+        return CallFunction(raw_func_call.location, returning, function, args)
 
     def get_chef_for_varname(self, varname):
         chef = self
@@ -114,7 +141,8 @@ class _Chef:
 
         if isinstance(raw_expression, raw_ast.FuncCall):
             call = self.cook_function_call(raw_expression)
-            if call.function.type.returntype is None:
+            if call.function.type.return_or_yield_type is None:
+                assert call.function.type.is_generator
                 raise common.CompileError(
                     "%s doesn't return a value" % call.function.type.name,
                     raw_expression.location)
@@ -194,19 +222,21 @@ class _Chef:
 
                 args.append((argname, type_))
 
-            if raw_statement.return_type is None:
-                return_type = None
+            if raw_statement.return_or_yield_type is None:
+                return_or_yield_type = None
             else:
                 # FIXME: the location is wrong because no better location is
                 # available
-                return_type = self.cook_type(raw_statement.return_type,
-                                             raw_statement.location)
+                return_or_yield_type = self.cook_type(
+                    raw_statement.return_or_yield_type, raw_statement.location)
 
             functype = FunctionType(
-                raw_statement.funcname, [arg[1] for arg in args], return_type)
+                raw_statement.funcname, [arg[1] for arg in args],
+                return_or_yield_type, raw_statement.is_generator)
 
             # TODO: allow functions to call themselves
-            subchef = _Chef(self, True, return_type)
+            subchef = _Chef(self, True, raw_statement.is_generator,
+                            return_or_yield_type)
             subchef.local_vars.update(dict(args))
             body = list(map(subchef.cook_statement, raw_statement.body))
             self.local_vars[raw_statement.funcname] = functype
@@ -275,11 +305,14 @@ BUILTINS = [
     ('print', FunctionType('print', [TYPES['Str']])),
     ('TRUE', TYPES['Bool']),
     ('FALSE', TYPES['Bool']),
+    # FIXME: next shouldn't be just for string generators, needs generics
+    ('next', FunctionType('next', [GeneratorType(TYPES['Str'])],
+                          TYPES['Str'])),
 ]
 
 
 def cook(raw_ast_statements):
-    builtin_chef = _Chef(None, False, None)
+    builtin_chef = _Chef(None)
     builtin_chef.local_vars.update(dict(BUILTINS))
-    file_chef = _Chef(builtin_chef, False, None)
+    file_chef = _Chef(builtin_chef)
     return map(file_chef.cook_statement, raw_ast_statements)

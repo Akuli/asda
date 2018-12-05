@@ -4,6 +4,7 @@ from . import common, opcoder
 
 
 CREATE_FUNCTION = b'f'
+CREATE_GENERATOR_FUNCTION = b'g'
 LOOKUP_VAR = b'v'
 SET_VAR = b'V'
 STR_CONSTANT = b'"'
@@ -67,7 +68,8 @@ class _BytecodeWriter:
                 TRUE_CONSTANT if op.python_bool else FALSE_CONSTANT)
 
         elif isinstance(op, opcoder.CreateFunction):
-            self.output.extend(CREATE_FUNCTION)
+            self.output.extend(CREATE_GENERATOR_FUNCTION if op.is_generator
+                               else CREATE_FUNCTION)
             self.write_string(op.name)
             _BytecodeWriter(self.output).run(op.body_opcode)
 

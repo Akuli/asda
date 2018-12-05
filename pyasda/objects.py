@@ -17,12 +17,18 @@ class FunctionType(AsdaType):
     pass
 
 
+# TODO: keep track of item types?
+class GeneratorType(AsdaType):
+    pass
+
+
 class AsdaObject:
 
     def __init__(self, asda_type):
         self.asda_type = asda_type
 
 
+# TODO: rename this to String
 class AsdaString(AsdaObject):
 
     def __init__(self, python_string):
@@ -32,6 +38,13 @@ class AsdaString(AsdaObject):
     def __repr__(self):
         return '<%s.%s: %r>' % (type(self).__module__, type(self).__name__,
                                 self.python_string)
+
+
+class Generator(AsdaObject):
+
+    def __init__(self, next_callback):
+        super().__init__(GeneratorType())
+        self.next = next_callback
 
 
 class Function(AsdaObject):
@@ -51,4 +64,5 @@ BUILTINS = [
     Function(lambda arg: print(arg.python_string)),
     TRUE,
     FALSE,
+    Function(lambda arg: arg.next()),
 ]

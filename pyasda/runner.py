@@ -13,92 +13,108 @@ def _create_subscope(parent_scope, how_many_local_vars):
                   parent_scope.parent_scopes + [parent_scope])
 
 
-def _create_function_object(code, definition_scope):
+def _create_function_object(code, definition_scope, is_generator):
     def python_func(*args):
         scope = _create_subscope(definition_scope, code.how_many_local_vars)
         for index, arg in enumerate(args):
             scope.local_vars[index] = arg
-        return _run(code, scope)
+        runner = _Runner(code, scope)
+
+        if not is_generator:
+            return runner.run()
+
+        def get_next_item():
+            return objects.AsdaString('asiodfjoaisdjfioasdjfo')
+
+        return objects.Generator(get_next_item)
 
     return objects.Function(python_func)
 
 
-def _run(code, scope):
-    stack = []
-    opcodes = more_itertools.seekable(code.opcodes)
+class _Runner:
 
-    for opcode, *args in opcodes:
-        if opcode == bytecode_reader.CONSTANT:
-            [constant] = args
-            stack.append(constant)
+    def __init__(self, code, scope):
+        self.scope = scope
+        self.stack = []
+        self.opcodes = more_itertools.seekable(code.opcodes)
+        self.opcodes_len = len(code.opcodes)
 
-        elif opcode in {bytecode_reader.CALL_VOID_FUNCTION,
-                        bytecode_reader.CALL_RETURNING_FUNCTION}:
-            [how_many_args] = args
+    def run(self):
+        for opcode, *args in self.opcodes:
+            #print('  ' * len(self.scope.parent_scopes), opcode, args, self.stack, self.scope.local_vars)
+            if opcode == bytecode_reader.CONSTANT:
+                [constant] = args
+                self.stack.append(constant)
 
-            # python's negative slices are dumb
-            if how_many_args == 0:
-                call_args = []
+            elif opcode in {bytecode_reader.CALL_VOID_FUNCTION,
+                            bytecode_reader.CALL_RETURNING_FUNCTION}:
+                [how_many_args] = args
+
+                # python's negative slices are dumb
+                if how_many_args == 0:
+                    call_args = []
+                else:
+                    call_args = self.stack[-how_many_args:]
+                    del self.stack[-how_many_args:]
+
+                if opcode == bytecode_reader.CALL_RETURNING_FUNCTION:
+                    self.stack[-1] = self.stack[-1].run(call_args)
+                else:
+                    self.stack.pop().run(call_args)
+
+            elif opcode == bytecode_reader.LOOKUP_VAR:
+                level, index = args
+                if level == len(self.scope.parent_scopes):
+                    var_scope = self.scope
+                else:
+                    var_scope = self.scope.parent_scopes[level]
+                self.stack.append(var_scope.local_vars[index])
+
+            elif opcode == bytecode_reader.SET_VAR:
+                level, index = args
+                if level == len(self.scope.parent_scopes):
+                    var_scope = self.scope
+                else:
+                    var_scope = self.scope.parent_scopes[level]
+                var_scope.local_vars[index] = self.stack.pop()
+
+            elif opcode == bytecode_reader.POP_ONE:
+                del self.stack[-1]
+
+            elif opcode in {bytecode_reader.CREATE_FUNCTION,
+                            bytecode_reader.CREATE_GENERATOR_FUNCTION}:
+                name, body, is_generator = args
+                self.stack.append(_create_function_object(
+                    body, self.scope, is_generator))
+
+            elif opcode == bytecode_reader.VOID_RETURN:
+                assert not self.stack
+                return None
+
+            elif opcode == bytecode_reader.VALUE_RETURN:
+                value = self.stack.pop()
+                assert not self.stack
+                return value
+
+            elif opcode == bytecode_reader.NEGATION:
+                self.stack[-1] = {objects.TRUE: objects.FALSE,
+                                  objects.FALSE: objects.TRUE}[self.stack[-1]]
+
+            elif opcode == bytecode_reader.JUMP_IF:
+                [opcode_index] = args
+                boolean = self.stack.pop()
+                assert boolean is objects.TRUE or boolean is objects.FALSE
+                if boolean is objects.TRUE:
+                    assert 0 <= opcode_index <= self.opcodes_len
+                    self.opcodes.seek(opcode_index)
+
             else:
-                call_args = stack[-how_many_args:]
-                del stack[-how_many_args:]
+                assert False, opcode
 
-            if opcode == bytecode_reader.CALL_RETURNING_FUNCTION:
-                stack[-1] = stack[-1].run(call_args)
-            else:
-                stack.pop().run(call_args)
-
-        elif opcode == bytecode_reader.LOOKUP_VAR:
-            level, index = args
-            if level == len(scope.parent_scopes):
-                var_scope = scope
-            else:
-                var_scope = scope.parent_scopes[level]
-            stack.append(var_scope.local_vars[index])
-
-        elif opcode == bytecode_reader.SET_VAR:
-            level, index = args
-            if level == len(scope.parent_scopes):
-                var_scope = scope
-            else:
-                var_scope = scope.parent_scopes[level]
-            var_scope.local_vars[index] = stack.pop()
-
-        elif opcode == bytecode_reader.POP_ONE:
-            del stack[-1]
-
-        elif opcode == bytecode_reader.CREATE_FUNCTION:
-            name, body = args
-            stack.append(_create_function_object(body, scope))
-
-        elif opcode == bytecode_reader.VOID_RETURN:
-            assert not stack
-            return None
-
-        elif opcode == bytecode_reader.VALUE_RETURN:
-            value = stack.pop()
-            assert not stack
-            return value
-
-        elif opcode == bytecode_reader.NEGATION:
-            stack[-1] = {objects.TRUE: objects.FALSE,
-                         objects.FALSE: objects.TRUE}[stack[-1]]
-
-        elif opcode == bytecode_reader.JUMP_IF:
-            [opcode_index] = args
-            boolean = stack.pop()
-            assert boolean is objects.TRUE or boolean is objects.FALSE
-            if boolean is objects.TRUE:
-                assert 0 <= opcode_index <= len(code.opcodes)
-                opcodes.seek(opcode_index)
-
-        else:
-            assert False, opcode
-
-    assert not stack
+        assert not self.stack
 
 
 def run_file(code):
     global_scope = _Scope(objects.BUILTINS, [])
     file_scope = _create_subscope(global_scope, code.how_many_local_vars)
-    _run(code, file_scope)
+    _Runner(code, file_scope).run()
