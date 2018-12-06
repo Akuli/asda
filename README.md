@@ -74,7 +74,7 @@ anything relevant.
 
 ### Is there any documentation?
 
-Not yet, but there's [an examples directory](examples/). All of the
+[Not much](docs/), but there's [an examples directory](examples/). All of the
 examples should work with asdac and pyasda.
 
 ### Are there any tests?

@@ -1,9 +1,9 @@
-# The Asda Compiler
+# Asdac Internals
 
-This page documents the internals of `asdac`, including lots of details. It's
+This page documents how `asdac` works, including lots of details. It's
 mostly useful for people who want to develop the compiler in some way, or who
-just want to know how it works. Right now this page also contains lots of
-details about asda's syntax, although I'm planning on moving those things to a
+just want to know how it works. Right now this page also contains a somewhat
+detailed description of asda's syntax, although I'm planning on moving it to a
 separate page later.
 
 `asdac`, short for "asda compiler", reads source code from a `.asda` file and
