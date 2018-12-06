@@ -11,10 +11,10 @@ _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
     ('id', r'[^\W\d]\w*'),
     ('op', r'[;=():.,\[\]]'),
     ('string', r'"[^"]*?"'),
-    ('ignore1', r'^[ \t]*(?:#.*)?\n'),
+    ('ignore1', r'^ *(?:#.*)?\n'),
     ('newline', r'\n'),
     ('indent', r'^ +'),
-    ('ignore2', r'[ \t]+'),
+    ('ignore2', r' +'),
     ('ignore3', r'#.*'),
     ('error', r'.'),
 ])
