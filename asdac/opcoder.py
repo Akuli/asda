@@ -87,7 +87,7 @@ class _OpCoder:
 
             opcoder.do_body(expression.body)
             self.output.ops.append(CreateFunction(
-                expression.name, function_opcode, expression.type.is_generator))
+               expression.name, function_opcode, expression.type.is_generator))
 
         elif isinstance(expression, cooked_ast.LookupVar):
             coder = self._get_coder_for_level(expression.level)
