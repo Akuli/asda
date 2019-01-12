@@ -170,151 +170,161 @@ class _Chef:
                 "unknown type '%s'" % typename, location)
         return TYPES[typename]
 
+    def cook_let(self, raw):
+        # TODO: error if the variable is defined in an outer scope, or not?
+        if raw.varname in self.local_vars:
+            raise common.CompileError(
+                "there's already a variable named '%s'" % raw.varname,
+                raw.location)
+
+        value = self.cook_expression(raw.value)
+        self.local_vars[raw.varname] = value.type
+        return CreateLocalVar(raw.location, None, raw.varname, value)
+
+    def cook_setvar(self, raw):
+        cooked_value = self.cook_expression(raw.value)
+        varname = raw.varname
+        chef = self
+
+        while True:
+            if varname in chef.local_vars:
+                if cooked_value.type != chef.local_vars[varname]:
+                    raise common.CompileError(
+                        ("'%s' is of type %s, can't assign %s to it"
+                         % (varname, chef.local_vars[varname].name,
+                            cooked_value.type.name)),
+                        raw.location)
+                return SetVar(
+                    raw.location, None,
+                    varname, chef.level, cooked_value)
+            if chef.parent_chef is None:
+                raise common.CompileError(
+                    "variable not found: %s" % varname,
+                    raw.location)
+
+            chef = chef.parent_chef
+
+    def cook_function_definition(self, raw):
+        if self.get_chef_for_varname(raw.funcname) is not None:
+            raise common.CompileError(
+                ("there's already a variable named '%s'"
+                 % raw.funcname), raw.location)
+
+        argnames = []
+        argtypes = []
+        for typename, typeloc, argname, argnameloc in raw.args:
+            argtype = self.cook_type(typename, typeloc)
+            if self.get_chef_for_varname(argname) is not None:
+                raise common.CompileError(
+                    "there's already a variable named '%s'" % argname,
+                    argnameloc)
+
+            argnames.append(argname)
+            argtypes.append(argtype)
+
+        if raw.return_or_yield_type is None:
+            return_or_yield_type = None
+        else:
+            # FIXME: the location is wrong because no better location is
+            # available
+            return_or_yield_type = self.cook_type(
+                raw.return_or_yield_type, raw.location)
+
+        functype = FunctionType(
+            raw.funcname, argtypes, return_or_yield_type, raw.is_generator)
+
+        # TODO: allow functions to call themselves
+        subchef = _Chef(self, True, raw.is_generator, return_or_yield_type)
+        subchef.local_vars.update(dict(zip(argnames, argtypes)))
+        body = list(map(subchef.cook_statement, raw.body))
+        self.local_vars[raw.funcname] = functype
+
+        return CreateLocalVar(raw.location, functype, raw.funcname,
+                              CreateFunction(raw.location, functype,
+                                             raw.funcname, argnames, body))
+
+    def cook_return(self, raw):
+        if not self.can_return:
+            raise common.CompileError("return outside function", raw.location)
+
+        if self.return_type is None:
+            if raw.value is not None:
+                raise common.CompileError(
+                    "cannot return a value from a void function",
+                    raw.value.location)
+            return VoidReturn(raw.location, None)
+
+        if raw.value is None:
+            raise common.CompileError("missing return value", raw.location)
+        value = self.cook_expression(raw.value)
+        if value.type != self.return_type:
+            raise common.CompileError(
+                ("should return %s, not %s"
+                 % (self.return_type.name, value.type.name)),
+                value.location)
+        return ValueReturn(raw.location, None, value)
+
+    def cook_yield(self, raw):
+        if self.yield_type is None:
+            raise common.CompileError(
+                "yield outside generator function", raw.location)
+
+        value = self.cook_expression(raw.value)
+        if value.type != self.yield_type:
+            raise common.CompileError(
+                ("should yield %s, not %s"
+                 % (self.yield_type.name, value.type.name)),
+                value.location)
+        return Yield(raw.location, None, value)
+
+    def cook_if(self, raw):
+        cond = self.cook_expression(raw.condition)
+        if cond.type != TYPES['Bool']:
+            raise common.CompileError(
+                "expected Bool, got " + cond.type.name, cond.location)
+
+        if_body = list(map(self.cook_statement, raw.if_body))
+        else_body = list(map(self.cook_statement, raw.else_body))
+        return If(raw.location, None, cond, if_body, else_body)
+
+    def cook_while(self, raw):
+        cond = self.cook_expression(raw.condition)
+        if cond.type != TYPES['Bool']:
+            raise common.CompileError(
+                "expected Bool, got " + cond.type.name, cond.location)
+
+        body = list(map(self.cook_statement, raw.body))
+        return Loop(raw.location, None, None, cond, None, body)
+
+    def cook_for(self, raw):
+        init = self.cook_statement(raw.init)
+        cond = self.cook_expression(raw.cond)
+        if cond.type != TYPES['Bool']:
+            raise common.CompileError(
+                "expected Bool, got " + cond.type.name, cond.location)
+        incr = self.cook_statement(raw.incr)
+        body = list(map(self.cook_statement, raw.body))
+        return Loop(raw.location, None, init, cond, incr, body)
+
     def cook_statement(self, raw_statement):
         if isinstance(raw_statement, raw_ast.Let):
-            # TODO: error if the variable is defined in an outer scope, or not?
-            if raw_statement.varname in self.local_vars:
-                raise common.CompileError(
-                    ("there's already a variable named '%s'"
-                     % raw_statement.varname), raw_statement.location)
-
-            value = self.cook_expression(raw_statement.value)
-            self.local_vars[raw_statement.varname] = value.type
-            return CreateLocalVar(raw_statement.location, None,
-                                  raw_statement.varname, value)
-
+            return self.cook_let(raw_statement)
         if isinstance(raw_statement, raw_ast.SetVar):
-            cooked_value = self.cook_expression(raw_statement.value)
-            varname = raw_statement.varname
-            chef = self
-
-            while True:
-                if varname in chef.local_vars:
-                    if cooked_value.type != chef.local_vars[varname]:
-                        raise common.CompileError(
-                            ("'%s' is of type %s, can't assign %s to it"
-                             % (varname, chef.local_vars[varname].name,
-                                cooked_value.type.name)),
-                            raw_statement.location)
-                    return SetVar(
-                        raw_statement.location, None,
-                        varname, chef.level, cooked_value)
-                if chef.parent_chef is None:
-                    raise common.CompileError(
-                        "variable not found: %s" % varname,
-                        raw_statement.location)
-
-                chef = chef.parent_chef
-
+            return self.cook_setvar(raw_statement)
         if isinstance(raw_statement, raw_ast.FuncCall):
             return self.cook_function_call(raw_statement)
-
         if isinstance(raw_statement, raw_ast.FuncDefinition):
-            if self.get_chef_for_varname(raw_statement.funcname) is not None:
-                raise common.CompileError(
-                    ("there's already a variable named '%s'"
-                     % raw_statement.funcname), raw_statement.location)
-
-            argnames = []
-            argtypes = []
-            for typename, typeloc, argname, argnameloc in raw_statement.args:
-                argtype = self.cook_type(typename, typeloc)
-                if self.get_chef_for_varname(argname) is not None:
-                    raise common.CompileError(
-                        "there's already a variable named '%s'" % argname,
-                        argnameloc)
-
-                argnames.append(argname)
-                argtypes.append(argtype)
-
-            if raw_statement.return_or_yield_type is None:
-                return_or_yield_type = None
-            else:
-                # FIXME: the location is wrong because no better location is
-                # available
-                return_or_yield_type = self.cook_type(
-                    raw_statement.return_or_yield_type, raw_statement.location)
-
-            functype = FunctionType(
-                raw_statement.funcname, argtypes,
-                return_or_yield_type, raw_statement.is_generator)
-
-            # TODO: allow functions to call themselves
-            subchef = _Chef(self, True, raw_statement.is_generator,
-                            return_or_yield_type)
-            subchef.local_vars.update(dict(zip(argnames, argtypes)))
-            body = list(map(subchef.cook_statement, raw_statement.body))
-            self.local_vars[raw_statement.funcname] = functype
-
-            return CreateLocalVar(
-                raw_statement.location, functype, raw_statement.funcname,
-                CreateFunction(raw_statement.location, functype,
-                               raw_statement.funcname, argnames, body))
-
+            return self.cook_function_definition(raw_statement)
         if isinstance(raw_statement, raw_ast.Return):
-            if not self.can_return:
-                raise common.CompileError(
-                    "return outside function", raw_statement.location)
-
-            if self.return_type is None:
-                if raw_statement.value is not None:
-                    raise common.CompileError(
-                        "cannot return a value from a void function",
-                        raw_statement.value.location)
-                return VoidReturn(raw_statement.location, None)
-            else:
-                if raw_statement.value is None:
-                    raise common.CompileError(
-                        "missing return value", raw_statement.location)
-                value = self.cook_expression(raw_statement.value)
-                if value.type != self.return_type:
-                    raise common.CompileError(
-                        ("should return %s, not %s"
-                         % (self.return_type.name, value.type.name)),
-                        value.location)
-                return ValueReturn(raw_statement.location, None, value)
-
+            return self.cook_return(raw_statement)
         if isinstance(raw_statement, raw_ast.Yield):
-            if self.yield_type is None:
-                raise common.CompileError(
-                    "yield outside generator function", raw_statement.location)
-
-            value = self.cook_expression(raw_statement.value)
-            if value.type != self.yield_type:
-                raise common.CompileError(
-                    ("should yield %s, not %s"
-                     % (self.yield_type.name, value.type.name)),
-                    value.location)
-            return Yield(raw_statement.location, None, value)
-
+            return self.cook_yield(raw_statement)
         if isinstance(raw_statement, raw_ast.If):
-            cond = self.cook_expression(raw_statement.condition)
-            if cond.type != TYPES['Bool']:
-                raise common.CompileError(
-                    "expected Bool, got " + cond.type.name, cond.location)
-
-            if_body = list(map(self.cook_statement, raw_statement.if_body))
-            else_body = list(map(self.cook_statement, raw_statement.else_body))
-            return If(raw_statement.location, None, cond, if_body, else_body)
-
+            return self.cook_if(raw_statement)
         if isinstance(raw_statement, raw_ast.While):
-            cond = self.cook_expression(raw_statement.condition)
-            if cond.type != TYPES['Bool']:
-                raise common.CompileError(
-                    "expected Bool, got " + cond.type.name, cond.location)
-
-            body = list(map(self.cook_statement, raw_statement.body))
-            return Loop(raw_statement.location, None, None, cond, None, body)
-
+            return self.cook_while(raw_statement)
         if isinstance(raw_statement, raw_ast.For):
-            init = self.cook_statement(raw_statement.init)
-            cond = self.cook_expression(raw_statement.cond)
-            if cond.type != TYPES['Bool']:
-                raise common.CompileError(
-                    "expected Bool, got " + cond.type.name, cond.location)
-            incr = self.cook_statement(raw_statement.incr)
-            body = list(map(self.cook_statement, raw_statement.body))
-            return Loop(raw_statement.location, None, init, cond, incr, body)
+            return self.cook_for(raw_statement)
 
         assert False, raw_statement
 
