@@ -12,7 +12,7 @@ StrConstant = _astclass('StrConstant', ['python_string'])
 IntConstant = _astclass('IntConstant', ['python_int'])
 SetVar = _astclass('SetVar', ['varname', 'level', 'value'])
 LookupVar = _astclass('LookupVar', ['varname', 'level'])
-CreateFunction = _astclass('CreateFunction', ['name', 'args', 'body'])
+CreateFunction = _astclass('CreateFunction', ['name', 'argnames', 'body'])
 CreateLocalVar = _astclass('CreateLocalVar', ['varname', 'initial_value'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
 VoidReturn = _astclass('VoidReturn', [])
@@ -215,15 +215,17 @@ class _Chef:
                     ("there's already a variable named '%s'"
                      % raw_statement.funcname), raw_statement.location)
 
-            args = []
+            argnames = []
+            argtypes = []
             for typename, typeloc, argname, argnameloc in raw_statement.args:
-                type_ = self.cook_type(typename, typeloc)
+                argtype = self.cook_type(typename, typeloc)
                 if self.get_chef_for_varname(argname) is not None:
                     raise common.CompileError(
                         "there's already a variable named '%s'" % argname,
                         argnameloc)
 
-                args.append((argname, type_))
+                argnames.append(argname)
+                argtypes.append(argtype)
 
             if raw_statement.return_or_yield_type is None:
                 return_or_yield_type = None
@@ -234,20 +236,20 @@ class _Chef:
                     raw_statement.return_or_yield_type, raw_statement.location)
 
             functype = FunctionType(
-                raw_statement.funcname, [arg[1] for arg in args],
+                raw_statement.funcname, argtypes,
                 return_or_yield_type, raw_statement.is_generator)
 
             # TODO: allow functions to call themselves
             subchef = _Chef(self, True, raw_statement.is_generator,
                             return_or_yield_type)
-            subchef.local_vars.update(dict(args))
+            subchef.local_vars.update(dict(zip(argnames, argtypes)))
             body = list(map(subchef.cook_statement, raw_statement.body))
             self.local_vars[raw_statement.funcname] = functype
 
             return CreateLocalVar(
                 raw_statement.location, functype, raw_statement.funcname,
                 CreateFunction(raw_statement.location, functype,
-                               raw_statement.funcname, args, body))
+                               raw_statement.funcname, argnames, body))
 
         if isinstance(raw_statement, raw_ast.Return):
             if not self.can_return:

@@ -80,9 +80,9 @@ class _OpCoder:
             self.do_function_call(expression)
 
         elif isinstance(expression, cooked_ast.CreateFunction):
-            function_opcode = OpCode(len(expression.args))
+            function_opcode = OpCode(len(expression.argnames))
             opcoder = _OpCoder(function_opcode, self)
-            for index, (argname, argtype) in enumerate(expression.args):
+            for index, argname in enumerate(expression.argnames):
                 opcoder.local_vars[argname] = index
 
             opcoder.do_body(expression.body)
