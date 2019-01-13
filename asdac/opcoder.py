@@ -20,11 +20,12 @@ class OpCode:
         return var
 
 
+# all types are cooked_ast types
 StrConstant = namedtuple('StrConstant', ['python_string'])
 IntConstant = namedtuple('IntConstant', ['python_int'])
 BoolConstant = namedtuple('BoolConstant', ['python_bool'])
 CreateFunction = namedtuple('CreateFunction', [
-    'name', 'body_opcode', 'is_generator'])
+    'name', 'functype', 'body_opcode'])
 LookupVar = namedtuple('LookupVar', ['level', 'var'])
 SetVar = namedtuple('SetVar', ['level', 'var'])
 CallFunction = namedtuple('CallFunction', ['nargs', 'returns_a_value'])
@@ -87,7 +88,7 @@ class _OpCoder:
 
             opcoder.do_body(expression.body)
             self.output.ops.append(CreateFunction(
-               expression.name, function_opcode, expression.type.is_generator))
+               expression.name, expression.type, function_opcode))
 
         elif isinstance(expression, cooked_ast.LookupVar):
             coder = self._get_coder_for_level(expression.level)
@@ -192,7 +193,7 @@ def create_opcode(cooked):
     builtin_opcoder = _OpCoder(None, None)
     builtin_opcoder.local_vars.update({
         name: index
-        for index, (name, type_) in enumerate(cooked_ast.BUILTINS)
+        for index, name in enumerate(cooked_ast.BUILTIN_OBJECTS.keys())
     })
 
     output = OpCode(0)

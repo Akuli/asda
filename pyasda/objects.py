@@ -1,25 +1,33 @@
 # right now this file looks like a skeleton of boilerplate, but it works
 
+import collections
+
 
 class AsdaType:
     pass
 
 
-types = {
-    'Str': AsdaType(),
-    'Int': AsdaType(),
-    'Bool': AsdaType(),
-}
+types = collections.OrderedDict([
+    ('Str', AsdaType()),
+    ('Int', AsdaType()),
+    ('Bool', AsdaType()),
+])
 
 
-# TODO: keep track of arg types and return type?
 class FunctionType(AsdaType):
-    pass
+
+    def __init__(self, argtypes, returntype, is_generator=False):
+        super().__init__()
+        self.argtypes = argtypes
+        self.returntype = returntype
+        self.is_generator = is_generator
 
 
-# TODO: keep track of item types?
 class GeneratorType(AsdaType):
-    pass
+
+    def __init__(self, itemtype):
+        super().__init__()
+        self.itemtype = itemtype
 
 
 class AsdaObject:
@@ -42,27 +50,33 @@ class AsdaString(AsdaObject):
 
 class Generator(AsdaObject):
 
-    def __init__(self, next_callback):
-        super().__init__(GeneratorType())
+    def __init__(self, tybe, next_callback):
+        super().__init__(tybe)
         self.next = next_callback
 
 
 class Function(AsdaObject):
 
-    def __init__(self, python_func):
-        super().__init__(FunctionType())
+    def __init__(self, tybe, python_func):
+        super().__init__(tybe)
         self.python_func = python_func
 
     def run(self, args):
+        assert len(args) == len(self.asda_type.argtypes)
+        for arg, tybe in zip(args, self.asda_type.argtypes):
+            pass   # TODO: how 2 check this
         return self.python_func(*args)
 
 
 TRUE = AsdaObject(types['Bool'])
 FALSE = AsdaObject(types['Bool'])
 
+# FIXME: next() needs generics
 BUILTINS = [
-    Function(lambda arg: print(arg.python_string)),
+    Function(FunctionType([types['Str']], None),
+             lambda arg: print(arg.python_string)),
     TRUE,
     FALSE,
-    Function(lambda arg: arg.next()),
+    Function(FunctionType([GeneratorType(types['Str'])], types['Str']),
+             lambda arg: arg.next()),
 ]

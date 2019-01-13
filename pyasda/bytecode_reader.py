@@ -23,19 +23,32 @@ NEGATION = b'!'
 JUMP_IF = b'J'
 END_OF_BODY = b'E'      # only used in bytecode files
 
+TYPE_BUILTIN = b'b'
+TYPE_GENERATOR = b'G'  # not to be confused with generator functions
+TYPE_VOID = b'v'
+
 Code = collections.namedtuple('Code', ['how_many_local_vars', 'opcodes'])
 
 
 class _BytecodeReader:
 
     def __init__(self, read_callback):
-        self._maybe_read = read_callback    # no error on eof, returns b''
+        self._callback = read_callback    # no error on eof, returns b''
+        self._push_buffer = bytearray()
 
     # errors on unexpected eof
     def _read(self, size):
-        result = self._maybe_read(size)
-        assert len(result) == size
-        return result
+        part1 = bytearray()
+        while size > 0 and self._push_buffer:
+            part1.append(self._push_buffer.pop())
+            size -= 1
+
+        part2 = self._callback(size)
+        assert len(part2) == size
+        return bytes(part1) + part2
+
+    def _unread(self, byte):
+        self._push_buffer.append(byte)
 
     def _read_uint(self, size):
         assert size % 8 == 0 and 0 < size <= 64, size
@@ -54,12 +67,35 @@ class _BytecodeReader:
         utf8 = self._read(length)
         return utf8.decode('utf-8')
 
+    def read_type(self):
+        magic = self._read(1)
+
+        if magic == TYPE_BUILTIN:
+            index = self.read_uint8()
+            return list(objects.types.values())[index]
+
+        elif magic in {CREATE_FUNCTION, CREATE_GENERATOR_FUNCTION}:
+            is_generator = (magic == CREATE_GENERATOR_FUNCTION)
+            returntype = self.read_type()
+            nargs = self.read_uint8()
+            argtypes = [self.read_type() for junk in range(nargs)]
+            return objects.FunctionType(argtypes, returntype, is_generator)
+
+        elif magic == TYPE_VOID:
+            return None
+
+        elif magic == TYPE_GENERATOR:
+            return objects.GeneratorType(self.read_type())
+
+        else:
+            assert False
+
     def read_body(self):
         how_many_local_vars = self.read_uint16()
         opcode = []
 
         while True:
-            magic = self._maybe_read(1)
+            magic = self._read(1)
             if magic == END_OF_BODY:
                 break
 
@@ -83,10 +119,11 @@ class _BytecodeReader:
             elif magic == POP_ONE:
                 opcode.append((POP_ONE,))
             elif magic in {CREATE_FUNCTION, CREATE_GENERATOR_FUNCTION}:
-                name = self.read_string()
+                self._unread(*magic)
+                tybe = self.read_type()
+                name = self.read_string()     # TODO: is this needed at all?
                 body = self.read_body()
-                opcode.append((CREATE_FUNCTION, name, body,
-                               magic == CREATE_GENERATOR_FUNCTION))
+                opcode.append((CREATE_FUNCTION, tybe, name, body))
             elif magic == VOID_RETURN:
                 opcode.append((VOID_RETURN,))
             elif magic == VALUE_RETURN:

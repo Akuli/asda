@@ -1,10 +1,10 @@
 import functools
 
-from . import common, opcoder
+from . import common, cooked_ast, opcoder
 
 
-CREATE_FUNCTION = b'f'
-CREATE_GENERATOR_FUNCTION = b'g'
+CREATE_FUNCTION = b'f'             # also used when bytecoding a type
+CREATE_GENERATOR_FUNCTION = b'g'   # also used when bytecoding a type
 LOOKUP_VAR = b'v'
 SET_VAR = b'V'
 STR_CONSTANT = b'"'
@@ -20,6 +20,11 @@ YIELD = b'Y'
 NEGATION = b'!'
 JUMP_IF = b'J'
 END_OF_BODY = b'E'
+
+# these are used when bytecoding a type
+TYPE_BUILTIN = b'b'
+TYPE_GENERATOR = b'G'  # not to be confused with generator functions
+TYPE_VOID = b'v'
 
 
 class _BytecodeWriter:
@@ -53,9 +58,30 @@ class _BytecodeWriter:
         self.write_uint32(len(utf8))
         self.output.extend(utf8)
 
-    def write_type(self, type_):
-        # FIXME
-        self.write_string(type_.name)
+    def write_type(self, tybe):
+        if isinstance(tybe, cooked_ast.BuiltinType):
+            names = list(cooked_ast.BUILTIN_TYPES)
+            self.output.extend(TYPE_BUILTIN)
+            self.write_uint8(names.index(tybe.name))
+
+        elif isinstance(tybe, cooked_ast.FunctionType):
+            self.output.extend(CREATE_GENERATOR_FUNCTION if tybe.is_generator
+                               else CREATE_FUNCTION)
+            self.write_type(tybe.return_or_yield_type)
+
+            self.write_uint8(len(tybe.argtypes))
+            for argtype in tybe.argtypes:
+                self.write_type(argtype)
+
+        elif isinstance(tybe, cooked_ast.GeneratorType):
+            self.output.extend(TYPE_GENERATOR)
+            self.write_type(tybe.item_type)
+
+        elif tybe is None:
+            self.output.extend(TYPE_VOID)
+
+        else:
+            assert False, tybe
 
     def write_op(self, op):
         if isinstance(op, opcoder.StrConstant):
@@ -69,8 +95,8 @@ class _BytecodeWriter:
                 TRUE_CONSTANT if op.python_bool else FALSE_CONSTANT)
 
         elif isinstance(op, opcoder.CreateFunction):
-            self.output.extend(CREATE_GENERATOR_FUNCTION if op.is_generator
-                               else CREATE_FUNCTION)
+            assert isinstance(op.functype, cooked_ast.FunctionType)
+            self.write_type(op.functype)
             self.write_string(op.name)
             _BytecodeWriter(self.output).run(op.body_opcode)
 

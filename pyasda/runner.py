@@ -13,14 +13,14 @@ def _create_subscope(parent_scope, how_many_local_vars):
                   parent_scope.parent_scopes + [parent_scope])
 
 
-def _create_function_object(code, definition_scope, is_generator):
+def _create_function_object(code, definition_scope, tybe):
     def python_func(*args):
         scope = _create_subscope(definition_scope, code.how_many_local_vars)
         for index, arg in enumerate(args):
             scope.local_vars[index] = arg
         runner = _Runner(code, scope)
 
-        if not is_generator:
+        if not tybe.is_generator:
             yielded, value = runner.run()
             assert not yielded
             return value
@@ -34,9 +34,9 @@ def _create_function_object(code, definition_scope, is_generator):
                 raise RuntimeError("iteration ended lel")
             return value
 
-        return objects.Generator(get_next_item)
+        return objects.Generator(tybe.returntype, get_next_item)
 
-    return objects.Function(python_func)
+    return objects.Function(tybe, python_func)
 
 
 class _Runner:
@@ -96,9 +96,9 @@ class _Runner:
 
             elif opcode in {bytecode_reader.CREATE_FUNCTION,
                             bytecode_reader.CREATE_GENERATOR_FUNCTION}:
-                name, body, is_generator = args
+                tybe, name, body = args
                 self.stack.append(_create_function_object(
-                    body, self.scope, is_generator))
+                    body, self.scope, tybe))
 
             elif opcode == bytecode_reader.VOID_RETURN:
                 assert not self.stack

@@ -35,11 +35,11 @@ class BuiltinType(Type):
         self.name = name
 
 
-TYPES = {
-    'Str': BuiltinType('Str'),
-    'Int': BuiltinType('Int'),
-    'Bool': BuiltinType('Bool'),
-}
+BUILTIN_TYPES = collections.OrderedDict([
+    ('Str', BuiltinType('Str')),
+    ('Int', BuiltinType('Int')),
+    ('Bool', BuiltinType('Bool')),
+])
 
 
 class FunctionType(Type):
@@ -71,6 +71,16 @@ class GeneratorType(Type):
         if not isinstance(other, GeneratorType):
             return NotImplemented
         return self.item_type == other.item_type
+
+
+BUILTIN_OBJECTS = collections.OrderedDict([
+    ('print', FunctionType('print', [BUILTIN_TYPES['Str']])),
+    ('TRUE', BUILTIN_TYPES['Bool']),
+    ('FALSE', BUILTIN_TYPES['Bool']),
+    # FIXME: next shouldn't be just for string generators, needs generics
+    ('next', FunctionType('next', [GeneratorType(BUILTIN_TYPES['Str'])],
+                          BUILTIN_TYPES['Str'])),
+])
 
 
 class _Chef:
@@ -135,11 +145,11 @@ class _Chef:
 
     def cook_expression(self, raw_expression):
         if isinstance(raw_expression, raw_ast.String):
-            return StrConstant(raw_expression.location, TYPES['Str'],
+            return StrConstant(raw_expression.location, BUILTIN_TYPES['Str'],
                                raw_expression.python_string)
 
         if isinstance(raw_expression, raw_ast.Integer):
-            return IntConstant(raw_expression.location, TYPES['Int'],
+            return IntConstant(raw_expression.location, BUILTIN_TYPES['Int'],
                                raw_expression.python_int)
 
         if isinstance(raw_expression, raw_ast.FuncCall):
@@ -165,10 +175,10 @@ class _Chef:
         raise NotImplementedError("oh no: " + str(raw_expression))
 
     def cook_type(self, typename, location):
-        if typename not in TYPES:
+        if typename not in BUILTIN_TYPES:
             raise common.CompileError(
                 "unknown type '%s'" % typename, location)
-        return TYPES[typename]
+        return BUILTIN_TYPES[typename]
 
     def cook_let(self, raw):
         # TODO: error if the variable is defined in an outer scope, or not?
@@ -279,7 +289,7 @@ class _Chef:
 
     def cook_if(self, raw):
         cond = self.cook_expression(raw.condition)
-        if cond.type != TYPES['Bool']:
+        if cond.type != BUILTIN_TYPES['Bool']:
             raise common.CompileError(
                 "expected Bool, got " + cond.type.name, cond.location)
 
@@ -289,7 +299,7 @@ class _Chef:
 
     def cook_while(self, raw):
         cond = self.cook_expression(raw.condition)
-        if cond.type != TYPES['Bool']:
+        if cond.type != BUILTIN_TYPES['Bool']:
             raise common.CompileError(
                 "expected Bool, got " + cond.type.name, cond.location)
 
@@ -299,7 +309,7 @@ class _Chef:
     def cook_for(self, raw):
         init = self.cook_statement(raw.init)
         cond = self.cook_expression(raw.cond)
-        if cond.type != TYPES['Bool']:
+        if cond.type != BUILTIN_TYPES['Bool']:
             raise common.CompileError(
                 "expected Bool, got " + cond.type.name, cond.location)
         incr = self.cook_statement(raw.incr)
@@ -329,18 +339,8 @@ class _Chef:
         assert False, raw_statement
 
 
-BUILTINS = [
-    ('print', FunctionType('print', [TYPES['Str']])),
-    ('TRUE', TYPES['Bool']),
-    ('FALSE', TYPES['Bool']),
-    # FIXME: next shouldn't be just for string generators, needs generics
-    ('next', FunctionType('next', [GeneratorType(TYPES['Str'])],
-                          TYPES['Str'])),
-]
-
-
 def cook(raw_ast_statements):
     builtin_chef = _Chef(None)
-    builtin_chef.local_vars.update(dict(BUILTINS))
+    builtin_chef.local_vars.update(BUILTIN_OBJECTS)
     file_chef = _Chef(builtin_chef)
     return map(file_chef.cook_statement, raw_ast_statements)
