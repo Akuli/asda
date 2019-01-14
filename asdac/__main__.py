@@ -95,7 +95,8 @@ def main():
                 before, bad_code, after = e.location.get_source()
                 if bad_code.isspace():
                     replacement = '\N{lower one quarter block}'
-                    bad_code = re.sub(r'[^\S\n]', replacement, bad_code)
+                    bad_code = re.sub(r'[^\S\n]', replacement,
+                                      bad_code.expandtabs(4))
                     bad_code = bad_code.replace('\n', replacement * 3 + '\n')
 
                 gonna_print = before + red_start + bad_code + red_end + after

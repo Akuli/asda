@@ -46,7 +46,10 @@ def _raw_tokenize(filename, code):
                 filename, lineno, startcolumn, lineno, endcolumn)
 
         if kind == 'error':
-            raise common.CompileError("unexpected %s" % value, location)
+            message_part = {
+                '\t': 'tab',
+            }.get(value, repr(value))
+            raise common.CompileError("unexpected %s" % message_part, location)
         elif kind.startswith('ignore'):
             pass
         else:
