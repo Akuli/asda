@@ -16,6 +16,7 @@ Let = _astclass('Let', ['varname', 'value'])
 SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['varname'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
+FuncFromGeneric = _astclass('FuncFromGeneric', ['funcname', 'types'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
 FuncDefinition = _astclass('FuncDefinition', [
     'funcname', 'is_generator', 'args', 'return_or_yield_type', 'body'])
@@ -78,7 +79,16 @@ class _Parser:
         if first_token.kind == 'integer':
             result = Integer(first_token.location, int(first_token.value))
         elif first_token.kind == 'id':
-            result = GetVar(first_token.location, first_token.value)
+            if self.tokens.coming_up('op', '['):
+                # generic_func_name[T1, T2, ...]
+                self.tokens.next_token('op', '[')
+                types = self.parse_commasep_list(self.parse_type)
+                closing_bracket = self.tokens.next_token('op', ']')
+                result = FuncFromGeneric(
+                    first_token.location + closing_bracket.location,
+                    first_token.value, types)
+            else:
+                result = GetVar(first_token.location, first_token.value)
         elif first_token.kind == 'string':
             result = String(first_token.location, first_token.value.strip('"'))
         else:

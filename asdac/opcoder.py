@@ -1,4 +1,5 @@
 from collections import namedtuple
+import itertools
 
 from . import cooked_ast
 
@@ -52,7 +53,7 @@ class _OpCoder:
         else:
             self.level = parent_coder.level + 1
 
-        self.local_vars = {}    # {varname: opcode var int}
+        self.local_vars = {}    # {varname: opcode var int id}
 
     def do_function_call(self, call):
         self.do_expression(call.function)
@@ -90,10 +91,17 @@ class _OpCoder:
             self.output.ops.append(CreateFunction(
                expression.name, expression.type, function_opcode))
 
-        elif isinstance(expression, cooked_ast.LookupVar):
+        # the opcode is dynamically typed from here, so generic functions
+        # are treated same as variables
+        elif isinstance(expression, (cooked_ast.LookupVar,
+                                     cooked_ast.LookupGenericFunction)):
             coder = self._get_coder_for_level(expression.level)
+            if isinstance(expression, cooked_ast.LookupVar):
+                name = expression.varname
+            else:
+                name = expression.funcname
             self.output.ops.append(LookupVar(
-                expression.level, coder.local_vars[expression.varname]))
+                expression.level, coder.local_vars[name]))
 
         else:
             assert False, expression
@@ -193,7 +201,10 @@ def create_opcode(cooked):
     builtin_opcoder = _OpCoder(None, None)
     builtin_opcoder.local_vars.update({
         name: index
-        for index, name in enumerate(cooked_ast.BUILTIN_OBJECTS.keys())
+        for index, name in enumerate(itertools.chain(
+            cooked_ast.BUILTIN_OBJECTS.keys(),
+            cooked_ast.BUILTIN_GENERIC_FUNCS.keys()
+        ))
     })
 
     output = OpCode(0)

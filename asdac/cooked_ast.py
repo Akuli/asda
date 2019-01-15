@@ -12,6 +12,8 @@ StrConstant = _astclass('StrConstant', ['python_string'])
 IntConstant = _astclass('IntConstant', ['python_int'])
 SetVar = _astclass('SetVar', ['varname', 'level', 'value'])
 LookupVar = _astclass('LookupVar', ['varname', 'level'])
+LookupGenericFunction = _astclass('LookupGenericFunction',
+                                  ['funcname', 'types', 'level'])
 CreateFunction = _astclass('CreateFunction', ['name', 'argnames', 'body'])
 CreateLocalVar = _astclass('CreateLocalVar', ['varname', 'initial_value'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
@@ -24,6 +26,9 @@ Loop = _astclass('Loop', ['init', 'cond', 'incr', 'body'])    # while or for
 
 # subclasses must add a name attribute
 class Type:
+
+    def undo_generics(self, type_dict):
+        return self
 
     def __repr__(self):
         return '<cooked ast type %r>' % self.name
@@ -44,14 +49,14 @@ BUILTIN_TYPES = collections.OrderedDict([
 
 class FunctionType(Type):
 
-    def __init__(self, name, argtypes=(), return_or_yield_type=None,
+    def __init__(self, name_prefix, argtypes=(), return_or_yield_type=None,
                  is_generator=False):
         self.argtypes = list(argtypes)
         self.return_or_yield_type = return_or_yield_type
         self.is_generator = is_generator
-
+        self.name_prefix = name_prefix
         self.name = '%s(%s)' % (
-            name, ', '.join(argtype.name for argtype in argtypes))
+            name_prefix, ', '.join(argtype.name for argtype in argtypes))
 
     def __eq__(self, other):
         if not isinstance(other, FunctionType):
@@ -59,6 +64,16 @@ class FunctionType(Type):
         return (self.argtypes == other.argtypes and
                 self.return_or_yield_type == other.return_or_yield_type and
                 self.is_generator == other.is_generator)
+
+    def undo_generics(self, type_dict, new_name_prefix=None):
+        if new_name_prefix is None:
+            new_name_prefix = self.name_prefix
+
+        return FunctionType(
+            new_name_prefix,
+            [tybe.undo_generics(type_dict) for tybe in self.argtypes],
+            self.return_or_yield_type.undo_generics(type_dict),
+            self.is_generator)
 
 
 class GeneratorType(Type):
@@ -72,15 +87,64 @@ class GeneratorType(Type):
             return NotImplemented
         return self.item_type == other.item_type
 
+    def undo_generics(self, type_dict):
+        return GeneratorType(self.item_type.undo_generics(type_dict))
+
 
 BUILTIN_OBJECTS = collections.OrderedDict([
     ('print', FunctionType('print', [BUILTIN_TYPES['Str']])),
     ('TRUE', BUILTIN_TYPES['Bool']),
     ('FALSE', BUILTIN_TYPES['Bool']),
-    # FIXME: next shouldn't be just for string generators, needs generics
-    ('next', FunctionType('next', [GeneratorType(BUILTIN_TYPES['Str'])],
-                          BUILTIN_TYPES['Str'])),
 ])
+
+
+class GenericMarker(Type):
+
+    def __init__(self):
+        # FIXME: better naming
+        import random
+        self.name = random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+
+    def undo_generics(self, type_dict):
+        return type_dict.get(self, self)
+
+
+# note: generic functions are NOT objects
+#       generic functions are NOT types
+#       generic functions are something yet else :D
+class GenericFunction:
+
+    # type_markers contains GenericMarker objects
+    # functype's name_prefix should be set properly
+    def __init__(self, type_markers, functype):
+        self.type_markers = type_markers
+        self.functype = functype
+
+    def get_function_type(self, the_types, error_location):
+        if len(the_types) != len(self.type_markers):
+            if len(self.type_markers) == 1:
+                type_maybe_s = '1 type'
+            else:
+                type_maybe_s = '%d types' % len(self.type_markers)
+
+            raise common.CompileError(
+                "%s[...] expected %s, but got %d" % (
+                    type_maybe_s, len(the_types)),
+                error_location)
+
+        type_dict = dict(zip(self.type_markers, the_types))
+        new_name_prefix = '%s[%s]' % (
+            self.functype.name_prefix,
+            ', '.join(tybe.name for tybe in the_types))
+        return self.functype.undo_generics(type_dict, new_name_prefix)
+
+
+T = GenericMarker()
+BUILTIN_GENERIC_FUNCS = collections.OrderedDict([
+    ('next', GenericFunction(
+        [T], FunctionType('next', [GeneratorType(T)], T))),
+])
+del T
 
 
 class _Chef:
@@ -107,7 +171,9 @@ class _Chef:
         else:
             self.level = parent_chef.level + 1
 
-        self.local_vars = {}    # keys are strings, values are types
+        # keys are strings, values are types
+        self.local_vars = {}
+        self.local_generic_funcs = {}
 
     # there are multiple different kind of names:
     #   * types (currently all types are built-in)
@@ -117,7 +183,11 @@ class _Chef:
         while chef is not None:
             if name in chef.local_vars:
                 raise common.CompileError(
-                    "there's already a %s named '%s'" % (what_is_it, name),
+                    "there's already a '%s' variable" % name,
+                    location)
+            if name in chef.local_generic_funcs:
+                raise common.CompileError(
+                    "there's already a generic '%s' function" % name,
                     location)
             chef = chef.parent_chef
 
@@ -153,6 +223,7 @@ class _Chef:
 
         return CallFunction(raw_func_call.location, returning, function, args)
 
+    # get_chef_for_blah()s are kinda copy/pasta but not tooo bad imo
     def get_chef_for_varname(self, varname, error_location):
         chef = self
         while chef is not None:
@@ -162,6 +233,16 @@ class _Chef:
 
         raise common.CompileError(
             "variable not found: %s" % varname, error_location)
+
+    def get_chef_for_generic_func_name(self, generfuncname, error_location):
+        chef = self
+        while chef is not None:
+            if generfuncname in chef.local_generic_funcs:
+                return chef
+            chef = chef.parent_chef
+
+        raise common.CompileError(
+            "generic function not found: %s" % generfuncname, error_location)
 
     def cook_expression(self, raw_expression):
         if isinstance(raw_expression, raw_ast.String):
@@ -188,6 +269,18 @@ class _Chef:
                 raw_expression.location,
                 chef.local_vars[raw_expression.varname],
                 raw_expression.varname, chef.level)
+
+        if isinstance(raw_expression, raw_ast.FuncFromGeneric):
+            chef = self.get_chef_for_generic_func_name(
+                raw_expression.funcname, raw_expression.location)
+            generfunc = chef.local_generic_funcs[raw_expression.funcname]
+            types = [self.cook_type(tybe, location)
+                     for tybe, location in raw_expression.types]
+            functype = generfunc.get_function_type(
+                types, raw_expression.location)
+            return LookupGenericFunction(
+                raw_expression.location, functype, raw_expression.funcname,
+                types, chef.level)
 
         raise NotImplementedError("oh no: " + str(raw_expression))
 
@@ -347,5 +440,6 @@ class _Chef:
 def cook(raw_ast_statements):
     builtin_chef = _Chef(None)
     builtin_chef.local_vars.update(BUILTIN_OBJECTS)
+    builtin_chef.local_generic_funcs.update(BUILTIN_GENERIC_FUNCS)
     file_chef = _Chef(builtin_chef)
     return map(file_chef.cook_statement, raw_ast_statements)

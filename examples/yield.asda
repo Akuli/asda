@@ -1,8 +1,12 @@
-generator[Str] do_stuff():
+generator[Bool] do_stuff():
     while TRUE:
-        yield "Yay"
+        yield TRUE
+        yield FALSE
 
 let g = do_stuff()
-print(next(g))
-print(next(g))
-print(next(g))
+if next[Bool](g):
+    print("should get printed")
+if next[Bool](g):
+    print("should NOT get printed")
+if next[Bool](g):
+    print("should also get printed")

@@ -14,6 +14,10 @@ types = collections.OrderedDict([
 ])
 
 
+class GenericType(AsdaType):
+    pass
+
+
 class FunctionType(AsdaType):
 
     def __init__(self, argtypes, returntype, is_generator=False):
@@ -71,12 +75,12 @@ class Function(AsdaObject):
 TRUE = AsdaObject(types['Bool'])
 FALSE = AsdaObject(types['Bool'])
 
-# FIXME: next() needs generics
+T = GenericType()
 BUILTINS = [
     Function(FunctionType([types['Str']], None),
              lambda arg: print(arg.python_string)),
     TRUE,
     FALSE,
-    Function(FunctionType([GeneratorType(types['Str'])], types['Str']),
-             lambda arg: arg.next()),
+    Function(FunctionType([GeneratorType(T)], T), lambda arg: arg.next()),
 ]
+del T
