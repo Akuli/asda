@@ -187,24 +187,36 @@ class _Parser:
         varname = self.tokens.next_token('id')
         return typeinfo + (varname.value, varname.location)
 
+    def func_definition_coming_up(self):
+        # first 'id' is a type name
+        if not (self.tokens.coming_up('id') or
+                self.tokens.coming_up('keyword', 'void')):
+            return False
+
+        # currently the 'generator' keyword can only be used for this
+        if self.tokens.coming_up('keyword', 'generator', how_soon=2):
+            return True
+
+        # check for: TYPENAME FUNCNAME(...
+        return (self.tokens.coming_up('id', how_soon=2) and
+                self.tokens.coming_up('op', '(', how_soon=3))
+
     def parse_func_definition(self):
-        if self.tokens.coming_up('keyword', 'generator'):
-            generator = True
-            generator_keyword = self.tokens.next_token('keyword', 'generator')
-            first_location = generator_keyword.location
-            self.tokens.next_token('op', '[')
+        if self.tokens.coming_up('keyword', 'void'):
+            return_or_yield_type = None
+            type_location = self.tokens.next_token('keyword', 'void').location
+        else:
             return_or_yield_type, type_location = self.parse_type()
-            self.tokens.next_token('op', ']')
+
+        if self.tokens.coming_up('keyword', 'generator'):
+            generator_word = self.tokens.next_token('keyword', 'generator')
+            if return_or_yield_type is None:
+                raise common.CompileError(
+                    "cannot create a void generator function",
+                    type_location + generator_word.location)
+            generator = True
         else:
             generator = False
-            if self.tokens.coming_up('keyword', 'void'):
-                void = self.tokens.next_token('keyword', 'void')
-                first_location = void.location
-                return_or_yield_type = None
-                type_location = void.location
-            else:
-                return_or_yield_type, type_location = self.parse_type()
-                first_location = type_location
 
         name = self.tokens.next_token('id')
         self.tokens.next_token('op', '(')
@@ -215,7 +227,7 @@ class _Parser:
 
         # the location of a function definition is just the first line,
         # because the body can get quite long
-        location = first_location + close_paren.location
+        location = type_location + close_paren.location
         return FuncDefinition(location, name.value, generator, args,
                               return_or_yield_type, body)
 
@@ -263,11 +275,7 @@ class _Parser:
             result = self.parse_for()
             is_multiline = True
 
-        elif self.tokens.coming_up('keyword', 'generator') or (
-                (self.tokens.coming_up('id') or
-                 self.tokens.coming_up('keyword', 'void'))
-                and self.tokens.coming_up('id', how_soon=2)
-                and self.tokens.coming_up('op', '(', how_soon=3)):
+        elif self.func_definition_coming_up():
             result = self.parse_func_definition()
             is_multiline = True
 
