@@ -1,5 +1,6 @@
 import collections
 import functools
+import itertools
 
 import more_itertools
 
@@ -30,8 +31,11 @@ For = _astclass('For', ['init', 'cond', 'incr', 'body'])
 class _TokenIterator:
 
     def __init__(self, token_iterable):
-        # more_itertools.peekable is awesome
-        self._iterator = more_itertools.peekable(token_iterable)
+        self._iterator = iter(token_iterable)
+
+    def copy(self):
+        self._iterator, copied = itertools.tee(self._iterator)
+        return _TokenIterator(copied)
 
     def _check_token(self, token, kind, value):
         error = functools.partial(common.CompileError, location=token.location)
@@ -40,27 +44,35 @@ class _TokenIterator:
         if kind is not None and token.kind != kind:
             raise error("expected %s, got %r" % (kind, token.value))
 
-    def coming_up(self, kind=None, value=None, *, how_soon=1):
-        # self._iterator[how_soon-1] without a slice raises IndexError if the
-        # iterator ends, but that's undocumented so i don't want to rely on it
-        head = self._iterator[:how_soon]
-        if len(head) < how_soon:
+    def coming_up(self, kind=None, value=None, *, how_soon=0):
+        token = more_itertools.nth(self.copy()._iterator, how_soon)
+        if token is None:
+            # end of file before the token
             return False
-        assert len(head) == how_soon
 
         try:
-            self._check_token(head[-1], kind, value)
+            self._check_token(token, kind, value)
         except common.CompileError:
             return False
         return True
 
     def next_token(self, required_kind=None, required_value=None):
-        result = next(self._iterator)
+        try:
+            result = next(self._iterator)
+        except StopIteration as e:
+            # not-very-latest pythons suppress StopIteration if raised in
+            # generator function
+            # TODO: raise CompileError instead with some nice location
+            raise EOFError from e
         self._check_token(result, required_kind, required_value)
         return result
 
     def eof(self):
-        return (not self._iterator)
+        try:
+            next(self.copy()._iterator)
+            return False
+        except StopIteration:
+            return True
 
 
 class _Parser:
@@ -194,12 +206,12 @@ class _Parser:
             return False
 
         # currently the 'generator' keyword can only be used for this
-        if self.tokens.coming_up('keyword', 'generator', how_soon=2):
+        if self.tokens.coming_up('keyword', 'generator', how_soon=1):
             return True
 
         # check for: TYPENAME FUNCNAME(...
-        return (self.tokens.coming_up('id', how_soon=2) and
-                self.tokens.coming_up('op', '(', how_soon=3))
+        return (self.tokens.coming_up('id', how_soon=1) and
+                self.tokens.coming_up('op', '(', how_soon=2))
 
     def parse_func_definition(self):
         if self.tokens.coming_up('keyword', 'void'):
@@ -259,7 +271,7 @@ class _Parser:
             is_multiline = False
 
         elif (self.tokens.coming_up('id') and
-              self.tokens.coming_up('op', '=', how_soon=2)):
+              self.tokens.coming_up('op', '=', how_soon=1)):
             result = self.parse_assignment()
             is_multiline = False
 
