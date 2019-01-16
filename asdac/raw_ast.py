@@ -1,4 +1,5 @@
 import collections
+import contextlib
 import functools
 import itertools
 
@@ -36,6 +37,14 @@ class _TokenIterator:
     def copy(self):
         self._iterator, copied = itertools.tee(self._iterator)
         return _TokenIterator(copied)
+
+    @contextlib.contextmanager
+    def temporary_state(self):
+        self._iterator, backup = itertools.tee(self._iterator)
+        try:
+            yield
+        finally:
+            self._iterator = backup
 
     def _check_token(self, token, kind, value):
         error = functools.partial(common.CompileError, location=token.location)
@@ -199,21 +208,9 @@ class _Parser:
         varname = self.tokens.next_token('id')
         return typeinfo + (varname.value, varname.location)
 
-    def func_definition_coming_up(self):
-        # first 'id' is a type name
-        if not (self.tokens.coming_up('id') or
-                self.tokens.coming_up('keyword', 'void')):
-            return False
-
-        # currently the 'generator' keyword can only be used for this
-        if self.tokens.coming_up('keyword', 'generator', how_soon=1):
-            return True
-
-        # check for: TYPENAME FUNCNAME(...
-        return (self.tokens.coming_up('id', how_soon=1) and
-                self.tokens.coming_up('op', '(', how_soon=2))
-
-    def parse_func_definition(self):
+    # go_all_the_way=False is used when checking whether a valid-seeming
+    # function definition is coming up
+    def parse_func_definition(self, *, go_all_the_way=True):
         if self.tokens.coming_up('keyword', 'void'):
             return_or_yield_type = None
             type_location = self.tokens.next_token('keyword', 'void').location
@@ -235,6 +232,9 @@ class _Parser:
         args = self.parse_commasep_list(self.parse_arg_spec)
         close_paren = self.tokens.next_token('op', ')')
 
+        if not go_all_the_way:
+            return None
+
         body = _Parser(self.tokens).parse_block()
 
         # the location of a function definition is just the first line,
@@ -242,6 +242,14 @@ class _Parser:
         location = type_location + close_paren.location
         return FuncDefinition(location, name.value, generator, args,
                               return_or_yield_type, body)
+
+    def func_definition_coming_up(self):
+        with self.tokens.temporary_state():
+            try:
+                self.parse_func_definition(go_all_the_way=False)
+                return True
+            except common.CompileError:
+                return False
 
     def parse_assignment(self):
         name = self.tokens.next_token('id')
