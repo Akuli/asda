@@ -1,7 +1,7 @@
 from collections import namedtuple
 import itertools
 
-from . import cooked_ast
+from . import cooked_ast, objects
 
 
 # debugging tip: pprint.pprint(opcode.ops)
@@ -202,8 +202,8 @@ def create_opcode(cooked):
     builtin_opcoder.local_vars.update({
         name: index
         for index, name in enumerate(itertools.chain(
-            cooked_ast.BUILTIN_OBJECTS.keys(),
-            cooked_ast.BUILTIN_GENERIC_FUNCS.keys()
+            objects.BUILTIN_OBJECTS.keys(),
+            objects.BUILTIN_GENERIC_FUNCS.keys()
         ))
     })
 

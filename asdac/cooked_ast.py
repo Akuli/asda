@@ -1,6 +1,6 @@
 import collections
 
-from . import raw_ast, common
+from . import raw_ast, common, objects
 
 
 def _astclass(name, fields):
@@ -22,129 +22,6 @@ ValueReturn = _astclass('ValueReturn', ['value'])
 Yield = _astclass('Yield', ['value'])
 If = _astclass('If', ['cond', 'if_body', 'else_body'])
 Loop = _astclass('Loop', ['init', 'cond', 'incr', 'body'])    # while or for
-
-
-# subclasses must add a name attribute
-class Type:
-
-    def undo_generics(self, type_dict):
-        return self
-
-    def __repr__(self):
-        return '<cooked ast type %r>' % self.name
-
-
-class BuiltinType(Type):
-
-    def __init__(self, name):
-        self.name = name
-
-
-BUILTIN_TYPES = collections.OrderedDict([
-    ('Str', BuiltinType('Str')),
-    ('Int', BuiltinType('Int')),
-    ('Bool', BuiltinType('Bool')),
-])
-
-
-class FunctionType(Type):
-
-    def __init__(self, name_prefix, argtypes=(), return_or_yield_type=None,
-                 is_generator=False):
-        self.argtypes = list(argtypes)
-        self.return_or_yield_type = return_or_yield_type
-        self.is_generator = is_generator
-        self.name_prefix = name_prefix
-        self.name = '%s(%s)' % (
-            name_prefix, ', '.join(argtype.name for argtype in argtypes))
-
-    def __eq__(self, other):
-        if not isinstance(other, FunctionType):
-            return NotImplemented
-        return (self.argtypes == other.argtypes and
-                self.return_or_yield_type == other.return_or_yield_type and
-                self.is_generator == other.is_generator)
-
-    def undo_generics(self, type_dict, new_name_prefix=None):
-        if new_name_prefix is None:
-            new_name_prefix = self.name_prefix
-
-        return FunctionType(
-            new_name_prefix,
-            [tybe.undo_generics(type_dict) for tybe in self.argtypes],
-            self.return_or_yield_type.undo_generics(type_dict),
-            self.is_generator)
-
-
-class GeneratorType(Type):
-
-    def __init__(self, item_type):
-        self.item_type = item_type
-        self.name = 'Generator[%s]' % item_type.name
-
-    def __eq__(self, other):
-        if not isinstance(other, GeneratorType):
-            return NotImplemented
-        return self.item_type == other.item_type
-
-    def undo_generics(self, type_dict):
-        return GeneratorType(self.item_type.undo_generics(type_dict))
-
-
-BUILTIN_OBJECTS = collections.OrderedDict([
-    ('print', FunctionType('print', [BUILTIN_TYPES['Str']])),
-    ('TRUE', BUILTIN_TYPES['Bool']),
-    ('FALSE', BUILTIN_TYPES['Bool']),
-])
-
-
-class GenericMarker(Type):
-
-    def __init__(self):
-        # FIXME: better naming
-        import random
-        self.name = random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-
-    def undo_generics(self, type_dict):
-        return type_dict.get(self, self)
-
-
-# note: generic functions are NOT objects
-#       generic functions are NOT types
-#       generic functions are something yet else :D
-class GenericFunction:
-
-    # type_markers contains GenericMarker objects
-    # functype's name_prefix should be set properly
-    def __init__(self, type_markers, functype):
-        self.type_markers = type_markers
-        self.functype = functype
-
-    def get_function_type(self, the_types, error_location):
-        if len(the_types) != len(self.type_markers):
-            if len(self.type_markers) == 1:
-                type_maybe_s = '1 type'
-            else:
-                type_maybe_s = '%d types' % len(self.type_markers)
-
-            raise common.CompileError(
-                "%s[...] expected %s, but got %d" % (
-                    type_maybe_s, len(the_types)),
-                error_location)
-
-        type_dict = dict(zip(self.type_markers, the_types))
-        new_name_prefix = '%s[%s]' % (
-            self.functype.name_prefix,
-            ', '.join(tybe.name for tybe in the_types))
-        return self.functype.undo_generics(type_dict, new_name_prefix)
-
-
-T = GenericMarker()
-BUILTIN_GENERIC_FUNCS = collections.OrderedDict([
-    ('next', GenericFunction(
-        [T], FunctionType('next', [GeneratorType(T)], T))),
-])
-del T
 
 
 class _Chef:
@@ -191,7 +68,7 @@ class _Chef:
                     location)
             chef = chef.parent_chef
 
-        if name in BUILTIN_TYPES:
+        if name in objects.BUILTIN_TYPES:
             raise common.CompileError(
                 "'%s' is not a valid %s name because it's a type name"
                 % (name, what_is_it), location)
@@ -200,7 +77,7 @@ class _Chef:
 
     def cook_function_call(self, raw_func_call: raw_ast.FuncCall):
         function = self.cook_expression(raw_func_call.function)
-        if not isinstance(function.type, FunctionType):
+        if not isinstance(function.type, objects.FunctionType):
             raise common.CompileError(
                 "expected a function, got %s" % function.type.name,
                 function.location)
@@ -217,7 +94,8 @@ class _Chef:
                 raw_func_call.location)
 
         if function.type.is_generator:
-            returning = GeneratorType(function.type.return_or_yield_type)
+            returning = objects.GeneratorType(
+                function.type.return_or_yield_type)
         else:
             returning = function.type.return_or_yield_type
 
@@ -246,11 +124,13 @@ class _Chef:
 
     def cook_expression(self, raw_expression):
         if isinstance(raw_expression, raw_ast.String):
-            return StrConstant(raw_expression.location, BUILTIN_TYPES['Str'],
+            return StrConstant(raw_expression.location,
+                               objects.BUILTIN_TYPES['Str'],
                                raw_expression.python_string)
 
         if isinstance(raw_expression, raw_ast.Integer):
-            return IntConstant(raw_expression.location, BUILTIN_TYPES['Int'],
+            return IntConstant(raw_expression.location,
+                               objects.BUILTIN_TYPES['Int'],
                                raw_expression.python_int)
 
         if isinstance(raw_expression, raw_ast.FuncCall):
@@ -285,10 +165,10 @@ class _Chef:
         raise NotImplementedError("oh no: " + str(raw_expression))
 
     def cook_type(self, typename, location):
-        if typename not in BUILTIN_TYPES:
+        if typename not in objects.BUILTIN_TYPES:
             raise common.CompileError(
                 "unknown type '%s'" % typename, location)
-        return BUILTIN_TYPES[typename]
+        return objects.BUILTIN_TYPES[typename]
 
     def cook_let(self, raw):
         self._check_name_not_exist(raw.varname, 'variable', raw.location)
@@ -338,7 +218,7 @@ class _Chef:
             return_or_yield_type = self.cook_type(
                 raw.return_or_yield_type, raw.location)
 
-        functype = FunctionType(
+        functype = objects.FunctionType(
             raw.funcname, argtypes, return_or_yield_type, raw.is_generator)
 
         # TODO: allow functions to call themselves
@@ -387,7 +267,7 @@ class _Chef:
 
     def cook_if(self, raw):
         cond = self.cook_expression(raw.condition)
-        if cond.type != BUILTIN_TYPES['Bool']:
+        if cond.type != objects.BUILTIN_TYPES['Bool']:
             raise common.CompileError(
                 "expected Bool, got " + cond.type.name, cond.location)
 
@@ -397,7 +277,7 @@ class _Chef:
 
     def cook_while(self, raw):
         cond = self.cook_expression(raw.condition)
-        if cond.type != BUILTIN_TYPES['Bool']:
+        if cond.type != objects.BUILTIN_TYPES['Bool']:
             raise common.CompileError(
                 "expected Bool, got " + cond.type.name, cond.location)
 
@@ -407,7 +287,7 @@ class _Chef:
     def cook_for(self, raw):
         init = self.cook_statement(raw.init)
         cond = self.cook_expression(raw.cond)
-        if cond.type != BUILTIN_TYPES['Bool']:
+        if cond.type != objects.BUILTIN_TYPES['Bool']:
             raise common.CompileError(
                 "expected Bool, got " + cond.type.name, cond.location)
         incr = self.cook_statement(raw.incr)
@@ -439,7 +319,7 @@ class _Chef:
 
 def cook(raw_ast_statements):
     builtin_chef = _Chef(None)
-    builtin_chef.local_vars.update(BUILTIN_OBJECTS)
-    builtin_chef.local_generic_funcs.update(BUILTIN_GENERIC_FUNCS)
+    builtin_chef.local_vars.update(objects.BUILTIN_OBJECTS)
+    builtin_chef.local_generic_funcs.update(objects.BUILTIN_GENERIC_FUNCS)
     file_chef = _Chef(builtin_chef)
     return map(file_chef.cook_statement, raw_ast_statements)

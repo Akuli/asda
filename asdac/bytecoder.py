@@ -1,6 +1,6 @@
 import functools
 
-from . import common, cooked_ast, opcoder
+from . import common, objects, opcoder
 
 
 CREATE_FUNCTION = b'f'             # also used when bytecoding a type
@@ -59,12 +59,12 @@ class _BytecodeWriter:
         self.output.extend(utf8)
 
     def write_type(self, tybe):
-        if isinstance(tybe, cooked_ast.BuiltinType):
-            names = list(cooked_ast.BUILTIN_TYPES)
+        if isinstance(tybe, objects.BuiltinType):
+            names = list(objects.BUILTIN_TYPES)
             self.output.extend(TYPE_BUILTIN)
             self.write_uint8(names.index(tybe.name))
 
-        elif isinstance(tybe, cooked_ast.FunctionType):
+        elif isinstance(tybe, objects.FunctionType):
             self.output.extend(CREATE_GENERATOR_FUNCTION if tybe.is_generator
                                else CREATE_FUNCTION)
             self.write_type(tybe.return_or_yield_type)
@@ -73,7 +73,7 @@ class _BytecodeWriter:
             for argtype in tybe.argtypes:
                 self.write_type(argtype)
 
-        elif isinstance(tybe, cooked_ast.GeneratorType):
+        elif isinstance(tybe, objects.GeneratorType):
             self.output.extend(TYPE_GENERATOR)
             self.write_type(tybe.item_type)
 
@@ -95,7 +95,7 @@ class _BytecodeWriter:
                 TRUE_CONSTANT if op.python_bool else FALSE_CONSTANT)
 
         elif isinstance(op, opcoder.CreateFunction):
-            assert isinstance(op.functype, cooked_ast.FunctionType)
+            assert isinstance(op.functype, objects.FunctionType)
             self.write_type(op.functype)
             self.write_string(op.name)
             _BytecodeWriter(self.output).run(op.body_opcode)
