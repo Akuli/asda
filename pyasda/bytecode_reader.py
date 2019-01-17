@@ -13,6 +13,7 @@ INT_CONSTANT = b'1'     # only used in bytecode files
 TRUE_CONSTANT = b'T'    # only used in bytecode files
 FALSE_CONSTANT = b'F'   # only used in bytecode files
 CONSTANT = b'C'         # not used at all in bytecode files
+LOOKUP_METHOD = b'm'
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
 POP_ONE = b'P'
@@ -135,6 +136,10 @@ class _BytecodeReader:
                 opcode.append((JUMP_IF, where2jump))
             elif magic == NEGATION:
                 opcode.append((NEGATION,))
+            elif magic == LOOKUP_METHOD:
+                tybe = self.read_type()
+                index = self.read_uint16()
+                opcode.append((LOOKUP_METHOD, tybe, index))
             else:
                 assert False, magic
 

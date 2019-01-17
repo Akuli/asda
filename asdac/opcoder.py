@@ -28,6 +28,8 @@ BoolConstant = namedtuple('BoolConstant', ['python_bool'])
 CreateFunction = namedtuple('CreateFunction', [
     'name', 'functype', 'body_opcode'])
 LookupVar = namedtuple('LookupVar', ['level', 'var'])
+# tuples have an index() method, avoid name clash with misspelling
+LookupMethod = namedtuple('LookupMethod', ['type', 'indeks'])
 SetVar = namedtuple('SetVar', ['level', 'var'])
 CallFunction = namedtuple('CallFunction', ['nargs', 'returns_a_value'])
 PopOne = namedtuple('PopOne', [])
@@ -102,6 +104,12 @@ class _OpCoder:
                 name = expression.funcname
             self.output.ops.append(LookupVar(
                 expression.level, coder.local_vars[name]))
+
+        elif isinstance(expression, cooked_ast.LookupAttr):
+            self.do_expression(expression.obj)
+            method_names = list(expression.obj.type.methods.keys())
+            index = method_names.index(expression.attrname)
+            self.output.ops.append(LookupMethod(expression.obj.type, index))
 
         else:
             assert False, expression

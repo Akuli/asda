@@ -1,17 +1,14 @@
 # right now this file looks like a skeleton of boilerplate, but it works
 
 import collections
+import functools
+import itertools
 
 
 class AsdaType:
-    pass
 
-
-types = collections.OrderedDict([
-    ('Str', AsdaType()),
-    ('Int', AsdaType()),
-    ('Bool', AsdaType()),
-])
+    def __init__(self):
+        self.methods = []
 
 
 class GenericType(AsdaType):
@@ -22,9 +19,16 @@ class FunctionType(AsdaType):
 
     def __init__(self, argtypes, returntype, is_generator=False):
         super().__init__()
-        self.argtypes = argtypes
+        self.argtypes = list(argtypes)
         self.returntype = returntype
         self.is_generator = is_generator
+
+
+types = collections.OrderedDict([
+    ('Str', AsdaType()),
+    ('Int', AsdaType()),
+    ('Bool', AsdaType()),
+])
 
 
 class GeneratorType(AsdaType):
@@ -37,7 +41,7 @@ class GeneratorType(AsdaType):
 class AsdaObject:
 
     def __init__(self, asda_type):
-        self.asda_type = asda_type
+        self.asda_type = asda_type      # TODO: rename to just 'type'
 
 
 # TODO: rename this to String
@@ -65,11 +69,27 @@ class Function(AsdaObject):
         super().__init__(tybe)
         self.python_func = python_func
 
+    def method_bind(self, this):
+        bound_type = FunctionType(self.asda_type.argtypes[1:],
+                                  self.asda_type.returntype,
+                                  self.asda_type.is_generator)
+        return Function(bound_type, functools.partial(self.python_func, this))
+
     def run(self, args):
         assert len(args) == len(self.asda_type.argtypes)
         for arg, tybe in zip(args, self.asda_type.argtypes):
             pass   # TODO: how 2 check this
         return self.python_func(*args)
+
+
+def add_method(tybe, python_func, argtypes, *args, **kwargs):
+    functype = FunctionType(itertools.chain([tybe], argtypes), *args, **kwargs)
+    tybe.methods.append(Function(functype, python_func))
+
+
+add_method(
+    types['Str'], (lambda this: AsdaString(this.python_string.upper())),
+    [], types['Str'])
 
 
 TRUE = AsdaObject(types['Bool'])

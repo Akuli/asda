@@ -11,6 +11,7 @@ STR_CONSTANT = b'"'
 INT_CONSTANT = b'1'
 TRUE_CONSTANT = b'T'
 FALSE_CONSTANT = b'F'
+LOOKUP_METHOD = b'm'
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
 POP_ONE = b'P'
@@ -135,6 +136,11 @@ class _BytecodeWriter:
         elif isinstance(op, opcoder.JumpMarker):
             # already handled in run()
             pass
+
+        elif isinstance(op, opcoder.LookupMethod):
+            self.output.extend(LOOKUP_METHOD)
+            self.write_type(op.type)
+            self.write_uint16(op.indeks)
 
         else:
             assert False, op

@@ -12,6 +12,7 @@ StrConstant = _astclass('StrConstant', ['python_string'])
 IntConstant = _astclass('IntConstant', ['python_int'])
 SetVar = _astclass('SetVar', ['varname', 'level', 'value'])
 LookupVar = _astclass('LookupVar', ['varname', 'level'])
+LookupAttr = _astclass('LookupAttr', ['obj', 'attrname'])
 LookupGenericFunction = _astclass('LookupGenericFunction',
                                   ['funcname', 'types', 'level'])
 CreateFunction = _astclass('CreateFunction', ['name', 'argnames', 'body'])
@@ -132,6 +133,22 @@ class _Chef:
             return IntConstant(raw_expression.location,
                                objects.BUILTIN_TYPES['Int'],
                                raw_expression.python_int)
+
+        if isinstance(raw_expression, raw_ast.GetAttr):
+            # currently all attributes are method names
+            obj = self.cook_expression(raw_expression.obj)
+            try:
+                tybe = obj.type.methods[raw_expression.attrname]
+            except KeyError as e:
+                raise common.CompileError(
+                    # remember to replace 'method' with 'attribute' when other
+                    # attributes exist!
+                    "%s objects have no '%s' method" % (
+                        obj.type.name, raw_expression.attrname),
+                    raw_expression.location)
+
+            return LookupAttr(raw_expression.location, tybe.without_this_arg(),
+                              obj, raw_expression.attrname)
 
         if isinstance(raw_expression, raw_ast.FuncCall):
             call = self.cook_function_call(raw_expression)

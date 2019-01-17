@@ -125,6 +125,11 @@ class _Runner:
                     assert 0 <= opcode_index <= self.opcodes_len
                     self.opcodes.seek(opcode_index)
 
+            elif opcode == bytecode_reader.LOOKUP_METHOD:
+                [tybe, index] = args
+                unbound = tybe.methods[index]
+                self.stack[-1] = unbound.method_bind(self.stack[-1])
+
             else:
                 assert False, opcode
 
@@ -136,4 +141,4 @@ def run_file(code):
     global_scope = _Scope(objects.BUILTINS, [])
     file_scope = _create_subscope(global_scope, code.how_many_local_vars)
     result = _Runner(code, file_scope).run()
-    assert result == (False, None)
+    assert result == (False, None), result
