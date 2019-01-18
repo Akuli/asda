@@ -119,8 +119,6 @@ class _Parser:
 
         while True:
             if self.tokens.coming_up('op', '.'):
-                # rest of the code doesn't support the attributes, but this
-                # code worked when i wrote it
                 self.tokens.next_token('op', '.')
                 attribute = self.tokens.next_token('id')
                 result = GetAttr(result.location + attribute.location,
