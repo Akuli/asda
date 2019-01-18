@@ -5,17 +5,19 @@ import functools
 import itertools
 
 
-class AsdaType:
+class Type:
 
     def __init__(self):
         self.methods = []
 
 
-class GenericType(AsdaType):
-    pass
+class Object:
+
+    def __init__(self, tybe):
+        self.type = tybe
 
 
-class FunctionType(AsdaType):
+class FunctionType(Type):
 
     def __init__(self, argtypes, returntype, is_generator=False):
         super().__init__()
@@ -24,28 +26,52 @@ class FunctionType(AsdaType):
         self.is_generator = is_generator
 
 
+class Function(Object):
+
+    def __init__(self, tybe, python_func):
+        super().__init__(tybe)
+        self.python_func = python_func
+
+    def method_bind(self, this):
+        bound_type = FunctionType(self.type.argtypes[1:], self.type.returntype,
+                                  self.type.is_generator)
+        return Function(bound_type, functools.partial(self.python_func, this))
+
+    def run(self, args):
+        assert len(args) == len(self.type.argtypes)
+        for arg, tybe in zip(args, self.type.argtypes):
+            pass   # TODO: how 2 check this
+        return self.python_func(*args)
+
+
+def add_method(tybe, python_func, argtypes, *args, **kwargs):
+    functype = FunctionType(itertools.chain([tybe], argtypes), *args, **kwargs)
+    tybe.methods.append(Function(functype, python_func))
+
+
 types = collections.OrderedDict([
-    ('Str', AsdaType()),
-    ('Int', AsdaType()),
-    ('Bool', AsdaType()),
+    ('Str', Type()),
+    ('Int', Type()),
+    ('Bool', Type()),
 ])
 
+add_method(
+    types['Str'], (lambda this: String(this.python_string.upper())),
+    [], types['Str'])
 
-class GeneratorType(AsdaType):
+
+class GenericType(Type):
+    pass
+
+
+class GeneratorType(Type):
 
     def __init__(self, itemtype):
         super().__init__()
         self.itemtype = itemtype
 
 
-class AsdaObject:
-
-    def __init__(self, asda_type):
-        self.asda_type = asda_type      # TODO: rename to just 'type'
-
-
-# TODO: rename this to String
-class AsdaString(AsdaObject):
+class String(Object):
 
     def __init__(self, python_string):
         super().__init__(types['Str'])
@@ -56,44 +82,15 @@ class AsdaString(AsdaObject):
                                 self.python_string)
 
 
-class Generator(AsdaObject):
+class Generator(Object):
 
     def __init__(self, tybe, next_callback):
         super().__init__(tybe)
         self.next = next_callback
 
 
-class Function(AsdaObject):
-
-    def __init__(self, tybe, python_func):
-        super().__init__(tybe)
-        self.python_func = python_func
-
-    def method_bind(self, this):
-        bound_type = FunctionType(self.asda_type.argtypes[1:],
-                                  self.asda_type.returntype,
-                                  self.asda_type.is_generator)
-        return Function(bound_type, functools.partial(self.python_func, this))
-
-    def run(self, args):
-        assert len(args) == len(self.asda_type.argtypes)
-        for arg, tybe in zip(args, self.asda_type.argtypes):
-            pass   # TODO: how 2 check this
-        return self.python_func(*args)
-
-
-def add_method(tybe, python_func, argtypes, *args, **kwargs):
-    functype = FunctionType(itertools.chain([tybe], argtypes), *args, **kwargs)
-    tybe.methods.append(Function(functype, python_func))
-
-
-add_method(
-    types['Str'], (lambda this: AsdaString(this.python_string.upper())),
-    [], types['Str'])
-
-
-TRUE = AsdaObject(types['Bool'])
-FALSE = AsdaObject(types['Bool'])
+TRUE = Object(types['Bool'])
+FALSE = Object(types['Bool'])
 
 T = GenericType()
 BUILTINS = [

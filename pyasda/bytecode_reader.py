@@ -101,7 +101,7 @@ class _BytecodeReader:
                 break
 
             if magic == STR_CONSTANT:
-                string_object = objects.AsdaString(self.read_string())
+                string_object = objects.String(self.read_string())
                 opcode.append((CONSTANT, string_object))
             elif magic == TRUE_CONSTANT:
                 opcode.append((CONSTANT, objects.TRUE))
