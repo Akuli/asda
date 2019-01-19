@@ -1,5 +1,4 @@
 import argparse
-import functools
 import os
 import re
 import sys
@@ -9,7 +8,11 @@ import colorama
 
 from . import bytecoder, common, cooked_ast, opcoder, raw_ast, tokenizer
 
-eprint = functools.partial(print, file=sys.stderr)
+
+# functools.partial(print, file=sys.stderr) doesn't work because tests
+# change sys.stderr
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
 
 def source2bytecode(infile, outfile_name, quiet):
@@ -95,8 +98,14 @@ def main():
                 before, bad_code, after = e.location.get_source()
                 if bad_code.isspace():
                     replacement = '\N{lower one quarter block}'
+
+                    # this doesn't use .expandtabs() because
+                    # 'a\tb'.expandtabs(4) puts 3 spaces between a and b
+                    #
+                    # bad_code is a part of a \n-separated line and not a full
+                    # line, so it wouldn't expand it consistently
                     bad_code = re.sub(r'[^\S\n]', replacement,
-                                      bad_code.expandtabs(4))
+                                      bad_code.replace('\t', ' ' * 4))
                     bad_code = bad_code.replace('\n', replacement * 3 + '\n')
 
                 gonna_print = before + red_start + bad_code + red_end + after

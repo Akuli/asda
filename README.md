@@ -85,3 +85,27 @@ Not yet.
 
 I'm sorry, I haven't documented it yet :( If you are actually interested
 in this, you can ask me to document stuff by creating an issue.
+
+
+## Developing asda
+
+This command installs everything you need for developing asda:
+
+```
+$ python3 -m pip install --user pytest pytest-cov coverage
+```
+
+asdac's tests are in `asdac-tests/`. You can run them like this:
+
+```
+$ python3 -m pytest asdac-tests
+```
+
+If you also want to see coverage (the tests will run slower), run them like
+this:
+
+```
+$ python3 -m pytest asdac-tests --cov=asdac && python3 -m coverage html
+```
+
+Then open `htmlcov/index.html` in your favorite browser to view the results.
