@@ -26,7 +26,7 @@ StrConstant = namedtuple('StrConstant', ['python_string'])
 IntConstant = namedtuple('IntConstant', ['python_int'])
 BoolConstant = namedtuple('BoolConstant', ['python_bool'])
 CreateFunction = namedtuple('CreateFunction', [
-    'name', 'functype', 'body_opcode'])
+    'name', 'functype', 'yields', 'body_opcode'])
 LookupVar = namedtuple('LookupVar', ['level', 'var'])
 # tuples have an index() method, avoid name clash with misspelling
 LookupMethod = namedtuple('LookupMethod', ['type', 'indeks'])
@@ -90,8 +90,10 @@ class _OpCoder:
                 opcoder.local_vars[argname] = index
 
             opcoder.do_body(expression.body)
-            self.output.ops.append(CreateFunction(
-               expression.name, expression.type, function_opcode))
+            self.output.ops.append(CreateFunction(expression.name,
+                                                  expression.type,
+                                                  expression.yields,
+                                                  function_opcode))
 
         # the opcode is dynamically typed from here, so generic functions
         # are treated same as variables

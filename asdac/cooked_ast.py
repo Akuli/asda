@@ -15,7 +15,8 @@ LookupVar = _astclass('LookupVar', ['varname', 'level'])
 LookupAttr = _astclass('LookupAttr', ['obj', 'attrname'])
 LookupGenericFunction = _astclass('LookupGenericFunction',
                                   ['funcname', 'types', 'level'])
-CreateFunction = _astclass('CreateFunction', ['name', 'argnames', 'body'])
+CreateFunction = _astclass('CreateFunction',
+                           ['name', 'argnames', 'body', 'yields'])
 CreateLocalVar = _astclass('CreateLocalVar', ['varname', 'initial_value'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
 VoidReturn = _astclass('VoidReturn', [])
@@ -25,23 +26,38 @@ If = _astclass('If', ['cond', 'if_body', 'else_body'])
 Loop = _astclass('Loop', ['init', 'cond', 'incr', 'body'])    # while or for
 
 
+def _find_yields(raw_ast_nodes):
+    for node in raw_ast_nodes:
+        if isinstance(node, raw_ast.Yield):
+            yield node.location
+        elif isinstance(node, raw_ast.While):
+            yield from _find_yields(node.body)
+        elif isinstance(node, (raw_ast.FuncCall, raw_ast.SetVar,
+                               raw_ast.Return)):
+            pass
+        else:
+            assert False, node
+
+
 class _Chef:
 
-    def __init__(self, parent_chef, is_function=False, is_generator=False,
-                 return_or_yield_type=None):
-        # there's no can_yield, just check whether yield_type is not None
+    def __init__(self, parent_chef, is_function=False, yields=False,
+                 returntype=None):
+        # there's no self.can_yield, just check whether yield_type is not None
         if is_function:
             self.can_return = True
-            self.return_type = None if is_generator else return_or_yield_type
-            self.yield_type = return_or_yield_type if is_generator else None
-            if is_generator:
-                assert return_or_yield_type is not None
+            if yields:
+                assert isinstance(returntype, objects.GeneratorType)
+                self.yield_type = returntype.item_type
+                self.return_type = None
+            else:
+                self.yield_type = None
+                self.return_type = returntype
         else:
-            assert not is_function
-            assert return_or_yield_type is None
+            assert returntype is None
             self.can_return = False
-            self.return_type = None
             self.yield_type = None
+            self.return_type = None
 
         self.parent_chef = parent_chef
         if parent_chef is None:
@@ -94,13 +110,8 @@ class _Chef:
                 "cannot call %s with %s" % (function.type.name, message_end),
                 raw_func_call.location)
 
-        if function.type.is_generator:
-            returning = objects.GeneratorType(
-                function.type.return_or_yield_type)
-        else:
-            returning = function.type.return_or_yield_type
-
-        return CallFunction(raw_func_call.location, returning, function, args)
+        return CallFunction(raw_func_call.location, function.type.returntype,
+                            function, args)
 
     # get_chef_for_blah()s are kinda copy/pasta but not tooo bad imo
     def get_chef_for_varname(self, varname, error_location):
@@ -152,8 +163,7 @@ class _Chef:
 
         if isinstance(raw_expression, raw_ast.FuncCall):
             call = self.cook_function_call(raw_expression)
-            if call.function.type.return_or_yield_type is None:
-                assert call.function.type.is_generator
+            if call.function.type.returntype is None:
                 raise common.CompileError(
                     "%s doesn't return a value" % call.function.type.name,
                     raw_expression.location)
@@ -171,21 +181,30 @@ class _Chef:
             chef = self.get_chef_for_generic_func_name(
                 raw_expression.funcname, raw_expression.location)
             generfunc = chef.local_generic_funcs[raw_expression.funcname]
-            types = [self.cook_type(tybe, location)
-                     for tybe, location in raw_expression.types]
-            functype = generfunc.get_function_type(
-                types, raw_expression.location)
+            types = list(map(self.cook_type, raw_expression.types))
+            functype = generfunc.get_real_type(types, raw_expression.location)
             return LookupGenericFunction(
                 raw_expression.location, functype, raw_expression.funcname,
                 types, chef.level)
 
         raise NotImplementedError("oh no: " + str(raw_expression))
 
-    def cook_type(self, typename, location):
-        if typename not in objects.BUILTIN_TYPES:
-            raise common.CompileError(
-                "unknown type '%s'" % typename, location)
-        return objects.BUILTIN_TYPES[typename]
+    def cook_type(self, tybe):
+        if isinstance(tybe, raw_ast.GetType):
+            if tybe.name not in objects.BUILTIN_TYPES:
+                raise common.CompileError(
+                    "unknown type '%s'" % tybe.name, tybe.location)
+            return objects.BUILTIN_TYPES[tybe.name]
+
+        if isinstance(tybe, raw_ast.TypeFromGeneric):
+            if tybe.typename not in objects.BUILTIN_GENERIC_TYPES:
+                raise common.CompileError(
+                    "unknown generic type '%s'" % tybe.name)
+
+            genertype = objects.BUILTIN_GENERIC_TYPES[tybe.typename]
+            types = list(map(self.cook_type, tybe.types))
+            result = genertype.get_real_type(types, tybe.location)
+            return result
 
     def cook_let(self, raw):
         self._check_name_not_exist(raw.varname, 'variable', raw.location)
@@ -221,32 +240,36 @@ class _Chef:
 
         argnames = []
         argtypes = []
-        for typename, typeloc, argname, argnameloc in raw.args:
-            argtype = self.cook_type(typename, typeloc)
+        for raw_argtype, argname, argnameloc in raw.args:
+            argtype = self.cook_type(raw_argtype)
             self._check_name_not_exist(argname, 'variable', argnameloc)
             argnames.append(argname)
             argtypes.append(argtype)
 
-        if raw.return_or_yield_type is None:
-            return_or_yield_type = None
+        if raw.returntype is None:
+            returntype = None
         else:
-            # FIXME: the location is wrong because no better location is
-            # available
-            return_or_yield_type = self.cook_type(
-                raw.return_or_yield_type, raw.location)
+            returntype = self.cook_type(raw.returntype)
 
-        functype = objects.FunctionType(
-            raw.funcname, argtypes, return_or_yield_type, raw.is_generator)
+        functype = objects.FunctionType(raw.funcname, argtypes, returntype)
+
+        yield_location = next(_find_yields(raw.body), None)
+        if (yield_location is not None and
+                not isinstance(returntype, objects.GeneratorType)):
+            raise common.CompileError(
+                "cannot yield in a function that doesn't return "
+                "Generator[something]", yield_location)
 
         # TODO: allow functions to call themselves
-        subchef = _Chef(self, True, raw.is_generator, return_or_yield_type)
+        subchef = _Chef(self, True, yield_location is not None, returntype)
         subchef.local_vars.update(dict(zip(argnames, argtypes)))
         body = list(map(subchef.cook_statement, raw.body))
         self.local_vars[raw.funcname] = functype
 
         return CreateLocalVar(raw.location, functype, raw.funcname,
                               CreateFunction(raw.location, functype,
-                                             raw.funcname, argnames, body))
+                                             raw.funcname, argnames, body,
+                                             yield_location is not None))
 
     def cook_return(self, raw):
         if not self.can_return:
@@ -254,6 +277,10 @@ class _Chef:
 
         if self.return_type is None:
             if raw.value is not None:
+                if self.yield_type is not None:
+                    raise common.CompileError(
+                        "cannot return a value from a function that yields",
+                        raw.location)
                 raise common.CompileError(
                     "cannot return a value from a void function",
                     raw.value.location)
@@ -271,8 +298,7 @@ class _Chef:
 
     def cook_yield(self, raw):
         if self.yield_type is None:
-            raise common.CompileError(
-                "yield outside generator function", raw.location)
+            raise common.CompileError("yield outside function", raw.location)
 
         value = self.cook_expression(raw.value)
         if value.type != self.yield_type:

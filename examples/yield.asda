@@ -1,4 +1,4 @@
-Bool generator do_stuff():
+func do_stuff() -> Generator[Bool]:
     while TRUE:
         yield TRUE
         yield FALSE

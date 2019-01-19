@@ -3,8 +3,7 @@ import functools
 from . import common, objects, opcoder
 
 
-CREATE_FUNCTION = b'f'             # also used when bytecoding a type
-CREATE_GENERATOR_FUNCTION = b'g'   # also used when bytecoding a type
+CREATE_FUNCTION = b'f'     # also used when bytecoding a type
 LOOKUP_VAR = b'v'
 SET_VAR = b'V'
 STR_CONSTANT = b'"'
@@ -66,9 +65,8 @@ class _BytecodeWriter:
             self.write_uint8(names.index(tybe.name))
 
         elif isinstance(tybe, objects.FunctionType):
-            self.output.extend(CREATE_GENERATOR_FUNCTION if tybe.is_generator
-                               else CREATE_FUNCTION)
-            self.write_type(tybe.return_or_yield_type)
+            self.output.extend(CREATE_FUNCTION)
+            self.write_type(tybe.returntype)
 
             self.write_uint8(len(tybe.argtypes))
             for argtype in tybe.argtypes:
@@ -97,7 +95,8 @@ class _BytecodeWriter:
 
         elif isinstance(op, opcoder.CreateFunction):
             assert isinstance(op.functype, objects.FunctionType)
-            self.write_type(op.functype)
+            self.write_type(op.functype)    # includes CREATE_FUNCTION
+            self.output.append(1 if op.yields else 0)
             self.write_string(op.name)
             _BytecodeWriter(self.output).run(op.body_opcode)
 

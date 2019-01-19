@@ -18,10 +18,12 @@ Let = _astclass('Let', ['varname', 'value'])
 SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['varname'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
+GetType = _astclass('GetType', ['name'])
+TypeFromGeneric = _astclass('TypeFromGeneric', ['typename', 'types'])
 FuncFromGeneric = _astclass('FuncFromGeneric', ['funcname', 'types'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
 FuncDefinition = _astclass('FuncDefinition', [
-    'funcname', 'is_generator', 'args', 'return_or_yield_type', 'body'])
+    'funcname', 'args', 'returntype', 'body'])
 Return = _astclass('Return', ['value'])
 Yield = _astclass('Yield', ['value'])
 If = _astclass('If', ['condition', 'if_body', 'else_body'])
@@ -197,49 +199,47 @@ class _Parser:
 
     # TODO: update this when not all type names are id tokens
     def parse_type(self):
-        typename = self.tokens.next_token('id')
-        return (typename.value, typename.location)
+        first_token = self.tokens.next_token('id')
+        if self.tokens.coming_up('op', '['):
+            self.tokens.next_token('op', '[')
+            types = self.parse_commasep_list(self.parse_type)
+            closing_bracket = self.tokens.next_token('op', ']')
+            result = TypeFromGeneric(
+                first_token.location + closing_bracket.location,
+                first_token.value, types)
+        else:
+            result = GetType(first_token.location, first_token.value)
+        return result
 
     def parse_arg_spec(self):
         # TODO: update this when not all type names are id tokens
-        typeinfo = self.parse_type()
+        tybe = self.parse_type()
         varname = self.tokens.next_token('id')
-        return typeinfo + (varname.value, varname.location)
+        return (tybe, varname.value, varname.location)
 
     # go_all_the_way=False is used when checking whether a valid-seeming
     # function definition is coming up
-    def parse_func_definition(self, *, go_all_the_way=True):
-        if self.tokens.coming_up('keyword', 'void'):
-            return_or_yield_type = None
-            type_location = self.tokens.next_token('keyword', 'void').location
-        else:
-            return_or_yield_type, type_location = self.parse_type()
-
-        if self.tokens.coming_up('keyword', 'generator'):
-            generator_word = self.tokens.next_token('keyword', 'generator')
-            if return_or_yield_type is None:
-                raise common.CompileError(
-                    "cannot create a void generator function",
-                    type_location + generator_word.location)
-            generator = True
-        else:
-            generator = False
-
+    def parse_func_definition(self):
+        func_keyword = self.tokens.next_token('keyword', 'func')
         name = self.tokens.next_token('id')
         self.tokens.next_token('op', '(')
         args = self.parse_commasep_list(self.parse_arg_spec)
         close_paren = self.tokens.next_token('op', ')')
+        self.tokens.next_token('op', '->')
 
-        if not go_all_the_way:
-            return None
+        if self.tokens.coming_up('keyword', 'void'):
+            returntype = None
+            type_location = self.tokens.next_token('keyword', 'void').location
+        else:
+            returntype = self.parse_type()
+            type_location = returntype.location
 
         body = _Parser(self.tokens).parse_block()
 
         # the location of a function definition is just the first line,
         # because the body can get quite long
         location = type_location + close_paren.location
-        return FuncDefinition(location, name.value, generator, args,
-                              return_or_yield_type, body)
+        return FuncDefinition(location, name.value, args, returntype, body)
 
     def func_definition_coming_up(self):
         with self.tokens.temporary_state():
@@ -293,7 +293,7 @@ class _Parser:
             result = self.parse_for()
             is_multiline = True
 
-        elif self.func_definition_coming_up():
+        elif self.tokens.coming_up('keyword', 'func'):
             result = self.parse_func_definition()
             is_multiline = True
 

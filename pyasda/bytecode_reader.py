@@ -5,7 +5,6 @@ from . import objects
 
 
 CREATE_FUNCTION = b'f'
-CREATE_GENERATOR_FUNCTION = b'g'    # only used in bytecode files
 LOOKUP_VAR = b'v'
 SET_VAR = b'V'
 STR_CONSTANT = b'"'     # only used in bytecode files
@@ -75,12 +74,11 @@ class _BytecodeReader:
             index = self.read_uint8()
             return list(objects.types.values())[index]
 
-        elif magic in {CREATE_FUNCTION, CREATE_GENERATOR_FUNCTION}:
-            is_generator = (magic == CREATE_GENERATOR_FUNCTION)
+        elif magic == CREATE_FUNCTION:
             returntype = self.read_type()
             nargs = self.read_uint8()
             argtypes = [self.read_type() for junk in range(nargs)]
-            return objects.FunctionType(argtypes, returntype, is_generator)
+            return objects.FunctionType(argtypes, returntype)
 
         elif magic == TYPE_VOID:
             return None
@@ -119,12 +117,13 @@ class _BytecodeReader:
                 opcode.append((SET_VAR, level, index))
             elif magic == POP_ONE:
                 opcode.append((POP_ONE,))
-            elif magic in {CREATE_FUNCTION, CREATE_GENERATOR_FUNCTION}:
-                self._unread(*magic)
+            elif magic == CREATE_FUNCTION:
+                self._unread(magic[0])
                 tybe = self.read_type()
+                yields = bool(self._read(1)[0])
                 name = self.read_string()     # TODO: is this needed at all?
                 body = self.read_body()
-                opcode.append((CREATE_FUNCTION, tybe, name, body))
+                opcode.append((CREATE_FUNCTION, tybe, name, body, yields))
             elif magic == VOID_RETURN:
                 opcode.append((VOID_RETURN,))
             elif magic == VALUE_RETURN:

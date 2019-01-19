@@ -13,14 +13,14 @@ def _create_subscope(parent_scope, how_many_local_vars):
                   parent_scope.parent_scopes + [parent_scope])
 
 
-def _create_function_object(code, definition_scope, tybe):
+def _create_function_object(code, definition_scope, tybe, yields):
     def python_func(*args):
         scope = _create_subscope(definition_scope, code.how_many_local_vars)
         for index, arg in enumerate(args):
             scope.local_vars[index] = arg
         runner = _Runner(code, scope)
 
-        if not tybe.is_generator:
+        if not yields:
             yielded, value = runner.run()
             assert not yielded
             return value
@@ -94,11 +94,10 @@ class _Runner:
             elif opcode == bytecode_reader.POP_ONE:
                 del self.stack[-1]
 
-            elif opcode in {bytecode_reader.CREATE_FUNCTION,
-                            bytecode_reader.CREATE_GENERATOR_FUNCTION}:
-                tybe, name, body = args
+            elif opcode == bytecode_reader.CREATE_FUNCTION:
+                tybe, name, body, yields = args
                 self.stack.append(_create_function_object(
-                    body, self.scope, tybe))
+                    body, self.scope, tybe, yields))
 
             elif opcode == bytecode_reader.VOID_RETURN:
                 assert not self.stack

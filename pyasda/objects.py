@@ -19,11 +19,10 @@ class Object:
 
 class FunctionType(Type):
 
-    def __init__(self, argtypes, returntype, is_generator=False):
+    def __init__(self, argtypes, returntype):
         super().__init__()
         self.argtypes = list(argtypes)
         self.returntype = returntype
-        self.is_generator = is_generator
 
 
 class Function(Object):
@@ -33,8 +32,7 @@ class Function(Object):
         self.python_func = python_func
 
     def method_bind(self, this):
-        bound_type = FunctionType(self.type.argtypes[1:], self.type.returntype,
-                                  self.type.is_generator)
+        bound_type = FunctionType(self.type.argtypes[1:], self.type.returntype)
         return Function(bound_type, functools.partial(self.python_func, this))
 
     def run(self, args):
