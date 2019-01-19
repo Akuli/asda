@@ -23,6 +23,9 @@ Token = collections.namedtuple('Token', ['kind', 'value', 'location'])
 
 
 def _raw_tokenize(filename, code):
+    if not code.endswith('\n'):
+        code += '\n'
+
     lineno = 1
     line_offset = 0
 

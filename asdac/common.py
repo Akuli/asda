@@ -18,6 +18,12 @@ class Location:
     def __repr__(self):
         return '<Location: %s>' % str(self)
 
+    def __eq__(self, other):
+        if not isinstance(other, Location):
+            return NotImplemented
+        return ((self.filename, self.start, self.end) ==
+                (other.filename, other.start, other.end))
+
     @property
     def start(self):
         return (self.startline, self.startcolumn)
