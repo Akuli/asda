@@ -71,10 +71,13 @@ class _TokenIterator:
         try:
             result = next(self._iterator)
         except StopIteration as e:
+            # this shouldn't happen if the asda code is invalid, because the
+            # tokenizer puts a newline token at the end anyway and this should
+            # get that and fail at _check_token() instead
+            #
             # not-very-latest pythons suppress StopIteration if raised in
-            # generator function
-            # TODO: raise CompileError instead with some nice location
-            raise EOFError from e
+            # generator function, so make sure to be explicit
+            raise RuntimeError("there's a bug in asdac") from e
         self._check_token(result, required_kind, required_value)
         return result
 
@@ -91,12 +94,6 @@ class _Parser:
     def __init__(self, tokens):
         self.tokens = tokens
 
-    # be sure to change this if you change parse_expression!
-    def expression_coming_up(self):
-        return (self.tokens.coming_up('integer') or
-                self.tokens.coming_up('id') or
-                self.tokens.coming_up('string'))
-
     def parse_expression(self):
         first_token = self.tokens.next_token()
         if first_token.kind == 'integer':
@@ -105,8 +102,8 @@ class _Parser:
             if self.tokens.coming_up('op', '['):
                 # generic_func_name[T1, T2, ...]
                 self.tokens.next_token('op', '[')
-                types = self.parse_commasep_list(self.parse_type)
-                closing_bracket = self.tokens.next_token('op', ']')
+                types, closing_bracket = self.parse_commasep_list(
+                    self.parse_type, ']')
                 result = FuncFromGeneric(
                     first_token.location + closing_bracket.location,
                     first_token.value, types)
@@ -127,8 +124,8 @@ class _Parser:
                                  result, attribute.value)
             elif self.tokens.coming_up('op', '('):
                 self.tokens.next_token('op', '(')
-                args = self.parse_commasep_list(self.parse_expression)
-                last_paren = self.tokens.next_token('op', ')')
+                args, last_paren = self.parse_commasep_list(
+                    self.parse_expression, ')')
                 result = FuncCall(first_token.location + last_paren.location,
                                   result, args)
             else:
@@ -136,16 +133,16 @@ class _Parser:
 
         return result
 
-    def parse_commasep_list(self, parse_callback):
-        if not self.expression_coming_up():
-            return []
+    def parse_commasep_list(self, parse_callback, end_op):
+        if self.tokens.coming_up('op', end_op):
+            result = []
+        else:
+            result = [parse_callback()]
+            while self.tokens.coming_up('op', ','):
+                self.tokens.next_token('op', ',')
+                result.append(parse_callback())
 
-        result = [parse_callback()]
-        while self.tokens.coming_up('op', ','):
-            self.tokens.next_token('op', ',')
-            result.append(parse_callback())
-
-        return result
+        return (result, self.tokens.next_token('op', end_op))
 
     def parse_let_statement(self):
         let = self.tokens.next_token('keyword', 'let')
@@ -202,8 +199,8 @@ class _Parser:
         first_token = self.tokens.next_token('id')
         if self.tokens.coming_up('op', '['):
             self.tokens.next_token('op', '[')
-            types = self.parse_commasep_list(self.parse_type)
-            closing_bracket = self.tokens.next_token('op', ']')
+            types, closing_bracket = self.parse_commasep_list(
+                self.parse_type, ']')
             result = TypeFromGeneric(
                 first_token.location + closing_bracket.location,
                 first_token.value, types)
@@ -220,11 +217,10 @@ class _Parser:
     # go_all_the_way=False is used when checking whether a valid-seeming
     # function definition is coming up
     def parse_func_definition(self):
-        func_keyword = self.tokens.next_token('keyword', 'func')
+        self.tokens.next_token('keyword', 'func')
         name = self.tokens.next_token('id')
         self.tokens.next_token('op', '(')
-        args = self.parse_commasep_list(self.parse_arg_spec)
-        close_paren = self.tokens.next_token('op', ')')
+        args, close_paren = self.parse_commasep_list(self.parse_arg_spec, ')')
         self.tokens.next_token('op', '->')
 
         if self.tokens.coming_up('keyword', 'void'):
@@ -240,14 +236,6 @@ class _Parser:
         # because the body can get quite long
         location = type_location + close_paren.location
         return FuncDefinition(location, name.value, args, returntype, body)
-
-    def func_definition_coming_up(self):
-        with self.tokens.temporary_state():
-            try:
-                self.parse_func_definition(go_all_the_way=False)
-                return True
-            except common.CompileError:
-                return False
 
     def parse_assignment(self):
         name = self.tokens.next_token('id')
