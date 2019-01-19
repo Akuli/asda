@@ -70,7 +70,7 @@ class _TokenIterator:
     def next_token(self, required_kind=None, required_value=None):
         try:
             result = next(self._iterator)
-        except StopIteration as e:
+        except StopIteration as e:      # pragma: no cover
             # this shouldn't happen if the asda code is invalid, because the
             # tokenizer puts a newline token at the end anyway and this should
             # get that and fail at _check_token() instead

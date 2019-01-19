@@ -27,11 +27,12 @@ def _create_function_object(code, definition_scope, tybe, yields):
 
         def get_next_item():
             yielded, value = runner.run()
-            assert value is not None
             if not yielded:
                 # end of iteration
                 assert value is None
                 raise RuntimeError("iteration ended lel")
+
+            assert value is not None
             return value
 
         return objects.Generator(tybe.returntype, get_next_item)

@@ -10,3 +10,19 @@ if next[Bool](g):
     print("should NOT get printed")
 if next[Bool](g):
     print("should also get printed")
+
+
+func do_other_stuff() -> Generator[Str]:
+    yield "One"
+    yield "Two"
+
+    # if you comment out the next 2 lines, nothing should change
+    return
+    print("this should NOT get printed")
+
+let g2 = do_other_stuff()
+print(next[Str](g2))
+print(next[Str](g2))
+
+# uncomment to see pyasda's current behaviour for end of iterator
+#print(next[Str](g2))

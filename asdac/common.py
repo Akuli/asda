@@ -16,7 +16,9 @@ class Location:
             self.endline, self.endcolumn)
 
     def __repr__(self):
-        return '<Location: %s>' % str(self)
+        return 'Location(%r, %r, %r, %r, %r)' % (
+            self.filename, self.startline, self.startcolumn,
+            self.endline, self.endcolumn)
 
     def __eq__(self, other):
         if not isinstance(other, Location):
