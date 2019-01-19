@@ -64,3 +64,16 @@ def test_indent():
         tokenize('x:y')
     assert error.value.location == location(1, 1, 1, 2)
     assert error.value.message == ": without newline and indent"
+
+
+def test_tabs_forbidden_sorry():
+    with pytest.raises(CompileError) as error:
+        tokenize('print(\t"lol")')
+    assert error.value.location == location(1, 6, 1, 7)
+    assert error.value.message == "unexpected tab"
+
+
+def test_whitespace_ignoring(monkeypatch):
+    monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
+    assert (tokenize('func lol ( Generator [ Str ] asd ) : \n    boo') ==
+            tokenize('func lol(Generator[Str]asd):\n    boo'))
