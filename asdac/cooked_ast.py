@@ -22,7 +22,7 @@ CallFunction = _astclass('CallFunction', ['function', 'args'])
 VoidReturn = _astclass('VoidReturn', [])
 ValueReturn = _astclass('ValueReturn', ['value'])
 Yield = _astclass('Yield', ['value'])
-If = _astclass('If', ['cond', 'if_body', 'else_body'])
+If = _astclass('If', ['ifs', 'else_body'])
 Loop = _astclass('Loop', ['init', 'cond', 'incr', 'body'])    # while or for
 
 
@@ -311,14 +311,19 @@ class _Chef:
         return Yield(raw.location, None, value)
 
     def cook_if(self, raw):
-        cond = self.cook_expression(raw.condition)
-        if cond.type != objects.BUILTIN_TYPES['Bool']:
-            raise common.CompileError(
-                "expected Bool, got " + cond.type.name, cond.location)
+        cooked_ifs = []
+        for cond, body in raw.ifs:
+            cooked_cond = self.cook_expression(cond)
+            if cooked_cond.type != objects.BUILTIN_TYPES['Bool']:
+                raise common.CompileError(
+                    "expected Bool, got " + cooked_cond.type.name,
+                    cooked_cond.location)
 
-        if_body = list(map(self.cook_statement, raw.if_body))
-        else_body = list(map(self.cook_statement, raw.else_body))
-        return If(raw.location, None, cond, if_body, else_body)
+            cooked_ifs.append((cooked_cond,
+                               list(map(self.cook_statement, body))))
+
+        cooked_else_body = list(map(self.cook_statement, raw.else_body))
+        return If(raw.location, None, cooked_ifs, cooked_else_body)
 
     def cook_while(self, raw):
         cond = self.cook_expression(raw.condition)

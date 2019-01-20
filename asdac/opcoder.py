@@ -42,7 +42,15 @@ JumpIf = namedtuple('JumpIf', ['marker'])
 # must not be a namedtuple because different JumpMarker objects must not
 # compare equal
 class JumpMarker:
-    pass
+    # this used to be "class JumpMarker: pass" but this count thing is
+    # more debuggable imo
+    _counts = itertools.count(1)
+
+    def __init__(self):
+        self._count = next(type(self)._counts)
+
+    def __repr__(self):
+        return '<JumpMarker %d>' % self._count
 
 
 class _OpCoder:
@@ -147,18 +155,54 @@ class _OpCoder:
             self.output.ops.append(Yield())
 
         elif isinstance(statement, cooked_ast.If):
+            if len(statement.ifs) > 1:
+                # this turns this...
+                #
+                #   if cond1:
+                #       body1
+                #   elif cond2:
+                #       body2
+                #   elif cond3:
+                #       body3
+                #   else:
+                #       body4
+                #
+                # ...into this:
+                #
+                #   if cond1:
+                #       body1
+                #   else:
+                #       if cond2:
+                #           body2
+                #       elif cond3:
+                #           body3
+                #       else:
+                #           body4
+                #
+                # then recursion handles the rest of the conditions
+                first_cond_body, *rest = statement.ifs
+                else_of_first = cooked_ast.If(
+                    statement.location, statement.type,
+                    rest, statement.else_body)
+                simple_if = cooked_ast.If(
+                    statement.location, statement.type,
+                    [first_cond_body], [else_of_first])
+            else:
+                simple_if = statement
+
+            [(cond, if_body)] = simple_if.ifs
             end_of_if_body = JumpMarker()
             end_of_else_body = JumpMarker()
 
-            self.do_expression(statement.cond)
+            self.do_expression(cond)
             self.output.ops.append(Negation())
             self.output.ops.append(JumpIf(end_of_if_body))
-            for substatement in statement.if_body:
+            for substatement in if_body:
                 self.do_statement(substatement)
             self.output.ops.append(BoolConstant(True))
             self.output.ops.append(JumpIf(end_of_else_body))
             self.output.ops.append(end_of_if_body)
-            for substatement in statement.else_body:
+            for substatement in simple_if.else_body:
                 self.do_statement(substatement)
             self.output.ops.append(end_of_else_body)
 
@@ -185,12 +229,14 @@ class _OpCoder:
         else:
             assert False, statement     # pragma: no cover
 
+    # FIXME: this is pooooooooOO!!!!!!!!!!
     def _var_creating_statements(self, statement_list):
         for statement in statement_list:
             if isinstance(statement, cooked_ast.CreateLocalVar):
                 yield statement
             elif isinstance(statement, cooked_ast.If):
-                yield from self._var_creating_statements(statement.if_body)
+                for cond, body in statement.ifs:
+                    yield from self._var_creating_statements(body)
                 yield from self._var_creating_statements(statement.else_body)
 
     def do_body(self, statements):

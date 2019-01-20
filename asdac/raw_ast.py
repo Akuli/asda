@@ -25,7 +25,8 @@ FuncDefinition = _astclass('FuncDefinition', [
     'funcname', 'args', 'returntype', 'body'])
 Return = _astclass('Return', ['value'])
 Yield = _astclass('Yield', ['value'])
-If = _astclass('If', ['condition', 'if_body', 'else_body'])
+# ifs is a list of (condition, body) pairs, where body is a list
+If = _astclass('If', ['ifs', 'else_body'])
 While = _astclass('While', ['condition', 'body'])
 For = _astclass('For', ['init', 'cond', 'incr', 'body'])
 
@@ -164,16 +165,29 @@ class _Parser:
 
     # TODO: elif
     def parse_if_statement(self):
-        if_keyword = self.tokens.next_token('keyword', 'if')
+        keyword = 'if'
+
+        keyword = self.tokens.next_token('keyword', 'if')
         condition = self.parse_expression()
-        if_body = self.parse_block()
+        body = self.parse_block()
+        ifs = [(condition, body)]
+
+        # not ideal, but not used in many places
+        location = keyword.location + condition.location
+
+        while self.tokens.coming_up('keyword', 'elif'):
+            self.tokens.next_token('keyword', 'elif')
+
+            # c rewriting note: python evaluates tuple elements in order, but
+            # function call arguments in c have no guarantees
+            ifs.append((self.parse_expression(), self.parse_block()))
+
         if self.tokens.coming_up('keyword', 'else'):
             self.tokens.next_token('keyword', 'else')
             else_body = self.parse_block()
         else:
             else_body = []
-        return If(if_keyword.location + condition.location, condition,
-                  if_body, else_body)
+        return If(location, ifs, else_body)
 
     def parse_while(self):
         while_keyword = self.tokens.next_token('keyword', 'while')

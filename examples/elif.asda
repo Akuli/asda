@@ -1,0 +1,15 @@
+# no integers yet :(
+func weird_stuff(Bool a, Bool b, Bool c) -> void:
+    if a:
+        print("One")
+    elif b:
+        print("Two")
+    elif c:
+        print("Three")
+    else:
+        print("Four")
+
+weird_stuff(TRUE, TRUE, TRUE)
+weird_stuff(FALSE, TRUE, TRUE)
+weird_stuff(FALSE, FALSE, TRUE)
+weird_stuff(FALSE, FALSE, FALSE)
