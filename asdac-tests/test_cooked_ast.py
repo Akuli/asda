@@ -150,6 +150,32 @@ def test_yield_errors():
         'return "Boo"')
 
 
+def test_assign_asd_to_asd():
+    doesnt_parse('let asd = asd',
+                 "variable not found: asd",
+                 'asd')
+    doesnt_parse('let asd = "hey"\nlet asd = asd',
+                 "there's already a 'asd' variable",
+                 'let asd = asd')
+
+    # this one is fine, 'asd = asd' simply does nothing
+    assert len(parse('let asd = "key"\nasd = asd')) == 2
+
+
+def test_yield_finding_bugs():
+    doesnt_parse('func lol() -> void:\n  for yield x; y; z():\n    xyz()',
+                 ("cannot yield in a function that doesn't return "
+                  "Generator[something]"),
+                 'yield x')
+
+    # the yield is in a nested function, should work!
+    parse('''
+func f() -> void:
+    func g() -> Generator[Str]:
+        yield "Lol"
+''')
+
+
 # not all Generator[Str] functions yield, it's also allowed to return
 # a generator
 def test_different_generator_creating_functions():

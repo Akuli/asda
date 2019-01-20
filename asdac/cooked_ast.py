@@ -26,17 +26,17 @@ If = _astclass('If', ['cond', 'if_body', 'else_body'])
 Loop = _astclass('Loop', ['init', 'cond', 'incr', 'body'])    # while or for
 
 
-def _find_yields(raw_ast_nodes):
-    for node in raw_ast_nodes:
-        if isinstance(node, raw_ast.Yield):
-            yield node.location
-        elif isinstance(node, raw_ast.While):
-            yield from _find_yields(node.body)
-        elif isinstance(node, (raw_ast.FuncCall, raw_ast.SetVar,
-                               raw_ast.Return)):
-            pass
-        else:   # pragma: no cover
-            assert False, node
+# this is a somewhat evil function
+def _find_yields(node):
+    if isinstance(node, list):
+        for sub in node:
+            yield from _find_yields(sub)
+    elif isinstance(node, raw_ast.Yield):
+        yield node.location
+    # namedtuples are tuples >:D MUHAHAHAAAA!!
+    elif (isinstance(node, tuple) and
+          not isinstance(node, raw_ast.FuncDefinition)):
+        yield from _find_yields(list(node))
 
 
 class _Chef:
