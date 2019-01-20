@@ -80,7 +80,7 @@ class _BytecodeWriter:
             self.output.extend(TYPE_VOID)
 
         else:
-            assert False, tybe
+            assert False, tybe      # pragma: no cover
 
     def write_op(self, op):
         if isinstance(op, opcoder.StrConstant):
@@ -142,7 +142,7 @@ class _BytecodeWriter:
             self.write_uint16(op.indeks)
 
         else:
-            assert False, op
+            assert False, op        # pragma: no cover
 
     # don't call this more than once
     def run(self, opcode):

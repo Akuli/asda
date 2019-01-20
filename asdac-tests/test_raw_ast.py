@@ -1,5 +1,7 @@
 from asdac import tokenizer, raw_ast
-from asdac.raw_ast import (For, FuncCall, FuncFromGeneric, GetAttr, GetType, GetVar, Let, SetVar, String, TypeFromGeneric)
+from asdac.raw_ast import (For, FuncCall, FuncFromGeneric, GetAttr,
+                           GetType, GetVar, Let, SetVar, String,
+                           TypeFromGeneric)
 from asdac.common import CompileError, Location
 
 import pytest
@@ -26,23 +28,23 @@ def test_not_an_expression_or_a_statement():
 def test_generics():
     assert parse('magic_function[Str, Generator[Int]](x)') == [
         FuncCall(
-            Location('test file', 1,0, 1,38),
+            Location('test file', 1, 0, 1, 38),
             function=FuncFromGeneric(
-                Location('test file', 1,0, 1,35),
+                Location('test file', 1, 0, 1, 35),
                 funcname='magic_function',
                 types=[
-                    GetType(Location('test file', 1,15, 1,18), name='Str'),
+                    GetType(Location('test file', 1, 15, 1, 18), name='Str'),
                     TypeFromGeneric(
-                        Location('test file', 1,20, 1,34),
+                        Location('test file', 1, 20, 1, 34),
                         typename='Generator',
                         types=[
-                            GetType(Location('test file', 1,30, 1,33),
+                            GetType(Location('test file', 1, 30, 1, 33),
                                     name='Int'),
                         ],
                     ),
                 ],
             ),
-            args=[GetVar(Location('test file', 1,36, 1,37), varname='x')]
+            args=[GetVar(Location('test file', 1, 36, 1, 37), varname='x')]
         ),
     ]
 
@@ -95,3 +97,10 @@ def test_no_multiline_statement():
         parse('for while true:\n    print("hi")')
     assert error.value.message == "expected a one-line statement"
     assert error.value.location == Location('test file', 1, 4, 1, 14)
+
+
+def test_assign_to_non_variable():
+    with pytest.raises(CompileError) as error:
+        parse('print("lol") = x')
+    assert error.value.message == "expected a variable"
+    assert error.value.location == Location('test file', 1, 0, 1, 12)

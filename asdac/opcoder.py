@@ -114,7 +114,7 @@ class _OpCoder:
             self.output.ops.append(LookupMethod(expression.obj.type, index))
 
         else:
-            assert False, expression
+            assert False, expression    # pragma: no cover
 
     def do_statement(self, statement):
         if isinstance(statement, cooked_ast.CreateLocalVar):
@@ -183,7 +183,7 @@ class _OpCoder:
             self.output.ops.append(end)
 
         else:
-            assert False, statement
+            assert False, statement     # pragma: no cover
 
     def _var_creating_statements(self, statement_list):
         for statement in statement_list:

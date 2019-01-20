@@ -35,7 +35,7 @@ def _find_yields(raw_ast_nodes):
         elif isinstance(node, (raw_ast.FuncCall, raw_ast.SetVar,
                                raw_ast.Return)):
             pass
-        else:
+        else:   # pragma: no cover
             assert False, node
 
 
@@ -187,7 +187,8 @@ class _Chef:
                 raw_expression.location, functype, raw_expression.funcname,
                 types, chef.level)
 
-        raise NotImplementedError("oh no: " + str(raw_expression))
+        raise NotImplementedError(      # pragma: no cover
+            "oh no: " + str(raw_expression))
 
     def cook_type(self, tybe):
         if isinstance(tybe, raw_ast.GetType):
@@ -199,7 +200,8 @@ class _Chef:
         if isinstance(tybe, raw_ast.TypeFromGeneric):
             if tybe.typename not in objects.BUILTIN_GENERIC_TYPES:
                 raise common.CompileError(
-                    "unknown generic type '%s'" % tybe.name)
+                    "unknown generic type '%s'" % tybe.typename,
+                    tybe.location)
 
             genertype = objects.BUILTIN_GENERIC_TYPES[tybe.typename]
             types = list(map(self.cook_type, tybe.types))
@@ -357,7 +359,7 @@ class _Chef:
         if isinstance(raw_statement, raw_ast.For):
             return self.cook_for(raw_statement)
 
-        assert False, raw_statement
+        assert False, raw_statement     # pragma: no cover
 
 
 def cook(raw_ast_statements):

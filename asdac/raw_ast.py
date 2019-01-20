@@ -1,5 +1,4 @@
 import collections
-import contextlib
 import functools
 import itertools
 
@@ -40,13 +39,14 @@ class _TokenIterator:
         self._iterator, copied = itertools.tee(self._iterator)
         return _TokenIterator(copied)
 
-    @contextlib.contextmanager
-    def temporary_state(self):
-        self._iterator, backup = itertools.tee(self._iterator)
-        try:
-            yield
-        finally:
-            self._iterator = backup
+    # currently not used, but could be useful for some dirty magic
+#    @contextlib.contextmanager
+#    def temporary_state(self):
+#        self._iterator, backup = itertools.tee(self._iterator)
+#        try:
+#            yield
+#        finally:
+#            self._iterator = backup
 
     def _check_token(self, token, kind, value):
         error = functools.partial(common.CompileError, location=token.location)
@@ -55,9 +55,10 @@ class _TokenIterator:
         if kind is not None and token.kind != kind:
             raise error("expected %s, got %r" % (kind, token.value))
 
-    def coming_up(self, kind=None, value=None, *, how_soon=0):
-        token = more_itertools.nth(self.copy()._iterator, how_soon)
-        if token is None:
+    def coming_up(self, kind=None, value=None):
+        try:
+            token = next(self.copy()._iterator)
+        except StopIteration:
             # end of file before the token
             return False
 
@@ -237,12 +238,6 @@ class _Parser:
         location = type_location + close_paren.location
         return FuncDefinition(location, name.value, args, returntype, body)
 
-    def parse_assignment(self):
-        name = self.tokens.next_token('id')
-        self.tokens.next_token('op', '=')
-        value = self.parse_expression()
-        return SetVar(name.location + value.location, name.value, value)
-
     def parse_return(self):
         return_keyword = self.tokens.next_token('keyword', 'return')
         if self.tokens.coming_up('newline'):
@@ -262,11 +257,6 @@ class _Parser:
     def parse_statement(self, *, allow_multiline=True):
         if self.tokens.coming_up('keyword', 'let'):
             result = self.parse_let_statement()
-            is_multiline = False
-
-        elif (self.tokens.coming_up('id') and
-              self.tokens.coming_up('op', '=', how_soon=1)):
-            result = self.parse_assignment()
             is_multiline = False
 
         elif self.tokens.coming_up('keyword', 'if'):
@@ -294,13 +284,26 @@ class _Parser:
             is_multiline = False
 
         else:
-            # function call statement
-            result = self.parse_expression()
-            if not isinstance(result, FuncCall):
+            is_multiline = False
+
+            first_expr = self.parse_expression()
+            if self.tokens.coming_up('op', '='):
+                if not isinstance(first_expr, GetVar):
+                    raise common.CompileError(
+                        "expected a variable", first_expr.location)
+                self.tokens.next_token('op', '=')
+                value = self.parse_expression()
+                result = SetVar(first_expr.location + value.location,
+                                first_expr.varname, value)
+
+            elif isinstance(first_expr, FuncCall):
+                result = first_expr
+
+            else:
                 raise common.CompileError(
                     "expected a let, a variable assignment, an if, a while, "
                     "a function definition or a function call",
-                    result.location)
+                    first_expr.location)
             is_multiline = False
 
         if is_multiline:

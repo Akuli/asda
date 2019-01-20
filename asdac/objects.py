@@ -60,9 +60,10 @@ class FunctionType(Type):
     def __eq__(self, other):
         if not isinstance(other, FunctionType):
             return NotImplemented
+
+        # name_prefix is ignored on purpose
         return (self.argtypes == other.argtypes and
-                self.return_or_yield_type == other.return_or_yield_type and
-                self.is_generator == other.is_generator)
+                self.returntype == other.returntype)
 
     def without_this_arg(self):
         assert self._is_method
@@ -135,9 +136,16 @@ class Generic:
             else:
                 type_maybe_s = '%d types' % len(self.type_markers)
 
+            if hasattr(self.real_type, 'name_prefix'):
+                name = '%s[%s]' % (
+                    self.real_type.name_prefix,
+                    ', '.join(marker.name for marker in self.type_markers))
+            else:
+                name = self.real_type.name
+
             raise common.CompileError(
                 "%s expected %s, but got %d" % (
-                    self.real_type.name, type_maybe_s, len(the_types)),
+                    name, type_maybe_s, len(the_types)),
                 error_location)
 
         type_dict = dict(zip(self.type_markers, the_types))
