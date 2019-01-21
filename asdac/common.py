@@ -1,3 +1,6 @@
+import itertools
+
+
 class Location:
 
     def __init__(self, filename, startline, startcolumn, endline, endcolumn):
@@ -91,3 +94,19 @@ class CompileError(Exception):
 
     def __str__(self):
         return str(self.location) + ': ' + self.message
+
+
+# inheriting from this is a more debuggable alternative to "class Asd: pass"
+class Marker:
+
+    def __init__(self):
+        # needs __dict__ because that way attributes don't inherit from
+        # parent classes
+        try:
+            counts = type(self).__dict__['_counts']
+        except KeyError:
+            counts = type(self)._counts = itertools.count(1)
+        self._count = next(counts)
+
+    def __repr__(self):
+        return '<%s %d>' % (type(self).__name__, self._count)

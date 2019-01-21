@@ -1,7 +1,20 @@
 from collections import namedtuple
 import itertools
 
-from . import cooked_ast, objects
+from . import common, cooked_ast, objects
+
+
+class VarMarker(common.Marker):
+    pass
+
+
+class ArgMarker:
+
+    def __init__(self, index):
+        self.index = index
+
+    def __repr__(self):
+        return '%s(%d)' % (type(self).__name__, self.index)
 
 
 # debugging tip: pprint.pprint(opcode.ops)
@@ -13,10 +26,7 @@ class OpCode:
         self.local_vars = list(range(nargs))
 
     def add_local_var(self):
-        if self.local_vars:
-            var = max(self.local_vars) + 1
-        else:
-            var = 0
+        var = VarMarker()
         self.local_vars.append(var)
         return var
 
@@ -39,18 +49,8 @@ Negation = namedtuple('Negation', [])
 JumpIf = namedtuple('JumpIf', ['marker'])
 
 
-# must not be a namedtuple because different JumpMarker objects must not
-# compare equal
-class JumpMarker:
-    # this used to be "class JumpMarker: pass" but this count thing is
-    # more debuggable imo
-    _counts = itertools.count(1)
-
-    def __init__(self):
-        self._count = next(type(self)._counts)
-
-    def __repr__(self):
-        return '<JumpMarker %d>' % self._count
+class JumpMarker(common.Marker):
+    pass
 
 
 class _OpCoder:
@@ -63,7 +63,8 @@ class _OpCoder:
         else:
             self.level = parent_coder.level + 1
 
-        self.local_vars = {}    # {varname: opcode var int id}
+        # {varname: VarMarker or ArgMarker}
+        self.local_vars = {}
 
     def do_function_call(self, call):
         self.do_expression(call.function)
@@ -95,7 +96,7 @@ class _OpCoder:
             function_opcode = OpCode(len(expression.argnames))
             opcoder = _OpCoder(function_opcode, self)
             for index, argname in enumerate(expression.argnames):
-                opcoder.local_vars[argname] = index
+                opcoder.local_vars[argname] = ArgMarker(index)
 
             opcoder.do_body(expression.body)
             self.output.ops.append(CreateFunction(expression.name,
@@ -243,7 +244,7 @@ class _OpCoder:
 def create_opcode(cooked):
     builtin_opcoder = _OpCoder(None, None)
     builtin_opcoder.local_vars.update({
-        name: index
+        name: ArgMarker(index)
         for index, name in enumerate(itertools.chain(
             objects.BUILTIN_OBJECTS.keys(),
             objects.BUILTIN_GENERIC_FUNCS.keys()

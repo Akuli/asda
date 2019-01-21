@@ -82,7 +82,7 @@ class _BytecodeWriter:
         else:
             assert False, tybe      # pragma: no cover
 
-    def write_op(self, op):
+    def write_op(self, op, varlists):
         if isinstance(op, opcoder.StrConstant):
             self.output.extend(STR_CONSTANT)
             self.write_string(op.python_string)
@@ -98,17 +98,22 @@ class _BytecodeWriter:
             self.write_type(op.functype)    # includes CREATE_FUNCTION
             self.output.append(1 if op.yields else 0)
             self.write_string(op.name)
-            _BytecodeWriter(self.output).run(op.body_opcode)
+
+            varlists = varlists + [op.body_opcode.local_vars]
+            _BytecodeWriter(self.output).run(op.body_opcode, varlists)
 
         elif isinstance(op, opcoder.LookupVar):
             self.output.extend(LOOKUP_VAR)
             self.write_uint8(op.level)
-            self.write_uint16(op.var)
+            if isinstance(op.var, opcoder.ArgMarker):
+                self.write_uint16(op.var.index)
+            else:
+                self.write_uint16(varlists[op.level].index(op.var))
 
         elif isinstance(op, opcoder.SetVar):
             self.output.extend(SET_VAR)
             self.write_uint8(op.level)
-            self.write_uint16(op.var)
+            self.write_uint16(varlists[op.level].index(op.var))
 
         elif isinstance(op, opcoder.CallFunction):
             self.output.extend(CALL_RETURNING_FUNCTION if op.returns_a_value
@@ -145,7 +150,7 @@ class _BytecodeWriter:
             assert False, op        # pragma: no cover
 
     # don't call this more than once
-    def run(self, opcode):
+    def run(self, opcode, varlists):
         i = 0
         for op in opcode.ops:
             if isinstance(op, opcoder.JumpMarker):
@@ -155,11 +160,13 @@ class _BytecodeWriter:
 
         self.write_uint16(len(opcode.local_vars))
         for op in opcode.ops:
-            self.write_op(op)
+            self.write_op(op, varlists)
         self.output.extend(END_OF_BODY)
 
 
 def create_bytecode(opcode):
     output = bytearray()
-    _BytecodeWriter(output).run(opcode)
+    # the built-in varlist is None because all builtins are implemented
+    # as ArgMarkers, so they don't need a varlist
+    _BytecodeWriter(output).run(opcode, [None, opcode.local_vars])
     return output
