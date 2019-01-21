@@ -105,7 +105,7 @@ class _Parser:
                 # generic_func_name[T1, T2, ...]
                 self.tokens.next_token('op', '[')
                 types, closing_bracket = self.parse_commasep_list(
-                    self.parse_type, ']')
+                    self.parse_type, ']', False)
                 result = FuncFromGeneric(
                     first_token.location + closing_bracket.location,
                     first_token.value, types)
@@ -127,7 +127,7 @@ class _Parser:
             elif self.tokens.coming_up('op', '('):
                 self.tokens.next_token('op', '(')
                 args, last_paren = self.parse_commasep_list(
-                    self.parse_expression, ')')
+                    self.parse_expression, ')', True)
                 result = FuncCall(first_token.location + last_paren.location,
                                   result, args)
             else:
@@ -135,8 +135,12 @@ class _Parser:
 
         return result
 
-    def parse_commasep_list(self, parse_callback, end_op):
+    def parse_commasep_list(self, parse_callback, end_op, allow_empty):
         if self.tokens.coming_up('op', end_op):
+            if not allow_empty:
+                raise common.CompileError(
+                    "expected 1 or more comma-separated items, got 0",
+                    self.tokens.next_token('op', end_op).location)
             result = []
         else:
             result = [parse_callback()]
@@ -215,7 +219,7 @@ class _Parser:
         if self.tokens.coming_up('op', '['):
             self.tokens.next_token('op', '[')
             types, closing_bracket = self.parse_commasep_list(
-                self.parse_type, ']')
+                self.parse_type, ']', False)
             result = TypeFromGeneric(
                 first_token.location + closing_bracket.location,
                 first_token.value, types)
@@ -235,7 +239,8 @@ class _Parser:
         self.tokens.next_token('keyword', 'func')
         name = self.tokens.next_token('id')
         self.tokens.next_token('op', '(')
-        args, close_paren = self.parse_commasep_list(self.parse_arg_spec, ')')
+        args, close_paren = self.parse_commasep_list(
+            self.parse_arg_spec, ')', True)
         self.tokens.next_token('op', '->')
 
         if self.tokens.coming_up('keyword', 'void'):

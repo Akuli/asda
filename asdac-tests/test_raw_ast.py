@@ -48,6 +48,12 @@ def test_generics():
         ),
     ]
 
+    with pytest.raises(CompileError) as error:
+        parse('lol[]')
+    assert error.value.message == (
+        "expected 1 or more comma-separated items, got 0")
+    assert error.value.location == Location('test file', 1, 4, 1, 5)
+
 
 def test_method_call():
     assert parse('"hello".uppercase()') == [
