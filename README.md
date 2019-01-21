@@ -79,7 +79,7 @@ examples should work with asdac and pyasda.
 
 ### Are there any tests?
 
-Not yet.
+Yes. See [developing asda](#developing-asda) below.
 
 ### How does it work?
 
