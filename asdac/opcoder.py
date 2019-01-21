@@ -127,6 +127,7 @@ class _OpCoder:
     def do_statement(self, statement):
         if isinstance(statement, cooked_ast.CreateLocalVar):
             var = self.output.add_local_var()
+            assert statement.varname not in self.local_vars
             self.local_vars[statement.varname] = var
             self.do_expression(statement.initial_value)
             self.output.ops.append(SetVar(self.level, var))
@@ -229,25 +230,11 @@ class _OpCoder:
         else:
             assert False, statement     # pragma: no cover
 
-    # FIXME: this is pooooooooOO!!!!!!!!!!
-    def _var_creating_statements(self, statement_list):
-        for statement in statement_list:
-            if isinstance(statement, cooked_ast.CreateLocalVar):
-                yield statement
-            elif isinstance(statement, cooked_ast.If):
-                for cond, body in statement.ifs:
-                    yield from self._var_creating_statements(body)
-                yield from self._var_creating_statements(statement.else_body)
-
     def do_body(self, statements):
         if iter(statements) is statements:
             # statements is an iterator, which is bad because it needs to be
             # looped over twice
             statements = list(statements)
-
-        for statement in self._var_creating_statements(statements):
-            assert statement.varname not in self.local_vars
-            self.local_vars[statement.varname] = statement.varname
 
         for statement in statements:
             self.do_statement(statement)
