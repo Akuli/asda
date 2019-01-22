@@ -30,3 +30,10 @@ def test_generic_lookup_errors():
     doesnt_parse('func lol() -> Generator[Str, Int]:\n    print("Boo")',
                  "Generator[T] expected 1 type, but got 2",
                  'Generator[Str, Int]')
+
+    doesnt_parse('''
+func lol[T, U](T arg) -> Str:
+    return "Hello"
+
+lol[Bool](TRUE)
+''', "lol[T, U] expected 2 types, but got 1", 'lol[Bool]')
