@@ -277,8 +277,6 @@ class _Chef:
         # * creating the real subchef needs cooked returntype
         # * cooking the returntype needs a chef that knows the generic types
         yield_location = next(_find_yields(raw.body), None)
-        subchef = _Chef(self, True, yield_location is not None, returntype)
-        subchef.local_types.update(temp_chef.local_types)
         if (yield_location is not None and
                 not isinstance(returntype, objects.GeneratorType)):
             raise common.CompileError(
@@ -288,6 +286,8 @@ class _Chef:
         functype = objects.FunctionType(raw.funcname, argtypes, returntype)
 
         # TODO: allow functions to call themselves
+        subchef = _Chef(self, True, yield_location is not None, returntype)
+        subchef.local_types.update(temp_chef.local_types)
         subchef.local_vars.update(dict(zip(argnames, argtypes)))
         body = list(map(subchef.cook_statement, raw.body))
 
