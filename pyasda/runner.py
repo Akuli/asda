@@ -54,7 +54,6 @@ class _Runner:
     #   * None for void return
     def run(self):
         for opcode, *args in self.opcodes:
-            #print('  ' * len(self.scope.parent_scopes), opcode, args, self.stack, self.scope.local_vars)
             if opcode == bytecode_reader.CONSTANT:
                 [constant] = args
                 self.stack.append(constant)

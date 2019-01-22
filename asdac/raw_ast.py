@@ -2,8 +2,6 @@ import collections
 import functools
 import itertools
 
-import more_itertools
-
 from . import common
 
 
