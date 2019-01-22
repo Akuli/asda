@@ -2,7 +2,7 @@ import pytest
 
 from asdac import tokenizer, raw_ast, objects
 from asdac.common import CompileError, Location
-from asdac.cooked_ast import cook, CreateFunction, CreateLocalVar, StrConstant
+from asdac.cooked_ast import cook
 
 
 def parse(code):
@@ -173,12 +173,6 @@ func f() -> void:
 # not all Generator[Str] functions yield, it's also allowed to return
 # a generator
 def test_different_generator_creating_functions():
-    # the actual value of the ast kinda needs to be checked to make sure that
-    # it does the right thing :/
-    strgen = objects.GeneratorType(objects.BUILTIN_TYPES['Str'])
-    functype = objects.FunctionType('whatever', [], strgen)
-    anywhere = Location('test file', *([Anything()] * 4))
-
     create_lol, create_lol2 = parse('''
 func lol() -> Generator[Str]:
     yield "Hi"
