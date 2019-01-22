@@ -21,8 +21,9 @@ GetType = _astclass('GetType', ['name'])
 TypeFromGeneric = _astclass('TypeFromGeneric', ['typename', 'types'])
 FuncFromGeneric = _astclass('FuncFromGeneric', ['funcname', 'types'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
+# generics is a list of (typename, location) pairs, or None
 FuncDefinition = _astclass('FuncDefinition', [
-    'funcname', 'args', 'returntype', 'body'])
+    'funcname', 'generics', 'args', 'returntype', 'body'])
 Return = _astclass('Return', ['value'])
 Yield = _astclass('Yield', ['value'])
 # ifs is a list of (condition, body) pairs, where body is a list
@@ -238,6 +239,19 @@ class _Parser:
     def parse_func_definition(self):
         self.tokens.next_token('keyword', 'func')
         name = self.tokens.next_token('id')
+
+        if self.tokens.coming_up('op', '['):
+            def parse_a_generic():
+                token = self.tokens.next_token('id')
+                return (token.value, token.location)
+
+            self.tokens.next_token('op', '[')
+            generics, closing_bracket = self.parse_commasep_list(
+                parse_a_generic, ']', False)
+
+        else:
+            generics = None
+
         self.tokens.next_token('op', '(')
         args, close_paren = self.parse_commasep_list(
             self.parse_arg_spec, ')', True)
@@ -255,7 +269,8 @@ class _Parser:
         # the location of a function definition is just the first line,
         # because the body can get quite long
         location = type_location + close_paren.location
-        return FuncDefinition(location, name.value, args, returntype, body)
+        return FuncDefinition(location, name.value, generics, args,
+                              returntype, body)
 
     def parse_return(self):
         return_keyword = self.tokens.next_token('keyword', 'return')

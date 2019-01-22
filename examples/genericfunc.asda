@@ -1,0 +1,5 @@
+func do_nothing[T](T value) -> T:
+    return value
+
+if do_nothing[Bool](TRUE):
+    print(do_nothing[Str]("Hello"))

@@ -92,6 +92,17 @@ class _OpCoder:
         elif isinstance(expression, cooked_ast.CallFunction):
             self.do_function_call(expression)
 
+        # the whole functype is in the opcode because even though the opcode is
+        # not statically typed, each object has a type
+        #
+        # in things like BoolConstant the interpreter knows that the type will
+        # be Bool, but there are many different function types because
+        # functions with different argument types or return type have
+        # different types
+        #
+        # general rule: if something creates a new object, make sure to include
+        # enough information for the interpreter to tell what the type of the
+        # object should be
         elif isinstance(expression, cooked_ast.CreateFunction):
             function_opcode = OpCode(len(expression.argnames))
             opcoder = _OpCoder(function_opcode, self)
@@ -227,6 +238,17 @@ class _OpCoder:
             self.output.ops.append(BoolConstant(True))
             self.output.ops.append(JumpIf(beginning))
             self.output.ops.append(end)
+
+        elif isinstance(statement, cooked_ast.CreateGenericFunction):
+            dynamic_functype = statement.generic_obj.get_real_type(
+                [tybe.parent_type
+                 for tybe in statement.generic_obj.type_markers],
+                statement.location)
+            self.do_statement(cooked_ast.CreateLocalVar(
+                statement.location, None, statement.name,
+                cooked_ast.CreateFunction(
+                    statement.location, dynamic_functype, statement.name,
+                    statement.argnames, statement.body, statement.yields)))
 
         else:
             assert False, statement     # pragma: no cover

@@ -13,8 +13,9 @@ from asdac import common
 
 class Type(metaclass=abc.ABCMeta):
 
-    def __init__(self, name):
+    def __init__(self, name, parent_type):
         self.name = name
+        self.parent_type = parent_type
 
         # keys are names, values are FunctionTypes with 'this' as first arg
         self.methods = collections.OrderedDict()
@@ -31,8 +32,8 @@ class Type(metaclass=abc.ABCMeta):
         return '<%s type %r>' % (__name__, self.name)
 
 
-class BuiltinType(Type):
-    pass
+OBJECT = Type('Object', None)
+OBJECT.parent_type = OBJECT
 
 
 class FunctionType(Type):
@@ -45,7 +46,8 @@ class FunctionType(Type):
         if is_method:
             del argtype_names[0]
 
-        super().__init__('%s(%s)' % (name_prefix, ', '.join(argtype_names)))
+        super().__init__('%s(%s)' % (name_prefix, ', '.join(argtype_names)),
+                         OBJECT)
         self.returntype = returntype
         self.name_prefix = name_prefix
         self._is_method = is_method
@@ -83,9 +85,10 @@ class FunctionType(Type):
 
 
 BUILTIN_TYPES = collections.OrderedDict([
-    ('Str', BuiltinType('Str')),
-    ('Int', BuiltinType('Int')),
-    ('Bool', BuiltinType('Bool')),
+    ('Str', Type('Str', OBJECT)),
+    ('Int', Type('Int', OBJECT)),
+    ('Bool', Type('Bool', OBJECT)),
+    ('Object', OBJECT),
 ])
 BUILTIN_TYPES['Str'].add_method('uppercase', [], BUILTIN_TYPES['Str'])
 
@@ -93,7 +96,7 @@ BUILTIN_TYPES['Str'].add_method('uppercase', [], BUILTIN_TYPES['Str'])
 class GeneratorType(Type):
 
     def __init__(self, item_type):
-        super().__init__('Generator[%s]' % item_type.name)
+        super().__init__('Generator[%s]' % item_type.name, OBJECT)
         self.item_type = item_type
 
     def __eq__(self, other):
@@ -113,6 +116,9 @@ BUILTIN_OBJECTS = collections.OrderedDict([
 
 
 class GenericMarker(Type):
+
+    def __init__(self, name):
+        super().__init__(name, OBJECT)
 
     def undo_generics(self, type_dict):
         return type_dict.get(self, self)

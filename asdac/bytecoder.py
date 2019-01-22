@@ -59,7 +59,7 @@ class _BytecodeWriter:
         self.output.extend(utf8)
 
     def write_type(self, tybe):
-        if isinstance(tybe, objects.BuiltinType):
+        if tybe in objects.BUILTIN_TYPES.values():
             names = list(objects.BUILTIN_TYPES)
             self.output.extend(TYPE_BUILTIN)
             self.write_uint8(names.index(tybe.name))
@@ -99,8 +99,8 @@ class _BytecodeWriter:
             self.output.append(1 if op.yields else 0)
             self.write_string(op.name)
 
-            varlists = varlists + [op.body_opcode.local_vars]
-            _BytecodeWriter(self.output).run(op.body_opcode, varlists)
+            body_varlists = varlists + [op.body_opcode.local_vars]
+            _BytecodeWriter(self.output).run(op.body_opcode, body_varlists)
 
         elif isinstance(op, opcoder.LookupVar):
             self.output.extend(LOOKUP_VAR)

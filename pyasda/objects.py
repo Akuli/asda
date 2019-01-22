@@ -7,11 +7,16 @@ import itertools
 
 class Type:
 
-    def __init__(self):
+    def __init__(self, base):
         self.methods = []
+        self.base_type = base
 
 
-class Object:
+OBJECT = Type(None)     # the asda base class of all asda objects
+OBJECT.base_type = OBJECT   # TODO: is this a good idea? at all?
+
+
+class Object:       # the python base class of all asda objects
 
     def __init__(self, tybe):
         self.type = tybe
@@ -20,7 +25,7 @@ class Object:
 class FunctionType(Type):
 
     def __init__(self, argtypes, returntype):
-        super().__init__()
+        super().__init__(OBJECT)
         self.argtypes = list(argtypes)
         self.returntype = returntype
 
@@ -48,9 +53,10 @@ def add_method(tybe, python_func, argtypes, *args, **kwargs):
 
 
 types = collections.OrderedDict([
-    ('Str', Type()),
-    ('Int', Type()),
-    ('Bool', Type()),
+    ('Str', Type(OBJECT)),
+    ('Int', Type(OBJECT)),
+    ('Bool', Type(OBJECT)),
+    ('Object', OBJECT),
 ])
 
 add_method(
@@ -59,13 +65,15 @@ add_method(
 
 
 class GenericType(Type):
-    pass
+
+    def __init__(self):
+        super().__init__(OBJECT)
 
 
 class GeneratorType(Type):
 
     def __init__(self, itemtype):
-        super().__init__()
+        super().__init__(OBJECT)
         self.itemtype = itemtype
 
 
@@ -83,6 +91,7 @@ class String(Object):
 class Generator(Object):
 
     def __init__(self, tybe, next_callback):
+        assert isinstance(tybe, GeneratorType)
         super().__init__(tybe)
         self.next = next_callback
 
