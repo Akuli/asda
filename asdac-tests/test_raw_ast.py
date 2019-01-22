@@ -110,3 +110,15 @@ def test_assign_to_non_variable():
         parse('print("lol") = x')
     assert error.value.message == "expected a variable"
     assert error.value.location == Location('test file', 1, 0, 1, 12)
+
+
+def test_repeated():
+    with pytest.raises(CompileError) as error:
+        parse('func lol[T, T]() -> void:\n    print("Boo")')
+    assert error.value.message == "repeated generic type name: T"
+    assert error.value.location == Location('test file', 1, 12, 1, 13)
+
+    with pytest.raises(CompileError) as error:
+        parse('func lol(Str x, Bool x) -> void:\n    print("Boo")')
+    assert error.value.message == "repeated argument name: x"
+    assert error.value.location == Location('test file', 1, 21, 1, 22)

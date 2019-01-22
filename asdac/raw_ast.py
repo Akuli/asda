@@ -1,6 +1,7 @@
 import collections
 import functools
 import itertools
+import operator
 
 from . import common
 
@@ -88,6 +89,17 @@ class _TokenIterator:
             return False
         except StopIteration:
             return True
+
+
+def _find_duplicate(iterable, *, key=(lambda item: item)):
+    seen = set()
+    for item in iterable:
+        keyed = key(item)
+        if keyed in seen:
+            return item
+        seen.add(keyed)
+
+    return None
 
 
 class _Parser:
@@ -227,7 +239,6 @@ class _Parser:
         return result
 
     def parse_arg_spec(self):
-        # TODO: update this when not all type names are id tokens
         tybe = self.parse_type()
         varname = self.tokens.next_token('id')
         return (tybe, varname.value, varname.location)
@@ -247,12 +258,25 @@ class _Parser:
             generics, closing_bracket = self.parse_commasep_list(
                 parse_a_generic, ']', False)
 
+            duplicate = _find_duplicate(generics, key=operator.itemgetter(0))
+            if duplicate is not None:
+                name, location = duplicate
+                raise common.CompileError(
+                    "repeated generic type name: %s" % name, location)
+
         else:
             generics = None
 
         self.tokens.next_token('op', '(')
         args, close_paren = self.parse_commasep_list(
             self.parse_arg_spec, ')', True)
+
+        duplicate = _find_duplicate(args, key=operator.itemgetter(1))
+        if duplicate is not None:
+            tybe, name, location = duplicate
+            raise common.CompileError(
+                "repeated argument name: %s" % name, location)
+
         self.tokens.next_token('op', '->')
 
         if self.tokens.coming_up('keyword', 'void'):
