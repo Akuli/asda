@@ -80,7 +80,8 @@ class FunctionType(Type):
         return FunctionType(
             new_name_prefix,
             [tybe.undo_generics(type_dict) for tybe in self.argtypes],
-            self.returntype.undo_generics(type_dict),
+            (None if self.returntype is None else
+             self.returntype.undo_generics(type_dict)),
             is_method=self._is_method)
 
 

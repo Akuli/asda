@@ -37,3 +37,11 @@ func lol[T, U](T arg) -> Str:
 
 lol[Bool](TRUE)
 ''', "lol[T, U] expected 2 types, but got 1", 'lol[Bool]')
+
+
+# there used to be a bug that couldn't handle genericness in void-returning
+# functions
+def test_void_returning_generic_bug():
+    ast = parse('func lol[T]() -> void:\n    print("Hello")\nlet f = lol[Str]')
+    loldef, fdef = ast
+    assert fdef.initial_value.type.returntype is None
