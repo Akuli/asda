@@ -91,15 +91,13 @@ class _TokenIterator:
             return True
 
 
-def _find_duplicate(iterable, *, key=(lambda item: item)):
+def _duplicate_check(iterable, what_are_they):
     seen = set()
-    for item in iterable:
-        keyed = key(item)
-        if keyed in seen:
-            return item
-        seen.add(keyed)
-
-    return None
+    for name, location in iterable:
+        if name in seen:
+            raise common.CompileError(
+                "repeated %s name: %s" % (what_are_they, name), location)
+        seen.add(name)
 
 
 class _Parser:
@@ -257,12 +255,7 @@ class _Parser:
             self.tokens.next_token('op', '[')
             generics, closing_bracket = self.parse_commasep_list(
                 parse_a_generic, ']', False)
-
-            duplicate = _find_duplicate(generics, key=operator.itemgetter(0))
-            if duplicate is not None:
-                name, location = duplicate
-                raise common.CompileError(
-                    "repeated generic type name: %s" % name, location)
+            _duplicate_check(generics, "generic type")
 
         else:
             generics = None
@@ -270,12 +263,7 @@ class _Parser:
         self.tokens.next_token('op', '(')
         args, close_paren = self.parse_commasep_list(
             self.parse_arg_spec, ')', True)
-
-        duplicate = _find_duplicate(args, key=operator.itemgetter(1))
-        if duplicate is not None:
-            tybe, name, location = duplicate
-            raise common.CompileError(
-                "repeated argument name: %s" % name, location)
+        _duplicate_check(((arg[1], arg[2]) for arg in args), "argument")
 
         self.tokens.next_token('op', '->')
 
