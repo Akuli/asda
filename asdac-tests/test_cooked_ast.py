@@ -2,9 +2,7 @@ import pytest
 
 from asdac import tokenizer, raw_ast, objects
 from asdac.common import CompileError, Location
-from asdac.cooked_ast import (cook, CallFunction, CreateFunction,
-                              CreateLocalVar, LookupVar, StrConstant,
-                              ValueReturn, Yield)
+from asdac.cooked_ast import cook, CreateFunction, CreateLocalVar, StrConstant
 
 
 def parse(code):
@@ -56,17 +54,13 @@ class Anything:
 
 
 def test_nested_generic_types():
-    ast = parse('func lol() -> Generator[Generator[Str]]:\n    print("Lol")')
-    assert ast == [
-        CreateLocalVar(
-            Location('test file', *([Anything()] * 4)),
-            type=objects.FunctionType(
-                'whatever',
-                returntype=objects.GeneratorType(
-                    objects.GeneratorType(
-                        objects.BUILTIN_TYPES['Str']))),
-            varname='lol',
-            initial_value=Anything())]
+    [createlocalvar] = parse(
+        'func lol() -> Generator[Generator[Str]]:\n    print("Lol")')
+    assert createlocalvar.varname == 'lol'
+    assert createlocalvar.initial_value.type == objects.FunctionType(
+        'whatever',
+        returntype=objects.GeneratorType(objects.GeneratorType(
+            objects.BUILTIN_TYPES['Str'])))
 
 
 def test_generic_func_not_found():
@@ -185,63 +179,17 @@ def test_different_generator_creating_functions():
     functype = objects.FunctionType('whatever', [], strgen)
     anywhere = Location('test file', *([Anything()] * 4))
 
-    def string(s):
-        return StrConstant(anywhere, type=objects.BUILTIN_TYPES['Str'],
-                           python_string=s)
-
-    def create_func(name, yields, body):
-        return CreateLocalVar(
-            anywhere,
-            type=functype,
-            varname=name,
-            initial_value=CreateFunction(
-                anywhere,
-                type=functype,
-                name=name,
-                argnames=[],
-                body=body,
-                yields=yields,
-            ),
-        )
-
-    assert parse('''
+    create_lol, create_lol2 = parse('''
 func lol() -> Generator[Str]:
     yield "Hi"
     yield "There"
 
 func lol2() -> Generator[Str]:
     return lol()
-''') == [
-        create_func('lol', True, [
-            Yield(
-                anywhere,
-                type=None,
-                value=string('Hi'),
-            ),
-            Yield(
-                anywhere,
-                type=None,
-                value=string('There'),
-            ),
-        ]),
-        create_func('lol2', False, [
-            ValueReturn(
-                anywhere,
-                type=None,
-                value=CallFunction(
-                    anywhere,
-                    type=strgen,
-                    function=LookupVar(
-                        anywhere,
-                        type=functype,
-                        varname='lol',
-                        level=1,
-                    ),
-                    args=[],
-                ),
-            ),
-        ]),
-    ]
+''')
+
+    assert (create_lol.initial_value.type ==
+            create_lol2.initial_value.type)
 
 
 def test_non_bool_cond():
