@@ -1,7 +1,6 @@
 import collections
 import functools
 import itertools
-import operator
 
 from . import common
 

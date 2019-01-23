@@ -16,6 +16,7 @@ CALL_RETURNING_FUNCTION = b')'
 POP_ONE = b'P'
 VOID_RETURN = b'r'
 VALUE_RETURN = b'R'
+DIDNT_RETURN_ERROR = b'd'
 YIELD = b'Y'
 NEGATION = b'!'
 JUMP_IF = b'J'
@@ -145,6 +146,9 @@ class _BytecodeWriter:
             self.output.extend(LOOKUP_METHOD)
             self.write_type(op.type)
             self.write_uint16(op.indeks)
+
+        elif isinstance(op, opcoder.DidntReturnError):
+            self.output.extend(DIDNT_RETURN_ERROR)
 
         else:
             assert False, op        # pragma: no cover

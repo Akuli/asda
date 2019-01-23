@@ -47,6 +47,7 @@ Return = namedtuple('Return', ['returns_a_value'])
 Yield = namedtuple('Yield', [])
 Negation = namedtuple('Negation', [])
 JumpIf = namedtuple('JumpIf', ['marker'])
+DidntReturnError = namedtuple('DidntReturnError', [])
 
 
 class JumpMarker(common.Marker):
@@ -110,6 +111,11 @@ class _OpCoder:
                 opcoder.local_vars[argname] = ArgMarker(index)
 
             opcoder.do_body(expression.body)
+            if expression.type.returntype is None:
+                function_opcode.ops.append(Return(False))
+            else:
+                function_opcode.ops.append(DidntReturnError())
+
             self.output.ops.append(CreateFunction(expression.name,
                                                   expression.type,
                                                   expression.yields,

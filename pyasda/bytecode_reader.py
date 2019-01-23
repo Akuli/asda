@@ -18,6 +18,7 @@ CALL_RETURNING_FUNCTION = b')'
 POP_ONE = b'P'
 VOID_RETURN = b'r'
 VALUE_RETURN = b'R'
+DIDNT_RETURN_ERROR = b'd'
 YIELD = b'Y'
 NEGATION = b'!'
 JUMP_IF = b'J'
@@ -107,16 +108,13 @@ class _BytecodeReader:
                 opcode.append((CONSTANT, objects.FALSE))
             elif magic in {CALL_VOID_FUNCTION, CALL_RETURNING_FUNCTION}:
                 opcode.append((magic, self.read_uint8()))
-            elif magic == LOOKUP_VAR:
+            elif magic in {LOOKUP_VAR, SET_VAR}:
                 level = self.read_uint8()
                 index = self.read_uint16()
-                opcode.append((LOOKUP_VAR, level, index))
-            elif magic == SET_VAR:
-                level = self.read_uint8()
-                index = self.read_uint16()
-                opcode.append((SET_VAR, level, index))
-            elif magic == POP_ONE:
-                opcode.append((POP_ONE,))
+                opcode.append((magic, level, index))
+            elif magic in {POP_ONE, DIDNT_RETURN_ERROR, NEGATION, YIELD,
+                           VOID_RETURN, VALUE_RETURN}:
+                opcode.append((magic,))
             elif magic == CREATE_FUNCTION:
                 self._unread(magic[0])
                 tybe = self.read_type()
@@ -124,17 +122,9 @@ class _BytecodeReader:
                 name = self.read_string()     # TODO: is this needed at all?
                 body = self.read_body()
                 opcode.append((CREATE_FUNCTION, tybe, name, body, yields))
-            elif magic == VOID_RETURN:
-                opcode.append((VOID_RETURN,))
-            elif magic == VALUE_RETURN:
-                opcode.append((VALUE_RETURN,))
-            elif magic == YIELD:
-                opcode.append((YIELD,))
             elif magic == JUMP_IF:
                 where2jump = self.read_uint16()
                 opcode.append((JUMP_IF, where2jump))
-            elif magic == NEGATION:
-                opcode.append((NEGATION,))
             elif magic == LOOKUP_METHOD:
                 tybe = self.read_type()
                 index = self.read_uint16()

@@ -1,4 +1,5 @@
 import collections
+import enum
 
 import more_itertools
 
@@ -13,6 +14,13 @@ def _create_subscope(parent_scope, how_many_local_vars):
                   parent_scope.parent_scopes + [parent_scope])
 
 
+class RunResult(enum.Enum):
+    YIELDED = 1
+    VALUE_RETURNED = 2
+    VOID_RETURNED = 3
+    DIDNT_RETURN = 4
+
+
 def _create_function_object(code, definition_scope, tybe, yields):
     def python_func(*args):
         scope = _create_subscope(definition_scope, code.how_many_local_vars)
@@ -21,19 +29,23 @@ def _create_function_object(code, definition_scope, tybe, yields):
         runner = _Runner(code, scope)
 
         if not yields:
-            yielded, value = runner.run()
-            assert not yielded
+            result, value = runner.run()
+            assert result in {RunResult.VALUE_RETURNED,
+                              RunResult.VOID_RETURNED}
             return value
 
         def get_next_item():
-            yielded, value = runner.run()
-            if not yielded:
+            result, value = runner.run()
+            if result == RunResult.YIELDED:
+                assert value is not None
+                return value
+
+            if result == RunResult.VOID_RETURNED:
                 # end of iteration
                 assert value is None
                 raise RuntimeError("iteration ended lel")
 
-            assert value is not None
-            return value
+            assert False, result
 
         return objects.Generator(tybe.returntype, get_next_item)
 
@@ -48,7 +60,7 @@ class _Runner:
         self.opcodes = more_itertools.seekable(code.opcodes)
         self.opcodes_len = len(code.opcodes)
 
-    # returns (yielded, result) where result is one of:
+    # returns (RunResult, value) where value is one of:
     #   * yielded value
     #   * returned value
     #   * None for void return
@@ -101,16 +113,16 @@ class _Runner:
 
             elif opcode == bytecode_reader.VOID_RETURN:
                 assert not self.stack
-                return (False, None)
+                return (RunResult.VOID_RETURNED, None)
 
             elif opcode == bytecode_reader.VALUE_RETURN:
                 value = self.stack.pop()
                 assert not self.stack
-                return (False, value)
+                return (RunResult.VALUE_RETURNED, value)
 
             elif opcode == bytecode_reader.YIELD:
                 value = self.stack.pop()
-                return (True, value)
+                return (RunResult.YIELDED, value)
 
             elif opcode == bytecode_reader.NEGATION:
                 self.stack[-1] = {objects.TRUE: objects.FALSE,
@@ -129,15 +141,19 @@ class _Runner:
                 unbound = tybe.methods[index]
                 self.stack[-1] = unbound.method_bind(self.stack[-1])
 
+            elif opcode == bytecode_reader.DIDNT_RETURN_ERROR:
+                assert not args
+                raise ValueError("a non-void function didn't return")
+
             else:
                 assert False, opcode
 
         assert not self.stack
-        return (False, None)
+        return (RunResult.DIDNT_RETURN, None)
 
 
 def run_file(code):
     global_scope = _Scope(objects.BUILTINS, [])
     file_scope = _create_subscope(global_scope, code.how_many_local_vars)
     result = _Runner(code, file_scope).run()
-    assert result == (False, None), result
+    assert result == (RunResult.DIDNT_RETURN, None), result
