@@ -31,10 +31,16 @@ def test_too_many_arguments():
 
 
 def test_implicit_return():
-    create_func, setvar = opcode('func lol() -> void:\n    print("Boo")').ops
-    implicit_return = create_func.body_opcode.ops[-1]
-    assert isinstance(implicit_return, Return)
-    assert not implicit_return.returns_a_value
+    codes = [
+        'func lol() -> void:\n    print("Boo")',
+        'func lol() -> Generator[Str]:\n    yield "Boo"',
+    ]
+
+    for code in codes:
+        create_func, setvar = opcode(code).ops
+        implicit_return = create_func.body_opcode.ops[-1]
+        assert isinstance(implicit_return, Return)
+        assert not implicit_return.returns_a_value
 
 
 def test_missing_return():

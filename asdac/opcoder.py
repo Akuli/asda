@@ -111,7 +111,7 @@ class _OpCoder:
                 opcoder.local_vars[argname] = ArgMarker(index)
 
             opcoder.do_body(expression.body)
-            if expression.type.returntype is None:
+            if expression.type.returntype is None or expression.yields:
                 function_opcode.ops.append(Return(False))
             else:
                 function_opcode.ops.append(DidntReturnError())
