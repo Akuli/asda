@@ -9,11 +9,10 @@ class Type:
 
     def __init__(self, base):
         self.methods = []
-        self.base_type = base
+        self.base_type = base   # None for OBJECT
 
 
 OBJECT = Type(None)     # the asda base class of all asda objects
-OBJECT.base_type = OBJECT   # TODO: is this a good idea? at all?
 
 
 class Object:       # the python base class of all asda objects
@@ -44,8 +43,6 @@ class Function(Object):
 
     def run(self, args):
         assert len(args) == len(self.type.argtypes)
-        for arg, tybe in zip(args, self.type.argtypes):
-            pass   # TODO: how 2 check this
         return self.python_func(*args)
 
 

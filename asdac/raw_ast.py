@@ -175,7 +175,6 @@ class _Parser:
         self.tokens.next_token('dedent')
         return body
 
-    # TODO: elif
     def parse_if_statement(self):
         keyword = 'if'
 

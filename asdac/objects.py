@@ -15,7 +15,7 @@ class Type(metaclass=abc.ABCMeta):
 
     def __init__(self, name, parent_type):
         self.name = name
-        self.parent_type = parent_type
+        self.parent_type = parent_type      # None for OBJECT
 
         # keys are names, values are FunctionTypes with 'this' as first arg
         self.methods = collections.OrderedDict()
@@ -33,7 +33,6 @@ class Type(metaclass=abc.ABCMeta):
 
 
 OBJECT = Type('Object', None)
-OBJECT.parent_type = OBJECT
 
 
 class FunctionType(Type):
