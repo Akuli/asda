@@ -48,7 +48,6 @@ def test_error_simple(asdac_run, monkeypatch):
     # this doesn't use capsys because it fucks up colorama color codes somehow
     monkeypatch.setattr(sys, 'stderr', FakeTtyStringIO())
 
-    # FIXME: this fails without \n at end of the code
     asdac_run('let asd = lol\n', exit_code=1)
 
     assert colorama.Fore.RED in sys.stderr.getvalue()
