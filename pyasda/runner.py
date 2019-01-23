@@ -21,7 +21,7 @@ class RunResult(enum.Enum):
     DIDNT_RETURN = 4
 
 
-def _create_function_object(code, definition_scope, tybe, yields):
+def _create_function_object(definition_scope, tybe, name, code, yields):
     def python_func(*args):
         scope = _create_subscope(definition_scope, code.how_many_local_vars)
         for index, arg in enumerate(args):
@@ -49,7 +49,7 @@ def _create_function_object(code, definition_scope, tybe, yields):
 
         return objects.Generator(tybe.returntype, get_next_item)
 
-    return objects.Function(tybe, python_func)
+    return objects.Function(tybe, name, python_func)
 
 
 class _Runner:
@@ -107,9 +107,7 @@ class _Runner:
                 del self.stack[-1]
 
             elif opcode == bytecode_reader.CREATE_FUNCTION:
-                tybe, name, body, yields = args
-                self.stack.append(_create_function_object(
-                    body, self.scope, tybe, yields))
+                self.stack.append(_create_function_object(self.scope, *args))
 
             elif opcode == bytecode_reader.VOID_RETURN:
                 assert not self.stack

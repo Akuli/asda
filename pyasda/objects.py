@@ -32,13 +32,15 @@ class FunctionType(Type):
 
 class Function(Object):
 
-    def __init__(self, tybe, python_func):
+    def __init__(self, tybe, name, python_func):
         super().__init__(tybe)
+        self.name = name
         self.python_func = python_func
 
     def method_bind(self, this):
         bound_type = FunctionType(self.type.argtypes[1:], self.type.returntype)
-        return Function(bound_type, functools.partial(self.python_func, this))
+        return Function(bound_type, self.name,
+                        functools.partial(self.python_func, this))
 
     def run(self, args):
         assert len(args) == len(self.type.argtypes)
@@ -47,9 +49,9 @@ class Function(Object):
         return self.python_func(*args)
 
 
-def add_method(tybe, python_func, argtypes, *args, **kwargs):
-    functype = FunctionType(itertools.chain([tybe], argtypes), *args, **kwargs)
-    tybe.methods.append(Function(functype, python_func))
+def add_method(tybe, name, python_func, argtypes, returntype):
+    functype = FunctionType(itertools.chain([tybe], argtypes), returntype)
+    tybe.methods.append(Function(functype, name, python_func))
 
 
 types = collections.OrderedDict([
@@ -60,8 +62,8 @@ types = collections.OrderedDict([
 ])
 
 add_method(
-    types['Str'], (lambda this: String(this.python_string.upper())),
-    [], types['Str'])
+    types['Str'], 'uppercase',
+    (lambda this: String(this.python_string.upper())), [], types['Str'])
 
 
 class GenericType(Type):
@@ -101,10 +103,11 @@ FALSE = Object(types['Bool'])
 
 T = GenericType()
 BUILTINS = [
-    Function(FunctionType([types['Str']], None),
+    Function(FunctionType([types['Str']], None), 'print',
              lambda arg: print(arg.python_string)),
     TRUE,
     FALSE,
-    Function(FunctionType([GeneratorType(T)], T), lambda arg: arg.next()),
+    Function(FunctionType([GeneratorType(T)], T), 'next',
+             lambda arg: arg.next()),
 ]
 del T
