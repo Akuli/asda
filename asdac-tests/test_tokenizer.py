@@ -70,7 +70,16 @@ def test_tabs_forbidden_sorry():
     with pytest.raises(CompileError) as error:
         tokenize('print(\t"lol")')
     assert error.value.location == location(1, 6, 1, 7)
-    assert error.value.message == "unexpected tab"
+    assert error.value.message == "tabs are not allowed in asda code"
+
+    with pytest.raises(CompileError) as error:
+        tokenize('print("\t")')
+    assert error.value.location == location(1, 7, 1, 8)
+    assert error.value.message == "tabs are not allowed in asda code"
+
+    # this should work, because it's backslash t, not an actual tab character
+    # note r in front of the python string
+    tokenize(r'print("\t")')
 
 
 def test_whitespace_ignoring(monkeypatch):

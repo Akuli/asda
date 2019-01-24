@@ -58,10 +58,17 @@ class _BytecodeReader:
             result |= self._read(1)[0] << offset
         return result
 
+    def _read_int(self, size):
+        uint = self._read_uint(size)
+        if uint >= 2**(size - 1):
+            return uint - 2**size
+        return uint
+
     read_uint8 = functools.partialmethod(_read_uint, 8)
     read_uint16 = functools.partialmethod(_read_uint, 16)
     read_uint32 = functools.partialmethod(_read_uint, 32)
-    read_uint64 = functools.partialmethod(_read_uint, 64)
+
+    read_int64 = functools.partialmethod(_read_int, 64)
 
     def read_string(self):
         length = self.read_uint32()
@@ -102,6 +109,8 @@ class _BytecodeReader:
             if magic == STR_CONSTANT:
                 string_object = objects.String(self.read_string())
                 opcode.append((CONSTANT, string_object))
+            elif magic == INT_CONSTANT:
+                opcode.append((CONSTANT, objects.Integer(self.read_int64())))
             elif magic == TRUE_CONSTANT:
                 opcode.append((CONSTANT, objects.TRUE))
             elif magic == FALSE_CONSTANT:

@@ -38,6 +38,7 @@ class _BytecodeWriter:
         # beforehand
         self.jumpmarker2index = {}
 
+    # writes an unsigned little-endian integer
     def _write_uint(self, size, number):
         assert size % 8 == 0 and 0 < size <= 64, size
         assert number >= 0
@@ -49,10 +50,21 @@ class _BytecodeWriter:
         self.output.extend((number >> offset) & 0xff
                            for offset in range(0, size, 8))
 
+    # writes a signed little-endian integer in two's complement
+    def _write_int(self, size, number):
+        # https://en.wikipedia.org/wiki/Two%27s_complement
+        if number >= 0:
+            u_value = number
+        else:
+            u_value = 2**size - abs(number)
+
+        self._write_uint(size, u_value)
+
+    write_int64 = functools.partialmethod(_write_int, 64)
+
     write_uint8 = functools.partialmethod(_write_uint, 8)
     write_uint16 = functools.partialmethod(_write_uint, 16)
     write_uint32 = functools.partialmethod(_write_uint, 32)
-    write_uint64 = functools.partialmethod(_write_uint, 64)
 
     def write_string(self, string):
         utf8 = string.encode('utf-8')
@@ -88,7 +100,9 @@ class _BytecodeWriter:
             self.output.extend(STR_CONSTANT)
             self.write_string(op.python_string)
 
-        # TODO: IntConstant
+        elif isinstance(op, opcoder.IntConstant):
+            self.output.extend(INT_CONSTANT)
+            self.write_int64(op.python_int)
 
         elif isinstance(op, opcoder.BoolConstant):
             self.output.extend(

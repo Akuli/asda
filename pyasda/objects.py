@@ -61,6 +61,9 @@ types = collections.OrderedDict([
 add_method(
     types['Str'], 'uppercase',
     (lambda this: String(this.python_string.upper())), [], types['Str'])
+add_method(
+    types['Int'], 'to_string',
+    (lambda this: String(str(this.python_int))), [], types['Str'])
 
 
 class GenericType(Type):
@@ -85,6 +88,17 @@ class String(Object):
     def __repr__(self):
         return '<%s.%s: %r>' % (type(self).__module__, type(self).__name__,
                                 self.python_string)
+
+
+INT64_MIN = -2**63
+INT64_MAX = 2**63 - 1
+
+
+class Integer(Object):
+    def __init__(self, python_int):
+        assert INT64_MIN <= python_int <= INT64_MAX
+        super().__init__(types['Int'])
+        self.python_int = python_int
 
 
 class Generator(Object):

@@ -122,3 +122,22 @@ def test_repeated():
         parse('func lol(Str x, Bool x) -> void:\n    print("Boo")')
     assert error.value.message == "repeated argument name: x"
     assert error.value.location == Location('test file', 1, 21, 1, 22)
+
+
+def test_huge_and_tiny_integers():
+    huge = 2**63 - 1
+    tiny = -2**63
+    too_huge = huge + 1
+    too_tiny = tiny - 1
+
+    for value, too in [(too_huge, 'big'), (too_tiny, 'small')]:
+        digits = len(str(value))
+
+        with pytest.raises(CompileError) as error:
+            parse('let x = %s' % value)
+        assert error.value.message == "this integer is too %s" % too
+        assert error.value.location == Location('test file', 1, 8, 1, 8+digits)
+
+    for value in [huge, tiny]:
+        [let] = parse('let x = %s' % value)
+        assert let.value.python_int == value

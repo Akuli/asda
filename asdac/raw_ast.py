@@ -99,6 +99,10 @@ def _duplicate_check(iterable, what_are_they):
         seen.add(name)
 
 
+INT64_MIN = -2**63
+INT64_MAX = 2**63 - 1
+
+
 class _Parser:
 
     def __init__(self, tokens):
@@ -107,6 +111,13 @@ class _Parser:
     def parse_expression(self):
         first_token = self.tokens.next_token()
         if first_token.kind == 'integer':
+            value = int(first_token.value)
+            if value < INT64_MIN:
+                raise common.CompileError(
+                    "this integer is too small", first_token.location)
+            if value > INT64_MAX:
+                raise common.CompileError(
+                    "this integer is too big", first_token.location)
             result = Integer(first_token.location, int(first_token.value))
         elif first_token.kind == 'id':
             if self.tokens.coming_up('op', '['):

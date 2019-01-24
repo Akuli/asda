@@ -7,7 +7,7 @@ from . import common
 
 
 _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
-    ('integer', r'[1-9][0-9]*|0'),
+    ('integer', r'-?[1-9][0-9]*|0'),   # TODO: add - prefix operator instead
     ('id', r'[^\W\d]\w*'),
     ('op', r'[;=():.,\[\]]|->'),
     ('string', r'"[^"]*?"'),
