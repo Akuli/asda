@@ -22,7 +22,31 @@ _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
 Token = collections.namedtuple('Token', ['kind', 'value', 'location'])
 
 
+# tabs are disallowed because they aren't used for indentation and you can use
+# "\t" to get a string that contains a tab
+# TODO: add support for \t, \n and maybe some others to rest of the interpreter
+def _tab_check(filename, code):
+    try:
+        index = code.index('\t')
+    except ValueError:
+        return
+
+    before_tab = code[:index]
+    lineno = before_tab.count('\n') + 1
+    try:
+        start_column = before_tab[::-1].index('\n')
+    except ValueError:
+        start_column = index
+
+    raise common.CompileError(
+        "tabs are not allowed in asda code",
+        common.Location(filename, lineno, start_column,
+                        lineno, start_column+1))
+
+
 def _raw_tokenize(filename, code):
+    _tab_check(filename, code)
+
     if not code.endswith('\n'):
         code += '\n'
 
@@ -49,10 +73,7 @@ def _raw_tokenize(filename, code):
                 filename, lineno, startcolumn, lineno, endcolumn)
 
         if kind == 'error':
-            message_part = {
-                '\t': 'tab',
-            }.get(value, repr(value))
-            raise common.CompileError("unexpected %s" % message_part, location)
+            raise common.CompileError("unexpected '%s'" % value, location)
         elif kind.startswith('ignore'):
             pass
         else:

@@ -77,9 +77,23 @@ def test_tabs_forbidden_sorry():
     assert error.value.location == location(1, 7, 1, 8)
     assert error.value.message == "tabs are not allowed in asda code"
 
+    # tokenizer.py handles tab on first line as a special case, so this is
+    # needed for better coverage
+    with pytest.raises(CompileError) as error:
+        tokenize('print("Boo")\nprint("\t")')
+    assert error.value.location == location(2, 7, 2, 8)
+    assert error.value.message == "tabs are not allowed in asda code"
+
     # this should work, because it's backslash t, not an actual tab character
     # note r in front of the python string
     tokenize(r'print("\t")')
+
+
+def test_unknown_character():
+    with pytest.raises(CompileError) as error:
+        tokenize('@')
+    assert error.value.location == location(1, 0, 1, 1)
+    assert error.value.message == "unexpected '@'"
 
 
 def test_whitespace_ignoring(monkeypatch):
