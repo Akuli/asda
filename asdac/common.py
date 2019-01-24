@@ -4,6 +4,13 @@ import itertools
 class Location:
 
     def __init__(self, filename, startline, startcolumn, endline, endcolumn):
+        # these make debugging a lot easier, don't delete these
+        assert isinstance(filename, str)
+        assert startline >= 1
+        assert startcolumn >= 0, (startline, startcolumn, endline, endcolumn)
+        assert endline >= 1
+        assert endcolumn >= 0
+
         # yes, comparing tuples works like this
         assert (startline, startcolumn) <= (endline, endcolumn)
 

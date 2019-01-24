@@ -13,6 +13,7 @@ FALSE_CONSTANT = b'F'
 LOOKUP_METHOD = b'm'
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
+STR_JOIN = b'j'
 POP_ONE = b'P'
 VOID_RETURN = b'r'
 VALUE_RETURN = b'R'
@@ -163,6 +164,9 @@ class _BytecodeWriter:
 
         elif isinstance(op, opcoder.DidntReturnError):
             self.output.extend(DIDNT_RETURN_ERROR)
+
+        elif isinstance(op, opcoder.StrJoin):
+            self.output.extend(STR_JOIN)
 
         else:
             assert False, op        # pragma: no cover

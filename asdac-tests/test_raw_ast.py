@@ -25,6 +25,26 @@ def test_not_an_expression_or_a_statement():
     assert error.value.location == Location('test file', 1, 0, 1, 5)
 
 
+def test_empty_string():
+    [string] = parse('print("")')[0].args
+    assert string.location == Location('test file', 1, 6, 1, 8)
+    assert string.python_string == ''
+
+
+# corner cases are handled in asdac.string_parser
+def test_joined_strings():
+    [string] = parse('print("a {b}")')[0].args
+    assert isinstance(string, raw_ast.JoinedString)
+    assert string.location == Location('test file', 1, 6, 1, 13)
+
+    a, b = string.parts
+    assert a.location == Location('test file', 1, 7, 1, 9)
+    assert b.location == Location('test file', 1, 10, 1, 11)
+
+    assert isinstance(a, raw_ast.String)
+    assert isinstance(b, raw_ast.FuncCall)      # implicit .to_string()
+
+
 def test_generics():
     assert parse('magic_function[Str, Generator[Int]](x)') == [
         FuncCall(

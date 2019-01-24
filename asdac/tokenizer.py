@@ -24,34 +24,33 @@ Token = collections.namedtuple('Token', ['kind', 'value', 'location'])
 
 # tabs are disallowed because they aren't used for indentation and you can use
 # "\t" to get a string that contains a tab
-# TODO: add support for \t, \n and maybe some others to rest of the interpreter
-def _tab_check(filename, code):
+def _tab_check(filename, code, initial_lineno, initial_column):
     try:
         index = code.index('\t')
     except ValueError:
         return
 
     before_tab = code[:index]
-    lineno = before_tab.count('\n') + 1
+    lineno = initial_lineno + before_tab.count('\n')
     try:
-        start_column = before_tab[::-1].index('\n')
+        column = before_tab[::-1].index('\n')
     except ValueError:
-        start_column = index
+        # tab is on first line, initial_column matters
+        column = initial_column + index
 
     raise common.CompileError(
         "tabs are not allowed in asda code",
-        common.Location(filename, lineno, start_column,
-                        lineno, start_column+1))
+        common.Location(filename, lineno, column, lineno, column+1))
 
 
-def _raw_tokenize(filename, code):
-    _tab_check(filename, code)
+def _raw_tokenize(filename, code, initial_lineno, initial_column):
+    _tab_check(filename, code, initial_lineno, initial_column)
 
     if not code.endswith('\n'):
         code += '\n'
 
-    lineno = 1
-    line_offset = 0
+    lineno = initial_lineno
+    line_offset = 0     # not set to initial_column, would be very complicated
 
     for match in re.finditer(_TOKEN_REGEX, code, flags=re.MULTILINE):
         kind = match.lastgroup
@@ -60,26 +59,28 @@ def _raw_tokenize(filename, code):
         endcolumn = match.end() - line_offset
 
         if '\n' in value:
+            # refactoring note: this code may need to be updated if it needs to
+            # work with start_line != 1 or initial_column != 0
             assert value.count('\n') == 1 and value.endswith('\n')
             location = common.Location(
                 filename,
-                lineno, startcolumn,
+                lineno, startcolumn + initial_column,
                 lineno + 1, 0,
             )
             lineno += 1
+            initial_column = 0
             line_offset = match.end()
         else:
             location = common.Location(
-                filename, lineno, startcolumn, lineno, endcolumn)
+               filename,
+               lineno, startcolumn + initial_column,
+               lineno, endcolumn + initial_column)
 
         if kind == 'error':
             if value == '"':
                 # because error messages would be very confusing without this
                 rest_of_line = code[match.end():].split('\n', 1)[0]
-                location = common.Location(
-                    location.filename,
-                    location.startline, location.startcolumn,
-                    location.endline, location.endcolumn + len(rest_of_line))
+                location.endcolumn += len(rest_of_line)
                 raise common.CompileError("this string never ends", location)
             raise common.CompileError("unexpected '%s'" % value, location)
         elif kind.startswith('ignore'):
@@ -181,8 +182,10 @@ def _remove_colons(tokens):
             yield token1
 
 
-def tokenize(filename, code):
-    tokens = _raw_tokenize(filename, code)
+def tokenize(filename, code, *, initial_lineno=1, initial_column=0):
+    assert initial_lineno >= 1
+    assert initial_column >= 0
+    tokens = _raw_tokenize(filename, code, initial_lineno, initial_column)
     tokens = _handle_indents_and_dedents(filename, tokens)
     tokens = _check_colons(tokens)
     tokens = _remove_colons(tokens)

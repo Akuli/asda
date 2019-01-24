@@ -15,6 +15,7 @@ CONSTANT = b'C'         # not used at all in bytecode files
 LOOKUP_METHOD = b'm'
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
+STR_JOIN = b'j'
 POP_ONE = b'P'
 VOID_RETURN = b'r'
 VALUE_RETURN = b'R'
@@ -122,7 +123,7 @@ class _BytecodeReader:
                 index = self.read_uint16()
                 opcode.append((magic, level, index))
             elif magic in {POP_ONE, DIDNT_RETURN_ERROR, NEGATION, YIELD,
-                           VOID_RETURN, VALUE_RETURN}:
+                           VOID_RETURN, VALUE_RETURN, STR_JOIN}:
                 opcode.append((magic,))
             elif magic == CREATE_FUNCTION:
                 self._unread(magic[0])

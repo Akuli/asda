@@ -140,8 +140,13 @@ class _Runner:
                 self.stack[-1] = unbound.method_bind(self.stack[-1])
 
             elif opcode == bytecode_reader.DIDNT_RETURN_ERROR:
-                assert not args
                 raise ValueError("a non-void function didn't return")
+
+            elif opcode == bytecode_reader.STR_JOIN:
+                string1, string2 = self.stack[-2:]
+                del self.stack[-2:]
+                self.stack.append(objects.String(
+                    string1.python_string + string2.python_string))
 
             else:
                 assert False, opcode

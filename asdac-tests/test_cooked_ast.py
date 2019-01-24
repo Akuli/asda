@@ -196,3 +196,10 @@ def test_non_bool_cond():
         doesnt_parse('%s\n    print("boo")' % first_line,
                      "expected Bool, got Str",
                      '"lol"')
+
+
+def test_joined_string_location_corner_case():
+    let, print_ = parse('let x = 1\nprint("hello {x}")')
+    [join] = print_.args
+    assert join.location == Location(
+        'test file', 2, len('print('), 2, len('print("hello {x}"'))

@@ -42,6 +42,7 @@ LookupVar = namedtuple('LookupVar', ['level', 'var'])
 LookupMethod = namedtuple('LookupMethod', ['type', 'indeks'])
 SetVar = namedtuple('SetVar', ['level', 'var'])
 CallFunction = namedtuple('CallFunction', ['nargs', 'returns_a_value'])
+StrJoin = namedtuple('StrJoin', [])
 PopOne = namedtuple('PopOne', [])
 Return = namedtuple('Return', ['returns_a_value'])
 Yield = namedtuple('Yield', [])
@@ -92,6 +93,11 @@ class _OpCoder:
 
         elif isinstance(expression, cooked_ast.CallFunction):
             self.do_function_call(expression)
+
+        elif isinstance(expression, cooked_ast.StrJoin):
+            self.do_expression(expression.string1)
+            self.do_expression(expression.string2)
+            self.output.ops.append(StrJoin())
 
         # the whole functype is in the opcode because even though the opcode is
         # not statically typed, each object has a type
@@ -260,11 +266,6 @@ class _OpCoder:
             assert False, statement     # pragma: no cover
 
     def do_body(self, statements):
-        if iter(statements) is statements:
-            # statements is an iterator, which is bad because it needs to be
-            # looped over twice
-            statements = list(statements)
-
         for statement in statements:
             self.do_statement(statement)
 

@@ -2,7 +2,7 @@ import collections
 import functools
 import itertools
 
-from . import common
+from . import common, string_parser, tokenizer
 
 
 def _astclass(name, fields):
@@ -11,6 +11,7 @@ def _astclass(name, fields):
 
 Integer = _astclass('Integer', ['python_int'])
 String = _astclass('String', ['python_string'])
+JoinedString = _astclass('JoinedString', ['parts'])
 Let = _astclass('Let', ['varname', 'value'])
 SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['varname'])
@@ -103,10 +104,50 @@ INT64_MIN = -2**63
 INT64_MAX = 2**63 - 1
 
 
+def _to_string(parsed):
+    location = parsed.location      # because pep8 line length
+    return FuncCall(location, GetAttr(location, parsed, 'to_string'), [])
+
+
 class _Parser:
 
     def __init__(self, tokens):
+        assert isinstance(tokens, _TokenIterator)
         self.tokens = tokens
+
+    def _handle_string_literal(self, string, location):
+        assert len(string) >= 2 and string[0] == '"' and string[-1] == '"'
+        content = string[1:-1]
+        content_location = common.Location(
+            location.filename, location.startline, location.startcolumn + 1,
+            location.endline, location.endcolumn - 1)
+
+        parts = []
+        for kind, value, part_location in string_parser.parse(
+                content, content_location):
+            if kind == 'string':
+                parts.append(String(part_location, value))
+            elif kind == 'code':
+                tokens = tokenizer.tokenize(
+                    part_location.filename, value,
+                    initial_lineno=part_location.startline,
+                    initial_column=part_location.startcolumn)
+                parser = _Parser(_TokenIterator(tokens))
+                parts.append(_to_string(parser.parse_expression()))
+                parser.tokens.next_token('newline')    # added by tokenizer
+                assert parser.tokens.eof()   # if fails, string isn't one-line
+            else:   # pragma: no cover
+                raise NotImplementedError(kind)
+
+        if len(parts) == 0:     # empty string
+            return String(location, '')
+        elif len(parts) == 1:
+            # _replace is a documented namedtuple method
+            # it has an underscore to allow creating a namedtuple with a field
+            # called replace
+            return parts[0]._replace(location=location)
+        else:
+            return JoinedString(location, parts)
 
     def parse_expression(self):
         first_token = self.tokens.next_token()
@@ -131,7 +172,8 @@ class _Parser:
             else:
                 result = GetVar(first_token.location, first_token.value)
         elif first_token.kind == 'string':
-            result = String(first_token.location, first_token.value.strip('"'))
+            result = self._handle_string_literal(
+                first_token.value, first_token.location)
         else:
             raise common.CompileError(
                 "expected an expression, got %r" % first_token.value,
@@ -372,7 +414,6 @@ class _Parser:
 
 
 def parse(tokens):
-    token_iter = _TokenIterator(tokens)
-    parser = _Parser(token_iter)
-    while not token_iter.eof():
+    parser = _Parser(_TokenIterator(tokens))
+    while not parser.tokens.eof():
         yield parser.parse_statement()
