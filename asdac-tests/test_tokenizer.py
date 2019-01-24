@@ -89,6 +89,27 @@ def test_tabs_forbidden_sorry():
     tokenize(r'print("\t")')
 
 
+def test_strings():
+    # the tokenizer doesn't detect which escapes are valid, so \ö tokenizes but
+    # fails in raw_ast.py
+    string, fake_newline = tokenize(r'"\ö"')
+    assert string.value == r'"\ö"'
+
+    # string literals can contain \" and \\ just like in python
+    string1, string2, string3, fake_newline = tokenize(
+        r'"\"" "a \"lol\" b" "\\ back \\ slashes \\"')
+    assert string1.value == r'"\""'
+    assert string2.value == r'"a \"lol\" b"'
+    assert string3.value == r'"\\ back \\ slashes \\"'
+
+    # never-ending strings should fail with a good error message
+    code = r'print("hello world\")'
+    with pytest.raises(CompileError) as error:
+        tokenize(code)
+    assert error.value.location == location(1, len('print('), 1, len(code))
+    assert error.value.message == "this string never ends"
+
+
 def test_unknown_character():
     with pytest.raises(CompileError) as error:
         tokenize('@')

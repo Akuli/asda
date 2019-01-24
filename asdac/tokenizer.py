@@ -10,7 +10,7 @@ _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
     ('integer', r'-?[1-9][0-9]*|0'),   # TODO: add - prefix operator instead
     ('id', r'[^\W\d]\w*'),
     ('op', r'[;=():.,\[\]]|->'),
-    ('string', r'"[^"]*?"'),
+    ('string', r'"(?:\\.|[^"\n\\])*?"'),
     ('ignore1', r'^ *(?:#.*)?\n'),
     ('newline', r'\n'),
     ('indent', r'^ +'),
@@ -73,6 +73,14 @@ def _raw_tokenize(filename, code):
                 filename, lineno, startcolumn, lineno, endcolumn)
 
         if kind == 'error':
+            if value == '"':
+                # because error messages would be very confusing without this
+                rest_of_line = code[match.end():].split('\n', 1)[0]
+                location = common.Location(
+                    location.filename,
+                    location.startline, location.startcolumn,
+                    location.endline, location.endcolumn + len(rest_of_line))
+                raise common.CompileError("this string never ends", location)
             raise common.CompileError("unexpected '%s'" % value, location)
         elif kind.startswith('ignore'):
             pass
