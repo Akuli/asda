@@ -143,10 +143,11 @@ class _Runner:
                 raise ValueError("a non-void function didn't return")
 
             elif opcode == bytecode_reader.STR_JOIN:
-                string1, string2 = self.stack[-2:]
-                del self.stack[-2:]
-                self.stack.append(objects.String(
-                    string1.python_string + string2.python_string))
+                [how_many] = args
+                assert how_many >= 2
+                strings = self.stack[-how_many:]
+                self.stack[-how_many:] = [
+                    objects.String(''.join(s.python_string for s in strings))]
 
             else:
                 assert False, opcode

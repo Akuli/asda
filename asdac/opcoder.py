@@ -42,7 +42,7 @@ LookupVar = namedtuple('LookupVar', ['level', 'var'])
 LookupMethod = namedtuple('LookupMethod', ['type', 'indeks'])
 SetVar = namedtuple('SetVar', ['level', 'var'])
 CallFunction = namedtuple('CallFunction', ['nargs', 'returns_a_value'])
-StrJoin = namedtuple('StrJoin', [])
+StrJoin = namedtuple('StrJoin', ['how_many_parts'])
 PopOne = namedtuple('PopOne', [])
 Return = namedtuple('Return', ['returns_a_value'])
 Yield = namedtuple('Yield', [])
@@ -95,9 +95,9 @@ class _OpCoder:
             self.do_function_call(expression)
 
         elif isinstance(expression, cooked_ast.StrJoin):
-            self.do_expression(expression.string1)
-            self.do_expression(expression.string2)
-            self.output.ops.append(StrJoin())
+            for part in expression.parts:
+                self.do_expression(part)
+            self.output.ops.append(StrJoin(len(expression.parts)))
 
         # the whole functype is in the opcode because even though the opcode is
         # not statically typed, each object has a type

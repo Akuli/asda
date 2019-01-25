@@ -123,7 +123,7 @@ class _BytecodeReader:
                 index = self.read_uint16()
                 opcode.append((magic, level, index))
             elif magic in {POP_ONE, DIDNT_RETURN_ERROR, NEGATION, YIELD,
-                           VOID_RETURN, VALUE_RETURN, STR_JOIN}:
+                           VOID_RETURN, VALUE_RETURN}:
                 opcode.append((magic,))
             elif magic == CREATE_FUNCTION:
                 self._unread(magic[0])
@@ -132,9 +132,8 @@ class _BytecodeReader:
                 name = self.read_string()
                 body = self.read_body()
                 opcode.append((CREATE_FUNCTION, tybe, name, body, yields))
-            elif magic == JUMP_IF:
-                where2jump = self.read_uint16()
-                opcode.append((JUMP_IF, where2jump))
+            elif magic in {JUMP_IF, STR_JOIN}:
+                opcode.append((magic, self.read_uint16()))
             elif magic == LOOKUP_METHOD:
                 tybe = self.read_type()
                 index = self.read_uint16()

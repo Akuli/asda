@@ -11,7 +11,7 @@ def _astclass(name, fields):
 
 Integer = _astclass('Integer', ['python_int'])
 String = _astclass('String', ['python_string'])
-JoinedString = _astclass('JoinedString', ['parts'])
+StrJoin = _astclass('StrJoin', ['parts'])
 Let = _astclass('Let', ['varname', 'value'])
 SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['varname'])
@@ -147,7 +147,7 @@ class _Parser:
             # called replace
             return parts[0]._replace(location=location)
         else:
-            return JoinedString(location, parts)
+            return StrJoin(location, parts)
 
     def parse_expression(self):
         first_token = self.tokens.next_token()

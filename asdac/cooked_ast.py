@@ -10,7 +10,7 @@ def _astclass(name, fields):
 
 
 StrConstant = _astclass('StrConstant', ['python_string'])
-StrJoin = _astclass('StrJoin', ['string1', 'string2'])
+StrJoin = _astclass('StrJoin', ['parts'])  # there are always >=2 parts
 IntConstant = _astclass('IntConstant', ['python_int'])
 SetVar = _astclass('SetVar', ['varname', 'level', 'value'])
 LookupVar = _astclass('LookupVar', ['varname', 'level'])
@@ -193,19 +193,10 @@ class _Chef:
                 raw_expression.location, functype, raw_expression.funcname,
                 types, chef.level)
 
-        if isinstance(raw_expression, raw_ast.JoinedString):
-            def join2(string1, string2):
-                # if there are only 2 things to join, the location of the join
-                # result spans the whole thing
-                if len(raw_expression.parts) == 2:
-                    location = raw_expression.location
-                else:
-                    location = string1.location + string2.location
-                return StrJoin(location, objects.BUILTIN_TYPES['Str'],
-                               string1, string2)
-
-            return functools.reduce(
-                join2, map(self.cook_expression, raw_expression.parts))
+        if isinstance(raw_expression, raw_ast.StrJoin):
+            return StrJoin(
+                raw_expression.location, objects.BUILTIN_TYPES['Str'],
+                list(map(self.cook_expression, raw_expression.parts)))
 
         raise NotImplementedError(      # pragma: no cover
             "oh no: " + str(type(raw_expression)))

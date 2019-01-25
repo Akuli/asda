@@ -167,6 +167,7 @@ class _BytecodeWriter:
 
         elif isinstance(op, opcoder.StrJoin):
             self.output.extend(STR_JOIN)
+            self.write_uint16(op.how_many_parts)
 
         else:
             assert False, op        # pragma: no cover
