@@ -61,6 +61,7 @@ types = collections.OrderedDict([
 add_method(
     types['Str'], 'uppercase',
     (lambda this: String(this.python_string.upper())), [], types['Str'])
+add_method(types['Str'], 'to_string', (lambda this: this), [], types['Str'])
 add_method(
     types['Int'], 'to_string',
     (lambda this: String(str(this.python_int))), [], types['Str'])

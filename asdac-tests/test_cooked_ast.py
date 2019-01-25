@@ -203,3 +203,9 @@ def test_joined_string_location_corner_case():
     [join] = print_.args
     assert join.location == Location(
         'test file', 2, len('print('), 2, len('print("hello {x}"'))
+
+
+def test_string_formatting_with_bad_type():
+    doesnt_parse('print("{TRUE}")',
+                 "Bool objects have no 'to_string' method",
+                 'TRUE')

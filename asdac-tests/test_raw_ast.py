@@ -34,7 +34,7 @@ def test_empty_string():
 # corner cases are handled in asdac.string_parser
 def test_joined_strings():
     [string] = parse('print("a {b}")')[0].args
-    assert isinstance(string, raw_ast.JoinedString)
+    assert isinstance(string, raw_ast.StrJoin)
     assert string.location == Location('test file', 1, 6, 1, 13)
 
     a, b = string.parts

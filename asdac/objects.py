@@ -91,6 +91,7 @@ BUILTIN_TYPES = collections.OrderedDict([
     ('Object', OBJECT),
 ])
 BUILTIN_TYPES['Str'].add_method('uppercase', [], BUILTIN_TYPES['Str'])
+BUILTIN_TYPES['Str'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 BUILTIN_TYPES['Int'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 
 
