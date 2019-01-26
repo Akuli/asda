@@ -1,5 +1,3 @@
-import random
-
 import pytest
 
 from asdac import string_parser

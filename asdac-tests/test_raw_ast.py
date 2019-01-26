@@ -1,4 +1,4 @@
-from asdac import tokenizer, raw_ast
+from asdac import raw_ast
 from asdac.raw_ast import (For, FuncCall, FromGeneric, GetAttr,
                            GetType, GetVar, Let, SetVar, String)
 from asdac.common import CompileError, Location

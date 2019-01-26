@@ -227,9 +227,7 @@ class _Parser:
         return body
 
     def parse_if_statement(self):
-        keyword = 'if'
-
-        keyword = self.tokens.next_token('keyword', 'if')
+        self.tokens.next_token('keyword', 'if')
         condition = self.parse_expression()
         body = self.parse_block()
         ifs = [(condition, body)]

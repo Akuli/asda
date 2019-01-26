@@ -6,7 +6,7 @@ import textwrap
 
 import colorama
 
-from . import bytecoder, common, cooked_ast, opcoder, raw_ast, tokenizer
+from . import bytecoder, common, cooked_ast, opcoder, raw_ast
 
 
 # functools.partial(print, file=sys.stderr) doesn't work because tests

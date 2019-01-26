@@ -1,6 +1,6 @@
 import pytest
 
-from asdac import tokenizer, raw_ast, cooked_ast
+from asdac import raw_ast, cooked_ast
 from asdac.common import CompileError, Location
 
 

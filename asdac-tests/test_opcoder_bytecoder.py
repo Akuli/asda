@@ -1,6 +1,6 @@
 import pytest
 
-from asdac import tokenizer, raw_ast, cooked_ast, bytecoder
+from asdac import raw_ast, cooked_ast, bytecoder
 from asdac.common import CompileError
 from asdac.opcoder import create_opcode, Return, DidntReturnError
 

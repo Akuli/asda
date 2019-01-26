@@ -1,12 +1,11 @@
 import pytest
 
-from asdac import tokenizer, raw_ast, objects
+from asdac import raw_ast, cooked_ast, objects
 from asdac.common import CompileError, Location
-from asdac.cooked_ast import cook
 
 
 def parse(code):
-    return list(cook(raw_ast.parse('test file', code)))
+    return list(cooked_ast.cook(raw_ast.parse('test file', code)))
 
 
 def doesnt_parse(code, message, bad_code):
