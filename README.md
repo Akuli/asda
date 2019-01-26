@@ -48,6 +48,9 @@ Hello World!
 to write an interpreter in C later, but first I want to get the python
 interpreter to work like I want it to work.
 
+There isn't much [documentation](docs/) yet, but there are many
+[code examples](examples/). All code examples should compile and run nicely.
+
 
 ## FAQ
 
@@ -57,11 +60,16 @@ interpreter to work like I want it to work.
 $ python3 -m asdac hello.asda -o - | python3 -m pyasda -
 ```
 
+### Is the documentation outdated?
+
+Yes. Create an issue if you want me to update it.
+
 ### Is there an interactive REPL, like Python's `>>>` prompt?
 
-Not yet, and I'm not sure whether there will ever be one. It would be
-kind of awesome, but I also like how the compiler and the interpreter
-are two separate programs.
+Not yet, and I'm not sure whether there will ever be one. I like how the
+compiler and the interpreter are two separate programs that do different things,
+but on the other hand, a REPL would be doable and kind of awesome. It's possible
+and not even very hard to get Python programs and C programs to work together.
 
 ### Why is the programming language named asda?
 
@@ -71,15 +79,6 @@ there's an Ö key on the keyboard right next to the Ä key, some people found Ö
 difficult to type for some reason. On the other hand, it's very easy to type
 asda. I also searched for "asda programming language" and I didn't find
 anything relevant.
-
-### Is there any documentation?
-
-[Not much](docs/), but there's [an examples directory](examples/). All of the
-examples should work with asdac and pyasda.
-
-### Are there any tests?
-
-Yes. See [developing asda](#developing-asda) below.
 
 ### How does it work?
 
@@ -95,17 +94,32 @@ This command installs everything you need for developing asda:
 $ python3 -m pip install --user pytest pytest-cov coverage
 ```
 
-asdac's tests are in `asdac-tests/`. You can run them like this:
+Or if you like virtualenvs:
 
 ```
-$ python3 -m pytest asdac-tests
+$ python3 -m venv env
+$ . env/bin/activate    # i think this works on windows:  Scripts\activate.bat
+(env) $ pip install -r requirements.txt
+(env) $ pip install pytest pytest-cov coverage
+```
+
+Tests are in `asdac-tests/` and `pyasda-tests/`. `asdac-tests/` is for tests
+that don't actually run the code, and `pyasda-tests` compile and run stuff.
+There are no tests that run anything without invoking the compiler, because that
+would mean writing opcode by hand; the compiler is good at generating opcode and
+well tested anyway, so it's much easier to use that for testing the interpreter.
+
+You can run all tests like this:
+
+```
+$ python3 -m pytest
 ```
 
 If you also want to see coverage (the tests will run slower), run them like
-this:
+this instead:
 
 ```
-$ python3 -m pytest asdac-tests --cov=asdac && python3 -m coverage html
+$ python3 -m pytest --cov=asdac --cov=pyasda && python3 -m coverage html
 ```
 
 Then open `htmlcov/index.html` in your favorite browser to view the results.

@@ -3,3 +3,4 @@ asda-compiled/
 .pytest_cache
 htmlcov/
 .coverage
+env/
