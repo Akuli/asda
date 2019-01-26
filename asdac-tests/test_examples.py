@@ -30,6 +30,7 @@ def create_test_func(sourcefilename):
         #       purely an asdac test
         assert bytecode.startswith(b'asda')
 
+    # magic is fun
     test_func.__name__ = 'test_' + sourcefilename.replace('.', '_dot_')
     test_func.__qualname__ = test_func.__name__
     globals()[test_func.__name__] = test_func

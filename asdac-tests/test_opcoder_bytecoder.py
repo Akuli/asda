@@ -14,19 +14,23 @@ def bytecode(code):
 
 
 def test_too_many_arguments():
-    args = map('Str s{}'.format, range(0xff + 1))
+    args = list(map('Str s{}'.format, range(0xff + 1)))
     code = 'func lol(%s) -> void:\n    print("boo")' % ', '.join(args)
 
     # the error message doesn't say clearly what actually went wrong because it
     # comes from generic uint writing code, but i think that's fine because who
     # would actually use more than 0xff arguments anyway
     #
-    # FIXME: the location being None is bad
+    # FIXME: the location being None is bad, opcode and bytecode should include
+    # line numbers and filename everywhere
     with pytest.raises(CompileError) as error:
         bytecode(code)
     assert error.value.message == (
         "this number does not fit in an unsigned 8-bit integer: %d" % (0xff+1))
     assert error.value.location is None     # FIXME
+
+    # 0xff arguments should work, because 0xff fits in an 8-bit uint
+    bytecode('func lol(%s) -> void:\n    print("boo")' % ','.join(args[1:]))
 
 
 def test_implicit_return():

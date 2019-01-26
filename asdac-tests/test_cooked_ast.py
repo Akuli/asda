@@ -107,7 +107,7 @@ def test_assign_errors():
 
 
 def test_return_errors():
-    # TODO: what if a non-void function doesn't return?
+    # a runtime error is created if a non-void function doesn't return
     for suffix in [' "lol"', '']:
         doesnt_parse('return' + suffix,
                      "return outside function",

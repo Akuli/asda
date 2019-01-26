@@ -45,11 +45,11 @@ def red(string):
 
 
 def test_error_simple(asdac_run, monkeypatch):
-    # this doesn't use capsys because it fucks up colorama color codes somehow
+    # this doesn't use capsys because it fucks up colorama colors somehow
+    #                                    ^^^^^  <--- bad word, omg
     monkeypatch.setattr(sys, 'stderr', FakeTtyStringIO())
 
     asdac_run('let asd = lol\n', exit_code=1)
-
     assert colorama.Fore.RED in sys.stderr.getvalue()
 
     match = re.fullmatch((
@@ -62,13 +62,13 @@ def test_error_simple(asdac_run, monkeypatch):
     assert match.group(1) == 'let asd = ' + red('lol')
 
 
-MARKER = '\N{lower one quarter block}'
+MARKER = '\N{lower one quarter block}' * 4
 
 
 def test_error_whitespace(asdac_run, monkeypatch):
     monkeypatch.setattr(sys, 'stderr', FakeTtyStringIO())
     asdac_run('a\t\n', exit_code=1)
-    assert sys.stderr.getvalue().endswith('\n    a' + red(MARKER * 4) + '\n')
+    assert sys.stderr.getvalue().endswith('\n    a' + red(MARKER) + '\n')
 
 
 def test_o_needed_stdin(asdac_run, monkeypatch, capsys):
