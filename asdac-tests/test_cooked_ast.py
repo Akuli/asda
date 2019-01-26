@@ -208,3 +208,17 @@ def test_string_formatting_with_bad_type():
     doesnt_parse('print("{TRUE}")',
                  "Bool objects have no 'to_string' method",
                  'TRUE')
+
+
+def test_void_statement(monkeypatch):
+    code = '''
+if TRUE:
+    print("a")
+    %s
+    print("b")
+'''
+    assert parse(code % 'void') == parse(code % '')
+
+    monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
+    assert (parse('for void; TRUE; void:\n    print("Hi")') ==
+            parse('while TRUE:\n    print("Hi")'))

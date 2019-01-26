@@ -373,10 +373,10 @@ class _Chef:
         if cond.type != objects.BUILTIN_TYPES['Bool']:
             raise common.CompileError(
                 "expected Bool, got " + cond.type.name, cond.location)
-        if_body = list(map(self.cook_statement, raw_if_body))
+        if_body = self.cook_body(raw_if_body)
 
         if len(raw.ifs) == 1:
-            else_body = list(map(self.cook_statement, raw.else_body))
+            else_body = self.cook_body(raw.else_body)
         else:
             # _replace is a documented namedtuple method, it has _ in front to
             # allow creating a namedtuple with an attribute named 'replace'
@@ -390,7 +390,7 @@ class _Chef:
             raise common.CompileError(
                 "expected Bool, got " + cond.type.name, cond.location)
 
-        body = list(map(self.cook_statement, raw.body))
+        body = self.cook_body(raw.body)
         return Loop(raw.location, None, None, cond, None, body)
 
     def cook_for(self, raw):
@@ -400,9 +400,10 @@ class _Chef:
             raise common.CompileError(
                 "expected Bool, got " + cond.type.name, cond.location)
         incr = self.cook_statement(raw.incr)
-        body = list(map(self.cook_statement, raw.body))
+        body = self.cook_body(raw.body)
         return Loop(raw.location, None, init, cond, incr, body)
 
+    # note that this returns None for a void statement, cook_body() handles it
     def cook_statement(self, raw_statement):
         if isinstance(raw_statement, raw_ast.Let):
             return self.cook_let(raw_statement)
@@ -416,6 +417,8 @@ class _Chef:
             return self.cook_return(raw_statement)
         if isinstance(raw_statement, raw_ast.Yield):
             return self.cook_yield(raw_statement)
+        if isinstance(raw_statement, raw_ast.VoidStatement):
+            return None
         if isinstance(raw_statement, raw_ast.If):
             return self.cook_if(raw_statement)
         if isinstance(raw_statement, raw_ast.While):
@@ -425,10 +428,13 @@ class _Chef:
 
         assert False, raw_statement     # pragma: no cover
 
+    def cook_body(self, raw_statements):
+        return [cooked for cooked in map(self.cook_statement, raw_statements)
+                if cooked is not None]
+
 
 def cook(raw_ast_statements):
     builtin_chef = _Chef(None)
     builtin_chef.local_vars.update(objects.BUILTIN_OBJECTS)
     builtin_chef.local_generic_funcs.update(objects.BUILTIN_GENERIC_FUNCS)
-    file_chef = _Chef(builtin_chef)
-    return map(file_chef.cook_statement, raw_ast_statements)
+    return _Chef(builtin_chef).cook_body(raw_ast_statements)

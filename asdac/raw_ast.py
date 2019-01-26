@@ -25,6 +25,7 @@ FuncDefinition = _astclass('FuncDefinition', [
     'funcname', 'generics', 'args', 'returntype', 'body'])
 Return = _astclass('Return', ['value'])
 Yield = _astclass('Yield', ['value'])
+VoidStatement = _astclass('VoidStatement', [])
 # ifs is a list of (condition, body) pairs, where body is a list
 If = _astclass('If', ['ifs', 'else_body'])
 While = _astclass('While', ['condition', 'body'])
@@ -337,6 +338,10 @@ class _Parser:
         value = self.parse_expression()
         return Yield(yield_keyword.location + value.location, value)
 
+    def parse_void_statement(self):
+        void = self.tokens.next_token('keyword', 'void')
+        return VoidStatement(void.location)
+
     def parse_statement(self, *, allow_multiline=True):
         if self.tokens.coming_up('keyword', 'if'):
             result = self.parse_if_statement()
@@ -364,6 +369,10 @@ class _Parser:
 
         elif self.tokens.coming_up('keyword', 'yield'):
             result = self.parse_yield()
+            is_multiline = False
+
+        elif self.tokens.coming_up('keyword', 'void'):
+            result = self.parse_void_statement()
             is_multiline = False
 
         else:
