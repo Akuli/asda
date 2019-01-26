@@ -96,6 +96,9 @@ def main():
 
             if args.infile is not sys.stdin:
                 before, bad_code, after = e.location.get_source()
+                if not bad_code:
+                    bad_code = ' ' * 4      # to make the location visible
+
                 if bad_code.isspace():
                     replacement = '\N{lower one quarter block}'
 

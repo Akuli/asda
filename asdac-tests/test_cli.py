@@ -49,7 +49,7 @@ def test_error_simple(asdac_run, monkeypatch):
     #                                    ^^^^^  <--- bad word, omg
     monkeypatch.setattr(sys, 'stderr', FakeTtyStringIO())
 
-    asdac_run('let asd = lol\n', exit_code=1)
+    asdac_run('let asd = lol', exit_code=1)
     assert colorama.Fore.RED in sys.stderr.getvalue()
 
     match = re.fullmatch((
@@ -69,6 +69,13 @@ def test_error_whitespace(asdac_run, monkeypatch):
     monkeypatch.setattr(sys, 'stderr', FakeTtyStringIO())
     asdac_run('a\t\n', exit_code=1)
     assert sys.stderr.getvalue().endswith('\n    a' + red(MARKER) + '\n')
+
+
+def test_error_empty_location(asdac_run, monkeypatch):
+    monkeypatch.setattr(sys, 'stderr', FakeTtyStringIO())
+    asdac_run('print("{}")', exit_code=1)
+    assert sys.stderr.getvalue().endswith(
+        '\n    print("{%s}")\n' % red(MARKER))
 
 
 def test_o_needed_stdin(asdac_run, monkeypatch, capsys):

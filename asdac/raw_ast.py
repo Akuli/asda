@@ -2,6 +2,8 @@ import collections
 import functools
 import itertools
 
+import more_itertools
+
 from . import common, string_parser, tokenizer
 
 
@@ -126,6 +128,17 @@ class _Parser:
                     part_location.filename, value,
                     initial_lineno=part_location.startline,
                     initial_column=part_location.startcolumn)
+
+                # make sure that there are some tokens, otherwise a thing in
+                # _TokenIterator fails
+                #
+                # the parse() function at end of this file does that too,
+                # because it does nothing if there are no tokens
+                spyed, tokens = more_itertools.spy(tokens)
+                if not spyed:
+                    raise common.CompileError(
+                        "you must put some code between { and }",
+                        part_location)
 
                 parser = _Parser(_TokenIterator(tokens))
                 parts.append(_to_string(parser.parse_expression()))
