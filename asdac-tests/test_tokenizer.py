@@ -1,8 +1,12 @@
+import functools
+
 import pytest
 
 from asdac.common import CompileError, Location
 from asdac.tokenizer import Token
 from asdac.tokenizer import tokenize as real_tokenize
+
+location = functools.partial(Location, 'test file')
 
 
 def tokenize(code):
@@ -19,12 +23,8 @@ def doesnt_tokenize(code, message, bad_code):
     endcolumn = startcolumn + len(bad_code)
 
     assert error.value.message == message
-    assert error.value.location == Location(
-        'test file', lineno, startcolumn, lineno, endcolumn)
-
-
-def location(startline, startcolumn, endline, endcolumn):
-    return Location('test file', startline, startcolumn, endline, endcolumn)
+    assert error.value.location == location(
+        lineno, startcolumn, lineno, endcolumn)
 
 
 def test_automatic_trailing_newline():
