@@ -234,9 +234,6 @@ class _Parser:
         body = self.parse_block()
         ifs = [(condition, body)]
 
-        # not ideal, but not used in many places
-        location = keyword.location + condition.location
-
         while self.tokens.coming_up('keyword', 'elif'):
             self.tokens.next_token('keyword', 'elif')
 
@@ -248,7 +245,9 @@ class _Parser:
             else_body = self.parse_block()
         else:
             else_body = []
-        return If(location, ifs, else_body)
+
+        # using condition.location is not ideal, but not used in many places
+        return If(condition.location, ifs, else_body)
 
     def parse_while(self):
         while_keyword = self.tokens.next_token('keyword', 'while')

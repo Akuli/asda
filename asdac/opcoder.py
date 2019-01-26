@@ -180,56 +180,20 @@ class _OpCoder:
             self.output.ops.append(Yield())
 
         elif isinstance(statement, cooked_ast.If):
-            if len(statement.ifs) > 1:
-                # this turns this...
-                #
-                #   if cond1:
-                #       body1
-                #   elif cond2:
-                #       body2
-                #   elif cond3:
-                #       body3
-                #   else:
-                #       body4
-                #
-                # ...into this:
-                #
-                #   if cond1:
-                #       body1
-                #   else:
-                #       if cond2:
-                #           body2
-                #       elif cond3:
-                #           body3
-                #       else:
-                #           body4
-                #
-                # then recursion handles the rest of the conditions
-                first_cond_body, *rest = statement.ifs
-                else_of_first = cooked_ast.If(
-                    statement.location, statement.type,
-                    rest, statement.else_body)
-                simple_if = cooked_ast.If(
-                    statement.location, statement.type,
-                    [first_cond_body], [else_of_first])
-            else:
-                simple_if = statement
-
-            [(cond, if_body)] = simple_if.ifs
             end_of_if_body = JumpMarker()
             end_of_else_body = JumpMarker()
 
             # this is why goto is bad style :D it's quite hard to understand
             # even a basic if,else
-            self.do_expression(cond)
+            self.do_expression(statement.condition)
             self.output.ops.append(Negation())
             self.output.ops.append(JumpIf(end_of_if_body))
-            for substatement in if_body:
+            for substatement in statement.if_body:
                 self.do_statement(substatement)
             self.output.ops.append(BoolConstant(True))
             self.output.ops.append(JumpIf(end_of_else_body))
             self.output.ops.append(end_of_if_body)
-            for substatement in simple_if.else_body:
+            for substatement in statement.else_body:
                 self.do_statement(substatement)
             self.output.ops.append(end_of_else_body)
 

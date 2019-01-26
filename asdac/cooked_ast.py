@@ -1,12 +1,11 @@
-import collections
-import functools
+from collections import namedtuple
 
 from . import raw_ast, common, objects
 
 
 def _astclass(name, fields):
     # type is set to None for statements
-    return collections.namedtuple(name, ['location', 'type'] + fields)
+    return namedtuple(name, ['location', 'type'] + fields)
 
 
 StrConstant = _astclass('StrConstant', ['python_string'])
@@ -27,7 +26,7 @@ CallFunction = _astclass('CallFunction', ['function', 'args'])
 VoidReturn = _astclass('VoidReturn', [])
 ValueReturn = _astclass('ValueReturn', ['value'])
 Yield = _astclass('Yield', ['value'])
-If = _astclass('If', ['ifs', 'else_body'])
+If = _astclass('If', ['condition', 'if_body', 'else_body'])
 Loop = _astclass('Loop', ['init', 'cond', 'incr', 'body'])    # while or for
 
 
@@ -345,21 +344,45 @@ class _Chef:
                 value.location)
         return Yield(raw.location, None, value)
 
-    # TODO: turn elifs into nested ifs here?
+    # this turns this...
+    #
+    #   if cond1:
+    #       body1
+    #   elif cond2:
+    #       body2
+    #   elif cond3:
+    #       body3
+    #   else:
+    #       body4
+    #
+    # ...into this:
+    #
+    #   if cond1:
+    #       body1
+    #   else:
+    #       if cond2:
+    #           body2
+    #       else:
+    #           if cond3:
+    #               body3
+    #           else:
+    #               body4
     def cook_if(self, raw):
-        cooked_ifs = []
-        for cond, body in raw.ifs:
-            cooked_cond = self.cook_expression(cond)
-            if cooked_cond.type != objects.BUILTIN_TYPES['Bool']:
-                raise common.CompileError(
-                    "expected Bool, got " + cooked_cond.type.name,
-                    cooked_cond.location)
+        raw_cond, raw_if_body = raw.ifs[0]
+        cond = self.cook_expression(raw_cond)
+        if cond.type != objects.BUILTIN_TYPES['Bool']:
+            raise common.CompileError(
+                "expected Bool, got " + cond.type.name, cond.location)
+        if_body = list(map(self.cook_statement, raw_if_body))
 
-            cooked_ifs.append((cooked_cond,
-                               list(map(self.cook_statement, body))))
+        if len(raw.ifs) == 1:
+            else_body = list(map(self.cook_statement, raw.else_body))
+        else:
+            # _replace is a documented namedtuple method, it has _ in front to
+            # allow creating a namedtuple with an attribute named 'replace'
+            else_body = [self.cook_if(raw._replace(ifs=raw.ifs[1:]))]
 
-        cooked_else_body = list(map(self.cook_statement, raw.else_body))
-        return If(raw.location, None, cooked_ifs, cooked_else_body)
+        return If(cond.location, None, cond, if_body, else_body)
 
     def cook_while(self, raw):
         cond = self.cook_expression(raw.condition)
