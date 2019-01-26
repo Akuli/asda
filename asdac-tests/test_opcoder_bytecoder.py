@@ -6,8 +6,7 @@ from asdac.opcoder import create_opcode, Return, DidntReturnError
 
 
 def opcode(code):
-    return create_opcode(
-        cooked_ast.cook(raw_ast.parse(tokenizer.tokenize('test file', code))))
+    return create_opcode(cooked_ast.cook(raw_ast.parse('test file', code)))
 
 
 def bytecode(code):

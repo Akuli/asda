@@ -50,7 +50,7 @@ def parse(string, string_location):
 
         if kind == 'escape':
             result.append(('string', _BACKSLASHED[value], create_location(
-                match.start(), match.start() + 2)))
+                match.start(), match.end())))
 
         elif kind == 'interpolate':
             result.append(('code', value[1:-1], create_location(
@@ -75,18 +75,14 @@ def parse(string, string_location):
         else:
             raise NotImplementedError(kind)     # pragma: no cover
 
-    # merge [('string', 'a'), ('string', 'b')] into [('string', 'ab')]
+    # turn [('string', 'a'), ('string', 'b')] to [('string', 'ab')]
     # this is needed for strings like "hello\nworld"
-    # have fun figuring out how this works
-    while True:
-        for i in range(len(result) - 1):   # OMG ITS RANGELEN KITTENS DIE!!
-            kind1, value1, location1 = result[i]
-            kind2, value2, location2 = result[i+1]
-            if kind1 == 'string' and kind2 == 'string':
-                del result[i+1]
-                result[i] = ('string', value1 + value2, location1 + location2)
-                break
+    merged = []
+    for kind, value, location in result:
+        if merged and merged[-1][0] == 'string' and kind == 'string':
+            merged[-1] = ('string', merged[-1][1] + value,
+                          merged[-1][2] + location)
         else:
-            break
+            merged.append((kind, value, location))
 
-    return result
+    return merged

@@ -15,7 +15,7 @@ class Type(metaclass=abc.ABCMeta):
 
     def __init__(self, name, parent_type):
         self.name = name
-        self.parent_type = parent_type      # None for OBJECT
+        self.parent_type = parent_type      # OBJECT's parent_type is None
 
         # keys are names, values are FunctionTypes with 'this' as first arg
         self.methods = collections.OrderedDict()
@@ -23,10 +23,10 @@ class Type(metaclass=abc.ABCMeta):
     def undo_generics(self, type_dict):
         return self
 
-    def add_method(self, name, argtypes, *args, **kwargs):
+    def add_method(self, name, argtypes, returntype):
         self.methods[name] = FunctionType(
             self.name + '.' + name, itertools.chain([self], argtypes),
-            *args, is_method=True, **kwargs)
+            returntype, is_method=True)
 
     def __repr__(self):
         return '<%s type %r>' % (__name__, self.name)

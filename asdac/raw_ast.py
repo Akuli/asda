@@ -17,8 +17,8 @@ SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['varname'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
 GetType = _astclass('GetType', ['name'])
-TypeFromGeneric = _astclass('TypeFromGeneric', ['typename', 'types'])
-FuncFromGeneric = _astclass('FuncFromGeneric', ['funcname', 'types'])
+# FromGeneric represents looking up a generic function or generic type
+FromGeneric = _astclass('TypeFromGeneric', ['name', 'types'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
 # generics is a list of (typename, location) pairs, or None
 FuncDefinition = _astclass('FuncDefinition', [
@@ -39,15 +39,6 @@ class _TokenIterator:
     def copy(self):
         self._iterator, copied = itertools.tee(self._iterator)
         return _TokenIterator(copied)
-
-    # currently not used, but could be useful for some dirty magic
-#    @contextlib.contextmanager
-#    def temporary_state(self):
-#        self._iterator, backup = itertools.tee(self._iterator)
-#        try:
-#            yield
-#        finally:
-#            self._iterator = backup
 
     def _check_token(self, token, kind, value):
         error = functools.partial(common.CompileError, location=token.location)
@@ -100,6 +91,7 @@ def _duplicate_check(iterable, what_are_they):
         seen.add(name)
 
 
+# asda integers must fit in 64 bits
 INT64_MIN = -2**63
 INT64_MAX = 2**63 - 1
 
@@ -127,15 +119,18 @@ class _Parser:
                 content, content_location):
             if kind == 'string':
                 parts.append(String(part_location, value))
+
             elif kind == 'code':
                 tokens = tokenizer.tokenize(
                     part_location.filename, value,
                     initial_lineno=part_location.startline,
                     initial_column=part_location.startcolumn)
+
                 parser = _Parser(_TokenIterator(tokens))
                 parts.append(_to_string(parser.parse_expression()))
                 parser.tokens.next_token('newline')    # added by tokenizer
                 assert parser.tokens.eof()   # if fails, string isn't one-line
+
             else:   # pragma: no cover
                 raise NotImplementedError(kind)
 
@@ -148,6 +143,14 @@ class _Parser:
             return parts[0]._replace(location=location)
         else:
             return StrJoin(location, parts)
+
+    def _from_generic(self, name_token):
+        self.tokens.next_token('op', '[')
+        types, closing_bracket = self.parse_commasep_list(
+            self.parse_type, ']', False)
+        return FromGeneric(
+            name_token.location + closing_bracket.location,
+            name_token.value, types)
 
     def parse_expression(self):
         first_token = self.tokens.next_token()
@@ -162,13 +165,7 @@ class _Parser:
             result = Integer(first_token.location, int(first_token.value))
         elif first_token.kind == 'id':
             if self.tokens.coming_up('op', '['):
-                # generic_func_name[T1, T2, ...]
-                self.tokens.next_token('op', '[')
-                types, closing_bracket = self.parse_commasep_list(
-                    self.parse_type, ']', False)
-                result = FuncFromGeneric(
-                    first_token.location + closing_bracket.location,
-                    first_token.value, types)
+                result = self._from_generic(first_token)
             else:
                 result = GetVar(first_token.location, first_token.value)
         elif first_token.kind == 'string':
@@ -208,6 +205,7 @@ class _Parser:
             while self.tokens.coming_up('op', ','):
                 self.tokens.next_token('op', ',')
                 result.append(parse_callback())
+            # TODO: allow a trailing comma?
 
         return (result, self.tokens.next_token('op', end_op))
 
@@ -242,8 +240,7 @@ class _Parser:
         while self.tokens.coming_up('keyword', 'elif'):
             self.tokens.next_token('keyword', 'elif')
 
-            # c rewriting note: python evaluates tuple elements in order, but
-            # function call arguments in c have no guarantees
+            # python evaluates tuple elements in order
             ifs.append((self.parse_expression(), self.parse_block()))
 
         if self.tokens.coming_up('keyword', 'else'):
@@ -277,12 +274,7 @@ class _Parser:
     def parse_type(self):
         first_token = self.tokens.next_token('id')
         if self.tokens.coming_up('op', '['):
-            self.tokens.next_token('op', '[')
-            types, closing_bracket = self.parse_commasep_list(
-                self.parse_type, ']', False)
-            result = TypeFromGeneric(
-                first_token.location + closing_bracket.location,
-                first_token.value, types)
+            result = self._from_generic(first_token)
         else:
             result = GetType(first_token.location, first_token.value)
         return result
@@ -346,15 +338,10 @@ class _Parser:
     def parse_yield(self):
         yield_keyword = self.tokens.next_token('keyword', 'yield')
         value = self.parse_expression()
-        location = yield_keyword.location + value.location
-        return Yield(location, value)
+        return Yield(yield_keyword.location + value.location, value)
 
     def parse_statement(self, *, allow_multiline=True):
-        if self.tokens.coming_up('keyword', 'let'):
-            result = self.parse_let_statement()
-            is_multiline = False
-
-        elif self.tokens.coming_up('keyword', 'if'):
+        if self.tokens.coming_up('keyword', 'if'):
             result = self.parse_if_statement()
             is_multiline = True
 
@@ -369,6 +356,10 @@ class _Parser:
         elif self.tokens.coming_up('keyword', 'func'):
             result = self.parse_func_definition()
             is_multiline = True
+
+        elif self.tokens.coming_up('keyword', 'let'):
+            result = self.parse_let_statement()
+            is_multiline = False
 
         elif self.tokens.coming_up('keyword', 'return'):
             result = self.parse_return()
@@ -397,9 +388,9 @@ class _Parser:
             else:
                 raise common.CompileError(
                     "expected a let, a variable assignment, an if, a while, "
-                    "a function definition or a function call",
+                    "a for, a return, a yield, a function definition or a "
+                    "function call",
                     first_expr.location)
-            is_multiline = False
 
         if is_multiline:
             if not allow_multiline:
@@ -413,7 +404,9 @@ class _Parser:
         return result
 
 
-def parse(tokens):
-    parser = _Parser(_TokenIterator(tokens))
+# this does the tokenizing because string formatting things need to invoke the
+# tokenizer anyway
+def parse(filename, code):
+    parser = _Parser(_TokenIterator(tokenizer.tokenize(filename, code)))
     while not parser.tokens.eof():
         yield parser.parse_statement()

@@ -4,7 +4,7 @@ import functools
 from . import objects
 
 
-CREATE_FUNCTION = b'f'
+CREATE_FUNCTION = b'f'  # also used in types
 LOOKUP_VAR = b'v'
 SET_VAR = b'V'
 STR_CONSTANT = b'"'     # only used in bytecode files
@@ -46,7 +46,8 @@ class _BytecodeReader:
             size -= 1
 
         part2 = self._callback(size)
-        assert len(part2) == size
+        if len(part2) != size:
+            raise RuntimeError("the bytecode file seems to be truncated")
         return bytes(part1) + part2
 
     def _unread(self, byte):
@@ -108,23 +109,28 @@ class _BytecodeReader:
                 break
 
             if magic == STR_CONSTANT:
-                string_object = objects.String(self.read_string())
-                opcode.append((CONSTANT, string_object))
+                opcode.append((CONSTANT, objects.String(self.read_string())))
             elif magic == INT_CONSTANT:
                 opcode.append((CONSTANT, objects.Integer(self.read_int64())))
             elif magic == TRUE_CONSTANT:
                 opcode.append((CONSTANT, objects.TRUE))
             elif magic == FALSE_CONSTANT:
                 opcode.append((CONSTANT, objects.FALSE))
+            elif magic in {POP_ONE, DIDNT_RETURN_ERROR, NEGATION, YIELD,
+                           VOID_RETURN, VALUE_RETURN}:
+                opcode.append((magic,))
             elif magic in {CALL_VOID_FUNCTION, CALL_RETURNING_FUNCTION}:
                 opcode.append((magic, self.read_uint8()))
+            elif magic in {JUMP_IF, STR_JOIN}:
+                opcode.append((magic, self.read_uint16()))
             elif magic in {LOOKUP_VAR, SET_VAR}:
                 level = self.read_uint8()
                 index = self.read_uint16()
                 opcode.append((magic, level, index))
-            elif magic in {POP_ONE, DIDNT_RETURN_ERROR, NEGATION, YIELD,
-                           VOID_RETURN, VALUE_RETURN}:
-                opcode.append((magic,))
+            elif magic == LOOKUP_METHOD:
+                tybe = self.read_type()
+                index = self.read_uint16()
+                opcode.append((LOOKUP_METHOD, tybe, index))
             elif magic == CREATE_FUNCTION:
                 self._unread(magic[0])
                 tybe = self.read_type()
@@ -132,12 +138,6 @@ class _BytecodeReader:
                 name = self.read_string()
                 body = self.read_body()
                 opcode.append((CREATE_FUNCTION, tybe, name, body, yields))
-            elif magic in {JUMP_IF, STR_JOIN}:
-                opcode.append((magic, self.read_uint16()))
-            elif magic == LOOKUP_METHOD:
-                tybe = self.read_type()
-                index = self.read_uint16()
-                opcode.append((LOOKUP_METHOD, tybe, index))
             else:
                 assert False, magic
 

@@ -6,7 +6,7 @@ from asdac.cooked_ast import cook
 
 
 def parse(code):
-    return list(cook(raw_ast.parse(tokenizer.tokenize('test file', code))))
+    return list(cook(raw_ast.parse('test file', code)))
 
 
 def doesnt_parse(code, message, bad_code):

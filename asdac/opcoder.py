@@ -219,6 +219,8 @@ class _OpCoder:
             end_of_if_body = JumpMarker()
             end_of_else_body = JumpMarker()
 
+            # this is why goto is bad style :D it's quite hard to understand
+            # even a basic if,else
             self.do_expression(cond)
             self.output.ops.append(Negation())
             self.output.ops.append(JumpIf(end_of_if_body))
@@ -237,6 +239,7 @@ class _OpCoder:
 
             if statement.init is not None:
                 self.do_statement(statement.init)
+
             self.output.ops.append(beginning)
             self.do_expression(statement.cond)
             self.output.ops.append(Negation())

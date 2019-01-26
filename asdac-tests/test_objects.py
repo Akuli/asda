@@ -5,8 +5,7 @@ from asdac.common import CompileError, Location
 
 
 def parse(code):
-    return list(cooked_ast.cook(raw_ast.parse(tokenizer.tokenize(
-        'test file', code))))
+    return list(cooked_ast.cook(raw_ast.parse('test file', code)))
 
 
 def doesnt_parse(code, message, bad_code):

@@ -23,12 +23,12 @@ def source2bytecode(infile, outfile_name, quiet):
             '<stdout>' if outfile_name == '-' else outfile_name)
         eprint("Compiling:", infile.name, "-->", printable_outfile_name)
 
-    # if you change this, make sure that the last step before opening the file
-    # does NOT produce an iterator, so that if something fails, an exception is
-    # likely raised before the output file is opened, and the output file gets
-    # left untouched if it exists
-    tokens = tokenizer.tokenize(infile.name, infile.read())
-    raw = raw_ast.parse(tokens)
+    # if you change this, make sure that the last step before opening the
+    # output file does NOT produce an iterator, so that if something fails, an
+    # exception is likely raised before the output file is opened, and the
+    # output file gets left untouched if it exists and no invalid output files
+    # are created
+    raw = raw_ast.parse(infile.name, infile.read())
     cooked = cooked_ast.cook(raw)
     opcode = opcoder.create_opcode(cooked)
     bytecode = bytecoder.create_bytecode(opcode)

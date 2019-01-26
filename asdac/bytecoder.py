@@ -115,8 +115,7 @@ class _BytecodeWriter:
             self.output.append(1 if op.yields else 0)
             self.write_string(op.name)
 
-            body_varlists = varlists + [op.body_opcode.local_vars]
-            _BytecodeWriter(self.output).run(op.body_opcode, body_varlists)
+            _BytecodeWriter(self.output).run(op.body_opcode, varlists)
 
         elif isinstance(op, opcoder.LookupVar):
             self.output.extend(LOOKUP_VAR)
@@ -174,7 +173,11 @@ class _BytecodeWriter:
 
     # don't call this more than once
     def run(self, opcode, varlists):
-        i = 0
+        # using += would mutate the argument and cause confusing things because
+        # python is awesome
+        varlists = varlists + [opcode.local_vars]
+
+        i = 0       # no, enumerate() does not work for this
         for op in opcode.ops:
             if isinstance(op, opcoder.JumpMarker):
                 self.jumpmarker2index[op] = i
@@ -191,5 +194,5 @@ def create_bytecode(opcode):
     output = bytearray()
     # the built-in varlist is None because all builtins are implemented
     # as ArgMarkers, so they don't need a varlist
-    _BytecodeWriter(output).run(opcode, [None, opcode.local_vars])
+    _BytecodeWriter(output).run(opcode, [None])
     return output

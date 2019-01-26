@@ -60,6 +60,7 @@ class _Chef:
                 self.return_type = returntype
         else:
             assert returntype is None
+            assert not yields
             self.can_return = False
             self.yield_type = None
             self.return_type = None
@@ -95,8 +96,6 @@ class _Chef:
             raise common.CompileError(
                 "'%s' is not a valid %s name because it's a type name"
                 % (name, what_is_it), location)
-
-        return None
 
     def cook_function_call(self, raw_func_call: raw_ast.FuncCall):
         function = self.cook_expression(raw_func_call.function)
@@ -183,14 +182,14 @@ class _Chef:
                 chef.local_vars[raw_expression.varname],
                 raw_expression.varname, chef.level)
 
-        if isinstance(raw_expression, raw_ast.FuncFromGeneric):
+        if isinstance(raw_expression, raw_ast.FromGeneric):   # generic func
             chef = self.get_chef_for_generic_func_name(
-                raw_expression.funcname, raw_expression.location)
-            generfunc = chef.local_generic_funcs[raw_expression.funcname]
+                raw_expression.name, raw_expression.location)
+            generfunc = chef.local_generic_funcs[raw_expression.name]
             types = list(map(self.cook_type, raw_expression.types))
             functype = generfunc.get_real_type(types, raw_expression.location)
             return LookupGenericFunction(
-                raw_expression.location, functype, raw_expression.funcname,
+                raw_expression.location, functype, raw_expression.name,
                 types, chef.level)
 
         if isinstance(raw_expression, raw_ast.StrJoin):
@@ -210,13 +209,13 @@ class _Chef:
             raise common.CompileError(
                 "unknown type '%s'" % tybe.name, tybe.location)
 
-        if isinstance(tybe, raw_ast.TypeFromGeneric):
-            if tybe.typename not in objects.BUILTIN_GENERIC_TYPES:
+        if isinstance(tybe, raw_ast.FromGeneric):   # generic type
+            if tybe.name not in objects.BUILTIN_GENERIC_TYPES:
                 raise common.CompileError(
-                    "unknown generic type '%s'" % tybe.typename,
+                    "unknown generic type '%s'" % tybe.name,
                     tybe.location)
 
-            genertype = objects.BUILTIN_GENERIC_TYPES[tybe.typename]
+            genertype = objects.BUILTIN_GENERIC_TYPES[tybe.name]
             types = list(map(self.cook_type, tybe.types))
             result = genertype.get_real_type(types, tybe.location)
             return result
@@ -252,13 +251,14 @@ class _Chef:
 
             chef = chef.parent_chef
 
+    # TODO: allow functions to call themselves
     def cook_function_definition(self, raw):
         self._check_name_not_exist(raw.funcname, 'variable', raw.location)
 
-        # yes, this is weird
-        # why this is needed is explained below
+        # yes, this is weird, but needed because:
+        # * creating the real subchef needs cooked returntype
+        # * cooking the returntype needs a chef that knows the generic types
         temp_chef = _Chef(self)
-
         if raw.generics is not None:
             markers = []
             for name, location in raw.generics:
@@ -280,9 +280,6 @@ class _Chef:
         else:
             returntype = temp_chef.cook_type(raw.returntype)
 
-        # here you can see why temp_chef is needed:
-        # * creating the real subchef needs cooked returntype
-        # * cooking the returntype needs a chef that knows the generic types
         yield_location = next(_find_yields(raw.body), None)
         if (yield_location is not None and
                 not isinstance(returntype, objects.GeneratorType)):
@@ -291,8 +288,6 @@ class _Chef:
                 "Generator[something]", yield_location)
 
         functype = objects.FunctionType(raw.funcname, argtypes, returntype)
-
-        # TODO: allow functions to call themselves
         subchef = _Chef(self, True, yield_location is not None, returntype)
         subchef.local_types.update(temp_chef.local_types)
         subchef.local_vars.update(dict(zip(argnames, argtypes)))
@@ -317,17 +312,17 @@ class _Chef:
 
         if self.return_type is None:
             if raw.value is not None:
-                if self.yield_type is not None:
+                if self.yield_type is None:
                     raise common.CompileError(
-                        "cannot return a value from a function that yields",
-                        raw.location)
+                        "cannot return a value from a void function",
+                        raw.value.location)
                 raise common.CompileError(
-                    "cannot return a value from a void function",
-                    raw.value.location)
+                    "cannot return a value from a function that yields",
+                    raw.location)
             return VoidReturn(raw.location, None)
-
         if raw.value is None:
             raise common.CompileError("missing return value", raw.location)
+
         value = self.cook_expression(raw.value)
         if value.type != self.return_type:
             raise common.CompileError(
@@ -338,6 +333,8 @@ class _Chef:
 
     def cook_yield(self, raw):
         if self.yield_type is None:
+            # the only way how we can get here is that this is not a function
+            # see cook_function_definition()
             raise common.CompileError("yield outside function", raw.location)
 
         value = self.cook_expression(raw.value)
@@ -348,6 +345,7 @@ class _Chef:
                 value.location)
         return Yield(raw.location, None, value)
 
+    # TODO: turn elifs into nested ifs here?
     def cook_if(self, raw):
         cooked_ifs = []
         for cond, body in raw.ifs:

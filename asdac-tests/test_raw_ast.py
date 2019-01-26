@@ -1,14 +1,13 @@
 from asdac import tokenizer, raw_ast
-from asdac.raw_ast import (For, FuncCall, FuncFromGeneric, GetAttr,
-                           GetType, GetVar, Let, SetVar, String,
-                           TypeFromGeneric)
+from asdac.raw_ast import (For, FuncCall, FromGeneric, GetAttr,
+                           GetType, GetVar, Let, SetVar, String)
 from asdac.common import CompileError, Location
 
 import pytest
 
 
 def parse(code):
-    return list(raw_ast.parse(tokenizer.tokenize('test file', code)))
+    return list(raw_ast.parse('test file', code))
 
 
 def test_not_an_expression_or_a_statement():
@@ -20,8 +19,8 @@ def test_not_an_expression_or_a_statement():
     with pytest.raises(CompileError) as error:
         parse('"lol"')
     assert error.value.message == (
-        "expected a let, a variable assignment, an if, a while, a function "
-        "definition or a function call")
+        "expected a let, a variable assignment, an if, a while, a for, "
+        "a return, a yield, a function definition or a function call")
     assert error.value.location == Location('test file', 1, 0, 1, 5)
 
 
@@ -49,14 +48,14 @@ def test_generics():
     assert parse('magic_function[Str, Generator[Int]](x)') == [
         FuncCall(
             Location('test file', 1, 0, 1, 38),
-            function=FuncFromGeneric(
+            function=FromGeneric(
                 Location('test file', 1, 0, 1, 35),
-                funcname='magic_function',
+                name='magic_function',
                 types=[
                     GetType(Location('test file', 1, 15, 1, 18), name='Str'),
-                    TypeFromGeneric(
+                    FromGeneric(
                         Location('test file', 1, 20, 1, 34),
-                        typename='Generator',
+                        name='Generator',
                         types=[
                             GetType(Location('test file', 1, 30, 1, 33),
                                     name='Int'),
