@@ -378,3 +378,4 @@ There are two kinds of types:
 [FALSE]: undocumented.md
 [to_string]: undocumented.md
 [generic]: undocumented.md
+[Generator]: undocumented.md
