@@ -260,17 +260,17 @@ there are also statements that take up more than one line. Here a "body" means
 
     `yield` works so that this...
 
-        ```js
-        func generate_hellos() -> Generator[Str]:
-            yield "Hello"
-            yield "Hello"
-            yield "Hello"
+    ```js
+    func generate_hellos() -> Generator[Str]:
+        yield "Hello"
+        yield "Hello"
+        yield "Hello"
 
-        let helloer = generate_hellos()
-        print(next[Str](helloer))
-        print(next[Str](helloer))
-        print(next[Str](helloer))
-        ```
+    let helloer = generate_hellos()
+    print(next[Str](helloer))
+    print(next[Str](helloer))
+    print(next[Str](helloer))
+    ```
 
     ...prints `"hello"` 3 times.
 
@@ -282,10 +282,10 @@ there are also statements that take up more than one line. Here a "body" means
     also return a generator object just like functions return values in general.
     Like this:
 
-        ```js
-        func generate_more_hellos() -> Generator[Str]:
-            return generate_hellos()
-        ```
+    ```js
+    func generate_more_hellos() -> Generator[Str]:
+        return generate_hellos()
+    ```
 
     Now `generate_hellos()` and `generate_more_hellos()` work the same way.
 
@@ -301,31 +301,31 @@ there are also statements that take up more than one line. Here a "body" means
 
     `elif` works so that this...
 
-        ```js
-        if cond1:
-            body1
-        elif cond2:
-            body2
-        elif cond3:
-            body3
-        else:
-            body4
-        ```
+    ```js
+    if cond1:
+        body1
+    elif cond2:
+        body2
+    elif cond3:
+        body3
+    else:
+        body4
+    ```
 
     ...does the same thing as this:
 
-        ```js
-        if cond1:
-            body1
+    ```js
+    if cond1:
+        body1
+    else:
+        if cond2:
+            body2
         else:
-            if cond2:
-                body2
+            if cond3:
+                body3
             else:
-                if cond3:
-                    body3
-                else:
-                    body4
-        ```
+                body4
+    ```
 
 - **For statements** consist of `for init; cond; incr` followed by a body.
   `init` and `incr` must be single-line statements, and `cond` must be an
