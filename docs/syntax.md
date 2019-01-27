@@ -121,13 +121,30 @@ if a:
       d()
 ```
 
-...is an error because `d()` doesn't match any of the indentations before it;
-it's not a part of `if b:` because `c()` is and it's indented less than `d()`,
-but it's indented more than `if b:`.
+...is an error because `d()` doesn't match any of the indentations before it.
+On one hand, `d()` seems to be a part of `if b:` because it's indented more than
+`if b:`, but on the other hand, `c()` also seems to be a part of `if b:`, even
+though `c()` and `d()` are indented differently. This is valid, of course:
 
-If a line contains nothing but indentation, comments or both, it's treated as a
-blank line. For example, this code doesn't compile because there should be
-something coming after `if a:`, but there isn't:
+```js
+if a:
+    if b:
+        c()
+        d()
+```
+
+This is also valid, but does a different thing:
+
+```js
+if a:
+    if b:
+        c()
+    d()
+```
+
+If a line contains nothing but indentation, it's treated as a blank line. For
+example, this code doesn't compile because there should be something coming
+after `if a:`, but there isn't:
 
 ```python3
 if a:
@@ -136,8 +153,7 @@ else:
     print("a is FALSE")
 ```
 
-Use a `void` statement instead. It's a [statement](#statements) that does
-nothing:
+Use a `void` statement instead. It's a [statement] that does nothing:
 
 ```js
 if a:
@@ -349,6 +365,7 @@ There are two kinds of types:
 
 
 [expression]: #expression
+[statement]: #statements
 [indentation]: #indentation
 [identifier]: #identifier-tokens
 [identifiers]: #identifier-tokens
