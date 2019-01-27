@@ -1,5 +1,6 @@
 # Asda Documentation
 
-Right now there is very little documentation.
+There isn't much documentation yet, but here's a list of what I have:
 
-* [Asdac internals](compiler.md)
+* [Asda's Syntax](syntax.md)
+* [Asdac Internals](compiler.md)

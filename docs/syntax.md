@@ -1,4 +1,4 @@
-# Syntax
+# Asda's Syntax
 
 This page documents asda's syntax. You may find it useful if you want to develop
 `asdac` or if you just want to know how the language works in detail.
