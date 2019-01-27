@@ -92,7 +92,11 @@ class _Runner:
                     var_scope = self.scope
                 else:
                     var_scope = self.scope.parent_scopes[level]
-                assert var_scope.local_vars[index] is not None
+
+                if var_scope.local_vars[index] is None:
+                    raise RuntimeError(
+                        "the value of a variable hasn't been set")
+
                 self.stack.append(var_scope.local_vars[index])
 
             elif opcode == bytecode_reader.SET_VAR:
