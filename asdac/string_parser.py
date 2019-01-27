@@ -12,7 +12,8 @@ _BACKSLASHED = collections.OrderedDict([
 ])
 
 _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
-    ('escape', r'\\[%s]' % re.escape(''.join(_BACKSLASHED.keys()))),
+    ('escape', r'\\[%s]' % re.escape(''.join(
+        char for slash, char in _BACKSLASHED.keys()))),
     ('interpolate', r'\{[^\{\}]*\}'),
     ('text', r'[^\{\}\\]+'),
     ('error', r'.'),
