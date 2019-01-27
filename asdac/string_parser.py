@@ -3,26 +3,27 @@ import re
 
 from asdac import common
 
-
 _BACKSLASHED = collections.OrderedDict([
     (r'\n', '\n'),
     (r'\t', '\t'),
     (r'\\', '\\'),
     (r'\"', '"'),
+    (r'\{', '{'),
+    (r'\}', '}'),
 ])
 
-_TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
-    ('escape', r'\\[%s]' % re.escape(''.join(
-        char for slash, char in _BACKSLASHED.keys()))),
-    ('interpolate', r'\{[^\{\}]*\}'),
-    ('text', r'[^\{\}\\]+'),
-    ('error', r'.'),
-])
-
-
-def _or_join(strings):
-    *comma_stuff, last = strings
-    return ', '.join(comma_stuff) + ' or ' + last
+_NOT_SPECIAL = r'[^{}\\"\n]'
+_REGEXES = [
+    ('escape', '|'.join(map(re.escape, _BACKSLASHED.keys()))),
+    # docs/syntax.md says that the code consists of 1 or more characters, but
+    # this does * instead of + because empty code will fail later anyway, and
+    # less special cases is nice
+    ('interpolate', r'\{%s*\}' % _NOT_SPECIAL),
+    ('text', r'%s+' % _NOT_SPECIAL),
+]
+CONTENT_REGEX = '(?:%s)*' % '|'.join(regex for name, regex in _REGEXES)
+_PARSING_REGEX = '|'.join(
+    '(?P<%s>%s)' % pair for pair in (_REGEXES + [('error', '.')]))
 
 
 # the string and location must NOT include the beginning and ending "
@@ -34,18 +35,13 @@ def parse(string, string_location):
     assert '\n' not in string       # but may contain '\\n', aka r'\n'
 
     def create_location(start_offset, end_offset):
-        if end_offset is None:
-            end = string_location.endcolumn
-        else:
-            end = string_location.startcolumn + end_offset
-
         return common.Location(
             string_location.filename, string_location.startline,
             string_location.startcolumn + start_offset,
-            string_location.endline, end)
+            string_location.endline, string_location.startcolumn + end_offset)
 
     result = []
-    for match in re.finditer(_TOKEN_REGEX, string):
+    for match in re.finditer(_PARSING_REGEX, string):
         kind = match.lastgroup
         value = match.group(kind)
 
@@ -60,18 +56,6 @@ def parse(string, string_location):
         elif kind == 'text':
             result.append(('string', value, create_location(
                 match.start(), match.end())))
-
-        elif kind == 'error':
-            if value == '\\':
-                raise common.CompileError(
-                    "expected " + _or_join(_BACKSLASHED.keys()),
-                    create_location(match.start(), match.start() + 2))
-            if value in {'{', '}'}:
-                raise common.CompileError(
-                    r"missing %s, or maybe you want \%s instead of %s" % (
-                        {'{': '}', '}': '{'}[value], value, value),
-                    create_location(match.start(), None))
-            raise NotImplementedError(value)    # pragma: no cover
 
         else:
             raise NotImplementedError(kind)     # pragma: no cover

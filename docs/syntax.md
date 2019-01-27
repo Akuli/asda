@@ -52,6 +52,9 @@ though `lol2` is.
 
 ## String Tokens
 
+In this section, a "special character" means `{`, `}`, `\`, `"` or a newline
+character.
+
 A string token begins with `"` and ends with another `"`. Between the quotes,
 there can be:
 
@@ -63,13 +66,22 @@ there can be:
 - `\}` to create a `}` character.
 - `{` and `}` with asda code in between to run the code and put the result into
   the string.
-- Anything else except `"`, a newline, or `\\`.
+- Any non-special character.
 
-The code between `{` and `}` cannot contain any `{` or `}` characters or
-anything that a string without `{` and `}` couldn't contain. There must be a
-matching `}` after each `{`, and `{}` can't be nested. The code should be an
-[indentation] whose value has a [to_string] method that takes no arguments and
-returns a string; it will be called to get a part of the resulting string.
+The code between `{` and `}` consists of 1 or more non-special characters. The
+code should be an [expression] whose value has a [to_string] method that takes
+no arguments and returns a string; it will be called to get a part of the
+resulting string. In other words, this...
+
+```js
+print("{x.y(z)}")
+```
+
+...does the same thing as this:
+
+```js
+print((x.y(z)).to_string())
+```
 
 
 ## Comments
@@ -265,11 +277,11 @@ there are also statements that take up more than one line. Here a "body" means
 ### Multiline Statements
 
 - **If statements** consist of `if` followed by a condition and a body. The
-  condition must be an [indentation] with type [Bool]. After the
-  `if`, there may be zero or more `elif` parts; each `elif` parts has the same
-  syntax as the `if` part, but with `elif` instead of `if`. After the `if` and
-  the `elif` parts (if there are any), there may be an `else` part, which has
-  the same syntax but without a condition expression.
+  condition must be an [expression] with type [Bool]. After the `if`, there may
+  be zero or more `elif` parts; each `elif` parts has the same syntax as the
+  `if` part, but with `elif` instead of `if`. After the `if` and the `elif`
+  parts (if there are any), there may be an `else` part, which has the same
+  syntax but without a condition expression.
 
     `elif` works so that this...
 
@@ -301,7 +313,7 @@ there are also statements that take up more than one line. Here a "body" means
 
 - **For statements** consist of `for init; cond; incr` followed by a body.
   `init` and `incr` must be single-line statements, and `cond` must be an
-  [indentation] with type [Bool].
+  [expression] with type [Bool].
 
     The for loop first runs `init`. Then it evaluates `cond`. If `cond` is
     [TRUE], it runs the body and `incr`; if `cond` is `FALSE`, it terminates.

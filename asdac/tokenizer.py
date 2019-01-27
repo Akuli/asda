@@ -3,14 +3,14 @@ import re
 
 import more_itertools
 
-from . import common
+from . import common, string_parser
 
 
 _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
     ('integer', r'-?[1-9][0-9]*|0'),   # TODO: add - prefix operator instead
     ('id', r'[^\W\d]\w*'),
     ('op', r'[;=():.,\[\]]|->'),
-    ('string', r'"(?:\\.|[^"\n\\])*?"'),
+    ('string', '"%s"' % string_parser.CONTENT_REGEX),
     ('ignore1', r'^ *(?:#.*)?\n'),
     ('newline', r'\n'),
     ('indent', r'^ +'),
@@ -81,7 +81,7 @@ def _raw_tokenize(filename, code, initial_lineno, initial_column):
                 # because error messages would be very confusing without this
                 rest_of_line = code[match.end():].split('\n', 1)[0]
                 location.endcolumn += len(rest_of_line)
-                raise common.CompileError("this string never ends", location)
+                raise common.CompileError("invalid string", location)
             raise common.CompileError("unexpected '%s'" % value, location)
         elif kind.startswith('ignore'):
             pass

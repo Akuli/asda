@@ -26,9 +26,7 @@ def doesnt_parse(string, message, loc):
 
 
 def test_escapes():
-    assert parse(r'\n\t\\\"') == [
-        ('string', '\n\t\\"', location(0, 8)),
-    ]
+    assert parse(r'\n\t\\\"\{\}') == [('string', '\n\t\\"{}', location(0, 12))]
 
 
 def test_interpolation():
@@ -50,22 +48,3 @@ def test_interpolation():
         ('code', 'z', location(12, 13)),
     ]
     assert parse('') == []
-
-
-def test_errors():
-    doesnt_parse('{hello',
-                 r"missing }, or maybe you want \{ instead of {",
-                 location(0, 6))
-    doesnt_parse('{{hello}',
-                 r"missing }, or maybe you want \{ instead of {",
-                 location(0, 8))
-    doesnt_parse('hello}',
-                 r"missing {, or maybe you want \} instead of }",
-                 location(5, 6))
-    doesnt_parse('{hello}}',
-                 r"missing {, or maybe you want \} instead of }",
-                 location(7, 8))
-
-    doesnt_parse(r'\a',
-                 r'expected \n, \t, \\ or \"',
-                 location(0, 2))
