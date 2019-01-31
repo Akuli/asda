@@ -65,7 +65,7 @@ class _Runner:
     #   * returned value
     #   * None for void return
     def run(self):
-        for opcode, *args in self.opcodes:
+        for lineno, opcode, args in self.opcodes:
             if opcode == bytecode_reader.CONSTANT:
                 [constant] = args
                 self.stack.append(constant)

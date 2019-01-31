@@ -4,6 +4,8 @@ import functools
 from . import objects
 
 
+SET_LINENO = b'L'
+
 CREATE_FUNCTION = b'f'  # also used in types
 LOOKUP_VAR = b'v'
 SET_VAR = b'V'
@@ -31,12 +33,16 @@ TYPE_VOID = b'v'
 
 Code = collections.namedtuple('Code', ['how_many_local_vars', 'opcodes'])
 
+# args is a tuple whose elements depend on the kind
+Op = collections.namedtuple('Op', ['lineno', 'kind', 'args'])
+
 
 class _BytecodeReader:
 
     def __init__(self, read_callback):
         self._callback = read_callback    # no error on eof, returns b''
         self._push_buffer = bytearray()
+        self._lineno = 1
 
     # errors on unexpected eof
     def _read(self, size):
@@ -72,13 +78,21 @@ class _BytecodeReader:
 
     read_int64 = functools.partialmethod(_read_int, 64)
 
+    def read_magic(self):
+        magic = self._read(1)
+        if magic == SET_LINENO:
+            self._lineno = self.read_uint32()
+            magic = self._read(1)
+            assert magic != SET_LINENO
+        return magic
+
     def read_string(self):
         length = self.read_uint32()
         utf8 = self._read(length)
         return utf8.decode('utf-8')
 
     def read_type(self):
-        magic = self._read(1)
+        magic = self.read_magic()
 
         if magic == TYPE_BUILTIN:
             index = self.read_uint8()
@@ -104,42 +118,45 @@ class _BytecodeReader:
         opcode = []
 
         while True:
-            magic = self._read(1)
+            magic = self.read_magic()
+            kind = magic
+
             if magic == END_OF_BODY:
                 break
-
-            if magic == STR_CONSTANT:
-                opcode.append((CONSTANT, objects.String(self.read_string())))
+            elif magic == STR_CONSTANT:
+                kind = CONSTANT
+                args = (objects.String(self.read_string()),)
             elif magic == INT_CONSTANT:
-                opcode.append((CONSTANT, objects.Integer(self.read_int64())))
+                kind = CONSTANT
+                args = (objects.Integer(self.read_int64()),)
             elif magic == TRUE_CONSTANT:
-                opcode.append((CONSTANT, objects.TRUE))
+                kind = CONSTANT
+                args = (objects.TRUE,)
             elif magic == FALSE_CONSTANT:
-                opcode.append((CONSTANT, objects.FALSE))
+                kind = CONSTANT
+                args = (objects.FALSE,)
             elif magic in {POP_ONE, DIDNT_RETURN_ERROR, NEGATION, YIELD,
                            VOID_RETURN, VALUE_RETURN}:
-                opcode.append((magic,))
+                args = ()
             elif magic in {CALL_VOID_FUNCTION, CALL_RETURNING_FUNCTION}:
-                opcode.append((magic, self.read_uint8()))
+                args = (self.read_uint8(),)
             elif magic in {JUMP_IF, STR_JOIN}:
-                opcode.append((magic, self.read_uint16()))
+                args = (self.read_uint16(),)
             elif magic in {LOOKUP_VAR, SET_VAR}:
-                level = self.read_uint8()
-                index = self.read_uint16()
-                opcode.append((magic, level, index))
+                args = (self.read_uint8(), self.read_uint16())
             elif magic == LOOKUP_METHOD:
-                tybe = self.read_type()
-                index = self.read_uint16()
-                opcode.append((LOOKUP_METHOD, tybe, index))
+                args = (self.read_type(), self.read_uint16())
             elif magic == CREATE_FUNCTION:
                 self._unread(magic[0])
                 tybe = self.read_type()
                 yields = bool(self._read(1)[0])
                 name = self.read_string()
                 body = self.read_body()
-                opcode.append((CREATE_FUNCTION, tybe, name, body, yields))
+                args = (tybe, name, body, yields)
             else:
                 assert False, magic
+
+            opcode.append(Op(self._lineno, kind, args))
 
         return Code(how_many_local_vars, opcode)
 
