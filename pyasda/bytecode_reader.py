@@ -4,16 +4,17 @@ import functools
 from . import objects
 
 
-SET_LINENO = b'L'
+SET_LINENO = b'L'   # only used in bytecode files
 
 CREATE_FUNCTION = b'f'  # also used in types
 LOOKUP_VAR = b'v'
 SET_VAR = b'V'
-STR_CONSTANT = b'"'     # only used in bytecode files
-INT_CONSTANT = b'1'     # only used in bytecode files
-TRUE_CONSTANT = b'T'    # only used in bytecode files
-FALSE_CONSTANT = b'F'   # only used in bytecode files
-CONSTANT = b'C'         # not used at all in bytecode files
+STR_CONSTANT = b'"'             # only used in bytecode files
+NON_NEGATIVE_INT_CONSTANT = b'1'    # only used in bytecode files
+NEGATIVE_INT_CONSTANT = b'2'    # only used in bytecode files
+TRUE_CONSTANT = b'T'            # only used in bytecode files
+FALSE_CONSTANT = b'F'           # only used in bytecode files
+CONSTANT = b'C'                 # not used at all in bytecode files
 LOOKUP_METHOD = b'm'
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
@@ -27,6 +28,7 @@ NEGATION = b'!'
 JUMP_IF = b'J'
 END_OF_BODY = b'E'      # only used in bytecode files
 
+# these are only used in bytecode files
 TYPE_BUILTIN = b'b'
 TYPE_GENERATOR = b'G'  # not to be confused with generator functions
 TYPE_VOID = b'v'
@@ -66,17 +68,18 @@ class _BytecodeReader:
             result |= self._read(1)[0] << offset
         return result
 
-    def _read_int(self, size):
-        uint = self._read_uint(size)
-        if uint >= 2**(size - 1):
-            return uint - 2**size
-        return uint
-
     read_uint8 = functools.partialmethod(_read_uint, 8)
     read_uint16 = functools.partialmethod(_read_uint, 16)
     read_uint32 = functools.partialmethod(_read_uint, 32)
 
-    read_int64 = functools.partialmethod(_read_int, 64)
+    def read_big_uint(self):
+        # c rewrite notes: use mpz_init2, mpz_mul_2exp, mpz_ior
+        byte_count = self.read_uint32()
+        result = 0
+        for index, byte in enumerate(self._read(byte_count)):
+            result <<= 8
+            result |= byte
+        return result
 
     def read_magic(self):
         magic = self._read(1)
@@ -126,9 +129,12 @@ class _BytecodeReader:
             elif magic == STR_CONSTANT:
                 kind = CONSTANT
                 args = (objects.String(self.read_string()),)
-            elif magic == INT_CONSTANT:
+            elif magic in {NON_NEGATIVE_INT_CONSTANT, NEGATIVE_INT_CONSTANT}:
                 kind = CONSTANT
-                args = (objects.Integer(self.read_int64()),)
+                value = self.read_big_uint()
+                if magic == NEGATIVE_INT_CONSTANT:
+                    value = -value
+                args = (objects.Integer(value),)
             elif magic == TRUE_CONSTANT:
                 kind = CONSTANT
                 args = (objects.TRUE,)

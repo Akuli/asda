@@ -9,7 +9,8 @@ CREATE_FUNCTION = b'f'     # also used when bytecoding a type
 LOOKUP_VAR = b'v'
 SET_VAR = b'V'
 STR_CONSTANT = b'"'
-INT_CONSTANT = b'1'
+NON_NEGATIVE_INT_CONSTANT = b'1'
+NEGATIVE_INT_CONSTANT = b'2'
 TRUE_CONSTANT = b'T'
 FALSE_CONSTANT = b'F'
 LOOKUP_METHOD = b'm'
@@ -49,21 +50,23 @@ class _ByteCode:
         self.byte_array.extend((number >> offset) & 0xff
                                for offset in range(0, size, 8))
 
-    # writes a signed little-endian integer in two's complement
-    def _add_int(self, size, number):
-        # https://en.wikipedia.org/wiki/Two%27s_complement
-        if number >= 0:
-            u_value = number
-        else:
-            u_value = 2**size - abs(number)
-
-        self._add_uint(size, u_value)
-
-    add_int64 = functools.partialmethod(_add_int, 64)
-
     add_uint8 = functools.partialmethod(_add_uint, 8)
     add_uint16 = functools.partialmethod(_add_uint, 16)
     add_uint32 = functools.partialmethod(_add_uint, 32)
+
+    # writes an unsigned, arbitrarily big integer in a funny format where least
+    # significant byte is last
+    def add_big_uint(self, abs_value):
+        assert abs_value >= 0
+
+        result = bytearray()
+        while abs_value != 0:
+            result.append(abs_value & 0xff)
+            abs_value >>= 8
+        result.reverse()
+
+        self.add_uint32(len(result))
+        self.byte_array.extend(result)
 
     def add_byte(self, byte):
         if isinstance(byte, int):
@@ -126,8 +129,12 @@ class _BytecodeWriter:
             self.bytecode.write_string(op.python_string)
 
         elif isinstance(op, opcoder.IntConstant):
-            self.bytecode.add_byte(INT_CONSTANT)
-            self.bytecode.add_int64(op.python_int)
+            if op.python_int >= 0:
+                self.bytecode.add_byte(NON_NEGATIVE_INT_CONSTANT)
+                self.bytecode.add_big_uint(op.python_int)
+            else:
+                self.bytecode.add_byte(NEGATIVE_INT_CONSTANT)
+                self.bytecode.add_big_uint(abs(op.python_int))
 
         elif isinstance(op, opcoder.BoolConstant):
             self.bytecode.add_byte(

@@ -97,7 +97,6 @@ INT64_MAX = 2**63 - 1
 
 class Integer(Object):
     def __init__(self, python_int):
-        assert INT64_MIN <= python_int <= INT64_MAX
         super().__init__(types['Int'])
         self.python_int = python_int
 

@@ -109,6 +109,13 @@ There are no tests that run anything without invoking the compiler, because that
 would mean writing opcode by hand; the compiler is good at generating opcode and
 well tested anyway, so it's much easier to use that for testing the interpreter.
 
+The [examples](examples/) are also tested, and the tests will fail if there are
+any examples that aren't getting tested. If the example prints something, the
+easiest way to get it tested is to add a text file with the output as contents
+to `examples/output`. If that isn't possible (for example, the `while` example
+prints forever, and can't be tested with an output file), add a test to
+`pyasda-tests/test_examples.py`.
+
 You can run all tests like this:
 
 ```
