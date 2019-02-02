@@ -20,7 +20,7 @@ GetVar = _astclass('GetVar', ['varname'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
 GetType = _astclass('GetType', ['name'])
 # FromGeneric represents looking up a generic function or generic type
-FromGeneric = _astclass('TypeFromGeneric', ['name', 'types'])
+FromGeneric = _astclass('FromGeneric', ['name', 'types'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
 # generics is a list of (typename, location) pairs, or None
 FuncDefinition = _astclass('FuncDefinition', [
@@ -92,11 +92,6 @@ def _duplicate_check(iterable, what_are_they):
             raise common.CompileError(
                 "repeated %s name: %s" % (what_are_they, name), location)
         seen.add(name)
-
-
-# asda integers must fit in 64 bits
-INT64_MIN = -2**63
-INT64_MAX = 2**63 - 1
 
 
 def _to_string(parsed):
