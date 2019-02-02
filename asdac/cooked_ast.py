@@ -259,6 +259,7 @@ class _Chef:
         # * cooking the returntype needs a chef that knows the generic types
         temp_chef = _Chef(self)
         if raw.generics is not None:
+            assert raw.generics
             markers = []
             for name, location in raw.generics:
                 self._check_name_not_exist(name, 'generic type', location)
