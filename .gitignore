@@ -4,3 +4,6 @@ asda-compiled/
 htmlcov/
 .coverage
 env/
+
+asdar/zig-cache
+asdar/asda
