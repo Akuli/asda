@@ -81,7 +81,7 @@ test "string new" {
 // the utf8 can be freed after calling this
 pub fn newFromUtf8(allocator: *std.mem.Allocator, utf8: []const u8) !*Object {
     // utf8 is never less bytes than the unicode, so utf8.len works here
-    const buf = try allocator.alloc(u32, utf8.len);
+    var buf: []u32 = try allocator.alloc(u32, utf8.len);
     errdefer allocator.free(buf);
 
     var i: usize = 0;
@@ -92,9 +92,8 @@ pub fn newFromUtf8(allocator: *std.mem.Allocator, utf8: []const u8) !*Object {
     }
 
     // the realloc is making the buf smaller, so it "can't" fail
-    const new_buf = allocator.realloc(u32, buf, i) catch unreachable;
-
-    return newNoCopy(allocator, new_buf);
+    buf = allocator.realloc(u32, buf, i) catch unreachable;
+    return newNoCopy(allocator, buf);
 }
 
 test "string newFromUtf8" {
