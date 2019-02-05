@@ -5,5 +5,5 @@ htmlcov/
 .coverage
 env/
 
-asdar/zig-cache
+zig-cache
 asdar/asda
