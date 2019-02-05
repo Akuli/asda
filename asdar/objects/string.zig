@@ -64,7 +64,7 @@ test "string newNoCopy" {
 }
 
 // creates a new string that uses a copy of the unicode
-pub fn new(allocator: *std.mem.Allocator, unicode: []u32) AllocError!*Object {
+pub fn new(allocator: *std.mem.Allocator, unicode: []const u32) AllocError!*Object {
     const dup = try std.mem.dupe(allocator, u32, unicode);
     errdefer allocator.free(dup);
     return newNoCopy(allocator, dup);
@@ -73,7 +73,8 @@ pub fn new(allocator: *std.mem.Allocator, unicode: []u32) AllocError!*Object {
 test "string new" {
     const assert = std.debug.assert;
 
-    const buf = try std.heap.c_allocator.alloc(u32, 5);   // TODO: don't malloc for this test
+    // TODO: figure out how to create the array without mallocing
+    const buf = try std.heap.c_allocator.alloc(u32, 5);
     defer std.heap.c_allocator.free(buf);
     buf[0] = 'a';
     buf[1] = 'b';
