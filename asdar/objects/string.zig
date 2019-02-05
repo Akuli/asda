@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const Type = @import("../object.zig").Type;
 const Object = @import("../object.zig").Object;
 const ObjectData = @import("../object.zig").ObjectData;
@@ -44,8 +45,6 @@ pub fn newNoCopy(allocator: *std.mem.Allocator, unicode: []u32) !*Object {
 }
 
 test "string newNoCopy" {
-    const assert = std.debug.assert;
-
     var string: *Object = undefined;
     {
         const buf = try std.heap.c_allocator.alloc(u32, 5);
@@ -70,8 +69,6 @@ pub fn new(allocator: *std.mem.Allocator, unicode: []const u32) !*Object {
 }
 
 test "string new" {
-    const assert = std.debug.assert;
-
     const arr = []u32{ 'a', 'b', 'c' };
 
     const string = try new(std.heap.c_allocator, arr);
@@ -100,12 +97,16 @@ pub fn newFromUtf8(allocator: *std.mem.Allocator, utf8: []const u8) !*Object {
     return newNoCopy(allocator, new_buf);
 }
 
-test "newFromUtf8" {
-    const assert = std.debug.assert;
-
+test "string newFromUtf8" {
     const string = try newFromUtf8(std.heap.c_allocator, "Pöö");
     defer string.decref();
 
     const arr = []u32{ 'P', 0xf6, 0xf6 };
     assert(std.mem.eql(u32, string.data.value.StringValue.unicode, arr));
+}
+
+test "empty string" {
+    const string = try newFromUtf8(std.heap.c_allocator, "");
+    defer string.decref();
+    assert(string.data.value.StringValue.unicode.len == 0);
 }
