@@ -1,5 +1,6 @@
 const std = @import("std");
-const objects = @import("objects.zig");
+const Object = @import("object.zig").Object;
+const objects = @import("objects/index.zig");
 
 // because std.os.exit() doesn't run defers, which would otherwise leak memory
 fn mainInner(args: []const []u8) anyerror!u8 {
@@ -9,7 +10,6 @@ fn mainInner(args: []const []u8) anyerror!u8 {
         return 2;
     }
 
-    std.debug.warn("would run file: {}\n", args[1]);
     return 0;
 }
 

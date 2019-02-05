@@ -1,8 +1,9 @@
 const std = @import("std");
-const assert = std.debug.assert;
+const objects = @import("objects/index.zig");
+const AllocError = std.mem.Allocator.Error;
 
 pub const Type = struct {
-    // optional to work around a bug, never actually null
+    // optional to work around a bug, never actually null, use getMethods() to access this
     // https://github.com/ziglang/zig/issues/1914
     methods: ?[]*Object,
 
@@ -11,7 +12,7 @@ pub const Type = struct {
     }
 
     pub fn getMethods(typ: *Type) []*Object {
-        return (typ.methods orelse unreachable);
+        return typ.methods.?;
     }
 };
 
@@ -20,7 +21,9 @@ var object_type_value = Type.init([]*Object { });
 pub const object_type = &object_type_value;
 
 pub const ObjectData = struct {
+
     pub const Value = union(enum) {
+        StringValue: objects.string.Data,
         NoData,
     };
 
@@ -29,6 +32,7 @@ pub const ObjectData = struct {
     pub fn destroy(self: ObjectData) void {
         switch(self.value) {
             ObjectData.Value.NoData => { },
+            ObjectData.Value.StringValue => self.value.StringValue.destroy(),
         }
     }
 };
@@ -44,12 +48,12 @@ pub const Object = struct {
     allocator: *std.mem.Allocator,
     data: ObjectData,
 
-    pub fn init(allocator: *std.mem.Allocator, type_: *Type, data: ?ObjectData) std.mem.Allocator.Error!*Object {
+    pub fn init(allocator: *std.mem.Allocator, typ: *Type, data: ?ObjectData) AllocError!*Object {
         const obj = try allocator.create(Object);
         errdefer allocator.destroy(obj);
 
         obj.* = Object{
-            .asda_type = type_,
+            .asda_type = typ,
             .refcount = 1,
             .allocator = allocator,
             .data = data orelse ObjectData{ .value = ObjectData.Value.NoData },
@@ -64,12 +68,15 @@ pub const Object = struct {
     pub fn decref(this: *Object) void {
         this.refcount -= 1;
         if (this.refcount == 0) {
+            this.data.destroy();
             this.allocator.destroy(this);
         }
     }
 };
 
 test "basic object creation" {
+    const assert = std.debug.assert;
+
     const obj = try Object.init(std.heap.c_allocator, object_type, null);
     defer obj.decref();
 
