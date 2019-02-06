@@ -168,7 +168,6 @@ fn readAsdaBytes(stream: *StreamType) !bool {
 }
 
 pub fn readByteCode(allocator: *std.mem.Allocator, stream: *StreamType) !ReadResult {
-    // TODO: don't use a panic for this
     if (!(try readAsdaBytes(stream))) {
         return error.BytecodeNotAnAsdaFile;
     }
