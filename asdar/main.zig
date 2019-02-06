@@ -1,13 +1,28 @@
 const std = @import("std");
 const Object = @import("object.zig").Object;
-const objects = @import("objects/index.zig");
+const bcreader = @import("bcreader.zig");
+const misc = @import("misc.zig");
 
 // because std.os.exit() doesn't run defers, which would otherwise leak memory
-fn mainInner(args: []const []u8) anyerror!u8 {
+fn mainInner(args: []const []u8) u8 {
     if (args.len != 2) {
         // std.debug.warn writes to stderr
         std.debug.warn("Usage: {} bytecodefile\n", args[0]);
         return 2;
+    }
+
+    if (std.os.File.openRead(args[1])) |f| {
+        defer f.close();
+
+        const stream = &f.inStream().stream;
+        if (bcreader.readByteCode(std.heap.c_allocator, stream)) |code| {
+            defer code.destroy();
+            code.debugDump();
+        } else |err| {
+            std.debug.warn("{}: cannot read {}: {}\n", args[0], args[1], misc.errorToString(err));
+        }
+    } else |err| {
+        std.debug.warn("{}: cannot open {}: {}\n", args[0], args[1], misc.errorToString(err));
     }
 
     return 0;
@@ -26,7 +41,7 @@ pub fn main() !void {
     {
         var args = try std.os.argsAlloc(std.heap.c_allocator);
         defer std.os.argsFree(std.heap.c_allocator, args);
-        status = try mainInner(args);
+        status = mainInner(args);
     }
 
     if (status != 0) {

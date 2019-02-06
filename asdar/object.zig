@@ -1,6 +1,7 @@
 const std = @import("std");
-const objects = @import("objects/index.zig");
 const AllocError = std.mem.Allocator.Error;
+
+const StringData = @import("objects/string.zig").Data;
 
 pub const Type = struct {
     // optional to work around a bug, never actually null, use getMethods() to access this
@@ -23,7 +24,7 @@ pub const object_type = &object_type_value;
 pub const ObjectData = struct {
 
     pub const Value = union(enum) {
-        StringValue: objects.string.Data,
+        StringValue: StringData,
         NoData,
     };
 

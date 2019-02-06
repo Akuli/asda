@@ -91,8 +91,7 @@ pub fn newFromUtf8(allocator: *std.mem.Allocator, utf8: []const u8) !*Object {
         i += 1;
     }
 
-    // the realloc is making the buf smaller, so it "can't" fail
-    buf = allocator.realloc(u32, buf, i) catch unreachable;
+    buf = allocator.shrink(u32, buf, i);
     return newNoCopy(allocator, buf);
 }
 
