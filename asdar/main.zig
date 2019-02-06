@@ -15,14 +15,24 @@ fn mainInner(args: []const []u8) u8 {
         defer f.close();
 
         const stream = &f.inStream().stream;
-        if (bcreader.readByteCode(std.heap.c_allocator, stream)) |code| {
-            defer code.destroy();
-            code.debugDump();
+        if (bcreader.readByteCode(std.heap.c_allocator, stream)) |res| {
+            switch(res) {
+                bcreader.ReadResult.InvalidOpByte => |byte| {
+                    std.debug.warn("{}: cannot read {}: Invalid op byte 0x{x}\n", args[0], args[1], byte);
+                    return 1;
+                },
+                bcreader.ReadResult.ByteCode => |code| {
+                    defer code.destroy();
+                    code.debugDump();
+                },
+            }
         } else |err| {
             std.debug.warn("{}: cannot read {}: {}\n", args[0], args[1], misc.errorToString(err));
+            return 1;
         }
     } else |err| {
         std.debug.warn("{}: cannot open {}: {}\n", args[0], args[1], misc.errorToString(err));
+        return 1;
     }
 
     return 0;

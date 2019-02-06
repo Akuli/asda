@@ -82,6 +82,12 @@ pub const Code = struct {
     }
 };
 
+// invalid op byte error would be quite useless if one doesn't know what the invalid byte is
+pub const ReadResult = union(enum) {
+    ByteCode: Code,
+    InvalidOpByte: u8,
+};
+
 const BytecodeReader = struct {
     allocator: *std.mem.Allocator,
     in: *StreamType,
@@ -101,7 +107,7 @@ const BytecodeReader = struct {
         return result;
     }
 
-    fn readBody(self: *BytecodeReader) !Code {
+    fn readBody(self: *BytecodeReader) !ReadResult {
         const nlocals = try self.in.readIntLittle(u16);
         var ops = std.ArrayList(Op).init(self.allocator);
         errdefer (Code{ .nlocalvars = nlocals, .ops = ops }).destroy();
@@ -135,7 +141,7 @@ const BytecodeReader = struct {
                     break :blk Op.Data{ .CallFunction = Op.CallFunctionData{ .returning = ret, .nargs = nargs }};
                 },
                 else => {
-                    return misc.byteToBytecodeOpByteError(opbyte);
+                    return ReadResult{ .InvalidOpByte = opbyte };
                 },
             };
 
@@ -148,7 +154,7 @@ const BytecodeReader = struct {
             }
         }
 
-        return Code{ .nlocalvars = nlocals, .ops = ops };
+        return ReadResult{ .ByteCode = Code{ .nlocalvars = nlocals, .ops = ops } };
     }
 };
 
@@ -161,18 +167,24 @@ fn readAsdaBytes(stream: *StreamType) !bool {
     return std.mem.eql(u8, buf, "asda");
 }
 
-pub fn readByteCode(allocator: *std.mem.Allocator, stream: *StreamType) !Code {
+pub fn readByteCode(allocator: *std.mem.Allocator, stream: *StreamType) !ReadResult {
     // TODO: don't use a panic for this
     if (!(try readAsdaBytes(stream))) {
         return error.BytecodeNotAnAsdaFile;
     }
 
     var reader = BytecodeReader.init(allocator, stream);
-    const body = try reader.readBody();
+    const result = try reader.readBody();
 
-    var tmp_buf = []u8{ 0 };
-    if (0 != try stream.read(tmp_buf[0..])) {
-        return error.BytecodeTrailingGarbage;
+    switch(result) {
+        ReadResult.InvalidOpByte => {},
+        ReadResult.ByteCode => {
+            var tmp_buf = []u8{ 0 };
+            if (0 != try stream.read(tmp_buf[0..])) {
+                return error.BytecodeTrailingGarbage;
+            }
+        },
     }
-    return body;
+
+    return result;
 }
