@@ -4,7 +4,7 @@ const bcreader = @import("bcreader.zig");
 
 const Scope = struct {
     allocator: *std.mem.Allocator,   // for creating subscopes
-    localvars: []?*Object,
+    local_vars: []?*Object,
     parent_scopes: []*Scope,
 
     fn initGlobal(allocator: *std.mem.Allocator) Scope {
@@ -19,7 +19,7 @@ const Scope = struct {
         //             passed to free
         return Scope{
             .allocator = allocator,
-            .localvars = []*Object{ },
+            .local_vars = []*Object{ },
             .parent_scopes = []*Scope{ },
         };
     }
@@ -38,13 +38,21 @@ const Scope = struct {
 
         return Scope{
             .allocator = parent.allocator,
-            .localvars = locals,
+            .local_vars = locals,
             .parent_scopes = parents,
         };
     }
 
+    fn getForLevel(self: *Scope, level: u16) *Scope {
+        if (level == self.parent_scopes.len) {
+            return self;
+        }
+        std.debug.assert(level < self.parent_scopes.len);
+        return self.parent_scopes[level];
+    }
+
     fn destroy(self: Scope) void {
-        self.allocator.free(self.localvars);
+        self.allocator.free(self.local_vars);
         self.allocator.free(self.parent_scopes);
     }
 };
@@ -53,8 +61,8 @@ test "very basic scope creation" {
     const assert = std.debug.assert;
 
     var objs = []?*Object{ null };
-    const s = Scope{ .localvars = objs[0..], .parent_scopes = []Scope{ }};
-    assert(s.localvars.len == 1);
+    const s = Scope{ .local_vars = objs[0..], .parent_scopes = []Scope{ }};
+    assert(s.local_vars.len == 1);
     assert(s.parent_scopes.len == 0);
 }
 
@@ -65,7 +73,7 @@ const RunResult = union(enum) {
 
 const Runner = struct {
     scope: *Scope,
-    stack: std.ArrayList(*Object),    // TODO: use a fixed size array, calculate size in compiler
+    stack: std.ArrayList(*Object),    // TODO: give this a size hint calculated by the compiler
     ops: []bcreader.Op,
 
     fn init(allocator: *std.mem.Allocator, ops: []bcreader.Op, scope: *Scope) Runner {
@@ -74,15 +82,42 @@ const Runner = struct {
         return Runner{ .scope = scope, .stack = stack, .ops = ops };
     }
 
-    fn run(self: *Runner) RunResult {
-        var i: usize = 0;
-        while (i < self.ops.len) : (i += 1) {
-            std.debug.warn("Would do a thing\n");
-        }
+    // yes this is needed, otherwise doesn't compile
+    fn runHelper() RunResult {
         return RunResult.DidntReturn;
     }
 
+    fn run(self: *Runner) !RunResult {
+        var i: usize = 0;
+        while (i < self.ops.len) {
+            switch(self.ops[i].data) {
+                bcreader.Op.Data.LookupVar => |vardata| {
+                    std.debug.warn("Looking up a var lol\n");
+                    //const scope = self.scope.getForLevel(vardata.level);
+                    //const obj = scope.local_vars[vardata.index].?;
+                    //try self.stack.append(obj);
+                    //obj.incref();
+                    i += 1;
+                },
+                bcreader.Op.Data.CallFunction => {
+                    std.debug.warn("Calling a function löl\n");
+                    i += 1;
+                },
+                bcreader.Op.Data.Constant => |obj| {
+                    try self.stack.append(obj);
+                    obj.incref();
+                    i += 1;
+                },
+            }
+        }
+        return Runner.runHelper();
+    }
+
     fn destroy(self: Runner) void {
+        var it = self.stack.iterator();
+        while (it.next()) |obj| {
+            obj.decref();
+        }
         self.stack.deinit();
     }
 };
@@ -96,5 +131,5 @@ pub fn runFile(allocator: *std.mem.Allocator, code: bcreader.Code) !RunResult {
 
     var runner = Runner.init(allocator, code.ops, &file_scope);
     defer runner.destroy();
-    return runner.run();
+    return (try runner.run());
 }
