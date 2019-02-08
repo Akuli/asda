@@ -46,8 +46,18 @@ test "ObjectData" {
 pub const Object = struct {
     asda_type: *Type,
     refcount: u32,     // TODO: use an atomic?
-    allocator: *std.mem.Allocator,
+    allocator: ?*std.mem.Allocator,   // null for objects created at comptime
     data: ObjectData,
+
+    // put the return value to a variable and use &that_variable everywhere
+    pub fn initComptime(typ: *Type, data: ?ObjectData) Object {
+        return Object{
+            .asda_type = typ,
+            .refcount = 1,
+            .allocator = null,
+            .data = data orelse ObjectData{ .value = ObjectData.Value.NoData },
+        };
+    }
 
     pub fn init(allocator: *std.mem.Allocator, typ: *Type, data: ?ObjectData) AllocError!*Object {
         const obj = try allocator.create(Object);
@@ -70,7 +80,9 @@ pub const Object = struct {
         this.refcount -= 1;
         if (this.refcount == 0) {
             this.data.destroy();
-            this.allocator.destroy(this);
+            if (this.allocator) |allocator| {
+                allocator.destroy(this);
+            }
         }
     }
 };
