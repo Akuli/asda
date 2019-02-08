@@ -30,7 +30,6 @@ const JUMP_IF: u8 = 'J';
 const END_OF_BODY: u8 = 'E';
 
 
-
 pub const Op = struct {
     pub const VarData = struct{ level: u8, index: u16 };
     pub const CallFunctionData = struct{ returning: bool, nargs: u8 };
@@ -57,21 +56,19 @@ pub const Op = struct {
 };
 
 pub const Code = struct {
+    allocator: *std.mem.Allocator,   // for freeing ops
+    ops: []Op,
     nlocalvars: u16,
-    ops: std.ArrayList(Op),
 
     pub fn destroy(self: *const Code) void {
-        var it = self.ops.iterator();
-        while (it.next()) |op| {
+        for (self.ops) |op| {
             op.destroy();
         }
-
-        self.ops.deinit();
+        self.allocator.free(self.ops);
     }
 
     pub fn debugDump(self: *const Code) void {
-        var it = self.ops.iterator();
-        while (it.next()) |op| {
+        for (self.ops) |op| {
             std.debug.warn("{}  ", op.lineno);
             switch(op.data) {
                 Op.Data.LookupVar => |vardata| std.debug.warn("LookupVar: level={}, index={}\n", vardata.level, vardata.index),
@@ -109,8 +106,15 @@ const BytecodeReader = struct {
 
     fn readBody(self: *BytecodeReader) !ReadResult {
         const nlocals = try self.in.readIntLittle(u16);
+
         var ops = std.ArrayList(Op).init(self.allocator);
-        errdefer (Code{ .nlocalvars = nlocals, .ops = ops }).destroy();
+        errdefer {
+            var it = ops.iterator();
+            while (it.next()) |op| {
+                op.destroy();
+            }
+            ops.deinit();
+        }
 
         while (true) {
             var opbyte = try self.in.readByte();
@@ -154,7 +158,11 @@ const BytecodeReader = struct {
             }
         }
 
-        return ReadResult{ .ByteCode = Code{ .nlocalvars = nlocals, .ops = ops } };
+        return ReadResult{ .ByteCode = Code{
+            .allocator = self.allocator,
+            .nlocalvars = nlocals,
+            .ops = ops.toOwnedSlice(),
+        }};
     }
 };
 
