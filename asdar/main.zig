@@ -1,8 +1,8 @@
 const std = @import("std");
-const Object = @import("object.zig").Object;
 const bcreader = @import("bcreader.zig");
 const misc = @import("misc.zig");
 const runner = @import("runner.zig");
+
 
 // because std.os.exit() doesn't run defers, which would otherwise leak memory
 fn mainInner(args: []const []u8) u8 {
@@ -14,14 +14,17 @@ fn mainInner(args: []const []u8) u8 {
         return 2;
     }
 
-    if (std.os.File.openRead(args[1])) |f| {
+    const program = args[0];
+    const filename = args[1];
+
+    if (std.os.File.openRead(filename)) |f| {
         defer f.close();
 
-        const stream = &f.inStream().stream;
+        const stream = &f.inStream().stream;    // no idea why the last .stream is needed, but this works :D
         if (bcreader.readByteCode(allocator, stream)) |res| {
             switch(res) {
                 bcreader.ReadResult.InvalidOpByte => |byte| {
-                    std.debug.warn("{}: cannot read {}: Invalid op byte 0x{x}\n", args[0], args[1], byte);
+                    std.debug.warn("{}: cannot read {}: Unknown op byte 0x{x}\n", program, filename, byte);
                     return 1;
                 },
                 bcreader.ReadResult.ByteCode => |code| {
@@ -30,16 +33,16 @@ fn mainInner(args: []const []u8) u8 {
                     if (runner.runFile(allocator, code)) |_| {
                         // ok
                     } else |err| {
-                        std.debug.warn("{}: running {} failed: {}\n", args[0], args[1], misc.errorToString(err));
+                        std.debug.warn("{}: running {} failed: {}\n", program, filename, misc.errorToString(err));
                     }
                 },
             }
         } else |err| {
-            std.debug.warn("{}: cannot read {}: {}\n", args[0], args[1], misc.errorToString(err));
+            std.debug.warn("{}: cannot read {}: {}\n", program, filename, misc.errorToString(err));
             return 1;
         }
     } else |err| {
-        std.debug.warn("{}: cannot open {}: {}\n", args[0], args[1], misc.errorToString(err));
+        std.debug.warn("{}: cannot open {}: {}\n", program, filename, misc.errorToString(err));
         return 1;
     }
 

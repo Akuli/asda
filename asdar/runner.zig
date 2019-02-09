@@ -1,5 +1,5 @@
 const std = @import("std");
-const Object = @import("object.zig").Object;
+const Object = @import("objtyp.zig").Object;
 const bcreader = @import("bcreader.zig");
 const builtins = @import("builtins.zig");
 const objects = @import("objects/index.zig");
@@ -162,5 +162,5 @@ pub fn runFile(allocator: *std.mem.Allocator, code: bcreader.Code) !void {
     defer runner.destroy();
 
     const result = try runner.run();
-    // TODO: make sure that it's DidntReturn
+    std.debug.assert(result == RunResult.DidntReturn);
 }

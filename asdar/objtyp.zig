@@ -1,6 +1,6 @@
-const std = @import("std");
-const AllocError = std.mem.Allocator.Error;
+// Object and Type
 
+const std = @import("std");
 const objects = @import("objects/index.zig");
 
 pub const BasicType = struct {
@@ -29,21 +29,15 @@ pub fn getMethods(typ: *Type) []*Object{
 var object_type_value = Type{ .Basic = BasicType.init([]*Object { }) };
 pub const object_type = &object_type_value;
 
-// TODO: does this really need to be wrapped in a struct?
-pub const ObjectData = struct {
-    pub const Value = union(enum) {
-        StringValue: objects.string.Data,
-        FunctionValue: objects.function.Data,
-        NoData,
-    };
-
-    value: Value,
+pub const ObjectData = union(enum) {
+    StringValue: objects.string.Data,
+    FunctionValue: objects.function.Data,
+    NoData,
 
     pub fn destroy(self: ObjectData) void {
-        switch(self.value) {
-            ObjectData.Value.NoData,
-            ObjectData.Value.FunctionValue => { },
-            ObjectData.Value.StringValue => self.value.StringValue.destroy(),
+        switch(self) {
+            ObjectData.NoData, ObjectData.FunctionValue => { },
+            ObjectData.StringValue => |val| val.destroy(),
         }
     }
 };
@@ -65,11 +59,11 @@ pub const Object = struct {
             .asda_type = typ,
             .refcount = 1,
             .allocator = null,
-            .data = data orelse ObjectData{ .value = ObjectData.Value.NoData },
+            .data = data orelse ObjectData{ .NoData = void{} },     // TODO: is this the best way to do this?
         };
     }
 
-    pub fn init(allocator: *std.mem.Allocator, typ: *Type, data: ?ObjectData) AllocError!*Object {
+    pub fn init(allocator: *std.mem.Allocator, typ: *Type, data: ?ObjectData) !*Object {
         const obj = try allocator.create(Object);
         errdefer allocator.destroy(obj);
 
@@ -77,7 +71,7 @@ pub const Object = struct {
             .asda_type = typ,
             .refcount = 1,
             .allocator = allocator,
-            .data = data orelse ObjectData{ .value = ObjectData.Value.NoData },
+            .data = data orelse ObjectData{ .NoData = void{} },
         };
         return obj;
     }

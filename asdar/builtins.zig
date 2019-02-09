@@ -1,7 +1,7 @@
 const std = @import("std");
+const objtyp = @import("objtyp.zig");
+const Object = objtyp.Object;
 const objects = @import("objects/index.zig");
-const Object = @import("object.zig").Object;
-const Type = @import("object.zig").Type;
 
 fn printFn(args: []const *Object) anyerror!void {
     // TODO: don't hardcode std.heap.c_allocator
@@ -20,8 +20,8 @@ test "builtins printFn" {
     try printFn([]const*Object{ s });
 }
 
-var print_type = objects.function.FunctionType.initComptimeVoid([]const *Type{ objects.string.typ });
-var print_value = objects.function.newComptime("blah", &print_type, objects.function.Fn{ .Void = printFn });
+var print_type = objects.function.FunctionType.initComptimeVoid([]const *objtyp.Type{ objects.string.typ });
+var print_value = objects.function.newComptime("print", &print_type, objects.function.Fn{ .Void = printFn });
 pub const print = &print_value;
 
 pub const builtin_array = []const *Object {

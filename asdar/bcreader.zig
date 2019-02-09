@@ -1,9 +1,8 @@
 // bytecode reader
 
 const std = @import("std");
-const misc = @import("misc.zig");
-const Object = @import("object.zig").Object;
-const string_object = @import("objects/string.zig");
+const Object = @import("objtyp.zig").Object;
+const objects = @import("objects/index.zig");
 
 const StreamType = std.io.InStream(std.os.File.InStream.Error);
 
@@ -80,6 +79,7 @@ pub const Code = struct {
 };
 
 // invalid op byte error would be quite useless if one doesn't know what the invalid byte is
+// TODO: also include the offset of the invalid byte?
 pub const ReadResult = union(enum) {
     ByteCode: Code,
     InvalidOpByte: u8,
@@ -127,11 +127,11 @@ const BytecodeReader = struct {
             }
 
             const opdata = switch(opbyte) {
-                END_OF_BODY => break,    // this breaks the while(true) loop, not the switch
+                END_OF_BODY => break,    // breaks while(true), does nothing to switch(opbyte)
                 STR_CONSTANT => blk: {
                     const value = try self.readString();
                     defer self.allocator.free(value);
-                    const obj = try string_object.newFromUtf8(self.allocator, value);
+                    const obj = try objects.string.newFromUtf8(self.allocator, value);
                     break :blk Op.Data{ .Constant = obj };
                 },
                 LOOKUP_VAR => blk: {
@@ -148,8 +148,8 @@ const BytecodeReader = struct {
                     return ReadResult{ .InvalidOpByte = opbyte };
                 },
             };
-
             errdefer opdata.destroy();
+
             try ops.append(Op{ .lineno = self.lineno, .data = opdata });
         }
 

@@ -1,18 +1,16 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const Type = @import("../object.zig").Type;
-const BasicType = @import("../object.zig").BasicType;
-const Object = @import("../object.zig").Object;
-const ObjectData = @import("../object.zig").ObjectData;
+const objtyp = @import("../objtyp.zig");
+const Object = objtyp.Object;
 
 
 pub const Data = struct {
     allocator: *std.mem.Allocator,
     unicode: []u32,
 
-    pub fn init(allocator: *std.mem.Allocator, unicode: []u32) ObjectData {
+    pub fn init(allocator: *std.mem.Allocator, unicode: []u32) objtyp.ObjectData {
         const value = Data{ .allocator = allocator, .unicode = unicode };
-        return ObjectData{ .value = ObjectData.Value{ .StringValue = value }};
+        return objtyp.ObjectData{ .StringValue = value };
     }
 
     pub fn destroy(self: Data) void {
@@ -20,7 +18,7 @@ pub const Data = struct {
     }
 };
 
-var type_value = Type{ .Basic = BasicType.init([]*Object { }) };
+var type_value = objtyp.Type{ .Basic = objtyp.BasicType.init([]*Object { }) };
 pub const typ = &type_value;
 
 // unlike with new(), the string is responsible for freeing the unicode
@@ -99,7 +97,7 @@ pub fn newFromUtf8(allocator: *std.mem.Allocator, utf8: []const u8) !*Object {
 // returns the value of a string as unicode
 // return value must not be freed
 pub fn toUnicode(str: *Object) []const u32 {
-    return str.data.value.StringValue.unicode;
+    return str.data.StringValue.unicode;
 }
 
 // returns the utf8 of a string, return value must be freed after calling
