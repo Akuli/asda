@@ -1,26 +1,21 @@
 const std = @import("std");
 const Object = @import("object.zig").Object;
 const bcreader = @import("bcreader.zig");
+const builtins = @import("builtins.zig");
+const objects = @import("objects/index.zig");
 
 const Scope = struct {
     allocator: *std.mem.Allocator,   // for creating subscopes
-    local_vars: []?*Object,
+    local_vars: []const ?*Object,
     parent_scopes: []*Scope,
+    free_local_vars_and_parent_scopes: bool,
 
     fn initGlobal(allocator: *std.mem.Allocator) Scope {
-        // yes, the empty slices work with the destroy(), i asked on #zig on freenode
-        //
-        //  <Akuli> if i have: const lol = []*T{ };   what happens if i do
-        //          some_allocator.free(lol)? is that guaranteed to do nothing?
-        //  <emekankurumeh[m]> I think the problem would be with passing the
-        //                     allocator memory it doesn't own.
-        //  <Akuli> yes, i'm asking whether an empty slice is a special case
-        //  <andrewrk> yes empty slice with undefined pointer can be safely
-        //             passed to free
         return Scope{
             .allocator = allocator,
-            .local_vars = []*Object{ },
+            .local_vars = builtins.builtin_array[0..],
             .parent_scopes = []*Scope{ },
+            .free_local_vars_and_parent_scopes = false,
         };
     }
 
@@ -40,6 +35,7 @@ const Scope = struct {
             .allocator = parent.allocator,
             .local_vars = locals,
             .parent_scopes = parents,
+            .free_local_vars_and_parent_scopes = true,
         };
     }
 
@@ -52,18 +48,24 @@ const Scope = struct {
     }
 
     fn destroy(self: Scope) void {
-        self.allocator.free(self.local_vars);
-        self.allocator.free(self.parent_scopes);
+        if (self.free_local_vars_and_parent_scopes) {
+            self.allocator.free(self.local_vars);
+            self.allocator.free(self.parent_scopes);
+        }
     }
 };
 
-test "very basic scope creation" {
+test "very basic scope creating" {
     const assert = std.debug.assert;
 
-    var objs = []?*Object{ null };
-    const s = Scope{ .local_vars = objs[0..], .parent_scopes = []Scope{ }};
-    assert(s.local_vars.len == 1);
-    assert(s.parent_scopes.len == 0);
+    var global_scope = Scope.initGlobal(std.heap.c_allocator);
+    defer global_scope.destroy();
+    var file_scope = try global_scope.initSub(3);
+    defer file_scope.destroy();
+
+    assert(global_scope.parent_scopes.len == 0);
+    assert(file_scope.parent_scopes.len == 1);
+    assert(file_scope.parent_scopes[0] == &global_scope);
 }
 
 const RunResult = union(enum) {
@@ -92,15 +94,40 @@ const Runner = struct {
         while (i < self.ops.len) {
             switch(self.ops[i].data) {
                 bcreader.Op.Data.LookupVar => |vardata| {
-                    std.debug.warn("Looking up a var lol\n");
-                    //const scope = self.scope.getForLevel(vardata.level);
-                    //const obj = scope.local_vars[vardata.index].?;
-                    //try self.stack.append(obj);
-                    //obj.incref();
+                    const scope = self.scope.getForLevel(vardata.level);
+                    const obj = scope.local_vars[vardata.index].?;
+                    try self.stack.append(obj);
+                    obj.incref();
                     i += 1;
                 },
-                bcreader.Op.Data.CallFunction => {
-                    std.debug.warn("Calling a function löl\n");
+                bcreader.Op.Data.CallFunction => |calldata| {
+                    const n = self.stack.count();
+                    const args = self.stack.toSliceConst()[(n - calldata.nargs)..n];
+                    const func = self.stack.at(n - calldata.nargs - 1);
+                    defer {
+                        for (args) |arg| {
+                            arg.decref();
+                        }
+                        func.decref();
+
+                        if (calldata.returning) {
+                            // n: number of things in the stack initially
+                            // -calldata.nargs: arguments popped from stack
+                            // -1: func was popped from stack
+                            // +1: return value pushed to stack
+                            self.stack.shrink(n - calldata.nargs - 1 + 1);
+                        } else {
+                            // same as above but with no return value pushed
+                            self.stack.shrink(n - calldata.nargs - 1);
+                        }
+                    }
+
+                    std.debug.assert(args.len == calldata.nargs);
+                    if (calldata.returning) {
+                        std.debug.panic("not implemented yet :(");
+                    } else {
+                        try objects.function.callVoid(func, args);
+                    }
                     i += 1;
                 },
                 bcreader.Op.Data.Constant => |obj| {
@@ -110,6 +137,8 @@ const Runner = struct {
                 },
             }
         }
+
+        std.debug.assert(self.stack.count() == 0);
         return Runner.runHelper();
     }
 
@@ -123,7 +152,7 @@ const Runner = struct {
 };
 
 
-pub fn runFile(allocator: *std.mem.Allocator, code: bcreader.Code) !RunResult {
+pub fn runFile(allocator: *std.mem.Allocator, code: bcreader.Code) !void {
     var global_scope = Scope.initGlobal(allocator);
     defer global_scope.destroy();
     var file_scope = try global_scope.initSub(code.nlocalvars);
@@ -131,5 +160,7 @@ pub fn runFile(allocator: *std.mem.Allocator, code: bcreader.Code) !RunResult {
 
     var runner = Runner.init(allocator, code.ops, &file_scope);
     defer runner.destroy();
-    return (try runner.run());
+
+    const result = try runner.run();
+    // TODO: make sure that it's DidntReturn
 }

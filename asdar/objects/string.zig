@@ -1,6 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const Type = @import("../object.zig").Type;
+const BasicType = @import("../object.zig").BasicType;
 const Object = @import("../object.zig").Object;
 const ObjectData = @import("../object.zig").ObjectData;
 
@@ -19,7 +20,7 @@ pub const Data = struct {
     }
 };
 
-var type_value = Type.init([]*Object { });
+var type_value = Type{ .Basic = BasicType.init([]*Object { }) };
 pub const typ = &type_value;
 
 // unlike with new(), the string is responsible for freeing the unicode
@@ -95,16 +96,48 @@ pub fn newFromUtf8(allocator: *std.mem.Allocator, utf8: []const u8) !*Object {
     return newNoCopy(allocator, buf);
 }
 
-test "string newFromUtf8" {
+// returns the value of a string as unicode
+// return value must not be freed
+pub fn toUnicode(str: *Object) []const u32 {
+    return str.data.value.StringValue.unicode;
+}
+
+// returns the utf8 of a string, return value must be freed after calling
+pub fn toUtf8(allocator: *std.mem.Allocator, str: *Object) ![]u8 {
+    const codepoints = toUnicode(str);
+
+    var result = std.ArrayList(u8).init(allocator);
+    errdefer result.deinit();
+    try result.ensureCapacity(codepoints.len);   // superstitious optimization for ascii strings
+
+    for (codepoints) |p| {
+        var buf = []u8{ 0, 0, 0, 0 };
+        const n = try std.unicode.utf8Encode(p, buf[0..]);
+        try result.appendSlice(buf[0..n]);
+    }
+
+    return result.toOwnedSlice();
+}
+
+test "string newFromUtf8 toUnicode toUtf8" {
     const string = try newFromUtf8(std.heap.c_allocator, "Pöö");
     defer string.decref();
 
     const arr = []u32{ 'P', 0xf6, 0xf6 };
-    assert(std.mem.eql(u32, string.data.value.StringValue.unicode, arr));
+    assert(std.mem.eql(u32, toUnicode(string), arr));
+
+    const utf8 = try toUtf8(std.heap.c_allocator, string);
+    defer std.heap.c_allocator.free(utf8);
+    assert(std.mem.eql(u8, utf8, "Pöö"));
 }
 
-test "empty string" {
+test "string empty" {
     const string = try newFromUtf8(std.heap.c_allocator, "");
     defer string.decref();
-    assert(string.data.value.StringValue.unicode.len == 0);
+
+    assert(toUnicode(string).len == 0);
+
+    const utf8 = try toUtf8(std.heap.c_allocator, string);
+    defer std.heap.c_allocator.free(utf8);
+    assert(utf8.len == 0);
 }

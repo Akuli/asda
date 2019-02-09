@@ -27,13 +27,11 @@ fn mainInner(args: []const []u8) u8 {
                 bcreader.ReadResult.ByteCode => |code| {
                     defer code.destroy();
 
-                    code.debugDump();
                     if (runner.runFile(allocator, code)) |_| {
                         // ok
                     } else |err| {
                         std.debug.warn("{}: running {} failed: {}\n", args[0], args[1], misc.errorToString(err));
                     }
-                    code.debugDump();
                 },
             }
         } else |err| {

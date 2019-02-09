@@ -126,8 +126,8 @@ const BytecodeReader = struct {
                 }
             }
 
-            const opdata: ?Op.Data = switch(opbyte) {
-                END_OF_BODY => null,    // TODO: learn to use break correctly instead
+            const opdata = switch(opbyte) {
+                END_OF_BODY => break,    // this breaks the while(true) loop, not the switch
                 STR_CONSTANT => blk: {
                     const value = try self.readString();
                     defer self.allocator.free(value);
@@ -149,13 +149,8 @@ const BytecodeReader = struct {
                 },
             };
 
-            if (opdata == null) {
-                break;
-            }
-            {
-                errdefer opdata.?.destroy();
-                try ops.append(Op{ .lineno = self.lineno, .data = opdata.? });
-            }
+            errdefer opdata.destroy();
+            try ops.append(Op{ .lineno = self.lineno, .data = opdata });
         }
 
         return ReadResult{ .ByteCode = Code{

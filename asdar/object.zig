@@ -1,30 +1,39 @@
 const std = @import("std");
 const AllocError = std.mem.Allocator.Error;
 
-const StringData = @import("objects/string.zig").Data;
+const objects = @import("objects/index.zig");
 
-pub const Type = struct {
+pub const BasicType = struct {
     // optional to work around a bug, never actually null, use getMethods() to access this
     // https://github.com/ziglang/zig/issues/1914
     methods: ?[]*Object,
 
-    pub fn init(methods: []*Object) Type {
-        return Type{ .methods = methods };
-    }
-
-    pub fn getMethods(typ: *Type) []*Object {
-        return typ.methods.?;
+    pub fn init(methods: []*Object) BasicType {
+        return BasicType{ .methods = methods };
     }
 };
 
+pub const Type = union(enum) {
+    Basic: BasicType,
+    Function: objects.function.FunctionType,
+};
+
+pub fn getMethods(typ: *Type) []*Object{
+    return switch(typ.*) {
+        Type.Basic => |basictype| basictype.methods.?,
+        Type.Function => []*Object{ },
+    };
+}
+
 // TODO: const some stuff
-var object_type_value = Type.init([]*Object { });
+var object_type_value = Type{ .Basic = BasicType.init([]*Object { }) };
 pub const object_type = &object_type_value;
 
+// TODO: does this really need to be wrapped in a struct?
 pub const ObjectData = struct {
-
     pub const Value = union(enum) {
-        StringValue: StringData,
+        StringValue: objects.string.Data,
+        FunctionValue: objects.function.Data,
         NoData,
     };
 
@@ -32,7 +41,8 @@ pub const ObjectData = struct {
 
     pub fn destroy(self: ObjectData) void {
         switch(self.value) {
-            ObjectData.Value.NoData => { },
+            ObjectData.Value.NoData,
+            ObjectData.Value.FunctionValue => { },
             ObjectData.Value.StringValue => self.value.StringValue.destroy(),
         }
     }
@@ -100,5 +110,5 @@ test "basic object creation" {
     assert(obj.refcount == 1);
 
     assert(obj.asda_type == object_type);
-    assert(obj.asda_type.getMethods().len == 0);
+    assert(getMethods(obj.asda_type).len == 0);
 }

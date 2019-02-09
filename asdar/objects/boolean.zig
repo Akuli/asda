@@ -1,11 +1,12 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const Type = @import("../object.zig").Type;
+const BasicType = @import("../object.zig").BasicType;
 const Object = @import("../object.zig").Object;
 const ObjectData = @import("../object.zig").ObjectData;
 
 
-var type_value = Type.init([]*Object { });
+var type_value = Type{ .Basic = BasicType.init([]*Object { }) };
 pub const typ = &type_value;
 
 const no_data = ObjectData{ .value = ObjectData.Value.NoData };
