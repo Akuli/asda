@@ -84,9 +84,7 @@ pub const Object = struct {
         this.refcount -= 1;
         if (this.refcount == 0) {
             this.data.destroy();
-            if (this.allocator) |allocator| {
-                allocator.destroy(this);
-            }
+            (this.allocator orelse unreachable).destroy(this);
         }
     }
 };

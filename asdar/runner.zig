@@ -15,6 +15,9 @@ const Scope = struct {
         const scopes = try allocator.alloc(*Scope, 0);
         errdefer allocator.free(scopes);
 
+        for (locals) |obj| {
+            obj.?.incref();
+        }
         return Scope{
             .allocator = allocator,
             .local_vars = locals,
@@ -142,12 +145,16 @@ const Runner = struct {
                     obj.incref();
                 },
                 bcreader.Op.Data.Negation => {
-                    const j = self.stack.count() - 1;
-                    self.stack.set(j, switch(self.stack.at(j)) {
+                    const last = self.stack.count() - 1;
+                    const old = self.stack.at(last);
+                    const new = switch(old) {
                         objects.boolean.TRUE => objects.boolean.FALSE,
                         objects.boolean.FALSE => objects.boolean.TRUE,
                         else => unreachable,
-                    });
+                    };
+                    old.decref();
+                    new.incref();
+                    self.stack.set(last, new);
                 },
                 bcreader.Op.Data.JumpIf => {},
             }
