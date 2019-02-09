@@ -35,13 +35,14 @@ pub const Op = struct {
 
     pub const Data = union(enum) {
         LookupVar: VarData,
+        SetVar: VarData,
         CallFunction: CallFunctionData,
         Constant: *Object,
 
         pub fn destroy(self: Op.Data) void {
             switch(self) {
                 Op.Data.Constant => |obj| obj.decref(),
-                Op.Data.LookupVar, Op.Data.CallFunction => {},
+                Op.Data.LookupVar, Op.Data.SetVar, Op.Data.CallFunction => {},
             }
         }
     };
@@ -134,10 +135,15 @@ const BytecodeReader = struct {
                     const obj = try objects.string.newFromUtf8(self.allocator, value);
                     break :blk Op.Data{ .Constant = obj };
                 },
-                LOOKUP_VAR => blk: {
+                LOOKUP_VAR, SET_VAR => blk: {
                     const level = try self.in.readIntLittle(u8);
                     const index = try self.in.readIntLittle(u16);
-                    break :blk Op.Data{ .LookupVar = Op.VarData{ .level = level, .index = index }};
+                    const vardata = Op.VarData{ .level = level, .index = index };
+                    break :blk switch(opbyte) {
+                        LOOKUP_VAR => Op.Data{ .LookupVar = vardata },
+                        SET_VAR => Op.Data{ .SetVar = vardata },
+                        else => unreachable,
+                    };
                 },
                 CALL_VOID_FUNCTION, CALL_RETURNING_FUNCTION => blk: {
                     const ret = (opbyte == CALL_RETURNING_FUNCTION);

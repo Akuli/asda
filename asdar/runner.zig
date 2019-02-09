@@ -5,17 +5,20 @@ const builtins = @import("builtins.zig");
 const objects = @import("objects/index.zig");
 
 const Scope = struct {
-    allocator: *std.mem.Allocator,   // for creating subscopes
-    local_vars: []const ?*Object,
+    allocator: *std.mem.Allocator,   // for local_vars and parent_scopes
+    local_vars: []?*Object,
     parent_scopes: []*Scope,
-    free_local_vars_and_parent_scopes: bool,
 
-    fn initGlobal(allocator: *std.mem.Allocator) Scope {
+    fn initGlobal(allocator: *std.mem.Allocator) !Scope {
+        const locals = try std.mem.dupe(allocator, ?*Object, builtins.builtin_array[0..]);
+        errdefer allocator.free(locals);
+        const scopes = try allocator.alloc(*Scope, 0);
+        errdefer allocator.free(scopes);
+
         return Scope{
             .allocator = allocator,
-            .local_vars = builtins.builtin_array[0..],
-            .parent_scopes = []*Scope{ },
-            .free_local_vars_and_parent_scopes = false,
+            .local_vars = locals,
+            .parent_scopes = scopes,
         };
     }
 
@@ -35,7 +38,6 @@ const Scope = struct {
             .allocator = parent.allocator,
             .local_vars = locals,
             .parent_scopes = parents,
-            .free_local_vars_and_parent_scopes = true,
         };
     }
 
@@ -48,17 +50,20 @@ const Scope = struct {
     }
 
     fn destroy(self: Scope) void {
-        if (self.free_local_vars_and_parent_scopes) {
-            self.allocator.free(self.local_vars);
-            self.allocator.free(self.parent_scopes);
+        for (self.local_vars) |obj| {
+            if (obj != null) {
+                obj.?.decref();
+            }
         }
+        self.allocator.free(self.local_vars);
+        self.allocator.free(self.parent_scopes);
     }
 };
 
 test "very basic scope creating" {
     const assert = std.debug.assert;
 
-    var global_scope = Scope.initGlobal(std.heap.c_allocator);
+    var global_scope = try Scope.initGlobal(std.heap.c_allocator);
     defer global_scope.destroy();
     var file_scope = try global_scope.initSub(3);
     defer file_scope.destroy();
@@ -98,6 +103,11 @@ const Runner = struct {
                     const obj = scope.local_vars[vardata.index].?;
                     try self.stack.append(obj);
                     obj.incref();
+                    i += 1;
+                },
+                bcreader.Op.Data.SetVar => |vardata| {
+                    const scope = self.scope.getForLevel(vardata.level);
+                    scope.local_vars[vardata.index] = self.stack.pop();
                     i += 1;
                 },
                 bcreader.Op.Data.CallFunction => |calldata| {
@@ -153,7 +163,7 @@ const Runner = struct {
 
 
 pub fn runFile(allocator: *std.mem.Allocator, code: bcreader.Code) !void {
-    var global_scope = Scope.initGlobal(allocator);
+    var global_scope = try Scope.initGlobal(allocator);
     defer global_scope.destroy();
     var file_scope = try global_scope.initSub(code.nlocalvars);
     defer file_scope.destroy();
