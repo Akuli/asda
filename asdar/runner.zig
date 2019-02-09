@@ -4,7 +4,7 @@ const bcreader = @import("bcreader.zig");
 const builtins = @import("builtins.zig");
 const objects = @import("objects/index.zig");
 
-const Scope = struct {
+pub const Scope = struct {
     allocator: *std.mem.Allocator,   // for local_vars and parent_scopes
     local_vars: []?*Object,
     parent_scopes: []*Scope,
@@ -52,7 +52,7 @@ const Scope = struct {
         return self.parent_scopes[level];
     }
 
-    fn destroy(self: Scope) void {
+    pub fn destroy(self: Scope) void {
         for (self.local_vars) |obj| {
             if (obj != null) {
                 obj.?.decref();

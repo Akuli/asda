@@ -16,41 +16,59 @@ pub const FunctionType = struct {
 };
 
 pub const Fn = union(enum) {
-    Returning: fn([]const *Object) anyerror!*Object,
-    Void: fn([]const *Object) anyerror!void,
+    Returning: fn(data: *objtyp.ObjectData, []const *Object) anyerror!*Object,
+    Void: fn(data: *objtyp.ObjectData, []const *Object) anyerror!void,
 };
 
 pub const Data = struct {
-    name: []const u8,    // should be e.g. statically allocated, this won't handle freeing
+    allocator: ?*std.mem.Allocator,    // for allocator.destroy()ing data
+    name: []const u8,   // should be e.g. statically allocated, this won't handle freeing
     zig_fn: Fn,
+    passed_data: *objtyp.ObjectData,   // must be pointer to avoid union that contains itself, which is why allocator is needed
+
+    fn initComptime(name: []const u8, zig_fn: Fn, passed_data: *objtyp.ObjectData) Data {
+        return Data{ .allocator = null, .name = name, .zig_fn = zig_fn, .passed_data = passed_data };
+    }
+
+    fn init(allocator: *std.mem.Allocator, name: []const u8, zig_fn: Fn, passed_data: objtyp.ObjectData) !Data {
+        const pdata = try allocator.create(objtyp.ObjectData);
+        errdefer allocator.destroy(pdata);
+        pdata.* = passed_data;
+        return Data{ .allocator = allocator, .name = name, .zig_fn = zig_fn, .passed_data = pdata };
+    }
+
+    pub fn destroy(self: Data) void {
+        if (self.allocator) |allocator| {
+            self.passed_data.*.destroy();
+            allocator.destroy(self.passed_data);
+        }
+    }
 };
 
-fn testFn(objs: []const *Object) anyerror!*Object {
+fn testFn(data: *objtyp.ObjectData, objs: []const *Object) anyerror!*Object {
     return objs[0];
 }
 
-test "function data creating" {
-    const assert = std.debug.assert;
-    const object_type = @import("../object.zig").object_type;
-
-    const argtypes = []*objtyp.Type{ object_type, object_type };
-    const type2 = FunctionType{ .argtypes = argtypes[0..], .returntype = object_type };
-    const func_data = Data{ .name = "testfunc", .zig_fn = Fn{ .Returning = testFn }};
-    assert(std.mem.eql(u8, func_data.name, "testfunc"));
-    assert(func_data.zig_fn.Returning == testFn);
-}
-
-pub fn newComptime(name: []const u8, typ: *objtyp.Type, zig_fn: Fn) Object {
+// passed_data should be e.g. statically allocated, and will NOT be destroyed
+// if it isn't, make it statically allocated or use init()
+pub fn newComptimeWithPassedData(name: []const u8, typ: *objtyp.Type, zig_fn: Fn, passed_data: *objtyp.ObjectData) Object {
     // TODO: figure out why this doesn't work
     //switch(zig_fn) {
     //    Fn.Returning => std.debug.assert(typ.Function.returntype != null),
     //    Fn.Void => std.debug.assert(typ.Function.returntype == null),
     //}
 
-    const data = objtyp.ObjectData{ .FunctionValue = Data{ .name = name, .zig_fn = zig_fn }};
+    const data = objtyp.ObjectData{ .FunctionData = Data.initComptime(name, zig_fn, passed_data) };
     return Object.initComptime(typ, data);
 }
 
+var no_data = objtyp.ObjectData{ .NoData = void{} };
+
+pub fn newComptime(name: []const u8, typ: *objtyp.Type, zig_fn: Fn) Object {
+    return newComptimeWithPassedData(name, typ, zig_fn, &no_data);
+}
+
+// tests newComptimeWithPassedData because newComptime calls it
 test "function newComptime" {
     const assert = std.debug.assert;
     const string = @import("string.zig");
@@ -65,9 +83,9 @@ test "function newComptime" {
 }
 
 pub fn callReturning(func: *Object, args: []const *Object) !*Object {
-    return func.data.value.FunctionValue.zig_fn.Returning(args);
+    return try func.data.value.FunctionValue.zig_fn.Returning(func.data.FunctionData.passed_data, args);
 }
 
 pub fn callVoid(func: *Object, args: []const *Object) !void {
-    try func.data.FunctionValue.zig_fn.Void(args);
+    try func.data.FunctionData.zig_fn.Void(func.data.FunctionData.passed_data, args);
 }

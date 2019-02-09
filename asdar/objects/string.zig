@@ -10,7 +10,7 @@ pub const Data = struct {
 
     pub fn init(allocator: *std.mem.Allocator, unicode: []u32) objtyp.ObjectData {
         const value = Data{ .allocator = allocator, .unicode = unicode };
-        return objtyp.ObjectData{ .StringValue = value };
+        return objtyp.ObjectData{ .StringData = value };
     }
 
     pub fn destroy(self: Data) void {
@@ -56,8 +56,6 @@ test "string newNoCopy" {
         string = try newNoCopy(std.heap.c_allocator, buf);
     }
     defer string.decref();
-
-    assert(string.data.value.StringValue.unicode[2] == 'c');
 }
 
 // creates a new string that uses a copy of the unicode
@@ -72,8 +70,6 @@ test "string new" {
 
     const string = try new(std.heap.c_allocator, arr);
     defer string.decref();
-
-    assert(std.mem.eql(u32, arr, string.data.value.StringValue.unicode));
 }
 
 // the nicest way to create a string object
@@ -97,7 +93,7 @@ pub fn newFromUtf8(allocator: *std.mem.Allocator, utf8: []const u8) !*Object {
 // returns the value of a string as unicode
 // return value must not be freed
 pub fn toUnicode(str: *Object) []const u32 {
-    return str.data.StringValue.unicode;
+    return str.data.StringData.unicode;
 }
 
 // returns the utf8 of a string, return value must be freed after calling

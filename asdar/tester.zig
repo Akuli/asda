@@ -8,7 +8,7 @@ comptime {
     _ = @import("builtins.zig");
     _ = @import("main.zig");
     _ = @import("misc.zig");
-    _ = @import("object.zig");
+    _ = @import("objtyp.zig");
     _ = @import("objects/index.zig");   // imports all objects
     _ = @import("runner.zig");
 }

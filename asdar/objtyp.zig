@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const objects = @import("objects/index.zig");
+const runner = @import("runner.zig");
 
 pub const BasicType = struct {
     // optional to work around a bug, never actually null, use getMethods() to access this
@@ -29,21 +30,27 @@ pub fn getMethods(typ: *Type) []*Object{
 var object_type_value = Type{ .Basic = BasicType.init([]*Object { }) };
 pub const object_type = &object_type_value;
 
+// used for arbitrary data outside this file, too
 pub const ObjectData = union(enum) {
-    StringValue: objects.string.Data,
-    FunctionValue: objects.function.Data,
+    StringData: objects.string.Data,
+    FunctionData: objects.function.Data,
+    RunnerScope: runner.Scope,
     NoData,
 
     pub fn destroy(self: ObjectData) void {
         switch(self) {
-            ObjectData.NoData, ObjectData.FunctionValue => { },
-            ObjectData.StringValue => |val| val.destroy(),
+            ObjectData.NoData => { },
+
+            // combining these into one makes the compiled executable segfault
+            ObjectData.FunctionData => |val| val.destroy(),
+            ObjectData.RunnerScope => |val| val.destroy(),
+            ObjectData.StringData => |val| val.destroy(),
         }
     }
 };
 
 test "ObjectData" {
-    const objData = ObjectData{ .value = ObjectData.Value.NoData };
+    const objData = ObjectData{ .NoData = void{} };
     defer objData.destroy();
 }
 

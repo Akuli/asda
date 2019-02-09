@@ -3,7 +3,7 @@ const objtyp = @import("objtyp.zig");
 const Object = objtyp.Object;
 const objects = @import("objects/index.zig");
 
-fn printFn(args: []const *Object) anyerror!void {
+fn printFn(data: *objtyp.ObjectData, args: []const *Object) anyerror!void {
     // TODO: don't hardcode std.heap.c_allocator
     // TODO: is calling getStdOut every time bad?
     std.debug.assert(args.len == 1);
@@ -16,8 +16,9 @@ fn printFn(args: []const *Object) anyerror!void {
 }
 
 test "builtins printFn" {
+    var no_data = objtyp.ObjectData{ .NoData = void{} };
     const s = try objects.string.newFromUtf8(std.heap.c_allocator, "Hello World!");
-    try printFn([]const*Object{ s });
+    try printFn(&no_data, []const *Object{ s });
 }
 
 var print_type = objects.function.FunctionType.initComptimeVoid([]const *objtyp.Type{ objects.string.typ });
