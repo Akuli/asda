@@ -147,27 +147,18 @@ const Runner = struct {
                 bcreader.Op.Data.Negation => {
                     const last = self.stack.count() - 1;
                     const old = self.stack.at(last);
-                    const new = switch(old) {
-                        objects.boolean.TRUE => objects.boolean.FALSE,
-                        objects.boolean.FALSE => objects.boolean.TRUE,
-                        else => unreachable,
-                    };
-                    old.decref();
-                    new.incref();
+                    defer old.decref();
+                    const new = objects.boolean.fromZigBool(!objects.boolean.toZigBool(old));
                     self.stack.set(last, new);
                 },
                 bcreader.Op.Data.JumpIf => {},
             }
 
             switch(self.ops[i].data) {
-                bcreader.Op.Data.JumpIf => |j| {
+                bcreader.Op.Data.JumpIf => |jmp| {
                     const cond = self.stack.pop();
-                    switch(cond) {
-                        objects.boolean.TRUE => i = j,
-                        objects.boolean.FALSE => i += 1,
-                        else => unreachable,
-                    }
-                    cond.decref();
+                    defer cond.decref();
+                    i = if(objects.boolean.toZigBool(cond)) jmp else i+1;
                 },
                 else => i += 1,
             }

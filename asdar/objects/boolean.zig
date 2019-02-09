@@ -18,6 +18,14 @@ pub fn fromZigBool(b: bool) *Object {
     return res;
 }
 
+pub fn toZigBool(b: *Object) bool {
+    return switch(b) {
+        TRUE => true,
+        FALSE => false,
+        else => unreachable,
+    };
+}
+
 test "fromZigBool" {
     const t = fromZigBool(true);
     defer t.decref();
@@ -26,4 +34,9 @@ test "fromZigBool" {
 
     assert(t == TRUE);
     assert(f == FALSE);
+}
+
+test "toZigBool" {
+    assert(toZigBool(TRUE));
+    assert(!toZigBool(FALSE));
 }
