@@ -38,11 +38,13 @@ pub const Op = struct {
         SetVar: VarData,
         CallFunction: CallFunctionData,
         Constant: *Object,
+        Negation: void,
+        JumpIf: u16,
 
         pub fn destroy(self: Op.Data) void {
             switch(self) {
                 Op.Data.Constant => |obj| obj.decref(),
-                Op.Data.LookupVar, Op.Data.SetVar, Op.Data.CallFunction => {},
+                else => {},
             }
         }
     };
@@ -135,6 +137,15 @@ const BytecodeReader = struct {
                     const obj = try objects.string.newFromUtf8(self.allocator, value);
                     break :blk Op.Data{ .Constant = obj };
                 },
+                TRUE_CONSTANT, FALSE_CONSTANT => blk: {
+                    const obj = switch(opbyte) {
+                        TRUE_CONSTANT => objects.boolean.TRUE,
+                        FALSE_CONSTANT => objects.boolean.FALSE,
+                        else => unreachable,
+                    };
+                    obj.incref();
+                    break :blk Op.Data{ .Constant = obj };
+                },
                 LOOKUP_VAR, SET_VAR => blk: {
                     const level = try self.in.readIntLittle(u8);
                     const index = try self.in.readIntLittle(u16);
@@ -145,6 +156,8 @@ const BytecodeReader = struct {
                         else => unreachable,
                     };
                 },
+                NEGATION => Op.Data{ .Negation = void{} },      // TODO: is void{} best way?
+                JUMP_IF => Op.Data{ .JumpIf = try self.in.readIntLittle(u16) },
                 CALL_VOID_FUNCTION, CALL_RETURNING_FUNCTION => blk: {
                     const ret = (opbyte == CALL_RETURNING_FUNCTION);
                     const nargs = try self.in.readIntLittle(u8);

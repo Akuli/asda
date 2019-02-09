@@ -103,12 +103,10 @@ const Runner = struct {
                     const obj = scope.local_vars[vardata.index].?;
                     try self.stack.append(obj);
                     obj.incref();
-                    i += 1;
                 },
                 bcreader.Op.Data.SetVar => |vardata| {
                     const scope = self.scope.getForLevel(vardata.level);
                     scope.local_vars[vardata.index] = self.stack.pop();
-                    i += 1;
                 },
                 bcreader.Op.Data.CallFunction => |calldata| {
                     const n = self.stack.count();
@@ -138,13 +136,33 @@ const Runner = struct {
                     } else {
                         try objects.function.callVoid(func, args);
                     }
-                    i += 1;
                 },
                 bcreader.Op.Data.Constant => |obj| {
                     try self.stack.append(obj);
                     obj.incref();
-                    i += 1;
                 },
+                bcreader.Op.Data.Negation => {
+                    const j = self.stack.count() - 1;
+                    self.stack.set(j, switch(self.stack.at(j)) {
+                        objects.boolean.TRUE => objects.boolean.FALSE,
+                        objects.boolean.FALSE => objects.boolean.TRUE,
+                        else => unreachable,
+                    });
+                },
+                bcreader.Op.Data.JumpIf => {},
+            }
+
+            switch(self.ops[i].data) {
+                bcreader.Op.Data.JumpIf => |j| {
+                    const cond = self.stack.pop();
+                    switch(cond) {
+                        objects.boolean.TRUE => i = j,
+                        objects.boolean.FALSE => i += 1,
+                        else => unreachable,
+                    }
+                    cond.decref();
+                },
+                else => i += 1,
             }
         }
 
