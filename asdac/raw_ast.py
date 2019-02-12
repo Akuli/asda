@@ -32,6 +32,8 @@ VoidStatement = _astclass('VoidStatement', [])
 If = _astclass('If', ['ifs', 'else_body'])
 While = _astclass('While', ['condition', 'body'])
 For = _astclass('For', ['init', 'cond', 'incr', 'body'])
+PrefixOperator = _astclass('PrefixOperator', ['operator', 'expression'])
+BinaryOperator = _astclass('BinaryOperator', ['operator', 'lhs', 'rhs'])
 
 
 class _TokenIterator:
@@ -161,7 +163,7 @@ class _Parser:
             name_token.location + closing_bracket.location,
             name_token.value, types)
 
-    def parse_expression(self):
+    def parse_expression_without_operators(self):
         first_token = self.tokens.next_token()
         if first_token.kind == 'integer':
             result = Integer(first_token.location, int(first_token.value))
@@ -173,6 +175,9 @@ class _Parser:
         elif first_token.kind == 'string':
             result = self._handle_string_literal(
                 first_token.value, first_token.location)
+        elif self.tokens.coming_up('op', '('):
+            result = self.parse_expression()
+            self.tokens.next_token('op', ')')
         else:
             raise common.CompileError(
                 "expected an expression, got %r" % first_token.value,
@@ -194,6 +199,59 @@ class _Parser:
                 break
 
         return result
+
+    def parse_expression(self):
+        # every other element of funny_stuff is an expression, every other is
+        # an operator string
+        funny_stuff = []
+
+        # currently '-' is the only prefix operator
+        if self.tokens.coming_up('op', '-'):
+            # make sure that e.g. -a-b and -a+b do the right thing
+            funny_stuff.append(None)
+            funny_stuff.append('-')
+            self.tokens.next_token()
+
+        funny_stuff.append(self.parse_expression_without_operators())
+
+        operators = [set('*/'), set('+-')]
+
+        while any(self.tokens.coming_up('op', op)
+                  for op_set in operators
+                  for op in op_set):
+            funny_stuff.append(self.tokens.next_token('op').value)
+            funny_stuff.append(self.parse_expression_without_operators())
+
+        # "merge" things together so that precedences are correct
+        for op_set in operators:
+            # find all places where those operators are
+            indexes = []
+            for index, possible_op in enumerate(funny_stuff):
+                if index % 2 == 1 and possible_op in op_set:
+                    indexes.append(index)
+
+            # must go from beginning to end, because a+b+c means (a+b)+c
+            # i know, pop from beginning is slow, but please don't "optimize"
+            # this without profiling first
+            while indexes:
+                index = indexes.pop(0)
+                lhs, op, rhs = funny_stuff[index-1:index+2]
+
+                if lhs is None:     # the prefixing, see above
+                    assert op == '-'
+                    assert rhs is not None
+                    # location is not perfect, but will do
+                    result = PrefixOperator(rhs.location, '-', rhs)
+                else:
+                    result = BinaryOperator(lhs.location, op, lhs, rhs)
+
+                funny_stuff[index-1:index+2] = [result]
+
+                # 3 funny_stuff elements were replaced with 1, so fix indexes
+                indexes = [index - 2 for index in indexes]
+
+        assert len(funny_stuff) == 1
+        return funny_stuff[0]
 
     def parse_commasep_list(self, parse_callback, end_op, allow_empty):
         if self.tokens.coming_up('op', end_op):

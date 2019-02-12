@@ -7,9 +7,9 @@ from . import common, string_parser
 
 
 _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
-    ('integer', r'-?[1-9][0-9]*|0'),   # TODO: add - prefix operator instead
+    ('integer', r'[1-9][0-9]*|0'),
     ('id', r'[^\W\d]\w*'),
-    ('op', r'[;=():.,\[\]]|->'),
+    ('op', r'->|[+\-*/;=():.,\[\]]'),
     ('string', '"%s"' % string_parser.CONTENT_REGEX),
     ('ignore1', r'^ *(?:#.*)?\n'),
     ('newline', r'\n'),
