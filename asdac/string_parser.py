@@ -27,6 +27,15 @@ _PARSING_REGEX = '|'.join(
 
 
 # the string and location must NOT include the beginning and ending "
+#
+# the result may be e.g. this for "a\nb":
+#
+#    [('string', 'a', some location),
+#     ('string', '\n', some location),
+#     ('string', 'b', some location)]
+#
+# but it doesn't matter, or if it does it's probably time to write other
+# optimizing code as well, and this can become a part of that then
 def parse(string, string_location):
     # this assumes that the string is one-line
     assert string_location.startline == string_location.endline
@@ -46,28 +55,16 @@ def parse(string, string_location):
         value = match.group(kind)
 
         if kind == 'escape':
-            result.append(('string', _BACKSLASHED[value], create_location(
-                match.start(), match.end())))
+            yield ('string', _BACKSLASHED[value],
+                   create_location(match.start(), match.end()))
 
         elif kind == 'interpolate':
-            result.append(('code', value[1:-1], create_location(
+            yield (('code', value[1:-1], create_location(
                 match.start() + 1, match.end() - 1)))
 
         elif kind == 'text':
-            result.append(('string', value, create_location(
-                match.start(), match.end())))
+            yield ('string', value,
+                   create_location(match.start(), match.end()))
 
         else:
             raise NotImplementedError(kind)     # pragma: no cover
-
-    # turn [('string', 'a'), ('string', 'b')] to [('string', 'ab')]
-    # this is needed for strings like "hello\nworld"
-    merged = []
-    for kind, value, location in result:
-        if merged and merged[-1][0] == 'string' and kind == 'string':
-            merged[-1] = ('string', merged[-1][1] + value,
-                          merged[-1][2] + location)
-        else:
-            merged.append((kind, value, location))
-
-    return merged

@@ -14,7 +14,7 @@ def location(start_offset, end_offset):
 
 
 def parse(string):
-    return string_parser.parse(string, location(0, len(string)))
+    return list(string_parser.parse(string, location(0, len(string))))
 
 
 # the argument is not called location because there's a global location() func
@@ -26,7 +26,10 @@ def doesnt_parse(string, message, loc):
 
 
 def test_escapes():
-    assert parse(r'\n\t\\\"\{\}') == [('string', '\n\t\\"{}', location(0, 12))]
+    parts = ['\n', '\t', '\\', '"', '{', '}']
+    assert parse(r'\n\t\\\"\{\}') == [
+        ('string', part, location(2*index, 2*index + 2))
+        for index, part in enumerate(parts)]
 
 
 def test_interpolation():
