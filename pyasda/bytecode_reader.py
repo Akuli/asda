@@ -28,6 +28,12 @@ NEGATION = b'!'
 JUMP_IF = b'J'
 END_OF_BODY = b'E'      # only used in bytecode files
 
+PLUS = b'+'
+MINUS = b'-'
+PREFIX_MINUS = b'_'
+TIMES = b'*'
+#DIVIDE = b'/'
+
 # these are only used in bytecode files
 TYPE_BUILTIN = b'b'
 TYPE_GENERATOR = b'G'  # not to be confused with generator functions
@@ -142,7 +148,9 @@ class _BytecodeReader:
                 kind = CONSTANT
                 args = (objects.FALSE,)
             elif magic in {POP_ONE, DIDNT_RETURN_ERROR, NEGATION, YIELD,
-                           VOID_RETURN, VALUE_RETURN}:
+                           VOID_RETURN, VALUE_RETURN, PLUS, MINUS,
+                           PREFIX_MINUS, TIMES#, DIVIDE
+                           }:
                 args = ()
             elif magic in {CALL_VOID_FUNCTION, CALL_RETURNING_FUNCTION}:
                 args = (self.read_uint8(),)

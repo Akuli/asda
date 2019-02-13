@@ -96,9 +96,26 @@ INT64_MAX = 2**63 - 1
 
 
 class Integer(Object):
+
     def __init__(self, python_int):
         super().__init__(types['Int'])
+        assert isinstance(python_int, int)
         self.python_int = python_int
+
+    def plus(self, other):
+        return Integer(self.python_int + other.python_int)
+
+    def minus(self, other):
+        return Integer(self.python_int - other.python_int)
+
+    def prefix_minus(self):
+        return Integer(-self.python_int)
+
+    def times(self, other):
+        return Integer(self.python_int * other.python_int)
+
+#    def divide(self, other):
+#        return ???(self.python_int / other.python_int)
 
 
 class Generator(Object):

@@ -37,9 +37,15 @@ StrJoin = _op_class('StrJoin', ['how_many_parts'])
 PopOne = _op_class('PopOne', [])
 Return = _op_class('Return', ['returns_a_value'])
 Yield = _op_class('Yield', [])
-Negation = _op_class('Negation', [])
+BoolNegation = _op_class('BoolNegation', [])
 JumpIf = _op_class('JumpIf', ['marker'])
 DidntReturnError = _op_class('DidntReturnError', [])
+
+Plus = _op_class('Plus', [])
+Minus = _op_class('Minus', [])
+PrefixMinus = _op_class('PrefixMinus', [])
+Times = _op_class('Times', [])
+#Divide = _op_class('Divide', [])
 
 
 class JumpMarker(common.Marker):
@@ -179,6 +185,30 @@ class _OpCoder:
             self.output.ops.append(LookupMethod(
                 expression.location.startline, expression.obj.type, index))
 
+        elif isinstance(expression, cooked_ast.Plus):
+            self.do_expression(expression.lhs)
+            self.do_expression(expression.rhs)
+            self.output.ops.append(Plus(expression.location.startline))
+
+        elif isinstance(expression, cooked_ast.Minus):
+            self.do_expression(expression.lhs)
+            self.do_expression(expression.rhs)
+            self.output.ops.append(Minus(expression.location.startline))
+
+        elif isinstance(expression, cooked_ast.PrefixMinus):
+            self.do_expression(expression.prefixed)
+            self.output.ops.append(PrefixMinus(expression.location.startline))
+
+        elif isinstance(expression, cooked_ast.Times):
+            self.do_expression(expression.lhs)
+            self.do_expression(expression.rhs)
+            self.output.ops.append(Times(expression.location.startline))
+
+#        elif isinstance(expression, cooked_ast.Divide):
+#            self.do_expression(expression.lhs)
+#            self.do_expression(expression.rhs)
+#            self.output.ops.append(Divide(expression.location.startline))
+
         else:
             assert False, expression    # pragma: no cover
 
@@ -222,7 +252,7 @@ class _OpCoder:
             # this is why goto is bad style :D it's quite hard to understand
             # even a basic if,else
             self.do_expression(statement.condition)
-            self.output.ops.append(Negation(None))
+            self.output.ops.append(BoolNegation(None))
             self.output.ops.append(JumpIf(None, end_of_if_body))
             for substatement in statement.if_body:
                 self.do_statement(substatement)
@@ -242,7 +272,7 @@ class _OpCoder:
 
             self.output.ops.append(beginning)
             self.do_expression(statement.cond)
-            self.output.ops.append(Negation(None))
+            self.output.ops.append(BoolNegation(None))
             self.output.ops.append(JumpIf(None, end))
 
             for substatement in statement.body:

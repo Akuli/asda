@@ -175,7 +175,7 @@ class _Parser:
         elif first_token.kind == 'string':
             result = self._handle_string_literal(
                 first_token.value, first_token.location)
-        elif self.tokens.coming_up('op', '('):
+        elif first_token.kind == 'op' and first_token.value == '(':
             result = self.parse_expression()
             self.tokens.next_token('op', ')')
         else:

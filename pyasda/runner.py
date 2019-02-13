@@ -153,6 +153,20 @@ class _Runner:
                 self.stack[-how_many:] = [
                     objects.String(''.join(s.python_string for s in strings))]
 
+            elif opcode == bytecode_reader.PREFIX_MINUS:
+                self.stack[-1] = self.stack[-1].prefix_minus()
+
+            elif opcode in {bytecode_reader.PLUS, bytecode_reader.MINUS,
+                            bytecode_reader.TIMES}:#, bytecode_reader.DIVIDE}:
+                rhs = self.stack.pop()
+                lhs = self.stack.pop()
+                self.stack.append({
+                    bytecode_reader.PLUS: lhs.plus,
+                    bytecode_reader.MINUS: lhs.minus,
+                    bytecode_reader.TIMES: lhs.times,
+                    #bytecode_reader.DIVIDE: lhs.divide,
+                }[opcode](rhs))
+
             else:
                 assert False, opcode
 

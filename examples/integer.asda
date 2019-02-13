@@ -1,4 +1,7 @@
-let x = -123
-let y = 123
-print(x.to_string())
-print(y.to_string())
+let x = 3
+let y = 7
+
+# note that "{x}" does x.to_string()
+print("{x} + {y} = {x+y}")
+print("{x} - {y} = {x-y}")
+print("{x} * {y} = {x*y}")

@@ -29,6 +29,12 @@ Yield = _astclass('Yield', ['value'])
 If = _astclass('If', ['condition', 'if_body', 'else_body'])
 Loop = _astclass('Loop', ['init', 'cond', 'incr', 'body'])    # while or for
 
+Plus = _astclass('Plus', ['lhs', 'rhs'])
+Minus = _astclass('Minus', ['lhs', 'rhs'])
+PrefixMinus = _astclass('PrefixMinus', ['prefixed'])
+Times = _astclass('Times', ['lhs', 'rhs'])
+#Divide = _astclass('Divide', ['lhs', 'rhs'])
+
 
 # this is a somewhat evil function
 def _find_yields(node):
@@ -195,6 +201,49 @@ class _Chef:
             return StrJoin(
                 raw_expression.location, objects.BUILTIN_TYPES['Str'],
                 list(map(self.cook_expression, raw_expression.parts)))
+
+        if isinstance(raw_expression, raw_ast.PrefixOperator):
+            assert raw_expression.operator == '-'
+            integer = self.cook_expression(raw_expression.expression)
+            if integer.type is not objects.BUILTIN_TYPES['Int']:
+                raise common.CompileError(
+                    "-something only works if something is an integer",
+                    integer.location)
+            return PrefixMinus(
+                raw_expression.location, objects.BUILTIN_TYPES['Int'], integer)
+
+        if isinstance(raw_expression, raw_ast.BinaryOperator):
+            lhs = self.cook_expression(raw_expression.lhs)
+            rhs = self.cook_expression(raw_expression.rhs)
+
+            if raw_expression.operator == '/':
+                # i want 3/2 to return 1.5 as a float or fraction object, but
+                # the only number type i have now is Int
+                raise common.CompileError(
+                    "sorry, division is not supported yet :(",
+                    raw_expression.location)
+
+            if lhs.type is not objects.BUILTIN_TYPES['Int']:
+                problem = lhs.location
+            elif rhs.type is not objects.BUILTIN_TYPES['Int']:
+                problem = rhs.location
+            else:
+                problem = None
+
+            if problem is not None:
+                raise common.CompileError(
+                    "expected Int %s Int, got %s %s %s"
+                    % (raw_expression.operator, lhs.type.name,
+                       raw_expression.operator, rhs.type.name),
+                    problem)
+
+            return {
+                '+': Plus,
+                '-': Minus,
+                '*': Times,
+            }[raw_expression.operator](
+                raw_expression.location, objects.BUILTIN_TYPES['Int'],
+                lhs, rhs)
 
         raise NotImplementedError(      # pragma: no cover
             "oh no: " + str(type(raw_expression)))

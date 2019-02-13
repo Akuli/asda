@@ -22,9 +22,15 @@ VOID_RETURN = b'r'
 VALUE_RETURN = b'R'
 DIDNT_RETURN_ERROR = b'd'
 YIELD = b'Y'
-NEGATION = b'!'
+BOOL_NEGATION = b'!'
 JUMP_IF = b'J'
 END_OF_BODY = b'E'
+
+PLUS = b'+'
+MINUS = b'-'
+PREFIX_MINUS = b'_'
+TIMES = b'*'
+#DIVIDE = b'/'
 
 # these are used when bytecoding a type
 TYPE_BUILTIN = b'b'
@@ -127,81 +133,96 @@ class _BytecodeWriter:
         if isinstance(op, opcoder.StrConstant):
             self.bytecode.add_byte(STR_CONSTANT)
             self.bytecode.write_string(op.python_string)
+            return
 
-        elif isinstance(op, opcoder.IntConstant):
+        if isinstance(op, opcoder.IntConstant):
             if op.python_int >= 0:
                 self.bytecode.add_byte(NON_NEGATIVE_INT_CONSTANT)
                 self.bytecode.add_big_uint(op.python_int)
             else:
                 self.bytecode.add_byte(NEGATIVE_INT_CONSTANT)
                 self.bytecode.add_big_uint(abs(op.python_int))
+            return
 
-        elif isinstance(op, opcoder.BoolConstant):
+        if isinstance(op, opcoder.BoolConstant):
             self.bytecode.add_byte(
                 TRUE_CONSTANT if op.python_bool else FALSE_CONSTANT)
+            return
 
-        elif isinstance(op, opcoder.CreateFunction):
+        if isinstance(op, opcoder.CreateFunction):
             assert isinstance(op.functype, objects.FunctionType)
             self.write_type(op.functype)    # includes CREATE_FUNCTION
             self.bytecode.add_byte(1 if op.yields else 0)
             self.bytecode.write_string(op.name)
 
             _BytecodeWriter(self.bytecode).run(op.body_opcode, varlists)
+            return
 
-        elif isinstance(op, opcoder.LookupVar):
+        if isinstance(op, opcoder.LookupVar):
             self.bytecode.add_byte(LOOKUP_VAR)
             self.bytecode.add_uint8(op.level)
             if isinstance(op.var, opcoder.ArgMarker):
                 self.bytecode.add_uint16(op.var.index)
             else:
                 self.bytecode.add_uint16(varlists[op.level].index(op.var))
+            return
 
-        elif isinstance(op, opcoder.SetVar):
+        if isinstance(op, opcoder.SetVar):
             self.bytecode.add_byte(SET_VAR)
             self.bytecode.add_uint8(op.level)
             self.bytecode.add_uint16(varlists[op.level].index(op.var))
+            return
 
-        elif isinstance(op, opcoder.CallFunction):
+        if isinstance(op, opcoder.CallFunction):
             self.bytecode.add_byte(
                 CALL_RETURNING_FUNCTION if op.returns_a_value
                 else CALL_VOID_FUNCTION)
             self.bytecode.add_uint8(op.nargs)
+            return
 
-        elif isinstance(op, opcoder.PopOne):
-            self.bytecode.add_byte(POP_ONE)
-
-        elif isinstance(op, opcoder.Return):
+        if isinstance(op, opcoder.Return):
             self.bytecode.add_byte(VALUE_RETURN if op.returns_a_value
-                                            else VOID_RETURN)
+                                   else VOID_RETURN)
+            return
 
-        elif isinstance(op, opcoder.Yield):
-            self.bytecode.add_byte(YIELD)
-
-        elif isinstance(op, opcoder.Negation):
-            self.bytecode.add_byte(NEGATION)
-
-        elif isinstance(op, opcoder.JumpIf):
+        if isinstance(op, opcoder.JumpIf):
             self.bytecode.add_byte(JUMP_IF)
             self.bytecode.add_uint16(self.jumpmarker2index[op.marker])
-
-        elif isinstance(op, opcoder.JumpMarker):
-            # already handled in run()
-            pass
+            return
 
         elif isinstance(op, opcoder.LookupMethod):
             self.bytecode.add_byte(LOOKUP_METHOD)
             self.write_type(op.type)
             self.bytecode.add_uint16(op.indeks)
-
-        elif isinstance(op, opcoder.DidntReturnError):
-            self.bytecode.add_byte(DIDNT_RETURN_ERROR)
+            return
 
         elif isinstance(op, opcoder.StrJoin):
             self.bytecode.add_byte(STR_JOIN)
             self.bytecode.add_uint16(op.how_many_parts)
+            return
 
-        else:
-            assert False, op        # pragma: no cover
+        if isinstance(op, opcoder.JumpMarker):
+            # already handled in run()
+            return
+
+        simple_things = [
+            (opcoder.PopOne, POP_ONE),
+            (opcoder.Yield, YIELD),
+            (opcoder.BoolNegation, BOOL_NEGATION),
+            (opcoder.DidntReturnError, DIDNT_RETURN_ERROR),
+            (opcoder.Plus, PLUS),
+            (opcoder.Minus, MINUS),
+            (opcoder.PrefixMinus, PREFIX_MINUS),
+            (opcoder.Times, TIMES),
+            #(opcoder.Divide, DIVIDE),
+        ]
+
+        for klass, byte in simple_things:
+            if isinstance(op, klass):
+                self.bytecode.add_byte(byte)
+                return
+
+        assert False, op        # pragma: no cover
 
     # don't call this more than once because jumpmarker2index
     def run(self, opcode, varlists):
