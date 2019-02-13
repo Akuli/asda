@@ -41,8 +41,15 @@ Personally I like tabs as they are a character just for indentation, but most
 other people don't like them, so I disallowed them to make code consistent. If
 you want a string that contains a tab, do `"\t"`.
 
+Some of the different kinds of tokens are documented in more detail below. The
+tokens that aren't documented in more detail are mentioned in other parts of
+this documentation. For example, `123` is a valid token, because the
+[expression] documentation mentions it, and so are e.g. `(` and `-`. Note that
+`->` is one token, and therefore not same as `- >`, which has separate `-` and
+`>` tokens.
 
-## Identifier Tokens
+
+### Identifier Tokens
 
 An identifier token is e.g. `greeting`, `Str` or `uppercase`. It is a wordy and
 non-digit character followed by zero or more wordy characters. Note that the
@@ -50,7 +57,7 @@ first character can't be a digit, so `2lol` is not a valid identifier, even
 though `lol2` is.
 
 
-## String Tokens
+### String Tokens
 
 In this section, a "special character" means `{`, `}`, `\`, `"` or a newline
 character.
@@ -124,7 +131,9 @@ if a:
 ...is an error because `d()` doesn't match any of the indentations before it.
 On one hand, `d()` seems to be a part of `if b:` because it's indented more than
 `if b:`, but on the other hand, `c()` also seems to be a part of `if b:`, even
-though `c()` and `d()` are indented differently. This is valid, of course:
+though `c()` and `d()` are indented differently.
+
+This is valid, of course:
 
 ```js
 if a:
@@ -144,7 +153,7 @@ if a:
 
 If a line contains nothing but indentation, it's treated as a blank line. For
 example, this code doesn't compile because there should be something coming
-after `if a:`, but there isn't:
+after `if a:`, but there isn't (because [comments] are ignored):
 
 ```python3
 if a:
@@ -165,29 +174,73 @@ else:
 
 ## Expressions
 
+In this section, "comma-separated" means that there are commas between the
+items (if there are two or more items), but not elsewhere. For example, `a,b,c`
+is comma-separated properly, but `,a,b,c` and `a,b,c,` aren't. As special
+cases, a single item and no items at all are also considered comma-separated.
+In general, "X-separated" means a similar thing with X instead of a comma.
+
 An expression is a piece of code that produces a value, like `"Hello"` or `123`.
 Expressions may contain other expressions; for example, `"Hello".uppercase()` is
 an expression, and the `"Hello"` in it is also an expression. In fact,
-`hello.uppercase` is also an expression, so you can do this:
+`"Hello".uppercase` is also an expression, so you can do this:
 
 ```js
 let get_upper_hello = "Hello".uppercase
 print(get_upper_hello())
 ```
 
-Here's a list of all the different kinds of expressions:
+Some expressions are called "simple expressions", while other expressions
+consists of operators and simple expressions. Here's a list of all the
+different kinds of simple expressions:
 
-- **Integer literal**, like `123`, `-123` or `0`. Integer literals consist of a
-  digit 1-9 followed by zero or more 0-9 digits. There can be a `-` in front of
-  the digits. As a special case, `0` and `-0` are also valid (but equivalent).
-- **String literals** as explained [above](#string-tokens).
-- **Variable lookups** that consist of just an [identifier].
+- **Integer literal**, like `123` or `0`. Integer literals consist of a digit
+  1-9 followed by zero or more 0-9 digits. As a special case, `0` is also a
+  valid integer literal, even though it doesn't start with a 1-9 digit like all
+  other integer literals do. Note that `-123` is *not* an integer literal; it
+  is the prefix operator `-` applied to the integer literal `123` (see below).
+- **String literals** consist of a [string token].
+- **Variable lookups** consist of an [identifier].
 - **Generic function lookups** that consist of the name of a [generic] function,
   which is an identifier, and `[ ]` with one or more comma-separated [types] in
   between.
-- **Attribute lookups** consist of an expression, `.` and an [identifier].
-- **Function calls** consist of an expression, and `( )` with zero or more
-  comma-separated expressions in between.
+- **Parenthesized expressions** consist of `(`, an expression (it doesn't have
+  to be a simple expression) and `)`.
+
+Simple expressions can have zero or more of the following things at the end,
+and they are considered a part of the simple expression:
+
+- **Attribute lookups** consist of `.` and an [identifier].
+- **Function calls** consist of `( )` with zero or more comma-separated
+  expressions in between.
+
+An expression consists of an optional `-` and one or more operator-separated
+simple expressions. For example, `-a + b + c` is valid syntax, and so is `-a`,
+but `a + -b` isn't because there are two operators between `a` and `b`. Note
+that `a + (-b)` is valid, because `(-b)` with the parentheses is a simple
+expression.
+
+Here is an operator precedence list. It works so that operators higher on the
+list are applied first. Operators of the same precedence are applied
+left-to-right. For example, `- a + b + c` does `((- a) + b) + c`, and
+`a * b + c / d` does `(a * b) + (c / d)`. In the list, "prefix `-`" means `-`
+so that it's used like `- something`, not like `something - something`.
+
+1. `*`, `/`
+2. `+`, `-`, prefix `-`
+
+It's good style to use whitespace to make the precedence easier to see. For
+example, `- a*b + c/d` is good, `- a * b + c / d` is bad, and `-a * b+c / d` is
+horribly misleading.
+
+Note that the `/` operator doesn't actually work yet. I added it here just so
+that I wouldn't forget to add it later. If it's been a while since I wrote
+this, it might actually work. Try it and see:
+
+```js
+let x = 1 / 2
+print(x.to_string())
+```
 
 
 ## Statements
@@ -364,6 +417,7 @@ There are two kinds of types:
   another `]`, like `Generator[Str]` or `Generator[Generator[Str]]`.
 
 
+[comments]: #comments
 [expression]: #expression
 [statement]: #statements
 [indentation]: #indentation
