@@ -28,6 +28,26 @@ def test_not_an_expression_or_a_statement():
     assert error.value.location == location(1, 0, 1, 5)
 
 
+def test_parentheses_do_nothing(monkeypatch):
+    monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
+    assert (parse('let x = y') ==
+            parse('let x = (y)') ==
+            parse('let x = (((y)))'))
+
+
+def test_invalid_operator_stuff():
+    with pytest.raises(CompileError) as error:
+        parse('let x = +1')
+    assert error.value.message == "expected an expression, got '+'"
+    assert error.value.location == location(1, 8, 1, 9)
+
+    # TODO: this needs a better error message
+    with pytest.raises(CompileError) as error:
+        parse('let x = 1 + -2')
+    assert error.value.message == "expected an expression, got '-'"
+    assert error.value.location == location(1, 12, 1, 13)
+
+
 def test_empty_string():
     [string] = parse('print("")')[0].args
     assert string.location == location(1, 6, 1, 8)

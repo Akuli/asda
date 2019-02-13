@@ -140,6 +140,10 @@ class _BytecodeWriter:
                 self.bytecode.add_byte(NON_NEGATIVE_INT_CONSTANT)
                 self.bytecode.add_big_uint(op.python_int)
             else:
+                # currently this code never runs because -2 is parsed as the
+                # prefix minus operator applied to the non-negative integer
+                # constant 2, but i'm planning on adding an optimizer that
+                # would output it as a thing that needs this code
                 self.bytecode.add_byte(NEGATIVE_INT_CONSTANT)
                 self.bytecode.add_big_uint(abs(op.python_int))
             return

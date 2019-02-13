@@ -84,7 +84,7 @@ def test_while_example(compiler):
     # for example, if while was implemented with python's recursion, it would
     # crash before 1000 iterations because sys.getrecursionlimit() is 100 by
     # default
-    for lel in range(10000):
+    for lel in range(2000):
         assert process.stdout.readline() == b'Yay\n'
     process.kill()
 

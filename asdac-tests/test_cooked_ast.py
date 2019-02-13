@@ -143,6 +143,21 @@ def test_yield_errors():
         'return "Boo"')
 
 
+def test_operator_errors():
+    doesnt_parse('let x = 1 / 2',
+                 "sorry, division is not supported yet :(",
+                 '1 / 2')
+    doesnt_parse('let x = -"blah"',
+                 "expected -Int, got -Str",
+                 '-"blah"')
+    doesnt_parse('let x = 1 - "blah"',
+                 "expected Int - Int, got Int - Str",
+                 '"blah"')
+    doesnt_parse('let x = "blah" - 1',
+                 "expected Int - Int, got Str - Int",
+                 '"blah"')
+
+
 def test_assign_asd_to_asd():
     doesnt_parse('let asd = asd',
                  "variable not found: asd",

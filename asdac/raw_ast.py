@@ -202,15 +202,14 @@ class _Parser:
 
     def parse_expression(self):
         # every other element of funny_stuff is an expression, every other is
-        # an operator string
+        # an operator token
         funny_stuff = []
 
         # currently '-' is the only prefix operator
         if self.tokens.coming_up('op', '-'):
             # make sure that e.g. -a-b and -a+b do the right thing
             funny_stuff.append(None)
-            funny_stuff.append('-')
-            self.tokens.next_token()
+            funny_stuff.append(self.tokens.next_token())
 
         funny_stuff.append(self.parse_expression_without_operators())
 
@@ -219,7 +218,7 @@ class _Parser:
         while any(self.tokens.coming_up('op', op)
                   for op_set in operators
                   for op in op_set):
-            funny_stuff.append(self.tokens.next_token('op').value)
+            funny_stuff.append(self.tokens.next_token('op'))
             funny_stuff.append(self.parse_expression_without_operators())
 
         # "merge" things together so that precedences are correct
@@ -227,7 +226,7 @@ class _Parser:
             # find all places where those operators are
             indexes = []
             for index, possible_op in enumerate(funny_stuff):
-                if index % 2 == 1 and possible_op in op_set:
+                if index % 2 == 1 and possible_op.value in op_set:
                     indexes.append(index)
 
             # must go from beginning to end, because a+b+c means (a+b)+c
@@ -238,12 +237,13 @@ class _Parser:
                 lhs, op, rhs = funny_stuff[index-1:index+2]
 
                 if lhs is None:     # the prefixing, see above
-                    assert op == '-'
+                    assert op.value == '-'
                     assert rhs is not None
-                    # location is not perfect, but will do
-                    result = PrefixOperator(rhs.location, '-', rhs)
+                    result = PrefixOperator(
+                        op.location + rhs.location, op.value, rhs)
                 else:
-                    result = BinaryOperator(lhs.location, op, lhs, rhs)
+                    result = BinaryOperator(
+                        lhs.location + rhs.location, op.value, lhs, rhs)
 
                 funny_stuff[index-1:index+2] = [result]
 

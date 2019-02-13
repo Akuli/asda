@@ -207,8 +207,8 @@ class _Chef:
             integer = self.cook_expression(raw_expression.expression)
             if integer.type is not objects.BUILTIN_TYPES['Int']:
                 raise common.CompileError(
-                    "-something only works if something is an integer",
-                    integer.location)
+                    "expected -Int, got -%s" % integer.type.name,
+                    raw_expression.location)
             return PrefixMinus(
                 raw_expression.location, objects.BUILTIN_TYPES['Int'], integer)
 
