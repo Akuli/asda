@@ -237,7 +237,8 @@ like `something - something`.
 3. `==`, `!=`
 4. `` `some_function` ``
 
-The `some_function` can be any expression. Repeated backticks work so that
+The `some_function` can be any expression, and ``a `some_function` b`` does the
+same thing as `some_function(a, b)`. Repeated backticks work so that
 ``a`b`c`d`e`` is treated as ``(a `b` c) `d` e``, not as ``a `(b `c` d)` e``.
 
 It's good style to use whitespace to make the precedence easier to see. For
