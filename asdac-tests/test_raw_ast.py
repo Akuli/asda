@@ -1,4 +1,5 @@
 import functools
+import itertools
 
 from asdac import raw_ast
 from asdac.raw_ast import (For, FuncCall, FromGeneric, GetAttr,
@@ -46,6 +47,12 @@ def test_invalid_operator_stuff():
         parse('let x = 1 + -2')
     assert error.value.message == "expected an expression, got '-'"
     assert error.value.location == location(1, 12, 1, 13)
+
+    for ops in itertools.product(['==', '!='], repeat=2):
+        with pytest.raises(CompileError) as error:
+            parse('x %s y %s z' % ops)
+        assert error.value.message == "'a %s b %s c' is invalid syntax" % ops
+        assert error.value.location == location(1, 2, 1, 9)
 
 
 def test_empty_string():

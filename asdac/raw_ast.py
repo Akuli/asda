@@ -213,21 +213,42 @@ class _Parser:
 
         funny_stuff.append(self.parse_expression_without_operators())
 
-        operators = [{'*', '/'}, {'+', '-'}, {'==', '!='}]
+        operator_specs = [
+            # these are (op_set, allow_chaining) tuples
+            #
+            # a OP b OP c is:
+            #   * (a OP b) OP c, if allow_chaining
+            #   * an error with error_string
+            ({'*', '/'}, True),
+            ({'+', '-'}, True),
+            ({'==', '!='}, False),
+        ]
 
         while any(self.tokens.coming_up('op', op)
-                  for op_set in operators
+                  for op_set, allow_chaining in operator_specs
                   for op in op_set):
             funny_stuff.append(self.tokens.next_token('op'))
             funny_stuff.append(self.parse_expression_without_operators())
 
         # "merge" things together so that precedences are correct
-        for op_set in operators:
+        for op_set, allow_chaining in operator_specs:
             # find all places where those operators are
             indexes = []
             for index, possible_op in enumerate(funny_stuff):
                 if index % 2 == 1 and possible_op.value in op_set:
                     indexes.append(index)
+
+            if not allow_chaining:
+                for index1, index2 in zip(indexes, indexes[1:]):
+                    if index1 + 2 == index2:
+                        # the indexes are as next to each other as they can be
+                        # i.e. there's 1 expression between them
+                        op1 = funny_stuff[index1]
+                        op2 = funny_stuff[index2]
+                        raise common.CompileError(
+                            "'a {op1} b {op2} c' is invalid syntax".format(
+                                op1=op1.value, op2=op2.value),
+                            location=(op1.location + op2.location))
 
             # must go from beginning to end, because a+b+c means (a+b)+c
             # i know, pop from beginning is slow, but please don't "optimize"

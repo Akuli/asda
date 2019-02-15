@@ -225,8 +225,12 @@ syntax to allow this later.
 Here is an operator precedence list. It works so that operators higher on the
 list are applied first. Operators of the same precedence are applied
 left-to-right. For example, `- a + b + c` does `((- a) + b) + c`, and
-`a * b + c / d` does `(a * b) + (c / d)`. In the list, "prefix `-`" means `-`
-so that it's used like `- something`, not like `something - something`.
+`a * b + c / d` does `(a * b) + (c / d)`. As a special case, `==` and `!=`
+don't work this way; using them like that as in `a == b == c` is a syntax
+error.
+
+In the list, "prefix `-`" means `-` so that it's used like `- something`, not
+like `something - something`.
 
 1. `*`, `/`
 2. `+`, `-`, prefix `-`
