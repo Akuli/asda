@@ -36,6 +36,16 @@ def test_parentheses_do_nothing(monkeypatch):
             parse('let x = (((y)))'))
 
 
+def test_backtick_function_call(monkeypatch):
+    monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
+    assert parse('x `f` y') == parse('f(x, y)')
+    assert parse('(x `f` y) `g` z') == parse('g(f(x, y), z)')
+    assert parse('x `f` (y `g` z)') == parse('f(x, g(y, z))')
+    assert parse('x `f` y `g` z') == parse('(x `f` y) `g` z')
+    assert parse('x `(f` y `g)` z') == parse('y(f, g)(x, z)')
+    assert parse('x `f` y `g` z') != parse('x `(f` y `g)` z')
+
+
 def test_invalid_operator_stuff():
     with pytest.raises(CompileError) as error:
         parse('let x = +1')

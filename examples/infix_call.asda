@@ -1,0 +1,10 @@
+func lol(Str x, Str y) -> Str:
+    print(x)
+    print(y)
+    return "lolled"
+
+"a" `lol` "b"
+print("--------")
+
+let the_lolled = "c" `lol` "d"
+print(the_lolled)

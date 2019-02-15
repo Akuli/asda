@@ -200,19 +200,7 @@ class _Parser:
 
         return result
 
-    def parse_expression(self):
-        # every other element of funny_stuff is an expression, every other is
-        # an operator token
-        funny_stuff = []
-
-        # currently '-' is the only prefix operator
-        if self.tokens.coming_up('op', '-'):
-            # make sure that e.g. -a-b and -a+b do the right thing
-            funny_stuff.append(None)
-            funny_stuff.append(self.tokens.next_token())
-
-        funny_stuff.append(self.parse_expression_without_operators())
-
+    def parse_expression(self, *, allow_infix_syntax=True):
         operator_specs = [
             # these are (op_set, allow_chaining) tuples
             #
@@ -223,48 +211,77 @@ class _Parser:
             ({'+', '-'}, True),
             ({'==', '!='}, False),
         ]
+        if allow_infix_syntax:
+            operator_specs.append(({'`'}, True))
+
+        # every other element of funny_stuff is an expression, every other is
+        # (operator string, an operator token) or ('`', a function expression)
+        # the second element of those is called "info" because i couldn't come
+        # up with a better name
+        funny_stuff = []
+
+        # currently '-' is the only prefix operator
+        if self.tokens.coming_up('op', '-'):
+            # make sure that e.g. -a-b and -a+b do the right thing
+            funny_stuff.append(None)
+            funny_stuff.append(('-', self.tokens.next_token()))
+
+        funny_stuff.append(self.parse_expression_without_operators())
 
         while any(self.tokens.coming_up('op', op)
                   for op_set, allow_chaining in operator_specs
                   for op in op_set):
-            funny_stuff.append(self.tokens.next_token('op'))
+            token = self.tokens.next_token('op')
+            if token.value == '`':
+                # infix syntax:  a `f` b  does the same thing as  f(a, b)
+                info = self.parse_expression(allow_infix_syntax=False)
+                self.tokens.next_token('op', '`')
+            else:
+                info = token
+            funny_stuff.append((token.value, info))
+
             funny_stuff.append(self.parse_expression_without_operators())
 
         # "merge" things together so that precedences are correct
         for op_set, allow_chaining in operator_specs:
             # find all places where those operators are
             indexes = []
-            for index, possible_op in enumerate(funny_stuff):
-                if index % 2 == 1 and possible_op.value in op_set:
-                    indexes.append(index)
+            for index, value_and_info in enumerate(funny_stuff):
+                if index % 2 == 1:
+                    value, info = value_and_info
+                    if value in op_set:
+                        indexes.append(index)
 
             if not allow_chaining:
                 for index1, index2 in zip(indexes, indexes[1:]):
                     if index1 + 2 == index2:
                         # the indexes are as next to each other as they can be
                         # i.e. there's 1 expression between them
-                        op1 = funny_stuff[index1]
-                        op2 = funny_stuff[index2]
+                        # that's b in the below error message
+                        op1, token1 = funny_stuff[index1]
+                        op2, token2 = funny_stuff[index2]
                         raise common.CompileError(
-                            "'a {op1} b {op2} c' is invalid syntax".format(
-                                op1=op1.value, op2=op2.value),
-                            location=(op1.location + op2.location))
+                            "'a %s b %s c' is invalid syntax" % (op1, op2),
+                            location=(token1.location + token2.location))
 
             # must go from beginning to end, because a+b+c means (a+b)+c
             # i know, pop from beginning is slow, but please don't "optimize"
             # this without profiling first
             while indexes:
                 index = indexes.pop(0)
-                lhs, op, rhs = funny_stuff[index-1:index+2]
+                lhs, (op, info), rhs = funny_stuff[index-1:index+2]
 
                 if lhs is None:     # the prefixing, see above
-                    assert op.value == '-'
+                    assert op == '-'
                     assert rhs is not None
-                    result = PrefixOperator(
-                        op.location + rhs.location, op.value, rhs)
+                    result = PrefixOperator(info.location + rhs.location,
+                                            op, rhs)
+                elif op == '`':
+                    result = FuncCall(lhs.location + rhs.location,
+                                      info, [lhs, rhs])
                 else:
-                    result = BinaryOperator(
-                        lhs.location + rhs.location, op.value, lhs, rhs)
+                    result = BinaryOperator(lhs.location + rhs.location,
+                                            op, lhs, rhs)
 
                 funny_stuff[index-1:index+2] = [result]
 
