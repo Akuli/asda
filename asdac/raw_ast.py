@@ -213,7 +213,7 @@ class _Parser:
 
         funny_stuff.append(self.parse_expression_without_operators())
 
-        operators = [set('*/'), set('+-')]
+        operators = [{'*', '/'}, {'+', '-'}, {'==', '!='}]
 
         while any(self.tokens.coming_up('op', op)
                   for op_set in operators
@@ -341,8 +341,6 @@ class _Parser:
         varname = self.tokens.next_token('id')
         return (tybe, varname.value, varname.location)
 
-    # go_all_the_way=False is used when checking whether a valid-seeming
-    # function definition is coming up
     def parse_func_definition(self):
         self.tokens.next_token('keyword', 'func')
         name = self.tokens.next_token('id')

@@ -117,6 +117,9 @@ class Integer(Object):
 #    def divide(self, other):
 #        return ???(self.python_int / other.python_int)
 
+    def equal(self, other):
+        return TRUE if self.python_int == other.python_int else FALSE
+
 
 class Generator(Object):
 

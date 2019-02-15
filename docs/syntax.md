@@ -45,8 +45,8 @@ Some of the different kinds of tokens are documented in more detail below. The
 tokens that aren't documented in more detail are mentioned in other parts of
 this documentation. For example, `123` is a valid token, because the
 [expression] documentation mentions it, and so are e.g. `(` and `-`. Note that
-`->` is one token, and therefore not same as `- >`, which has separate `-` and
-`>` tokens.
+the operators `==`, `!=` and `->` are treated as one token, so `==` and `= =`
+are tokenized differently.
 
 
 ### Identifier Tokens
@@ -218,7 +218,9 @@ An expression consists of an optional `-` and one or more operator-separated
 simple expressions. For example, `-a + b + c` is valid syntax, and so is `-a`,
 but `a + -b` isn't because there are two operators between `a` and `b`. Note
 that `a + (-b)` is valid, because `(-b)` with the parentheses is a simple
-expression.
+expression. Also, `x == -1` is not valid syntax because that also contains two
+operators between `x` and `1`. I think this is dumb and I might change the
+syntax to allow this later.
 
 Here is an operator precedence list. It works so that operators higher on the
 list are applied first. Operators of the same precedence are applied
@@ -228,6 +230,7 @@ so that it's used like `- something`, not like `something - something`.
 
 1. `*`, `/`
 2. `+`, `-`, prefix `-`
+3. `==`, `!=`
 
 It's good style to use whitespace to make the precedence easier to see. For
 example, `- a*b + c/d` is good, `- a * b + c / d` is bad, and `-a * b+c / d` is

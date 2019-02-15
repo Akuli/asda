@@ -31,6 +31,7 @@ MINUS = b'-'
 PREFIX_MINUS = b'_'
 TIMES = b'*'
 #DIVIDE = b'/'
+EQUAL = b'='
 
 # these are used when bytecoding a type
 TYPE_BUILTIN = b'b'
@@ -219,6 +220,7 @@ class _BytecodeWriter:
             (opcoder.PrefixMinus, PREFIX_MINUS),
             (opcoder.Times, TIMES),
             #(opcoder.Divide, DIVIDE),
+            (opcoder.Equal, EQUAL),
         ]
 
         for klass, byte in simple_things:

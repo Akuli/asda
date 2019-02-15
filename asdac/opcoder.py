@@ -46,6 +46,7 @@ Minus = _op_class('Minus', [])
 PrefixMinus = _op_class('PrefixMinus', [])
 Times = _op_class('Times', [])
 #Divide = _op_class('Divide', [])
+Equal = _op_class('Equal', [])
 
 
 class JumpMarker(common.Marker):
@@ -208,6 +209,13 @@ class _OpCoder:
 #            self.do_expression(expression.lhs)
 #            self.do_expression(expression.rhs)
 #            self.output.ops.append(Divide(expression.location.startline))
+
+        elif isinstance(expression, (cooked_ast.Equal, cooked_ast.NotEqual)):
+            self.do_expression(expression.lhs)
+            self.do_expression(expression.rhs)
+            self.output.ops.append(Equal(expression.location.startline))
+            if isinstance(expression, cooked_ast.NotEqual):
+                self.output.ops.append(BoolNegation(None))
 
         else:
             assert False, expression    # pragma: no cover

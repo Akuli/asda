@@ -34,6 +34,8 @@ Minus = _astclass('Minus', ['lhs', 'rhs'])
 PrefixMinus = _astclass('PrefixMinus', ['prefixed'])
 Times = _astclass('Times', ['lhs', 'rhs'])
 #Divide = _astclass('Divide', ['lhs', 'rhs'])
+Equal = _astclass('Equal', ['lhs', 'rhs'])
+NotEqual = _astclass('NotEqual', ['lhs', 'rhs'])
 
 
 # this is a somewhat evil function
@@ -212,6 +214,7 @@ class _Chef:
             return PrefixMinus(
                 raw_expression.location, objects.BUILTIN_TYPES['Int'], integer)
 
+        # TODO: make this much less hard-coded
         if isinstance(raw_expression, raw_ast.BinaryOperator):
             lhs = self.cook_expression(raw_expression.lhs)
             rhs = self.cook_expression(raw_expression.rhs)
@@ -223,6 +226,7 @@ class _Chef:
                     "sorry, division is not supported yet :(",
                     raw_expression.location)
 
+            # TODO: add == for at least Str and Bool
             if lhs.type is not objects.BUILTIN_TYPES['Int']:
                 problem = lhs.location
             elif rhs.type is not objects.BUILTIN_TYPES['Int']:
@@ -237,13 +241,14 @@ class _Chef:
                        raw_expression.operator, rhs.type.name),
                     problem)
 
-            return {
-                '+': Plus,
-                '-': Minus,
-                '*': Times,
-            }[raw_expression.operator](
-                raw_expression.location, objects.BUILTIN_TYPES['Int'],
-                lhs, rhs)
+            klass, tybe = {
+                '+': (Plus, objects.BUILTIN_TYPES['Int']),
+                '-': (Minus, objects.BUILTIN_TYPES['Int']),
+                '*': (Times, objects.BUILTIN_TYPES['Int']),
+                '==': (Equal, objects.BUILTIN_TYPES['Bool']),
+                '!=': (NotEqual, objects.BUILTIN_TYPES['Bool']),
+            }[raw_expression.operator]
+            return klass(raw_expression.location, tybe, lhs, rhs)
 
         raise NotImplementedError(      # pragma: no cover
             "oh no: " + str(type(raw_expression)))
