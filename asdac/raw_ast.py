@@ -163,7 +163,8 @@ class _Parser:
             name_token.location + closing_bracket.location,
             name_token.value, types)
 
-    def parse_expression_without_operators(self):
+    # see docs/syntax.md
+    def parse_simple_expression(self):
         first_token = self.tokens.next_token()
         if first_token.kind == 'integer':
             result = Integer(first_token.location, int(first_token.value))
@@ -205,8 +206,8 @@ class _Parser:
             # these are (op_set, allow_chaining) tuples
             #
             # a OP b OP c is:
-            #   * (a OP b) OP c, if allow_chaining
-            #   * an error with error_string
+            #   * (a OP b) OP c, if allow_chaining is True
+            #   * an error, if allow_chaining is False
             ({'*', '/'}, True),
             ({'+', '-'}, True),
             ({'==', '!='}, False),
@@ -223,10 +224,9 @@ class _Parser:
         # currently '-' is the only prefix operator
         if self.tokens.coming_up('op', '-'):
             # make sure that e.g. -a-b and -a+b do the right thing
-            funny_stuff.append(None)
+            funny_stuff.append(None)    # handled later
             funny_stuff.append(('-', self.tokens.next_token()))
-
-        funny_stuff.append(self.parse_expression_without_operators())
+        funny_stuff.append(self.parse_simple_expression())
 
         while any(self.tokens.coming_up('op', op)
                   for op_set, allow_chaining in operator_specs
@@ -234,23 +234,20 @@ class _Parser:
             token = self.tokens.next_token('op')
             if token.value == '`':
                 # infix syntax:  a `f` b  does the same thing as  f(a, b)
-                info = self.parse_expression(allow_infix_syntax=False)
+                funny_stuff.append(
+                    ('`', self.parse_expression(allow_infix_syntax=False)))
                 self.tokens.next_token('op', '`')
             else:
-                info = token
-            funny_stuff.append((token.value, info))
+                funny_stuff.append((token.value, token))
 
-            funny_stuff.append(self.parse_expression_without_operators())
+            funny_stuff.append(self.parse_simple_expression())
 
         # "merge" things together so that precedences are correct
         for op_set, allow_chaining in operator_specs:
             # find all places where those operators are
-            indexes = []
-            for index, value_and_info in enumerate(funny_stuff):
-                if index % 2 == 1:
-                    value, info = value_and_info
-                    if value in op_set:
-                        indexes.append(index)
+            indexes = [index - len(funny_stuff)     # relative to end
+                       for index, value_and_info in enumerate(funny_stuff)
+                       if index % 2 == 1 and value_and_info[0] in op_set]
 
             if not allow_chaining:
                 for index1, index2 in zip(indexes, indexes[1:]):
@@ -265,31 +262,28 @@ class _Parser:
                             location=(token1.location + token2.location))
 
             # must go from beginning to end, because a+b+c means (a+b)+c
-            # i know, pop from beginning is slow, but please don't "optimize"
-            # this without profiling first
-            while indexes:
-                index = indexes.pop(0)
-                lhs, (op, info), rhs = funny_stuff[index-1:index+2]
+            # indexes start at end to avoid issues with them getting "outdated"
+            for index in indexes:
+                start = index-1
+                # python's funny corner case: stuff[-1:0] != stuff[-1:]
+                end = None if index+2 == 0 else index+2
+                lhs, (op, info), rhs = funny_stuff[start:end]
 
                 if lhs is None:     # the prefixing, see above
                     assert op == '-'
-                    assert rhs is not None
                     result = PrefixOperator(info.location + rhs.location,
                                             op, rhs)
-                elif op == '`':
-                    result = FuncCall(lhs.location + rhs.location,
-                                      info, [lhs, rhs])
                 else:
-                    result = BinaryOperator(lhs.location + rhs.location,
-                                            op, lhs, rhs)
+                    location = lhs.location + rhs.location
+                    if op == '`':
+                        result = FuncCall(location, info, [lhs, rhs])
+                    else:
+                        result = BinaryOperator(location, op, lhs, rhs)
 
-                funny_stuff[index-1:index+2] = [result]
+                funny_stuff[start:end] = [result]
 
-                # 3 funny_stuff elements were replaced with 1, so fix indexes
-                indexes = [index - 2 for index in indexes]
-
-        assert len(funny_stuff) == 1
-        return funny_stuff[0]
+        [result] = funny_stuff
+        return result
 
     def parse_commasep_list(self, parse_callback, end_op, allow_empty):
         if self.tokens.coming_up('op', end_op):
