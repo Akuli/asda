@@ -14,6 +14,10 @@ $ cd asda
 $ python3 -m pip install --user -r requirements.txt
 ```
 
+If pip can't install the `regex` module, you may need to install a package that
+contains more Python stuff. For example, on Debian-based Linux distributions
+you need `sudo apt install python3-dev`.
+
 Next, create a file called `hello.asda` with this content:
 
 ```js

@@ -1,6 +1,13 @@
 import itertools
 
 
+# these are for reading source files, as specified in docs/syntax.md
+OPEN_KWARGS = {
+    'encoding': 'utf-8-sig',    # like 'utf-8', but ignores a BOM
+    # python accepts both LF and CRLF by default
+}
+
+
 class Location:
 
     def __init__(self, filename, startline, startcolumn, endline, endcolumn):
@@ -64,7 +71,7 @@ class Location:
 
         A trailing newline is not included in the last part.
         """
-        with open(self.filename, 'r') as file:
+        with open(self.filename, 'r', **OPEN_KWARGS) as file:
             # move to the first line, note that line numbers start at 1
             for lineno in range(1, self.startline):
                 file.readline()

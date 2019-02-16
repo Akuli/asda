@@ -1,14 +1,15 @@
 import collections
-import re
 
 import more_itertools
+import regex
 
 from . import common, string_parser
 
 
+_LETTER_REGEX = r'\p{Lu}|\p{Ll}|\p{Lo}'    # not available in stdlib re module
 _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
     ('integer', r'[1-9][0-9]*|0'),
-    ('id', r'[^\W\d]\w*'),
+    ('id', r'(?:%s|_)(?:%s|[0-9_])*' % (_LETTER_REGEX, _LETTER_REGEX)),
     ('op', r'==|!=|->|[+\-`*/;=():.,\[\]]'),
     ('string', '"%s"' % string_parser.CONTENT_REGEX),
     ('ignore1', r'^ *(?:#.*)?\n'),
@@ -52,7 +53,7 @@ def _raw_tokenize(filename, code, initial_lineno, initial_column):
     lineno = initial_lineno
     line_offset = 0     # not set to initial_column, would be very complicated
 
-    for match in re.finditer(_TOKEN_REGEX, code, flags=re.MULTILINE):
+    for match in regex.finditer(_TOKEN_REGEX, code, flags=regex.MULTILINE):
         kind = match.lastgroup
         value = match.group(kind)
         startcolumn = match.start() - line_offset
@@ -77,12 +78,17 @@ def _raw_tokenize(filename, code, initial_lineno, initial_column):
                lineno, endcolumn + initial_column)
 
         if kind == 'error':
+            assert len(value) == 1
+
             if value == '"':
                 # because error messages would be very confusing without this
                 rest_of_line = code[match.end():].split('\n', 1)[0]
                 location.endcolumn += len(rest_of_line)
                 raise common.CompileError("invalid string", location)
-            raise common.CompileError("unexpected '%s'" % value, location)
+            if value.isprintable():
+                raise common.CompileError("unexpected '%s'" % value, location)
+            raise common.CompileError(
+                "unexpected character U+%04X" % ord(value), location)
         elif kind.startswith('ignore'):
             pass
         else:

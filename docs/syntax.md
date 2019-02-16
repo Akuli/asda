@@ -4,6 +4,17 @@ This page documents asda's syntax. You may find it useful if you want to develop
 `asdac` or if you just want to know how the language works in detail.
 
 
+## Source Files
+
+Asda code is always read as UTF-8. If the file starts with an UTF-8 BOM, it's
+ignored. Both LF and CRLF line endings are allowed.
+
+Tab characters are not allowed anywhere in the code, not even in [string tokens].
+Personally I like tabs as they are a character just for indentation, but most
+other people don't like them, so I disallowed them to make code consistent. If
+you want a string that contains a tab, do `"\t"`.
+
+
 ## Tokens
 
 A token is a part of code, like a variable name, a `"string"`, an operator like
@@ -36,11 +47,6 @@ tokens, and `" hello world "` contains more spaces than `"hello world"`. Those
 extra spaces are not ignored because they are not *between* tokens; they are a
 part of the [string token].
 
-Tab characters are not allowed in the source code, not even in [string tokens].
-Personally I like tabs as they are a character just for indentation, but most
-other people don't like them, so I disallowed them to make code consistent. If
-you want a string that contains a tab, do `"\t"`.
-
 Some of the different kinds of tokens are documented in more detail below. The
 tokens that aren't documented in more detail are mentioned in other parts of
 this documentation. For example, `123` is a valid token, because the
@@ -51,10 +57,14 @@ are tokenized differently.
 
 ### Identifier Tokens
 
-An identifier token is e.g. `greeting`, `Str` or `uppercase`. It is a wordy and
-non-digit character followed by zero or more wordy characters. Note that the
-first character can't be a digit, so `2lol` is not a valid identifier, even
-though `lol2` is.
+In this section, a "letter" means a Unicode character whose category is `Lu`,
+`Ll` or `Lo` (uppercase letter, lowercase letter or other letter). Note that
+characters from categories `Lm` and `Lt` (modifier letters and titlecase
+letters) are not considered "letters" in this section.
+
+An identifier token is e.g. `greeting`, `Str` or `uppercase`. It consists of a
+letter or `_` followed by zero or more letters or any one of the characters
+`_1234567890`.
 
 
 ### String Tokens

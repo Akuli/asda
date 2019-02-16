@@ -1,6 +1,8 @@
+import codecs
 import io
 import itertools
 import os
+import random
 import re
 import sys
 
@@ -16,7 +18,8 @@ def asdac_run(monkeypatch, tmp_path):
 
     def run(code, opts=(), exit_code=0):
         path = next(paths)
-        with open(path, 'w') as file:
+        with open(path, 'w', encoding='utf-8',
+                  newline=random.choice(['\n', '\r\n'])) as file:
             file.write(code)
 
         monkeypatch.setattr(
@@ -88,3 +91,21 @@ def test_o_needed_stdin(asdac_run, monkeypatch, capsys):
     assert not output
     assert errors.endswith(
         'the -o option is needed when reading source from stdin\n')
+
+
+def test_bom(asdac_run, capsys):
+    bom = codecs.BOM_UTF8.decode('utf-8')
+
+    asdac_run('print("hello")', exit_code=0)
+    asdac_run(bom + 'print("hello")', exit_code=0)
+    output, errors = capsys.readouterr()
+    assert not output
+    assert errors.count('\n') == 2
+
+    asdac_run(bom + bom + 'print("hello")', exit_code=1)
+    output, errors = capsys.readouterr()
+    assert not output
+    assert re.fullmatch(
+        (r"Compiling: .* --> .*\n"
+         r"error in .*: unexpected character U\+FEFF\n[\S\s]*"),
+        errors) is not None

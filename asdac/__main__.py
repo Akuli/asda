@@ -47,7 +47,7 @@ def source2bytecode(infile, outfile_name, quiet):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'infile', type=argparse.FileType('r', encoding='utf-8'),
+        'infile', type=argparse.FileType('r', **common.OPEN_KWARGS),
         help="source code file")
     parser.add_argument(
         # argparse.FileType('wb') would open the file even if compiling fails
