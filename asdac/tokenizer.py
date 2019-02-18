@@ -4,7 +4,6 @@ import sys
 
 import more_itertools
 import regex
-
 import sly
 
 from . import common, string_parser
