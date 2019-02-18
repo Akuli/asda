@@ -1,6 +1,4 @@
 import copy
-import re
-import sys
 
 import more_itertools
 import regex

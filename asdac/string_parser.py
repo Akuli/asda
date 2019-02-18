@@ -46,7 +46,6 @@ def parse(string, string_location):
             string_location.filename, string_location.offset + start_offset,
             end_offset - start_offset)
 
-    result = []
     for match in re.finditer(_PARSING_REGEX, string):
         kind = match.lastgroup
         value = match.group(kind)

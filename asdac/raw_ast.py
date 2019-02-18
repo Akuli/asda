@@ -3,7 +3,6 @@ import functools
 import itertools
 
 import more_itertools
-import sly
 
 from . import common, string_parser, tokenizer
 
