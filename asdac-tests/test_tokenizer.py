@@ -8,8 +8,10 @@ from asdac.tokenizer import tokenize as real_tokenize
 location = functools.partial(Location, 'test file')
 
 
-def tokens_equal(a, b):
-    return (a.type, a.value, a.index) == (b.type, b.value, b.index)
+def tokens_equal(a, b, *, consider_index=True):
+    if consider_index:
+        return (a.type, a.value, a.index) == (b.type, b.value, b.index)
+    return (a.type, a.value) == (b.type, b.value)
 
 
 # for checking == stuff with sly tokens
@@ -131,10 +133,8 @@ def test_unknown_character():
 
 def test_whitespace_ignoring(monkeypatch):
     Token = type(tokenize('a')[0])
-    monkeypatch.setattr(
-        Token, '__eq__',
-        lambda self, other: (
-            (self.type, self.value) == (other.type, other.value)))
+    monkeypatch.setattr(Token, '__eq__', functools.partialmethod(
+        tokens_equal, consider_index=False))
 
     assert (tokenize('func lol ( Generator [ Str ] asd ) : \n    boo') ==
             tokenize('func lol(Generator[Str]asd):\n    boo'))
