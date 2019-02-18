@@ -3,10 +3,28 @@ import functools
 import pytest
 
 from asdac.common import CompileError, Location
-from asdac.tokenizer import Token
 from asdac.tokenizer import tokenize as real_tokenize
 
 location = functools.partial(Location, 'test file')
+
+
+def tokens_equal(a, b):
+    return (a.type, a.value, a.index) == (b.type, b.value, b.index)
+
+
+# for checking == stuff with sly tokens
+class Token:
+
+    def __init__(self, kind, value, index):
+        self.type = kind
+        self.value = value
+        self.index = index
+
+    def __eq__(self, other):
+        try:
+            return tokens_equal(self, other)
+        except AttributeError:
+            return NotImplemented
 
 
 def tokenize(code):
@@ -26,7 +44,10 @@ def doesnt_tokenize(code, message, bad_code):
 
 
 def test_automatic_trailing_newline():
-    assert tokenize('let x = y') == tokenize('let x = y\n')
+    tokens1 = tokenize('let x = y')
+    tokens2 = tokenize('let x = y\n')
+    assert len(tokens1) == len(tokens2)
+    assert all(map(tokens_equal, tokens1, tokens2))
 
 
 def test_keyword_in_id():

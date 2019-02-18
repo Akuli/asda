@@ -1,3 +1,4 @@
+import copy
 import re
 import sys
 
@@ -91,43 +92,6 @@ def _tab_check(filename, code, initial_offset):
                               common.Location(filename, first_tab_offset, 1))
 
 
-# not to be confused with sly's tokens
-class Token:
-
-    def __init__(self, kind, value, index):
-        assert isinstance(index, int)
-        # TODO: this relies heavily on sly implementation details, better way?
-        fake_sly_token = sly.lex.Token()
-        fake_sly_token.type = kind
-        fake_sly_token.value = value
-        fake_sly_token.lineno = 1
-        fake_sly_token.index = index
-        self._init_from_sly_token(fake_sly_token)
-
-    @classmethod
-    def _from_sly_token(cls, *args):
-        self = cls.__new__(cls)  # create new instance without calling __init__
-        self._init_from_sly_token(*args)
-        return self
-
-    def _init_from_sly_token(self, sly_token):
-        self.type = sly_token.type
-        self.value = sly_token.value
-        self.index = sly_token.index
-        self.sly_token = sly_token
-
-    def __repr__(self):
-        return '<Token: kind=%r, value=%r, index=%r>' % (
-            self.type, self.value, self.index)
-
-    # for testing
-    def __eq__(self, other):
-        if not isinstance(other, Token):
-            return NotImplemented
-        return ((self.type, self.value, self.index) ==
-                (other.type, other.value, other.index))
-
-
 def _raw_tokenize(filename, code, initial_offset):
     _tab_check(filename, code, initial_offset)
 
@@ -135,9 +99,22 @@ def _raw_tokenize(filename, code, initial_offset):
         code += '\n'
 
     lexer = AsdaLexer(filename)
-    for sly_token in lexer.tokenize(code):
-        sly_token.index += initial_offset
-        yield Token._from_sly_token(sly_token)
+    for token in lexer.tokenize(code):
+        token.index += initial_offset
+        yield token
+
+
+# creates a new sly token so that it doesn't rely "too much" on sly's
+# implementation details
+def _copy_token(sly_token, **kwargs):
+    result = copy.copy(sly_token)
+    for name, value in kwargs.items():
+        setattr(result, name, value)
+    return result
+
+
+def _get_location(filename, token):
+    return common.Location(filename, token.index, len(token.value))
 
 
 def _handle_indents_and_dedents(filename, tokens, initial_offset):
@@ -156,25 +133,23 @@ def _handle_indents_and_dedents(filename, tokens, initial_offset):
         elif new_line_starting:
             if token.type == 'INDENT':
                 indent_level = len(token.value)
-                offset = token.index
-                value = token.value
+                fake_token = token
             else:
                 indent_level = 0
-                offset = line_start_offset
-                value = ''
-
-            location = common.Location(filename, offset, len(value))
+                fake_token = _copy_token(
+                    token, index=line_start_offset, value='')
 
             if indent_level > indent_levels[-1]:
-                yield Token('INDENT', value, offset)
-                indent_levels.append(len(value))
+                yield _copy_token(fake_token, type='INDENT')
+                indent_levels.append(len(fake_token.value))
 
             elif indent_level < indent_levels[-1]:
                 if indent_level not in indent_levels:
                     raise common.CompileError(
-                        "the indentation is wrong", location)
+                        "the indentation is wrong",
+                        _get_location(filename, fake_token))
                 while indent_level != indent_levels[-1]:
-                    yield Token('DEDENT', value, offset)
+                    yield _copy_token(fake_token, type='DEDENT')
                     del indent_levels[-1]
 
             if token.type != 'INDENT':
@@ -185,13 +160,12 @@ def _handle_indents_and_dedents(filename, tokens, initial_offset):
         else:
             yield token
 
+    # note: the previous loop left a 'token' variable around
+    # any sly token will do
     while indent_levels != [0]:
-        yield Token('DEDENT', '', line_start_offset)
+        yield _copy_token(token, type='DEDENT', value='',
+                          index=line_start_offset)
         del indent_levels[-1]
-
-
-def _get_location(filename, token):
-    return common.Location(filename, token.index, len(token.value))
 
 
 # the only allowed sequence that contains colon or indent is: colon \n indent
