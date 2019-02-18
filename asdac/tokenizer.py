@@ -111,21 +111,21 @@ class Token:
         return self
 
     def _init_from_sly_token(self, sly_token):
-        self.kind = sly_token.type
+        self.type = sly_token.type
         self.value = sly_token.value
         self.index = sly_token.index
         self.sly_token = sly_token
 
     def __repr__(self):
         return '<Token: kind=%r, value=%r, index=%r>' % (
-            self.kind, self.value, self.index)
+            self.type, self.value, self.index)
 
     # for testing
     def __eq__(self, other):
         if not isinstance(other, Token):
             return NotImplemented
-        return ((self.kind, self.value, self.index) ==
-                (other.kind, other.value, other.index))
+        return ((self.type, self.value, self.index) ==
+                (other.type, other.value, other.index))
 
 
 def _raw_tokenize(filename, code, initial_offset):
@@ -147,14 +147,14 @@ def _handle_indents_and_dedents(filename, tokens, initial_offset):
     line_start_offset = initial_offset
 
     for token in tokens:
-        if token.kind == 'NEWLINE':
+        if token.type == 'NEWLINE':
             assert not new_line_starting, "_raw_tokenize() doesn't work"
             new_line_starting = True
             line_start_offset = token.index + len(token.value)
             yield token
 
         elif new_line_starting:
-            if token.kind == 'INDENT':
+            if token.type == 'INDENT':
                 indent_level = len(token.value)
                 offset = token.index
                 value = token.value
@@ -177,7 +177,7 @@ def _handle_indents_and_dedents(filename, tokens, initial_offset):
                     yield Token('DEDENT', value, offset)
                     del indent_levels[-1]
 
-            if token.kind != 'INDENT':
+            if token.type != 'INDENT':
                 yield token
 
             new_line_starting = False
@@ -200,19 +200,19 @@ def _check_colons(filename, tokens):
     for token1, token2, token3 in staggered:
         assert token3 is not None
 
-        if token3.kind == 'INDENT':
+        if token3.type == 'INDENT':
             if (token1 is None or
                     token2 is None or
-                    token1.kind != 'OP' or
+                    token1.type != 'OP' or
                     token1.value != ':' or
-                    token2.kind != 'NEWLINE'):
+                    token2.type != 'NEWLINE'):
                 raise common.CompileError(
                     "indent without : and newline",
                     _get_location(filename, token3))
 
-        if token1 is not None and token1.kind == 'OP' and token1.value == ':':
+        if token1 is not None and token1.type == 'OP' and token1.value == ':':
             assert token2 is not None and token3 is not None
-            if token2.kind != 'NEWLINE' or token3.kind != 'INDENT':
+            if token2.type != 'NEWLINE' or token3.type != 'INDENT':
                 raise common.CompileError(
                     ": without newline and indent",
                     _get_location(filename, token1))
@@ -227,8 +227,8 @@ def _remove_colons(tokens):
     for token1, token2, token3 in staggered:
         # that is, ignore some stuff that comes before indents
         if (
-          (token2 is None or token2.kind != 'INDENT') and
-          (token3 is None or token3.kind != 'INDENT')):
+          (token2 is None or token2.type != 'INDENT') and
+          (token3 is None or token3.type != 'INDENT')):
             yield token1
 
 

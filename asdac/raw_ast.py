@@ -56,7 +56,7 @@ class _TokenIterator:
                                   location=self.locate(token))
         if value is not None and token.value != value:
             raise error("expected %r, got %r" % (value, token.value))
-        if kind is not None and token.kind != kind:
+        if kind is not None and token.type != kind:
             raise error("expected %s, got %r" % (kind, token.value))
 
     def coming_up(self, kind=None, value=None):
@@ -175,17 +175,17 @@ class _Parser:
     # see docs/syntax.md
     def parse_simple_expression(self):
         first_token = self.tokens.next_token()
-        if first_token.kind == 'INTEGER':
+        if first_token.type == 'INTEGER':
             result = Integer(self.locate(first_token), int(first_token.value))
-        elif first_token.kind == 'ID':
+        elif first_token.type == 'ID':
             if self.tokens.coming_up('OP', '['):
                 result = self._from_generic(first_token)
             else:
                 result = GetVar(self.locate(first_token), first_token.value)
-        elif first_token.kind == 'STRING':
+        elif first_token.type == 'STRING':
             result = self._handle_string_literal(
                 first_token.value, self.locate(first_token))
-        elif first_token.kind == 'OP' and first_token.value == '(':
+        elif first_token.type == 'OP' and first_token.value == '(':
             result = self.parse_expression()
             self.tokens.next_token('OP', ')')
         else:

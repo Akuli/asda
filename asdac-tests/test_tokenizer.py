@@ -119,7 +119,7 @@ def test_whitespace_ignoring(monkeypatch):
     monkeypatch.setattr(
         Token, '__eq__',
         lambda self, other: (
-            (self.kind, self.value) == (other.kind, other.value)))
+            (self.type, self.value) == (other.type, other.value)))
 
     assert (tokenize('func lol ( Generator [ Str ] asd ) : \n    boo') ==
             tokenize('func lol(Generator[Str]asd):\n    boo'))
