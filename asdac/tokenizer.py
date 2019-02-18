@@ -98,7 +98,7 @@ class Token:
         # TODO: this relies heavily on sly implementation details, better way?
         assert len(value) == location.length
         fake_sly_token = sly.lex.Token()
-        fake_sly_token.type = kind.upper()      # TODO: delete upper()
+        fake_sly_token.type = kind
         fake_sly_token.value = value
         fake_sly_token.lineno = 1
         fake_sly_token.index = location.offset
@@ -111,7 +111,7 @@ class Token:
         return self
 
     def _init_from_sly_token(self, sly_token, filename):
-        self.kind = sly_token.type.lower()    # TODO: delete lower()
+        self.kind = sly_token.type
         self.value = sly_token.value
         self.location = common.Location(
             filename, sly_token.index, len(sly_token.value))
@@ -148,14 +148,14 @@ def _handle_indents_and_dedents(filename, tokens, initial_offset):
     line_start_offset = initial_offset
 
     for token in tokens:
-        if token.kind == 'newline':
+        if token.kind == 'NEWLINE':
             assert not new_line_starting, "_raw_tokenize() doesn't work"
             new_line_starting = True
             line_start_offset = token.location.offset + token.location.length
             yield token
 
         elif new_line_starting:
-            if token.kind == 'indent':
+            if token.kind == 'INDENT':
                 indent_level = len(token.value)
                 location = token.location
                 value = token.value
@@ -165,7 +165,7 @@ def _handle_indents_and_dedents(filename, tokens, initial_offset):
                 value = ''
 
             if indent_level > indent_levels[-1]:
-                yield Token('indent', value, location)
+                yield Token('INDENT', value, location)
                 indent_levels.append(len(value))
 
             elif indent_level < indent_levels[-1]:
@@ -173,10 +173,10 @@ def _handle_indents_and_dedents(filename, tokens, initial_offset):
                     raise common.CompileError(
                         "the indentation is wrong", location)
                 while indent_level != indent_levels[-1]:
-                    yield Token('dedent', value, location)
+                    yield Token('DEDENT', value, location)
                     del indent_levels[-1]
 
-            if token.kind != 'indent':
+            if token.kind != 'INDENT':
                 yield token
 
             new_line_starting = False
@@ -185,7 +185,7 @@ def _handle_indents_and_dedents(filename, tokens, initial_offset):
             yield token
 
     while indent_levels != [0]:
-        yield Token('dedent', '',
+        yield Token('DEDENT', '',
                     common.Location(filename, line_start_offset, 0))
         del indent_levels[-1]
 
@@ -196,18 +196,18 @@ def _check_colons(tokens):
     for token1, token2, token3 in staggered:
         assert token3 is not None
 
-        if token3.kind == 'indent':
+        if token3.kind == 'INDENT':
             if (token1 is None or
                     token2 is None or
-                    token1.kind != 'op' or
+                    token1.kind != 'OP' or
                     token1.value != ':' or
-                    token2.kind != 'newline'):
+                    token2.kind != 'NEWLINE'):
                 raise common.CompileError(
                     "indent without : and newline", token3.location)
 
-        if token1 is not None and token1.kind == 'op' and token1.value == ':':
+        if token1 is not None and token1.kind == 'OP' and token1.value == ':':
             assert token2 is not None and token3 is not None
-            if token2.kind != 'newline' or token3.kind != 'indent':
+            if token2.kind != 'NEWLINE' or token3.kind != 'INDENT':
                 raise common.CompileError(
                     ": without newline and indent", token1.location)
 
@@ -221,8 +221,8 @@ def _remove_colons(tokens):
     for token1, token2, token3 in staggered:
         # that is, ignore some stuff that comes before indents
         if (
-          (token2 is None or token2.kind != 'indent') and
-          (token3 is None or token3.kind != 'indent')):
+          (token2 is None or token2.kind != 'INDENT') and
+          (token3 is None or token3.kind != 'INDENT')):
             yield token1
 
 

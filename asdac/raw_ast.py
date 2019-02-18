@@ -138,7 +138,7 @@ class _Parser:
 
                 parser = _Parser(_TokenIterator(tokens))
                 parts.append(_to_string(parser.parse_expression()))
-                parser.tokens.next_token('newline')    # added by tokenizer
+                parser.tokens.next_token('NEWLINE')    # added by tokenizer
                 assert parser.tokens.eof()   # if fails, string isn't one-line
 
             else:   # pragma: no cover
@@ -155,7 +155,7 @@ class _Parser:
             return StrJoin(location, parts)
 
     def _from_generic(self, name_token):
-        self.tokens.next_token('op', '[')
+        self.tokens.next_token('OP', '[')
         types, closing_bracket = self.parse_commasep_list(
             self.parse_type, ']', False)
         return FromGeneric(
@@ -165,32 +165,32 @@ class _Parser:
     # see docs/syntax.md
     def parse_simple_expression(self):
         first_token = self.tokens.next_token()
-        if first_token.kind == 'integer':
+        if first_token.kind == 'INTEGER':
             result = Integer(first_token.location, int(first_token.value))
-        elif first_token.kind == 'id':
-            if self.tokens.coming_up('op', '['):
+        elif first_token.kind == 'ID':
+            if self.tokens.coming_up('OP', '['):
                 result = self._from_generic(first_token)
             else:
                 result = GetVar(first_token.location, first_token.value)
-        elif first_token.kind == 'string':
+        elif first_token.kind == 'STRING':
             result = self._handle_string_literal(
                 first_token.value, first_token.location)
-        elif first_token.kind == 'op' and first_token.value == '(':
+        elif first_token.kind == 'OP' and first_token.value == '(':
             result = self.parse_expression()
-            self.tokens.next_token('op', ')')
+            self.tokens.next_token('OP', ')')
         else:
             raise common.CompileError(
                 "expected an expression, got %r" % first_token.value,
                 first_token.location)
 
         while True:
-            if self.tokens.coming_up('op', '.'):
-                self.tokens.next_token('op', '.')
-                attribute = self.tokens.next_token('id')
+            if self.tokens.coming_up('OP', '.'):
+                self.tokens.next_token('OP', '.')
+                attribute = self.tokens.next_token('ID')
                 result = GetAttr(result.location + attribute.location,
                                  result, attribute.value)
-            elif self.tokens.coming_up('op', '('):
-                self.tokens.next_token('op', '(')
+            elif self.tokens.coming_up('OP', '('):
+                self.tokens.next_token('OP', '(')
                 args, last_paren = self.parse_commasep_list(
                     self.parse_expression, ')', True)
                 result = FuncCall(first_token.location + last_paren.location,
@@ -221,21 +221,21 @@ class _Parser:
         funny_stuff = []
 
         # currently '-' is the only prefix operator
-        if self.tokens.coming_up('op', '-'):
+        if self.tokens.coming_up('OP', '-'):
             # make sure that e.g. -a-b and -a+b do the right thing
             funny_stuff.append(None)    # handled later
             funny_stuff.append(('-', self.tokens.next_token()))
         funny_stuff.append(self.parse_simple_expression())
 
-        while any(self.tokens.coming_up('op', op)
+        while any(self.tokens.coming_up('OP', op)
                   for op_set, allow_chaining in operator_specs
                   for op in op_set):
-            token = self.tokens.next_token('op')
+            token = self.tokens.next_token('OP')
             if token.value == '`':
                 # infix syntax:  a `f` b  does the same thing as  f(a, b)
                 funny_stuff.append(
                     ('`', self.parse_expression(allow_infix_syntax=False)))
-                self.tokens.next_token('op', '`')
+                self.tokens.next_token('OP', '`')
             else:
                 funny_stuff.append((token.value, token))
 
@@ -285,52 +285,52 @@ class _Parser:
         return result
 
     def parse_commasep_list(self, parse_callback, end_op, allow_empty):
-        if self.tokens.coming_up('op', end_op):
+        if self.tokens.coming_up('OP', end_op):
             if not allow_empty:
                 raise common.CompileError(
                     "expected 1 or more comma-separated items, got 0",
-                    self.tokens.next_token('op', end_op).location)
+                    self.tokens.next_token('OP', end_op).location)
             result = []
         else:
             result = [parse_callback()]
-            while self.tokens.coming_up('op', ','):
-                self.tokens.next_token('op', ',')
+            while self.tokens.coming_up('OP', ','):
+                self.tokens.next_token('OP', ',')
                 result.append(parse_callback())
             # TODO: allow a trailing comma?
 
-        return (result, self.tokens.next_token('op', end_op))
+        return (result, self.tokens.next_token('OP', end_op))
 
     def parse_let_statement(self):
-        let = self.tokens.next_token('keyword', 'let')
-        varname = self.tokens.next_token('id')
-        self.tokens.next_token('op', '=')
+        let = self.tokens.next_token('KEYWORD', 'let')
+        varname = self.tokens.next_token('ID')
+        self.tokens.next_token('OP', '=')
         value = self.parse_expression()
         return Let(let.location + value.location, varname.value, value)
 
     def parse_block(self):
-        self.tokens.next_token('indent')
+        self.tokens.next_token('INDENT')
 
         body = []
-        while not self.tokens.coming_up('dedent'):
+        while not self.tokens.coming_up('DEDENT'):
             body.append(self.parse_statement())
 
-        self.tokens.next_token('dedent')
+        self.tokens.next_token('DEDENT')
         return body
 
     def parse_if_statement(self):
-        self.tokens.next_token('keyword', 'if')
+        self.tokens.next_token('KEYWORD', 'if')
         condition = self.parse_expression()
         body = self.parse_block()
         ifs = [(condition, body)]
 
-        while self.tokens.coming_up('keyword', 'elif'):
-            self.tokens.next_token('keyword', 'elif')
+        while self.tokens.coming_up('KEYWORD', 'elif'):
+            self.tokens.next_token('KEYWORD', 'elif')
 
             # python evaluates tuple elements in order
             ifs.append((self.parse_expression(), self.parse_block()))
 
-        if self.tokens.coming_up('keyword', 'else'):
-            self.tokens.next_token('keyword', 'else')
+        if self.tokens.coming_up('KEYWORD', 'else'):
+            self.tokens.next_token('KEYWORD', 'else')
             else_body = self.parse_block()
         else:
             else_body = []
@@ -339,7 +339,7 @@ class _Parser:
         return If(condition.location, ifs, else_body)
 
     def parse_while(self):
-        while_keyword = self.tokens.next_token('keyword', 'while')
+        while_keyword = self.tokens.next_token('KEYWORD', 'while')
         condition = self.parse_expression()
         body = self.parse_block()
         return While(
@@ -348,11 +348,11 @@ class _Parser:
     # for init; cond; incr:
     #     body
     def parse_for(self):
-        for_keyword = self.tokens.next_token('keyword', 'for')
+        for_keyword = self.tokens.next_token('KEYWORD', 'for')
         init = self.parse_statement(allow_multiline=False)
-        self.tokens.next_token('op', ';')
+        self.tokens.next_token('OP', ';')
         cond = self.parse_expression()
-        self.tokens.next_token('op', ';')
+        self.tokens.next_token('OP', ';')
         incr = self.parse_statement(allow_multiline=False)
         body = self.parse_block()
         return For(for_keyword.location + incr.location,
@@ -360,8 +360,8 @@ class _Parser:
 
     # TODO: update this when not all type names are id tokens
     def parse_type(self):
-        first_token = self.tokens.next_token('id')
-        if self.tokens.coming_up('op', '['):
+        first_token = self.tokens.next_token('ID')
+        if self.tokens.coming_up('OP', '['):
             result = self._from_generic(first_token)
         else:
             result = GetType(first_token.location, first_token.value)
@@ -369,19 +369,19 @@ class _Parser:
 
     def parse_arg_spec(self):
         tybe = self.parse_type()
-        varname = self.tokens.next_token('id')
+        varname = self.tokens.next_token('ID')
         return (tybe, varname.value, varname.location)
 
     def parse_func_definition(self):
-        self.tokens.next_token('keyword', 'func')
-        name = self.tokens.next_token('id')
+        self.tokens.next_token('KEYWORD', 'func')
+        name = self.tokens.next_token('ID')
 
-        if self.tokens.coming_up('op', '['):
+        if self.tokens.coming_up('OP', '['):
             def parse_a_generic():
-                token = self.tokens.next_token('id')
+                token = self.tokens.next_token('ID')
                 return (token.value, token.location)
 
-            self.tokens.next_token('op', '[')
+            self.tokens.next_token('OP', '[')
             generics, closing_bracket = self.parse_commasep_list(
                 parse_a_generic, ']', False)
             _duplicate_check(generics, "generic type")
@@ -389,16 +389,16 @@ class _Parser:
         else:
             generics = None
 
-        self.tokens.next_token('op', '(')
+        self.tokens.next_token('OP', '(')
         args, close_paren = self.parse_commasep_list(
             self.parse_arg_spec, ')', True)
         _duplicate_check(((arg[1], arg[2]) for arg in args), "argument")
 
-        self.tokens.next_token('op', '->')
+        self.tokens.next_token('OP', '->')
 
-        if self.tokens.coming_up('keyword', 'void'):
+        if self.tokens.coming_up('KEYWORD', 'void'):
             returntype = None
-            type_location = self.tokens.next_token('keyword', 'void').location
+            type_location = self.tokens.next_token('KEYWORD', 'void').location
         else:
             returntype = self.parse_type()
             type_location = returntype.location
@@ -412,8 +412,8 @@ class _Parser:
                               returntype, body)
 
     def parse_return(self):
-        return_keyword = self.tokens.next_token('keyword', 'return')
-        if self.tokens.coming_up('newline'):
+        return_keyword = self.tokens.next_token('KEYWORD', 'return')
+        if self.tokens.coming_up('NEWLINE'):
             value = None
             location = return_keyword.location
         else:
@@ -422,44 +422,44 @@ class _Parser:
         return Return(location, value)
 
     def parse_yield(self):
-        yield_keyword = self.tokens.next_token('keyword', 'yield')
+        yield_keyword = self.tokens.next_token('KEYWORD', 'yield')
         value = self.parse_expression()
         return Yield(yield_keyword.location + value.location, value)
 
     def parse_void_statement(self):
-        void = self.tokens.next_token('keyword', 'void')
+        void = self.tokens.next_token('KEYWORD', 'void')
         return VoidStatement(void.location)
 
     def parse_statement(self, *, allow_multiline=True):
-        if self.tokens.coming_up('keyword', 'if'):
+        if self.tokens.coming_up('KEYWORD', 'if'):
             result = self.parse_if_statement()
             is_multiline = True
 
-        elif self.tokens.coming_up('keyword', 'while'):
+        elif self.tokens.coming_up('KEYWORD', 'while'):
             result = self.parse_while()
             is_multiline = True
 
-        elif self.tokens.coming_up('keyword', 'for'):
+        elif self.tokens.coming_up('KEYWORD', 'for'):
             result = self.parse_for()
             is_multiline = True
 
-        elif self.tokens.coming_up('keyword', 'func'):
+        elif self.tokens.coming_up('KEYWORD', 'func'):
             result = self.parse_func_definition()
             is_multiline = True
 
-        elif self.tokens.coming_up('keyword', 'let'):
+        elif self.tokens.coming_up('KEYWORD', 'let'):
             result = self.parse_let_statement()
             is_multiline = False
 
-        elif self.tokens.coming_up('keyword', 'return'):
+        elif self.tokens.coming_up('KEYWORD', 'return'):
             result = self.parse_return()
             is_multiline = False
 
-        elif self.tokens.coming_up('keyword', 'yield'):
+        elif self.tokens.coming_up('KEYWORD', 'yield'):
             result = self.parse_yield()
             is_multiline = False
 
-        elif self.tokens.coming_up('keyword', 'void'):
+        elif self.tokens.coming_up('KEYWORD', 'void'):
             result = self.parse_void_statement()
             is_multiline = False
 
@@ -467,11 +467,11 @@ class _Parser:
             is_multiline = False
 
             first_expr = self.parse_expression()
-            if self.tokens.coming_up('op', '='):
+            if self.tokens.coming_up('OP', '='):
                 if not isinstance(first_expr, GetVar):
                     raise common.CompileError(
                         "expected a variable", first_expr.location)
-                self.tokens.next_token('op', '=')
+                self.tokens.next_token('OP', '=')
                 value = self.parse_expression()
                 result = SetVar(first_expr.location + value.location,
                                 first_expr.varname, value)
@@ -493,7 +493,7 @@ class _Parser:
             # whatever gave the result has already handled the newline
         else:
             if allow_multiline:
-                self.tokens.next_token('newline')
+                self.tokens.next_token('NEWLINE')
 
         return result
 

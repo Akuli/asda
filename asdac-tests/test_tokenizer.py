@@ -31,22 +31,22 @@ def test_automatic_trailing_newline():
 
 def test_keyword_in_id():
     assert tokenize('func funcy ffunc func') == [
-        Token('keyword', 'func', location(0, 4)),
-        Token('id', 'funcy', location(5, 5)),
-        Token('id', 'ffunc', location(11, 5)),
-        Token('keyword', 'func', location(17, 4)),
-        Token('newline', '\n', location(21, 1)),
+        Token('KEYWORD', 'func', location(0, 4)),
+        Token('ID', 'funcy', location(5, 5)),
+        Token('ID', 'ffunc', location(11, 5)),
+        Token('KEYWORD', 'func', location(17, 4)),
+        Token('NEWLINE', '\n', location(21, 1)),
     ]
 
 
 def test_indent():
     assert tokenize('if x:\n  y') == [
-        Token('keyword', 'if', location(0, 2)),
-        Token('id', 'x', location(3, 1)),
-        Token('indent', '  ', location(6, 2)),
-        Token('id', 'y', location(8, 1)),
-        Token('newline', '\n', location(9, 1)),
-        Token('dedent', '', location(10, 0)),
+        Token('KEYWORD', 'if', location(0, 2)),
+        Token('ID', 'x', location(3, 1)),
+        Token('INDENT', '  ', location(6, 2)),
+        Token('ID', 'y', location(8, 1)),
+        Token('NEWLINE', '\n', location(9, 1)),
+        Token('DEDENT', '', location(10, 0)),
     ]
 
     doesnt_tokenize('if x:\n     y\n z',
@@ -54,16 +54,16 @@ def test_indent():
                     ' ')
 
     assert tokenize('a:\n  b\nx:\n    y') == [
-        Token('id', 'a', location(0, 1)),
-        Token('indent', '  ', location(3, 2)),
-        Token('id', 'b', location(5, 1)),
-        Token('newline', '\n', location(6, 1)),
-        Token('dedent', '', location(7, 0)),
-        Token('id', 'x', location(7, 1)),
-        Token('indent', '    ', location(10, 4)),
-        Token('id', 'y', location(14, 1)),
-        Token('newline', '\n', location(15, 1)),
-        Token('dedent', '', location(16, 0)),
+        Token('ID', 'a', location(0, 1)),
+        Token('INDENT', '  ', location(3, 2)),
+        Token('ID', 'b', location(5, 1)),
+        Token('NEWLINE', '\n', location(6, 1)),
+        Token('DEDENT', '', location(7, 0)),
+        Token('ID', 'x', location(7, 1)),
+        Token('INDENT', '    ', location(10, 4)),
+        Token('ID', 'y', location(14, 1)),
+        Token('NEWLINE', '\n', location(15, 1)),
+        Token('DEDENT', '', location(16, 0)),
     ]
 
     doesnt_tokenize('x\n y',
