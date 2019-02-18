@@ -20,14 +20,9 @@ def doesnt_tokenize(code, message, bad_code):
     with pytest.raises(CompileError) as error:
         tokenize(code)
 
-    i = code.rindex(bad_code)
-    lineno = code[:i].count('\n') + 1
-    startcolumn = len(code[:i].split('\n')[-1])
-    endcolumn = startcolumn + len(bad_code)
-
+    index = code.rindex(bad_code)
     assert error.value.message == message
-    assert error.value.location == location(
-        lineno, startcolumn, lineno, endcolumn)
+    assert error.value.location == location(index, len(bad_code))
 
 
 def test_automatic_trailing_newline():
@@ -36,22 +31,22 @@ def test_automatic_trailing_newline():
 
 def test_keyword_in_id():
     assert tokenize('func funcy ffunc func') == [
-        Token('keyword', 'func', location(1, 0, 1, 4)),
-        Token('id', 'funcy', location(1, 5, 1, 10)),
-        Token('id', 'ffunc', location(1, 11, 1, 16)),
-        Token('keyword', 'func', location(1, 17, 1, 21)),
-        Token('newline', '\n', location(1, 21, 2, 0)),
+        Token('keyword', 'func', location(0, 4)),
+        Token('id', 'funcy', location(5, 5)),
+        Token('id', 'ffunc', location(11, 5)),
+        Token('keyword', 'func', location(17, 4)),
+        Token('newline', '\n', location(21, 1)),
     ]
 
 
 def test_indent():
     assert tokenize('if x:\n  y') == [
-        Token('keyword', 'if', location(1, 0, 1, 2)),
-        Token('id', 'x', location(1, 3, 1, 4)),
-        Token('indent', '  ', location(2, 0, 2, 2)),
-        Token('id', 'y', location(2, 2, 2, 3)),
-        Token('newline', '\n', location(2, 3, 3, 0)),
-        Token('dedent', '', location(3, 0, 3, 0)),
+        Token('keyword', 'if', location(0, 2)),
+        Token('id', 'x', location(3, 1)),
+        Token('indent', '  ', location(6, 2)),
+        Token('id', 'y', location(8, 1)),
+        Token('newline', '\n', location(9, 1)),
+        Token('dedent', '', location(10, 0)),
     ]
 
     doesnt_tokenize('if x:\n     y\n z',
@@ -59,16 +54,16 @@ def test_indent():
                     ' ')
 
     assert tokenize('a:\n  b\nx:\n    y') == [
-        Token('id', 'a', location(1, 0, 1, 1)),
-        Token('indent', '  ', location(2, 0, 2, 2)),
-        Token('id', 'b', location(2, 2, 2, 3)),
-        Token('newline', '\n', location(2, 3, 3, 0)),
-        Token('dedent', '', location(3, 0, 3, 0)),
-        Token('id', 'x', location(3, 0, 3, 1)),
-        Token('indent', '    ', location(4, 0, 4, 4)),
-        Token('id', 'y', location(4, 4, 4, 5)),
-        Token('newline', '\n', location(4, 5, 5, 0)),
-        Token('dedent', '', location(5, 0, 5, 0)),
+        Token('id', 'a', location(0, 1)),
+        Token('indent', '  ', location(3, 2)),
+        Token('id', 'b', location(5, 1)),
+        Token('newline', '\n', location(6, 1)),
+        Token('dedent', '', location(7, 0)),
+        Token('id', 'x', location(7, 1)),
+        Token('indent', '    ', location(10, 4)),
+        Token('id', 'y', location(14, 1)),
+        Token('newline', '\n', location(15, 1)),
+        Token('dedent', '', location(16, 0)),
     ]
 
     doesnt_tokenize('x\n y',

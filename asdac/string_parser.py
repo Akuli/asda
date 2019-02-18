@@ -38,16 +38,13 @@ _PARSING_REGEX = '|'.join(
 # optimizing code as well, and this can become a part of that then
 def parse(string, string_location):
     # this assumes that the string is one-line
-    assert string_location.startline == string_location.endline
-    assert (string_location.startcolumn + len(string) ==
-            string_location.endcolumn)
     assert '\n' not in string       # but may contain '\\n', aka r'\n'
+    assert len(string) == string_location.length
 
     def create_location(start_offset, end_offset):
         return common.Location(
-            string_location.filename, string_location.startline,
-            string_location.startcolumn + start_offset,
-            string_location.endline, string_location.startcolumn + end_offset)
+            string_location.filename, string_location.offset + start_offset,
+            end_offset - start_offset)
 
     result = []
     for match in re.finditer(_PARSING_REGEX, string):

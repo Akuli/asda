@@ -10,59 +10,61 @@ OPEN_KWARGS = {
 
 class Location:
 
-    def __init__(self, filename, startline, startcolumn, endline, endcolumn):
+    def __init__(self, filename, offset, length):
         # these make debugging a lot easier, don't delete these
         assert isinstance(filename, str)
-        assert startline >= 1
-        assert startcolumn >= 0, (startline, startcolumn, endline, endcolumn)
-        assert endline >= 1
-        assert endcolumn >= 0
-
-        # yes, comparing tuples works like this
-        assert (startline, startcolumn) <= (endline, endcolumn)
+        assert offset >= 0
+        assert length >= 0
 
         self.filename = filename
-        self.startline = startline
-        self.startcolumn = startcolumn
-        self.endline = endline
-        self.endcolumn = endcolumn
-
-    def __str__(self):
-        return '%s:%d,%d...%d,%d' % (
-            self.filename, self.startline, self.startcolumn,
-            self.endline, self.endcolumn)
+        self.offset = offset
+        self.length = length
 
     def __repr__(self):
-        return 'Location(%r, %r, %r, %r, %r)' % (
-            self.filename, self.startline, self.startcolumn,
-            self.endline, self.endcolumn)
+        return 'Location(%r, %r, %r)' % (
+            self.filename, self.offset, self.length)
+
+    def get_line_column_string(self):
+        try:
+            with open(self.filename, 'r', **OPEN_KWARGS) as file:
+                before = file.read(self.offset)
+                value = file.read(self.length)
+            if len(before) != self.offset or len(value) != self.length:
+                # this can happen when input e.g. comes from /dev/fd/something
+                # but is hard to test
+                raise OSError   # pragma: no cover
+        except OSError:
+            # not perfect, but is the best we can do
+            startline = 1
+            startcolumn = self.offset
+            endline = 1
+            endcolumn = self.offset + self.length
+        else:
+            startline = 1 + before.count('\n')
+            startcolumn = len(before.rsplit('\n', 1)[-1])
+            endline = startline + value.count('\n')
+            endcolumn = len((before + value).rsplit('\n', 1)[-1])
+
+        return '%s:%s,%s...%s,%s' % (
+            self.filename, startline, startcolumn, endline, endcolumn)
 
     def __eq__(self, other):
         if not isinstance(other, Location):
             return NotImplemented
-        return ((self.filename, self.start, self.end) ==
-                (other.filename, other.start, other.end))
-
-    @property
-    def start(self):
-        return (self.startline, self.startcolumn)
-
-    @property
-    def end(self):
-        return (self.endline, self.endcolumn)
+        return ((self.filename, self.offset, self.length) ==
+                (other.filename, other.offset, other.length))
 
     # because operator magic is fun
     def __add__(self, other):
         if not isinstance(other, Location):
             return NotImplemented
 
-        assert self.filename == other.filename
-        start = min(self.start, other.start)
-        end = max(self.end, other.end)
-        return Location(self.filename, *(start + end))
+        start = min(self.offset, other.offset)
+        end = max(self.offset + self.length, other.offset + other.length)
+        return Location(self.filename, start, end - start)
 
     def get_source(self):
-        """Reads the code from the source file.
+        """Reads the code from the source file. Raises OSError on failure.
 
         This always reads and returns full lines of code, but the location may
         start or end in the middle of a line, so the lines are returned as a
@@ -72,30 +74,21 @@ class Location:
         A trailing newline is not included in the last part.
         """
         with open(self.filename, 'r', **OPEN_KWARGS) as file:
-            # move to the first line, note that line numbers start at 1
-            for lineno in range(1, self.startline):
-                file.readline()
+            before = file.read(self.offset)
+            value = file.read(self.length)
+            if len(before) != self.offset or len(value) != self.length:
+                raise OSError("file ended sooner than expected")
+            if value.endswith('\n'):
+                after = ''
+            else:
+                after = file.readline().rstrip('\n')    # can become ''
 
-            # special case: only 1 line must be read
-            if self.startline == self.endline:
-                line = file.readline().rstrip('\n')
-                return (line[:self.startcolumn],
-                        line[self.startcolumn:self.endcolumn],
-                        line[self.endcolumn:])
+        if before.endswith('\n'):
+            before = ''
+        else:
+            before = before.rsplit('\n', 1)[-1]
 
-            first_line = file.readline().rstrip('\n')
-            before_start = first_line[:self.startcolumn]
-            lines = [first_line[self.startcolumn:]]
-
-            lines.extend(
-                file.readline().rstrip('\n')
-                for lineno in range(self.startline+1, self.endline))
-
-            last_line = file.readline().rstrip('\n')
-            lines.append(last_line[:self.endcolumn])
-            after_end = last_line[self.endcolumn:]
-
-            return (before_start, '\n'.join(lines), after_end)
+        return (before, value, after)
 
 
 class CompileError(Exception):
@@ -107,7 +100,7 @@ class CompileError(Exception):
         self.message = message
 
     def __str__(self):
-        return str(self.location) + ': ' + self.message
+        return '%r: %s' % (self.location, self.message)
 
 
 # inheriting from this is a more debuggable alternative to "class Asd: pass"

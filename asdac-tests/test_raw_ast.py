@@ -19,14 +19,14 @@ def test_not_an_expression_or_a_statement():
     with pytest.raises(CompileError) as error:
         parse('print(])')
     assert error.value.message == "expected an expression, got ']'"
-    assert error.value.location == location(1, 6, 1, 7)
+    assert error.value.location == location(6, 1)
 
     with pytest.raises(CompileError) as error:
         parse('"lol"')
     assert error.value.message == (
         "expected a let, a variable assignment, an if, a while, a for, "
         "a return, a yield, a function definition or a function call")
-    assert error.value.location == location(1, 0, 1, 5)
+    assert error.value.location == location(0, 5)
 
 
 def test_parentheses_do_nothing(monkeypatch):
@@ -50,24 +50,24 @@ def test_invalid_operator_stuff():
     with pytest.raises(CompileError) as error:
         parse('let x = +1')
     assert error.value.message == "expected an expression, got '+'"
-    assert error.value.location == location(1, 8, 1, 9)
+    assert error.value.location == location(8, 1)
 
     # TODO: this needs a better error message
     with pytest.raises(CompileError) as error:
         parse('let x = 1 + -2')
     assert error.value.message == "expected an expression, got '-'"
-    assert error.value.location == location(1, 12, 1, 13)
+    assert error.value.location == location(12, 1)
 
     for ops in itertools.product(['==', '!='], repeat=2):
         with pytest.raises(CompileError) as error:
             parse('x %s y %s z' % ops)
         assert error.value.message == "'a %s b %s c' is invalid syntax" % ops
-        assert error.value.location == location(1, 2, 1, 9)
+        assert error.value.location == location(2, 7)
 
 
 def test_empty_string():
     [string] = parse('print("")')[0].args
-    assert string.location == location(1, 6, 1, 8)
+    assert string.location == location(6, 2)
     assert string.python_string == ''
 
 
@@ -80,19 +80,19 @@ def test_empty_braces_in_string():
     column = len('print("{')
     assert error1.value.message == "you must put some code between { and }"
     assert error2.value.message == "you must put some code between { and }"
-    assert error1.value.location == location(1, column, 1, column)
-    assert error2.value.location == location(1, column, 1, column+1)
+    assert error1.value.location == location(column, 0)
+    assert error2.value.location == location(column, 1)
 
 
 # corner cases are handled in asdac.string_parser
 def test_joined_strings():
     [string] = parse('print("a {b}")')[0].args
     assert isinstance(string, raw_ast.StrJoin)
-    assert string.location == location(1, 6, 1, 13)
+    assert string.location == location(6, 7)
 
     a, b = string.parts
-    assert a.location == location(1, 7, 1, 9)
-    assert b.location == location(1, 10, 1, 11)
+    assert a.location == location(7, 2)
+    assert b.location == location(10, 1)
 
     assert isinstance(a, raw_ast.String)
     assert isinstance(b, raw_ast.FuncCall)      # implicit .to_string()
@@ -101,23 +101,23 @@ def test_joined_strings():
 def test_generics():
     assert parse('magic_function[Str, Generator[Int]](x)') == [
         FuncCall(
-            location(1, 0, 1, 38),
+            location(0, 38),
             function=FromGeneric(
-                location(1, 0, 1, 35),
+                location(0, 35),
                 name='magic_function',
                 types=[
-                    GetType(location(1, 15, 1, 18), name='Str'),
+                    GetType(location(15, 3), name='Str'),
                     FromGeneric(
-                        location(1, 20, 1, 34),
+                        location(20, 14),
                         name='Generator',
                         types=[
-                            GetType(location(1, 30, 1, 33),
+                            GetType(location(30, 3),
                                     name='Int'),
                         ],
                     ),
                 ],
             ),
-            args=[GetVar(location(1, 36, 1, 37), varname='x')]
+            args=[GetVar(location(36, 1), varname='x')]
         ),
     ]
 
@@ -125,16 +125,16 @@ def test_generics():
         parse('lol[]')
     assert error.value.message == (
         "expected 1 or more comma-separated items, got 0")
-    assert error.value.location == location(1, 4, 1, 5)
+    assert error.value.location == location(4, 1)
 
 
 def test_method_call():
     assert parse('"hello".uppercase()') == [
         FuncCall(
-            location(1, 0, 1, 19),
+            location(0, 19),
             function=GetAttr(
-                location(1, 0, 1, 17),
-                obj=String(location(1, 0, 1, 7),
+                location(0, 17),
+                obj=String(location(0, 7),
                            python_string='hello'),
                 attrname='uppercase',
             ),
@@ -146,24 +146,24 @@ def test_method_call():
 def test_for():
     assert parse('for let x = a; b; x = c:\n    print(x)') == [
         For(
-            location(1, 0, 1, 23),
+            location(0, 23),
             init=Let(
-                location(1, 4, 1, 13),
+                location(4, 9),
                 varname='x',
-                value=GetVar(location(1, 12, 1, 13), varname='a'),
+                value=GetVar(location(12, 1), varname='a'),
             ),
-            cond=GetVar(location(1, 15, 1, 16), varname='b'),
+            cond=GetVar(location(15, 1), varname='b'),
             incr=SetVar(
-                location(1, 18, 1, 23),
+                location(18, 5),
                 varname='x',
-                value=GetVar(location(1, 22, 1, 23), varname='c'),
+                value=GetVar(location(22, 1), varname='c'),
             ),
             body=[
                 FuncCall(
-                    location(2, 4, 2, 12),
-                    function=GetVar(location(2, 4, 2, 9),
+                    location(29, 8),
+                    function=GetVar(location(29, 5),
                                     varname='print'),
-                    args=[GetVar(location(2, 10, 2, 11),
+                    args=[GetVar(location(35, 1),
                                  varname='x')],
                 ),
             ],
@@ -175,23 +175,23 @@ def test_no_multiline_statement():
     with pytest.raises(CompileError) as error:
         parse('for while true:\n    print("hi")')
     assert error.value.message == "expected a one-line statement"
-    assert error.value.location == location(1, 4, 1, 14)
+    assert error.value.location == location(4, 10)
 
 
 def test_assign_to_non_variable():
     with pytest.raises(CompileError) as error:
         parse('print("lol") = x')
     assert error.value.message == "expected a variable"
-    assert error.value.location == location(1, 0, 1, 12)
+    assert error.value.location == location(0, 12)
 
 
 def test_repeated():
     with pytest.raises(CompileError) as error:
         parse('func lol[T, T]() -> void:\n    print("Boo")')
     assert error.value.message == "repeated generic type name: T"
-    assert error.value.location == location(1, 12, 1, 13)
+    assert error.value.location == location(12, 1)
 
     with pytest.raises(CompileError) as error:
         parse('func lol(Str x, Bool x) -> void:\n    print("Boo")')
     assert error.value.message == "repeated argument name: x"
-    assert error.value.location == location(1, 21, 1, 22)
+    assert error.value.location == location(21, 1)

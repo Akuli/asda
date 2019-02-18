@@ -1,128 +1,167 @@
-import collections
+import re
+import sys
 
 import more_itertools
 import regex
+
+import sly
 
 from . import common, string_parser
 
 
 _LETTER_REGEX = r'\p{Lu}|\p{Ll}|\p{Lo}'    # not available in stdlib re module
-_TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
-    ('integer', r'[1-9][0-9]*|0'),
-    ('id', r'(?:%s|_)(?:%s|[0-9_])*' % (_LETTER_REGEX, _LETTER_REGEX)),
-    ('op', r'==|!=|->|[+\-`*/;=():.,\[\]]'),
-    ('string', '"%s"' % string_parser.CONTENT_REGEX),
-    ('ignore1', r'^ *(?:#.*)?\n'),
-    ('newline', r'\n'),
-    ('indent', r'^ +'),
-    ('ignore2', r' +'),
-    ('ignore3', r'#.*'),
-    ('error', r'.'),
-])
 
-Token = collections.namedtuple('Token', ['kind', 'value', 'location'])
+
+class AsdaLexer(sly.Lexer):
+    regex_module = regex
+
+    tokens = {INTEGER, ID, OP, KEYWORD, STRING, IGNORE1, NEWLINE,   # noqa
+              INDENT, IGNORE2}      # noqa
+
+    INTEGER = r'[1-9][0-9]*|0'
+    ID = r'(?:%s|_)(?:%s|[0-9_])*' % (_LETTER_REGEX, _LETTER_REGEX)
+    OP = r'==|!=|->|[+\-`*/;=():.,\[\]]'
+    STRING = '"' + string_parser.CONTENT_REGEX + '"'
+    BLANK_LINE = r'(?<=\n|^) *(?:#.*)?\n'
+    NEWLINE = r'\n'
+    INDENT = r'(?<=\n|^) +'
+    IGNORE_SPACES = r' '
+    IGNORE_COMMENT = r'#.*'
+
+    ID['let'] = KEYWORD     # noqa
+    ID['if'] = KEYWORD      # noqa
+    ID['elif'] = KEYWORD    # noqa
+    ID['else'] = KEYWORD    # noqa
+    ID['while'] = KEYWORD   # noqa
+    ID['for'] = KEYWORD     # noqa
+    ID['void'] = KEYWORD    # noqa
+    ID['return'] = KEYWORD  # noqa
+    ID['func'] = KEYWORD    # noqa
+    ID['yield'] = KEYWORD   # noqa
+
+    def __init__(self, filename):
+        super().__init__()
+        self.filename = filename
+
+    def BLANK_LINE(self, token):
+        self.lineno += 1
+        self.line_start_offset = token.index + len(token.value)
+        return None
+
+    def NEWLINE(self, token):
+        self.lineno += 1
+        self.line_start_offset = token.index + len(token.value)
+        return token
+
+    def IGNORE_SPACES(self, token):
+        return None
+
+    def IGNORE_COMMENT(self, token):
+        return None
+
+    def error(self, token):
+        assert token.value
+        if token.value.startswith('"'):
+            # because error messages would be very confusing without this
+            try:
+                length = token.value.index('\n')
+            except IndexError:
+                length = len(token.value)
+            raise common.CompileError("invalid string", common.Location(
+                self.filename, token.index, length))
+
+        location = common.Location(self.filename, token.index, 1)
+        if token.value[0].isprintable():
+            raise common.CompileError(
+                # TODO: this is confusing if token.value[0] == "'"
+                "unexpected '%s'" % token.value[0], location)
+        raise common.CompileError(
+            "unexpected character U+%04X" % ord(token.value[0]), location)
 
 
 # tabs are disallowed because they aren't used for indentation and you can use
 # "\t" to get a string that contains a tab
-def _tab_check(filename, code, initial_lineno, initial_column):
+def _tab_check(filename, code, initial_offset):
     try:
-        index = code.index('\t')
+        first_tab_offset = initial_offset + code.index('\t')
     except ValueError:
         return
 
-    before_tab = code[:index]
-    lineno = initial_lineno + before_tab.count('\n')
-    try:
-        column = before_tab[::-1].index('\n')
-    except ValueError:
-        # tab is on first line, initial_column matters
-        column = initial_column + index
-
-    raise common.CompileError(
-        "tabs are not allowed in asda code",
-        common.Location(filename, lineno, column, lineno, column+1))
+    raise common.CompileError("tabs are not allowed in asda code",
+                              common.Location(filename, first_tab_offset, 1))
 
 
-def _raw_tokenize(filename, code, initial_lineno, initial_column):
-    _tab_check(filename, code, initial_lineno, initial_column)
+# not to be confused with sly's tokens
+class Token:
+
+    def __init__(self, kind, value, location):
+        # TODO: this relies heavily on sly implementation details, better way?
+        assert len(value) == location.length
+        fake_sly_token = sly.lex.Token()
+        fake_sly_token.type = kind.upper()      # TODO: delete upper()
+        fake_sly_token.value = value
+        fake_sly_token.lineno = 1
+        fake_sly_token.index = location.offset
+        self._init_from_sly_token(fake_sly_token, location.filename)
+
+    @classmethod
+    def _from_sly_token(cls, *args):
+        self = cls.__new__(cls)  # create new instance without calling __init__
+        self._init_from_sly_token(*args)
+        return self
+
+    def _init_from_sly_token(self, sly_token, filename):
+        self.kind = sly_token.type.lower()    # TODO: delete lower()
+        self.value = sly_token.value
+        self.location = common.Location(
+            filename, sly_token.index, len(sly_token.value))
+        self.sly_token = sly_token
+
+    def __repr__(self):
+        return '<Token: kind=%r, value=%r, location=%r>' % (
+            self.kind, self.value, self.location)
+
+    # for testing
+    def __eq__(self, other):
+        if not isinstance(other, Token):
+            return NotImplemented
+        return ((self.kind, self.value, self.location) ==
+                (other.kind, other.value, other.location))
+
+
+def _raw_tokenize(filename, code, initial_offset):
+    _tab_check(filename, code, initial_offset)
 
     if not code.endswith('\n'):
         code += '\n'
 
-    lineno = initial_lineno
-    line_offset = 0     # not set to initial_column, would be very complicated
-
-    for match in regex.finditer(_TOKEN_REGEX, code, flags=regex.MULTILINE):
-        kind = match.lastgroup
-        value = match.group(kind)
-        startcolumn = match.start() - line_offset
-        endcolumn = match.end() - line_offset
-
-        if '\n' in value:
-            # refactoring note: this code may need to be updated if it needs to
-            # work with start_line != 1 or initial_column != 0
-            assert value.count('\n') == 1 and value.endswith('\n')
-            location = common.Location(
-                filename,
-                lineno, startcolumn + initial_column,
-                lineno + 1, 0,
-            )
-            lineno += 1
-            initial_column = 0
-            line_offset = match.end()
-        else:
-            location = common.Location(
-               filename,
-               lineno, startcolumn + initial_column,
-               lineno, endcolumn + initial_column)
-
-        if kind == 'error':
-            assert len(value) == 1
-
-            if value == '"':
-                # because error messages would be very confusing without this
-                rest_of_line = code[match.end():].split('\n', 1)[0]
-                location.endcolumn += len(rest_of_line)
-                raise common.CompileError("invalid string", location)
-            if value.isprintable():
-                raise common.CompileError("unexpected '%s'" % value, location)
-            raise common.CompileError(
-                "unexpected character U+%04X" % ord(value), location)
-        elif kind.startswith('ignore'):
-            pass
-        else:
-            if kind == 'id' and value in {'let', 'if', 'elif', 'else', 'while',
-                                          'for', 'void', 'return', 'func',
-                                          'yield'}:
-                kind = 'keyword'
-            yield Token(kind, value, location)
+    lexer = AsdaLexer(filename)
+    for sly_token in lexer.tokenize(code):
+        sly_token.index += initial_offset
+        yield Token._from_sly_token(sly_token, filename)
 
 
-def _handle_indents_and_dedents(filename, tokens):
+def _handle_indents_and_dedents(filename, tokens, initial_offset):
     # this code took a while to figure out... don't ask me to comment it more
     indent_levels = [0]
     new_line_starting = True
-    last_lineno = None
+    line_start_offset = initial_offset
 
     for token in tokens:
-        last_lineno = token.location.endline
         if token.kind == 'newline':
             assert not new_line_starting, "_raw_tokenize() doesn't work"
             new_line_starting = True
+            line_start_offset = token.location.offset + token.location.length
             yield token
-            continue
 
-        if new_line_starting:
+        elif new_line_starting:
             if token.kind == 'indent':
                 indent_level = len(token.value)
                 location = token.location
                 value = token.value
             else:
                 indent_level = 0
-                lineno = token.location.startline
-                location = common.Location(token.location.filename,
-                                           lineno, 0, lineno, 0)
+                location = common.Location(filename, line_start_offset, 0)
                 value = ''
 
             if indent_level > indent_levels[-1]:
@@ -146,9 +185,8 @@ def _handle_indents_and_dedents(filename, tokens):
             yield token
 
     while indent_levels != [0]:
-        assert last_lineno is not None
         yield Token('dedent', '',
-                    common.Location(filename, last_lineno, 0, last_lineno, 0))
+                    common.Location(filename, line_start_offset, 0))
         del indent_levels[-1]
 
 
@@ -188,11 +226,10 @@ def _remove_colons(tokens):
             yield token1
 
 
-def tokenize(filename, code, *, initial_lineno=1, initial_column=0):
-    assert initial_lineno >= 1
-    assert initial_column >= 0
-    tokens = _raw_tokenize(filename, code, initial_lineno, initial_column)
-    tokens = _handle_indents_and_dedents(filename, tokens)
+def tokenize(filename, code, *, initial_offset=0):
+    assert initial_offset >= 0
+    tokens = _raw_tokenize(filename, code, initial_offset)
+    tokens = _handle_indents_and_dedents(filename, tokens, initial_offset)
     tokens = _check_colons(tokens)
     tokens = _remove_colons(tokens)
     return tokens

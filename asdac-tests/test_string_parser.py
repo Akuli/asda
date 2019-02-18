@@ -4,13 +4,12 @@ from asdac import string_parser
 from asdac.common import CompileError, Location
 
 
-LINE = 123
-COLUMN = 456
+START_OFFSET = 123
 
 
 def location(start_offset, end_offset):
-    return Location('test file', LINE, COLUMN + start_offset,
-                    LINE, COLUMN + end_offset)
+    return Location('test file', START_OFFSET + start_offset,
+                    end_offset - start_offset)
 
 
 def parse(string):

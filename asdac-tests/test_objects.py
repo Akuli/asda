@@ -12,14 +12,10 @@ def doesnt_parse(code, message, bad_code):
     with pytest.raises(CompileError) as error:
         parse(code)
 
-    i = code.rindex(bad_code)
-    lineno = code[:i].count('\n') + 1
-    startcolumn = len(code[:i].split('\n')[-1])
-    endcolumn = startcolumn + len(bad_code)
+    index = code.rindex(bad_code)
 
     assert error.value.message == message
-    assert error.value.location == Location(
-        'test file', lineno, startcolumn, lineno, endcolumn)
+    assert error.value.location == Location('test file', index, len(bad_code))
 
 
 def test_generic_lookup_errors():

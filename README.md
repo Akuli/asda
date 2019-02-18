@@ -5,14 +5,16 @@ This is my attempt at making a statically typed programming language.
 
 ## Hello World!
 
-Make sure that you have Python 3 with pip installed. Then you can download the
-compiler and the interpreter, and install their dependencies:
+Make sure that you have Python 3.6 or newer with pip installed. Then you can
+download the compiler and the interpreter, and install their dependencies:
 
 ```
 $ git clone https://github.com/Akuli/asda
 $ cd asda
 $ python3 -m pip install --user -r requirements.txt
 ```
+
+**TODO:** create a Python 3.5 compatible fork of sly
 
 If pip can't install the `regex` module, you may need to install a package that
 contains more Python stuff. For example, on Debian-based Linux distributions

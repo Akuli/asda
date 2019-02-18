@@ -1,4 +1,6 @@
+import bisect
 import collections
+import io
 import itertools
 
 from . import common, cooked_ast, objects
@@ -97,20 +99,44 @@ class _OpCoder:
     def __init__(self, output_opcode: OpCode, parent_coder):
         self.output = output_opcode
         self.parent_coder = parent_coder
-        if parent_coder is None:
+        if isinstance(parent_coder, tuple):     # this is dumb
             self.level = 0
-        else:
+            self.filename, self.line_start_offsets = parent_coder
+        elif isinstance(parent_coder, _OpCoder):
             self.level = parent_coder.level + 1
+            self.filename = parent_coder.filename
+            self.line_start_offsets = parent_coder.line_start_offsets
+        else:
+            raise TypeError
 
         # {varname: VarMarker or ArgMarker}
         self.local_vars = {}
+
+    # returns line number so that 1 means first line
+    def _lineno(self, location):
+        #    >>> offsets = [0, 4, 10]
+        #    >>> bisect.bisect(offsets, 0)
+        #    1
+        #    >>> bisect.bisect(offsets, 3)
+        #    1
+        #    >>> bisect.bisect(offsets, 4)
+        #    2
+        #    >>> bisect.bisect(offsets, 8)
+        #    2
+        #    >>> bisect.bisect(offsets, 9)
+        #    2
+        #    >>> bisect.bisect(offsets, 10)
+        #    3
+        assert location.filename == self.filename
+        return bisect.bisect(self.line_start_offsets, location.offset)
 
     def do_function_call(self, call):
         self.do_expression(call.function)
         for arg in call.args:
             self.do_expression(arg)
         self.output.ops.append(CallFunction(
-            call.location.startline, len(call.args), call.type is not None))
+            self._lineno(call.location), len(call.args),
+            call.type is not None))
 
     def _get_coder_for_level(self, level):
         level_difference = self.level - level
@@ -124,11 +150,11 @@ class _OpCoder:
     def do_expression(self, expression):
         if isinstance(expression, cooked_ast.StrConstant):
             self.output.ops.append(StrConstant(
-                expression.location.startline, expression.python_string))
+                self._lineno(expression.location), expression.python_string))
 
         elif isinstance(expression, cooked_ast.IntConstant):
             self.output.ops.append(IntConstant(
-                expression.location.startline, expression.python_int))
+                self._lineno(expression.location), expression.python_int))
 
         elif isinstance(expression, cooked_ast.CallFunction):
             self.do_function_call(expression)
@@ -137,7 +163,7 @@ class _OpCoder:
             for part in expression.parts:
                 self.do_expression(part)
             self.output.ops.append(StrJoin(
-                expression.location.startline, len(expression.parts)))
+                self._lineno(expression.location), len(expression.parts)))
 
         # the whole functype is in the opcode because even though the opcode is
         # not statically typed, each object has a type
@@ -163,7 +189,7 @@ class _OpCoder:
                 function_opcode.ops.append(DidntReturnError(None))
 
             self.output.ops.append(CreateFunction(
-                expression.location.startline, expression.name,
+                self._lineno(expression.location), expression.name,
                 expression.type, expression.yields, function_opcode))
 
         # the opcode is dynamically typed from here, so generic functions
@@ -176,7 +202,7 @@ class _OpCoder:
             else:
                 name = expression.funcname
             self.output.ops.append(LookupVar(
-                expression.location.startline, expression.level,
+                self._lineno(expression.location), expression.level,
                 coder.local_vars[name]))
 
         elif isinstance(expression, cooked_ast.LookupAttr):
@@ -184,36 +210,37 @@ class _OpCoder:
             method_names = list(expression.obj.type.methods.keys())
             index = method_names.index(expression.attrname)
             self.output.ops.append(LookupMethod(
-                expression.location.startline, expression.obj.type, index))
+                self._lineno(expression.location), expression.obj.type, index))
 
         elif isinstance(expression, cooked_ast.Plus):
             self.do_expression(expression.lhs)
             self.do_expression(expression.rhs)
-            self.output.ops.append(Plus(expression.location.startline))
+            self.output.ops.append(Plus(self._lineno(expression.location)))
 
         elif isinstance(expression, cooked_ast.Minus):
             self.do_expression(expression.lhs)
             self.do_expression(expression.rhs)
-            self.output.ops.append(Minus(expression.location.startline))
+            self.output.ops.append(Minus(self._lineno(expression.location)))
 
         elif isinstance(expression, cooked_ast.PrefixMinus):
             self.do_expression(expression.prefixed)
-            self.output.ops.append(PrefixMinus(expression.location.startline))
+            self.output.ops.append(PrefixMinus(
+                self._lineno(expression.location)))
 
         elif isinstance(expression, cooked_ast.Times):
             self.do_expression(expression.lhs)
             self.do_expression(expression.rhs)
-            self.output.ops.append(Times(expression.location.startline))
+            self.output.ops.append(Times(self._lineno(expression.location)))
 
 #        elif isinstance(expression, cooked_ast.Divide):
 #            self.do_expression(expression.lhs)
 #            self.do_expression(expression.rhs)
-#            self.output.ops.append(Divide(expression.location.startline))
+#            self.output.ops.append(Divide(self._lineno(expression.location)))
 
         elif isinstance(expression, (cooked_ast.Equal, cooked_ast.NotEqual)):
             self.do_expression(expression.lhs)
             self.do_expression(expression.rhs)
-            self.output.ops.append(Equal(expression.location.startline))
+            self.output.ops.append(Equal(self._lineno(expression.location)))
             if isinstance(expression, cooked_ast.NotEqual):
                 self.output.ops.append(BoolNegation(None))
 
@@ -227,31 +254,34 @@ class _OpCoder:
             self.local_vars[statement.varname] = var
             self.do_expression(statement.initial_value)
             self.output.ops.append(SetVar(
-                statement.location.startline, self.level, var))
+                self._lineno(statement.location), self.level, var))
 
         elif isinstance(statement, cooked_ast.CallFunction):
             self.do_function_call(statement)
             if statement.type is not None:
                 # not a void function, ignore return value
-                self.output.ops.append(PopOne(statement.location.startline))
+                self.output.ops.append(PopOne(
+                    self._lineno(statement.location)))
 
         elif isinstance(statement, cooked_ast.SetVar):
             self.do_expression(statement.value)
             coder = self._get_coder_for_level(statement.level)
             self.output.ops.append(SetVar(
-                statement.location.startline, statement.level,
+                self._lineno(statement.location), statement.level,
                 coder.local_vars[statement.varname]))
 
         elif isinstance(statement, cooked_ast.VoidReturn):
-            self.output.ops.append(Return(statement.location.startline, False))
+            self.output.ops.append(Return(
+                self._lineno(statement.location), False))
 
         elif isinstance(statement, cooked_ast.ValueReturn):
             self.do_expression(statement.value)
-            self.output.ops.append(Return(statement.location.startline, True))
+            self.output.ops.append(Return(
+                self._lineno(statement.location), True))
 
         elif isinstance(statement, cooked_ast.Yield):
             self.do_expression(statement.value)
-            self.output.ops.append(Yield(statement.location.startline))
+            self.output.ops.append(Yield(self._lineno(statement.location)))
 
         elif isinstance(statement, cooked_ast.If):
             end_of_if_body = JumpMarker()
@@ -311,8 +341,15 @@ class _OpCoder:
             self.do_statement(statement)
 
 
-def create_opcode(cooked):
-    builtin_opcoder = _OpCoder(None, None)
+def create_opcode(cooked, filename, source_code):
+    line_start_offsets = []
+    offset = 0
+    for line in io.StringIO(source_code):
+        line_start_offsets.append(offset)
+        offset += len(line)
+
+    builtin_opcoder = _OpCoder(None, (filename, line_start_offsets))
+    builtin_opcoder.line_start_offsets.extend(line_start_offsets)
     builtin_opcoder.local_vars.update({
         name: ArgMarker(index)
         for index, name in enumerate(itertools.chain(

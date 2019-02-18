@@ -23,14 +23,16 @@ def source2bytecode(infile, outfile_name, quiet):
             '<stdout>' if outfile_name == '-' else outfile_name)
         eprint("Compiling:", infile.name, "-->", printable_outfile_name)
 
+    source = infile.read()
+
     # if you change this, make sure that the last step before opening the
     # output file does NOT produce an iterator, so that if something fails, an
     # exception is likely raised before the output file is opened, and the
     # output file gets left untouched if it exists and no invalid output files
     # are created
-    raw = raw_ast.parse(infile.name, infile.read())
+    raw = raw_ast.parse(infile.name, source)
     cooked = cooked_ast.cook(raw)
-    opcode = opcoder.create_opcode(cooked)
+    opcode = opcoder.create_opcode(cooked, infile.name, source)
     bytecode = bytecoder.create_bytecode(opcode)
 
     # usually argparse.FileType would handle this, but see below
@@ -42,6 +44,43 @@ def source2bytecode(infile, outfile_name, quiet):
     with outfile:
         outfile.write(b'asda')
         outfile.write(bytecode)
+
+
+def report_compile_error(error, red_function):
+    if error.location is None:
+        eprint("error: %s" % error.message)
+        return
+
+    eprint("error in %s: %s" % (
+        error.location.get_line_column_string(), error.message))
+
+    try:
+        before, bad_code, after = error.location.get_source()
+    except OSError:
+        return
+
+    if not bad_code:
+        bad_code = ' ' * 4      # to make the location visible
+
+    if bad_code.isspace():
+        replacement = '\N{lower one quarter block}'
+
+        # this doesn't use .expandtabs() because 'a\tb'.expandtabs(4) puts 3
+        # spaces between a and b
+        #
+        # bad_code is a part of a \n-separated line and not a full line, so it
+        # wouldn't expand it consistently
+        bad_code = re.sub(r'[^\S\n]', replacement,
+                          bad_code.replace('\t', ' ' * 4))
+        bad_code = bad_code.replace('\n', replacement * 3 + '\n')
+
+    gonna_print = before + red_function(bad_code) + after
+    eprint()
+    eprint(textwrap.indent(gonna_print, ' ' * 4))
+
+
+def make_red(string):
+    return colorama.Fore.RED + string + colorama.Fore.RESET
 
 
 def main():
@@ -69,10 +108,9 @@ def main():
     }
     if color_dict[args.color]:
         colorama.init()
-        red_start = colorama.Fore.RED
-        red_end = colorama.Fore.RESET
+        red_function = make_red
     else:
-        red_start = red_end = ''
+        red_function = lambda string: string
 
     if args.outfile is None:
         if args.infile is sys.stdin:
@@ -89,32 +127,7 @@ def main():
         with args.infile:
             source2bytecode(args.infile, args.outfile, args.quiet)
     except common.CompileError as e:
-        if e.location is None:
-            eprint("error: %s" % e.message)
-        else:
-            eprint("error in %s: %s" % (str(e.location), e.message))
-
-            if args.infile is not sys.stdin:
-                before, bad_code, after = e.location.get_source()
-                if not bad_code:
-                    bad_code = ' ' * 4      # to make the location visible
-
-                if bad_code.isspace():
-                    replacement = '\N{lower one quarter block}'
-
-                    # this doesn't use .expandtabs() because
-                    # 'a\tb'.expandtabs(4) puts 3 spaces between a and b
-                    #
-                    # bad_code is a part of a \n-separated line and not a full
-                    # line, so it wouldn't expand it consistently
-                    bad_code = re.sub(r'[^\S\n]', replacement,
-                                      bad_code.replace('\t', ' ' * 4))
-                    bad_code = bad_code.replace('\n', replacement * 3 + '\n')
-
-                gonna_print = before + red_start + bad_code + red_end + after
-                eprint()
-                eprint(textwrap.indent(gonna_print, ' ' * 4))
-
+        report_compile_error(e, red_function)
         sys.exit(1)
 
 

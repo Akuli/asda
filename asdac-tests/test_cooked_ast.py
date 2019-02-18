@@ -12,14 +12,9 @@ def doesnt_parse(code, message, bad_code):
     with pytest.raises(CompileError) as error:
         parse(code)
 
-    i = code.rindex(bad_code)
-    lineno = code[:i].count('\n') + 1
-    startcolumn = len(code[:i].split('\n')[-1])
-    endcolumn = startcolumn + len(bad_code)
-
+    index = code.rindex(bad_code)
     assert error.value.message == message
-    assert error.value.location == Location(
-        'test file', lineno, startcolumn, lineno, endcolumn)
+    assert error.value.location == Location('test file', index, len(bad_code))
 
 
 def test_reusing_names():
@@ -216,7 +211,7 @@ def test_joined_string_location_corner_case():
     let, print_ = parse('let x = 1\nprint("hello {x}")')
     [join] = print_.args
     assert join.location == Location(
-        'test file', 2, len('print('), 2, len('print("hello {x}"'))
+        'test file', 16, len('"hello {x}"'))
 
 
 def test_string_formatting_with_bad_type():
@@ -226,6 +221,8 @@ def test_string_formatting_with_bad_type():
 
 
 def test_void_statement(monkeypatch):
+    monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
+
     code = '''
 if TRUE:
     print("a")
@@ -233,7 +230,5 @@ if TRUE:
     print("b")
 '''
     assert parse(code % 'void') == parse(code % '')
-
-    monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
     assert (parse('for void; TRUE; void:\n    print("Hi")') ==
             parse('while TRUE:\n    print("Hi")'))

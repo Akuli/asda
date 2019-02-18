@@ -3,6 +3,7 @@ import functools
 import itertools
 
 import more_itertools
+import sly
 
 from . import common, string_parser, tokenizer
 
@@ -111,8 +112,7 @@ class _Parser:
         assert len(string) >= 2 and string[0] == '"' and string[-1] == '"'
         content = string[1:-1]
         content_location = common.Location(
-            location.filename, location.startline, location.startcolumn + 1,
-            location.endline, location.endcolumn - 1)
+            location.filename, location.offset + 1, location.length - 2)
 
         parts = []
         for kind, value, part_location in string_parser.parse(
@@ -123,8 +123,7 @@ class _Parser:
             elif kind == 'code':
                 tokens = tokenizer.tokenize(
                     part_location.filename, value,
-                    initial_lineno=part_location.startline,
-                    initial_column=part_location.startcolumn)
+                    initial_offset=part_location.offset)
 
                 # make sure that there are some tokens, otherwise a thing in
                 # _TokenIterator fails
