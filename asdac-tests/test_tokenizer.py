@@ -15,16 +15,10 @@ def tokens_equal(a, b):
 # for checking == stuff with sly tokens
 class Token:
 
-    def __init__(self, kind, value, index):
-        self.type = kind
-        self.value = value
-        self.index = index
+    def __init__(self, *args):
+        self.type, self.value, self.index = args
 
-    def __eq__(self, other):
-        try:
-            return tokens_equal(self, other)
-        except AttributeError:
-            return NotImplemented
+    __eq__ = tokens_equal
 
 
 def tokenize(code):
