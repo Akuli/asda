@@ -39,15 +39,21 @@ BinaryOperator = _astclass('BinaryOperator', ['operator', 'lhs', 'rhs'])
 
 class _TokenIterator:
 
-    def __init__(self, token_iterable):
+    def __init__(self, filename, token_iterable):
+        self.filename = filename
         self._iterator = iter(token_iterable)
+
+    # get the location of a token
+    def locate(self, token):
+        return common.Location(self.filename, token.index, len(token.value))
 
     def copy(self):
         self._iterator, copied = itertools.tee(self._iterator)
-        return _TokenIterator(copied)
+        return _TokenIterator(self.filename, copied)
 
     def _check_token(self, token, kind, value):
-        error = functools.partial(common.CompileError, location=token.location)
+        error = functools.partial(common.CompileError,
+                                  location=self.locate(token))
         if value is not None and token.value != value:
             raise error("expected %r, got %r" % (value, token.value))
         if kind is not None and token.kind != kind:
@@ -108,6 +114,10 @@ class _Parser:
         assert isinstance(tokens, _TokenIterator)
         self.tokens = tokens
 
+    # because this is used in so many places
+    def locate(self, token):
+        return self.tokens.locate(token)
+
     def _handle_string_literal(self, string, location):
         assert len(string) >= 2 and string[0] == '"' and string[-1] == '"'
         content = string[1:-1]
@@ -136,7 +146,7 @@ class _Parser:
                         "you must put some code between { and }",
                         part_location)
 
-                parser = _Parser(_TokenIterator(tokens))
+                parser = _Parser(_TokenIterator(self.tokens.filename, tokens))
                 parts.append(_to_string(parser.parse_expression()))
                 parser.tokens.next_token('NEWLINE')    # added by tokenizer
                 assert parser.tokens.eof()   # if fails, string isn't one-line
@@ -159,41 +169,42 @@ class _Parser:
         types, closing_bracket = self.parse_commasep_list(
             self.parse_type, ']', False)
         return FromGeneric(
-            name_token.location + closing_bracket.location,
+            self.locate(name_token) + self.locate(closing_bracket),
             name_token.value, types)
 
     # see docs/syntax.md
     def parse_simple_expression(self):
         first_token = self.tokens.next_token()
         if first_token.kind == 'INTEGER':
-            result = Integer(first_token.location, int(first_token.value))
+            result = Integer(self.locate(first_token), int(first_token.value))
         elif first_token.kind == 'ID':
             if self.tokens.coming_up('OP', '['):
                 result = self._from_generic(first_token)
             else:
-                result = GetVar(first_token.location, first_token.value)
+                result = GetVar(self.locate(first_token), first_token.value)
         elif first_token.kind == 'STRING':
             result = self._handle_string_literal(
-                first_token.value, first_token.location)
+                first_token.value, self.locate(first_token))
         elif first_token.kind == 'OP' and first_token.value == '(':
             result = self.parse_expression()
             self.tokens.next_token('OP', ')')
         else:
             raise common.CompileError(
                 "expected an expression, got %r" % first_token.value,
-                first_token.location)
+                self.locate(first_token))
 
         while True:
             if self.tokens.coming_up('OP', '.'):
                 self.tokens.next_token('OP', '.')
                 attribute = self.tokens.next_token('ID')
-                result = GetAttr(result.location + attribute.location,
+                result = GetAttr(result.location + self.locate(attribute),
                                  result, attribute.value)
             elif self.tokens.coming_up('OP', '('):
                 self.tokens.next_token('OP', '(')
                 args, last_paren = self.parse_commasep_list(
                     self.parse_expression, ')', True)
-                result = FuncCall(first_token.location + last_paren.location,
+                result = FuncCall((self.locate(first_token) +
+                                   self.locate(last_paren)),
                                   result, args)
             else:
                 break
@@ -258,7 +269,7 @@ class _Parser:
                         op2, token2 = funny_stuff[index2]
                         raise common.CompileError(
                             "'a %s b %s c' is invalid syntax" % (op1, op2),
-                            location=(token1.location + token2.location))
+                            location=self.locate(token1) + self.locate(token2))
 
             # must go from beginning to end, because a+b+c means (a+b)+c
             # indexes start at end to avoid issues with them getting "outdated"
@@ -270,8 +281,8 @@ class _Parser:
 
                 if lhs is None:     # the prefixing, see above
                     assert op == '-'
-                    result = PrefixOperator(info.location + rhs.location,
-                                            op, rhs)
+                    result = PrefixOperator(
+                        self.locate(info) + rhs.location, op, rhs)
                 else:
                     location = lhs.location + rhs.location
                     if op == '`':
@@ -289,7 +300,7 @@ class _Parser:
             if not allow_empty:
                 raise common.CompileError(
                     "expected 1 or more comma-separated items, got 0",
-                    self.tokens.next_token('OP', end_op).location)
+                    self.locate(self.tokens.next_token('OP', end_op)))
             result = []
         else:
             result = [parse_callback()]
@@ -305,7 +316,7 @@ class _Parser:
         varname = self.tokens.next_token('ID')
         self.tokens.next_token('OP', '=')
         value = self.parse_expression()
-        return Let(let.location + value.location, varname.value, value)
+        return Let(self.locate(let) + value.location, varname.value, value)
 
     def parse_block(self):
         self.tokens.next_token('INDENT')
@@ -342,8 +353,8 @@ class _Parser:
         while_keyword = self.tokens.next_token('KEYWORD', 'while')
         condition = self.parse_expression()
         body = self.parse_block()
-        return While(
-            while_keyword.location + condition.location, condition, body)
+        return While(self.locate(while_keyword) + condition.location,
+                     condition, body)
 
     # for init; cond; incr:
     #     body
@@ -355,7 +366,7 @@ class _Parser:
         self.tokens.next_token('OP', ';')
         incr = self.parse_statement(allow_multiline=False)
         body = self.parse_block()
-        return For(for_keyword.location + incr.location,
+        return For(self.locate(for_keyword) + incr.location,
                    init, cond, incr, body)
 
     # TODO: update this when not all type names are id tokens
@@ -364,13 +375,13 @@ class _Parser:
         if self.tokens.coming_up('OP', '['):
             result = self._from_generic(first_token)
         else:
-            result = GetType(first_token.location, first_token.value)
+            result = GetType(self.locate(first_token), first_token.value)
         return result
 
     def parse_arg_spec(self):
         tybe = self.parse_type()
         varname = self.tokens.next_token('ID')
-        return (tybe, varname.value, varname.location)
+        return (tybe, varname.value, self.locate(varname))
 
     def parse_func_definition(self):
         self.tokens.next_token('KEYWORD', 'func')
@@ -379,7 +390,7 @@ class _Parser:
         if self.tokens.coming_up('OP', '['):
             def parse_a_generic():
                 token = self.tokens.next_token('ID')
-                return (token.value, token.location)
+                return (token.value, self.locate(token))
 
             self.tokens.next_token('OP', '[')
             generics, closing_bracket = self.parse_commasep_list(
@@ -398,7 +409,8 @@ class _Parser:
 
         if self.tokens.coming_up('KEYWORD', 'void'):
             returntype = None
-            type_location = self.tokens.next_token('KEYWORD', 'void').location
+            void = self.tokens.next_token('KEYWORD', 'void')
+            type_location = self.locate(void)
         else:
             returntype = self.parse_type()
             type_location = returntype.location
@@ -407,7 +419,7 @@ class _Parser:
 
         # the location of a function definition is just the first line,
         # because the body can get quite long
-        location = type_location + close_paren.location
+        location = type_location + self.locate(close_paren)
         return FuncDefinition(location, name.value, generics, args,
                               returntype, body)
 
@@ -415,20 +427,20 @@ class _Parser:
         return_keyword = self.tokens.next_token('KEYWORD', 'return')
         if self.tokens.coming_up('NEWLINE'):
             value = None
-            location = return_keyword.location
+            location = self.locate(return_keyword)
         else:
             value = self.parse_expression()
-            location = return_keyword.location + value.location
+            location = self.locate(return_keyword) + value.location
         return Return(location, value)
 
     def parse_yield(self):
         yield_keyword = self.tokens.next_token('KEYWORD', 'yield')
         value = self.parse_expression()
-        return Yield(yield_keyword.location + value.location, value)
+        return Yield(self.locate(yield_keyword) + value.location, value)
 
     def parse_void_statement(self):
         void = self.tokens.next_token('KEYWORD', 'void')
-        return VoidStatement(void.location)
+        return VoidStatement(self.locate(void))
 
     def parse_statement(self, *, allow_multiline=True):
         if self.tokens.coming_up('KEYWORD', 'if'):
@@ -501,6 +513,7 @@ class _Parser:
 # this does the tokenizing because string formatting things need to invoke the
 # tokenizer anyway
 def parse(filename, code):
-    parser = _Parser(_TokenIterator(tokenizer.tokenize(filename, code)))
-    while not parser.tokens.eof():
+    tokens = _TokenIterator(filename, tokenizer.tokenize(filename, code))
+    parser = _Parser(tokens)
+    while not tokens.eof():
         yield parser.parse_statement()

@@ -31,22 +31,22 @@ def test_automatic_trailing_newline():
 
 def test_keyword_in_id():
     assert tokenize('func funcy ffunc func') == [
-        Token('KEYWORD', 'func', location(0, 4)),
-        Token('ID', 'funcy', location(5, 5)),
-        Token('ID', 'ffunc', location(11, 5)),
-        Token('KEYWORD', 'func', location(17, 4)),
-        Token('NEWLINE', '\n', location(21, 1)),
+        Token('KEYWORD', 'func', 0),
+        Token('ID', 'funcy', 5),
+        Token('ID', 'ffunc', 11),
+        Token('KEYWORD', 'func', 17),
+        Token('NEWLINE', '\n', 21),
     ]
 
 
 def test_indent():
     assert tokenize('if x:\n  y') == [
-        Token('KEYWORD', 'if', location(0, 2)),
-        Token('ID', 'x', location(3, 1)),
-        Token('INDENT', '  ', location(6, 2)),
-        Token('ID', 'y', location(8, 1)),
-        Token('NEWLINE', '\n', location(9, 1)),
-        Token('DEDENT', '', location(10, 0)),
+        Token('KEYWORD', 'if', 0),
+        Token('ID', 'x', 3),
+        Token('INDENT', '  ', 6),
+        Token('ID', 'y', 8),
+        Token('NEWLINE', '\n', 9),
+        Token('DEDENT', '', 10),
     ]
 
     doesnt_tokenize('if x:\n     y\n z',
@@ -54,16 +54,16 @@ def test_indent():
                     ' ')
 
     assert tokenize('a:\n  b\nx:\n    y') == [
-        Token('ID', 'a', location(0, 1)),
-        Token('INDENT', '  ', location(3, 2)),
-        Token('ID', 'b', location(5, 1)),
-        Token('NEWLINE', '\n', location(6, 1)),
-        Token('DEDENT', '', location(7, 0)),
-        Token('ID', 'x', location(7, 1)),
-        Token('INDENT', '    ', location(10, 4)),
-        Token('ID', 'y', location(14, 1)),
-        Token('NEWLINE', '\n', location(15, 1)),
-        Token('DEDENT', '', location(16, 0)),
+        Token('ID', 'a', 0),
+        Token('INDENT', '  ', 3),
+        Token('ID', 'b', 5),
+        Token('NEWLINE', '\n', 6),
+        Token('DEDENT', '', 7),
+        Token('ID', 'x', 7),
+        Token('INDENT', '    ', 10),
+        Token('ID', 'y', 14),
+        Token('NEWLINE', '\n', 15),
+        Token('DEDENT', '', 16),
     ]
 
     doesnt_tokenize('x\n y',
@@ -115,6 +115,11 @@ def test_unknown_character():
 
 
 def test_whitespace_ignoring(monkeypatch):
-    monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
+    Token = type(tokenize('a')[0])
+    monkeypatch.setattr(
+        Token, '__eq__',
+        lambda self, other: (
+            (self.kind, self.value) == (other.kind, other.value)))
+
     assert (tokenize('func lol ( Generator [ Str ] asd ) : \n    boo') ==
             tokenize('func lol(Generator[Str]asd):\n    boo'))
