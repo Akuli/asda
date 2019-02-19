@@ -214,7 +214,7 @@ class _Parser:
         operator_specs = [
             # these are (op_set, allow_chaining) tuples
             #
-                # a OP b OP c is:
+            # a OP b OP c is:
             #   * (a OP b) OP c, if allow_chaining is True
             #   * an error, if allow_chaining is False
             ({'*', '/'}, True),

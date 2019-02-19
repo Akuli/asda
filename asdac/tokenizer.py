@@ -43,26 +43,14 @@ class AsdaLexer(sly.Lexer):
         self.filename = filename
 
     # sly wants the literals set to contain single characters only
-    @_(r'==|!=|->')
+    @_(r'==|!=|->')     # noqa
     def multicharacter_literal(self, token):
         token.type = token.value
         return token
 
-    def BLANK_LINE(self, token):
-        self.lineno += 1
-        self.line_start_offset = token.index + len(token.value)
-        return None
-
-    def NEWLINE(self, token):
-        self.lineno += 1
-        self.line_start_offset = token.index + len(token.value)
-        return token
-
-    def IGNORE_SPACES(self, token):
-        return None
-
-    def IGNORE_COMMENT(self, token):
-        return None
+    BLANK_LINE = lambda self, token: None       # noqa
+    IGNORE_SPACES = lambda self, token: None    # noqa
+    IGNORE_COMMENT = lambda self, token: None   # noqa
 
     def error(self, token):
         assert token.value
