@@ -15,8 +15,7 @@ class AsdaLexer(sly.Lexer):
 
     literals = {'+', '-', '*', '/', '=', '`', ';', ':', '.', ',',
                 '[', ']', '(', ')'}
-    tokens = {INTEGER, ID, KEYWORD, STRING, IGNORE1, NEWLINE,   # noqa
-              INDENT, IGNORE2}      # noqa
+    tokens = {INTEGER, ID, KEYWORD, STRING, NEWLINE, INDENT}      # noqa
 
     INTEGER = r'[1-9][0-9]*|0'
     ID = r'(?:%s|_)(?:%s|[0-9_])*' % (_LETTER_REGEX, _LETTER_REGEX)
