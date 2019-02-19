@@ -24,15 +24,28 @@ class Location:
         return 'Location(%r, %r, %r)' % (
             self.filename, self.offset, self.length)
 
+    # raises OSError
+    def _read_before_value_after(self):
+        with open(self.filename, 'r', **OPEN_KWARGS) as file:
+            before = file.read(self.offset)
+            value = file.read(self.length)
+
+            # after is from this location to next \n (included)
+            if value.endswith('\n'):
+                after = ''
+            else:
+                after = file.readline()
+
+        if len(before) != self.offset or len(value) != self.length:
+            # this can happen when input e.g. comes from /dev/fd/something
+            # but is hard to test
+            raise OSError("file ended too soon")   # pragma: no cover
+
+        return (before, value, after)
+
     def get_line_column_string(self):
         try:
-            with open(self.filename, 'r', **OPEN_KWARGS) as file:
-                before = file.read(self.offset)
-                value = file.read(self.length)
-            if len(before) != self.offset or len(value) != self.length:
-                # this can happen when input e.g. comes from /dev/fd/something
-                # but is hard to test
-                raise OSError   # pragma: no cover
+            before, value, junk = self._read_before_value_after()
         except OSError:
             # not perfect, but is the best we can do
             startline = 1
@@ -68,27 +81,13 @@ class Location:
 
         This always reads and returns full lines of code, but the location may
         start or end in the middle of a line, so the lines are returned as a
-        3-tuple of code before the location (but on *startline*), at the
-        location and after the location (but on *endline*).
+        3-tuple of code before the location, at the location and after the
+        location.
 
         A trailing newline is not included in the last part.
         """
-        with open(self.filename, 'r', **OPEN_KWARGS) as file:
-            before = file.read(self.offset)
-            value = file.read(self.length)
-            if len(before) != self.offset or len(value) != self.length:
-                raise OSError("file ended sooner than expected")
-            if value.endswith('\n'):
-                after = ''
-            else:
-                after = file.readline().rstrip('\n')    # can become ''
-
-        if before.endswith('\n'):
-            before = ''
-        else:
-            before = before.rsplit('\n', 1)[-1]
-
-        return (before, value, after)
+        before, value, after = self._read_before_value_after()
+        return (before.rsplit('\n', 1)[-1], value, after.rstrip('\n'))
 
 
 class CompileError(Exception):
