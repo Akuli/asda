@@ -164,7 +164,7 @@ class _Parser:
             return StrJoin(location, parts)
 
     def _from_generic(self, name_token):
-        self.tokens.next_token('OP', '[')
+        self.tokens.next_token('[')
         types, closing_bracket = self.parse_commasep_list(
             self.parse_type, ']', False)
         return FromGeneric(
@@ -177,29 +177,29 @@ class _Parser:
         if first_token.type == 'INTEGER':
             result = Integer(self.locate(first_token), int(first_token.value))
         elif first_token.type == 'ID':
-            if self.tokens.coming_up('OP', '['):
+            if self.tokens.coming_up('['):
                 result = self._from_generic(first_token)
             else:
                 result = GetVar(self.locate(first_token), first_token.value)
         elif first_token.type == 'STRING':
             result = self._handle_string_literal(
                 first_token.value, self.locate(first_token))
-        elif first_token.type == 'OP' and first_token.value == '(':
+        elif first_token.type == '(':
             result = self.parse_expression()
-            self.tokens.next_token('OP', ')')
+            self.tokens.next_token(')')
         else:
             raise common.CompileError(
                 "expected an expression, got %r" % first_token.value,
                 self.locate(first_token))
 
         while True:
-            if self.tokens.coming_up('OP', '.'):
-                self.tokens.next_token('OP', '.')
+            if self.tokens.coming_up('.'):
+                self.tokens.next_token('.')
                 attribute = self.tokens.next_token('ID')
                 result = GetAttr(result.location + self.locate(attribute),
                                  result, attribute.value)
-            elif self.tokens.coming_up('OP', '('):
-                self.tokens.next_token('OP', '(')
+            elif self.tokens.coming_up('('):
+                self.tokens.next_token('(')
                 args, last_paren = self.parse_commasep_list(
                     self.parse_expression, ')', True)
                 result = FuncCall((self.locate(first_token) +
@@ -214,7 +214,7 @@ class _Parser:
         operator_specs = [
             # these are (op_set, allow_chaining) tuples
             #
-            # a OP b OP c is:
+                # a OP b OP c is:
             #   * (a OP b) OP c, if allow_chaining is True
             #   * an error, if allow_chaining is False
             ({'*', '/'}, True),
@@ -231,21 +231,21 @@ class _Parser:
         funny_stuff = []
 
         # currently '-' is the only prefix operator
-        if self.tokens.coming_up('OP', '-'):
+        if self.tokens.coming_up('-'):
             # make sure that e.g. -a-b and -a+b do the right thing
             funny_stuff.append(None)    # handled later
             funny_stuff.append(('-', self.tokens.next_token()))
         funny_stuff.append(self.parse_simple_expression())
 
-        while any(self.tokens.coming_up('OP', op)
+        while any(self.tokens.coming_up(op)
                   for op_set, allow_chaining in operator_specs
                   for op in op_set):
-            token = self.tokens.next_token('OP')
+            token = self.tokens.next_token()
             if token.value == '`':
                 # infix syntax:  a `f` b  does the same thing as  f(a, b)
                 funny_stuff.append(
                     ('`', self.parse_expression(allow_infix_syntax=False)))
-                self.tokens.next_token('OP', '`')
+                self.tokens.next_token('`')
             else:
                 funny_stuff.append((token.value, token))
 
@@ -295,25 +295,25 @@ class _Parser:
         return result
 
     def parse_commasep_list(self, parse_callback, end_op, allow_empty):
-        if self.tokens.coming_up('OP', end_op):
+        if self.tokens.coming_up(end_op):
             if not allow_empty:
                 raise common.CompileError(
                     "expected 1 or more comma-separated items, got 0",
-                    self.locate(self.tokens.next_token('OP', end_op)))
+                    self.locate(self.tokens.next_token(end_op)))
             result = []
         else:
             result = [parse_callback()]
-            while self.tokens.coming_up('OP', ','):
-                self.tokens.next_token('OP', ',')
+            while self.tokens.coming_up(','):
+                self.tokens.next_token(',')
                 result.append(parse_callback())
             # TODO: allow a trailing comma?
 
-        return (result, self.tokens.next_token('OP', end_op))
+        return (result, self.tokens.next_token(end_op))
 
     def parse_let_statement(self):
         let = self.tokens.next_token('KEYWORD', 'let')
         varname = self.tokens.next_token('ID')
-        self.tokens.next_token('OP', '=')
+        self.tokens.next_token('=')
         value = self.parse_expression()
         return Let(self.locate(let) + value.location, varname.value, value)
 
@@ -360,9 +360,9 @@ class _Parser:
     def parse_for(self):
         for_keyword = self.tokens.next_token('KEYWORD', 'for')
         init = self.parse_statement(allow_multiline=False)
-        self.tokens.next_token('OP', ';')
+        self.tokens.next_token(';')
         cond = self.parse_expression()
-        self.tokens.next_token('OP', ';')
+        self.tokens.next_token(';')
         incr = self.parse_statement(allow_multiline=False)
         body = self.parse_block()
         return For(self.locate(for_keyword) + incr.location,
@@ -371,7 +371,7 @@ class _Parser:
     # TODO: update this when not all type names are id tokens
     def parse_type(self):
         first_token = self.tokens.next_token('ID')
-        if self.tokens.coming_up('OP', '['):
+        if self.tokens.coming_up('['):
             result = self._from_generic(first_token)
         else:
             result = GetType(self.locate(first_token), first_token.value)
@@ -386,12 +386,12 @@ class _Parser:
         self.tokens.next_token('KEYWORD', 'func')
         name = self.tokens.next_token('ID')
 
-        if self.tokens.coming_up('OP', '['):
+        if self.tokens.coming_up('['):
             def parse_a_generic():
                 token = self.tokens.next_token('ID')
                 return (token.value, self.locate(token))
 
-            self.tokens.next_token('OP', '[')
+            self.tokens.next_token('[')
             generics, closing_bracket = self.parse_commasep_list(
                 parse_a_generic, ']', False)
             _duplicate_check(generics, "generic type")
@@ -399,12 +399,12 @@ class _Parser:
         else:
             generics = None
 
-        self.tokens.next_token('OP', '(')
+        self.tokens.next_token('(')
         args, close_paren = self.parse_commasep_list(
             self.parse_arg_spec, ')', True)
         _duplicate_check(((arg[1], arg[2]) for arg in args), "argument")
 
-        self.tokens.next_token('OP', '->')
+        self.tokens.next_token('->')
 
         if self.tokens.coming_up('KEYWORD', 'void'):
             returntype = None
@@ -478,11 +478,11 @@ class _Parser:
             is_multiline = False
 
             first_expr = self.parse_expression()
-            if self.tokens.coming_up('OP', '='):
+            if self.tokens.coming_up('='):
                 if not isinstance(first_expr, GetVar):
                     raise common.CompileError(
                         "expected a variable", first_expr.location)
-                self.tokens.next_token('OP', '=')
+                self.tokens.next_token('=')
                 value = self.parse_expression()
                 result = SetVar(first_expr.location + value.location,
                                 first_expr.varname, value)

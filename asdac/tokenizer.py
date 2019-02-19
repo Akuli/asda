@@ -13,12 +13,13 @@ _LETTER_REGEX = r'\p{Lu}|\p{Ll}|\p{Lo}'    # not available in stdlib re module
 class AsdaLexer(sly.Lexer):
     regex_module = regex
 
-    tokens = {INTEGER, ID, OP, KEYWORD, STRING, IGNORE1, NEWLINE,   # noqa
+    literals = {'+', '-', '*', '/', '=', '`', ';', ':', '.', ',',
+                '[', ']', '(', ')'}
+    tokens = {INTEGER, ID, KEYWORD, STRING, IGNORE1, NEWLINE,   # noqa
               INDENT, IGNORE2}      # noqa
 
     INTEGER = r'[1-9][0-9]*|0'
     ID = r'(?:%s|_)(?:%s|[0-9_])*' % (_LETTER_REGEX, _LETTER_REGEX)
-    OP = r'==|!=|->|[+\-`*/;=():.,\[\]]'
     STRING = '"' + string_parser.CONTENT_REGEX + '"'
     BLANK_LINE = r'(?<=\n|^) *(?:#.*)?\n'
     NEWLINE = r'\n'
@@ -40,6 +41,12 @@ class AsdaLexer(sly.Lexer):
     def __init__(self, filename):
         super().__init__()
         self.filename = filename
+
+    # sly wants the literals set to contain single characters only
+    @_(r'==|!=|->')
+    def multicharacter_literal(self, token):
+        token.type = token.value
+        return token
 
     def BLANK_LINE(self, token):
         self.lineno += 1
@@ -174,14 +181,13 @@ def _check_colons(filename, tokens):
         if token3.type == 'INDENT':
             if (token1 is None or
                     token2 is None or
-                    token1.type != 'OP' or
-                    token1.value != ':' or
+                    token1.type != ':' or
                     token2.type != 'NEWLINE'):
                 raise common.CompileError(
                     "indent without : and newline",
                     _get_location(filename, token3))
 
-        if token1 is not None and token1.type == 'OP' and token1.value == ':':
+        if token1 is not None and token1.type == ':':
             assert token2 is not None and token3 is not None
             if token2.type != 'NEWLINE' or token3.type != 'INDENT':
                 raise common.CompileError(
