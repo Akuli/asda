@@ -15,17 +15,20 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-def source2bytecode(infile, compiled_dir, quiet):
+def source2bytecode(infile, compiled_dir, quiet, always_recompile):
     output_path = common.get_compiled_path(compiled_dir, infile.name)
 
-    infile_stat = os.stat(infile.fileno())
-    try:
-        outfile_stat = os.stat(output_path)
-    except FileNotFoundError:
+    if always_recompile:
         compiling = True
     else:
-        # compile only if source file is newer than compiled file
-        compiling = (infile_stat.st_mtime > outfile_stat.st_mtime)
+        infile_stat = os.stat(infile.fileno())
+        try:
+            outfile_stat = os.stat(output_path)
+        except FileNotFoundError:
+            compiling = True
+        else:
+            # compile only if source file is newer than compiled file
+            compiling = (infile_stat.st_mtime > outfile_stat.st_mtime)
 
     if not quiet:
         if compiling:
@@ -101,6 +104,11 @@ def main():
         '--compiled-dir', default='asda-compiled',
         help="directory for compiled asda files, default is ./asda-compiled")
     parser.add_argument(
+        '--always-recompile', action='store_true', default=False,
+        help=("always compile all files, even if they have already been "
+              "compiled and the compiled files are newer than the source "
+              "files"))
+    parser.add_argument(
         '-q', '--quiet', action='store_true',
         help="display less output")
     parser.add_argument(
@@ -127,7 +135,8 @@ def main():
     for file in args.infiles:
         try:
             with file:
-                source2bytecode(file, compiled_dir, args.quiet)
+                source2bytecode(file, compiled_dir, args.quiet,
+                                args.always_recompile)
         except common.CompileError as e:
             report_compile_error(e, red_function)
             sys.exit(1)

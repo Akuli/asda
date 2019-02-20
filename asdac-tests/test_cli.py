@@ -91,6 +91,25 @@ def test_cant_read_stdin(asdac_run, monkeypatch, capsys):
     assert errors.endswith("reading from stdin is not supported\n")
 
 
+def test_always_recompile_option(monkeypatch, tmp_path, capsys):
+    os.chdir(str(tmp_path))
+    with open('file.asda', 'w', encoding='utf-8') as file:
+        file.write('print("hi")')
+    monkeypatch.setattr(sys, 'argv', ['asdac', 'file.asda'])
+
+    asdac.__main__.main()
+    assert capsys.readouterr() == (
+        '', "Compiling: file.asda --> asda-compiled%sfile.asdac\n" % os.sep)
+
+    asdac.__main__.main()
+    assert capsys.readouterr() == ('', "No need to recompile file.asda\n")
+
+    sys.argv.append('--always-recompile')    # sys.argv is a monkeypatched list
+    asdac.__main__.main()
+    assert capsys.readouterr() == (
+        '', "Compiling: file.asda --> asda-compiled%sfile.asdac\n" % os.sep)
+
+
 def test_bom(asdac_run, capsys):
     bom = codecs.BOM_UTF8.decode('utf-8')
 
