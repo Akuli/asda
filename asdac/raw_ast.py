@@ -1,8 +1,6 @@
 import collections
 import functools
-import operator
 
-import more_itertools
 import sly
 
 from . import common, string_parser, tokenizer
@@ -64,11 +62,15 @@ def _expression_class(klass):
 
 
 class AsdaParser(sly.Parser):
+    # shuts up flake8
+    if False:
+        _ = None
+
     tokens = tokenizer.AsdaLexer.tokens | tokenizer.AsdaLexer.literals - {':'}
     precedence = (
         ('left', '`'),   # yes, this works with just the first token type
-        ('nonassoc', EQ, NE),
-        ('left', '+', '-'),    # FIXME: prefix minus
+        ('nonassoc', EQ, NE),   # noqa
+        ('left', '+', '-'),
         ('left', '*'),
     )
 
@@ -139,7 +141,7 @@ class AsdaParser(sly.Parser):
     def statements(self, parsed):
         return parsed.statements + [parsed.statement]
 
-    @_('')
+    @_('')     # noqa
     def statements(self, parsed):
         return []
 
@@ -155,7 +157,7 @@ class AsdaParser(sly.Parser):
         return GetType(self.create_location(parsed.index, len(parsed.ID)),
                        parsed.ID)
 
-    @_('ID from_generic')
+    @_('ID from_generic')     # noqa
     def type(self, parsed):
         types, end_offset = parsed.from_generic
         return FromGeneric(
@@ -165,18 +167,19 @@ class AsdaParser(sly.Parser):
     # control flow statements
     # ~~~~~~~~~~~~~~~~~~~~~~~
 
-    @_('WHILE expression block')
+    @_('WHILE expression block')     # noqa
     def statement(self, parsed):
         return While(self.create_location(parsed.index, len(parsed.WHILE)),
                      parsed.expression, parsed.block)
 
-    @_('FOR oneline_statement ";" expression ";" oneline_statement block')
+    @_(       # noqa
+        'FOR oneline_statement ";" expression ";" oneline_statement block')
     def statement(self, parsed):
         return For(self.create_location(parsed.index, len(parsed.FOR)),
                    parsed.oneline_statement0, parsed.expression,
                    parsed.oneline_statement1, parsed.block)
 
-    @_('IF expression block elif_parts else_part')
+    @_('IF expression block elif_parts else_part')  # noqa
     def statement(self, parsed):
         return If(self.create_location(parsed.index, len(parsed.IF)),
                   [(parsed.expression, parsed.block)] + parsed.elif_parts,
@@ -186,7 +189,7 @@ class AsdaParser(sly.Parser):
     def elif_parts(self, parsed):
         return parsed.elif_parts + [parsed.elif_part]
 
-    @_('')
+    @_('')      # noqa
     def elif_parts(self, parsed):
         return []
 
@@ -198,7 +201,7 @@ class AsdaParser(sly.Parser):
     def else_part(self, parsed):
         return parsed.block
 
-    @_('')
+    @_('')      # noqa
     def else_part(self, parsed):
         return []
 
@@ -214,7 +217,7 @@ class AsdaParser(sly.Parser):
     def arg_spec_list(self, parsed):
         return []
 
-    @_('nonempty_arg_spec_list')
+    @_('nonempty_arg_spec_list')      # noqa
     def arg_spec_list(self, parsed):
         return parsed.nonempty_arg_spec_list
 
@@ -222,11 +225,11 @@ class AsdaParser(sly.Parser):
     def nonempty_arg_spec_list(self, parsed):
         return parsed.nonempty_arg_spec_list + [parsed.arg_spec]
 
-    @_('arg_spec')
+    @_('arg_spec')      # noqa
     def nonempty_arg_spec_list(self, parsed):
         return [parsed.arg_spec]
 
-    @_('FUNC ID "(" arg_spec_list ")" ARROW return_type block')
+    @_('FUNC ID "(" arg_spec_list ")" ARROW return_type block')      # noqa
     @_('FUNC ID create_generic "(" arg_spec_list ")" ARROW return_type block')
     def statement(self, parsed):
         generics = getattr(parsed, 'create_generic', None)
@@ -243,7 +246,7 @@ class AsdaParser(sly.Parser):
     def return_type(self, parsed):
         return None
 
-    @_('type')
+    @_('type')      # noqa
     def return_type(self, parsed):
         return parsed.type
 
@@ -261,31 +264,31 @@ class AsdaParser(sly.Parser):
         return Let(self.create_location(parsed.index, end - parsed.index),
                    parsed.ID, parsed.expression)
 
-    @_('YIELD expression')
+    @_('YIELD expression')      # noqa
     def oneline_statement(self, parsed):
         return Yield(self.create_location(parsed.index, len(parsed.YIELD)),
                      parsed.expression)
 
-    @_('RETURN expression')
+    @_('RETURN expression')      # noqa
     def oneline_statement(self, parsed):
         return Return(self.create_location(parsed.index, len(parsed.RETURN)),
                       parsed.expression)
 
-    @_('RETURN')
+    @_('RETURN')      # noqa
     def oneline_statement(self, parsed):
         return Return(self.create_location(parsed.index, len(parsed.RETURN)),
                       None)
 
-    @_('VOID')
+    @_('VOID')      # noqa
     def oneline_statement(self, parsed):
         return VoidStatement(
             self.create_location(parsed.index, len(parsed.VOID)))
 
-    @_('expression')
+    @_('expression')      # noqa
     def oneline_statement(self, parsed):
         return parsed.expression
 
-    @_('ID "=" expression')
+    @_('ID "=" expression')      # noqa
     def oneline_statement(self, parsed):
         target_location = self.create_location(parsed.index, len(parsed.ID))
         return SetVar(target_location + parsed.expression.location,
@@ -298,7 +301,7 @@ class AsdaParser(sly.Parser):
     def expression(self, parsed):
         return parsed.simple_expression
 
-    @_expression_class(BinaryOperator)
+    @_expression_class(BinaryOperator)      # noqa
     @_('expression "+" expression',
        'expression "-" expression',
        'expression "*" expression',
@@ -309,7 +312,7 @@ class AsdaParser(sly.Parser):
         rhs = parsed.expression1
         return BinaryOperator(lhs.location + rhs.location, parsed[1], lhs, rhs)
 
-    @_expression_class(PrefixOperator)
+    @_expression_class(PrefixOperator)      # noqa
     @_('"-" expression')
     def expression(self, parsed):
         op_location = self.create_location(parsed.index, len('-'))
@@ -317,7 +320,7 @@ class AsdaParser(sly.Parser):
             op_location + parsed.expression.location, '-', parsed.expression)
         raise RuntimeError
 
-    @_expression_class(FuncCall)
+    @_expression_class(FuncCall)      # noqa
     @_('expression "`" expression "`" expression')
     def expression(self, parsed):
         lhs = parsed.expression0
@@ -339,7 +342,7 @@ class AsdaParser(sly.Parser):
             return FuncCall(location, parsed.simple_expression, value)
         raise NotImplementedError(kind)     # pragma: no cover
 
-    @_('simple_expression_no_trailers')
+    @_('simple_expression_no_trailers')      # noqa
     def simple_expression(self, parsed):
         return parsed.simple_expression_no_trailers
 
@@ -350,19 +353,19 @@ class AsdaParser(sly.Parser):
         return self.handle_string_literal(
             parsed.STRING, location)
 
-    @_expression_class(Integer)
+    @_expression_class(Integer)      # noqa
     @_('INTEGER')
     def simple_expression_no_trailers(self, parsed):
         return Integer(self.create_location(parsed.index, len(parsed.INTEGER)),
                        int(parsed.INTEGER))
 
-    @_expression_class(GetVar)
+    @_expression_class(GetVar)      # noqa
     @_('ID')
     def simple_expression_no_trailers(self, parsed):
         return GetVar(self.create_location(parsed.index, len(parsed.ID)),
                       parsed.ID)
 
-    @_expression_class(FromGeneric)
+    @_expression_class(FromGeneric)      # noqa
     @_('ID from_generic')
     def simple_expression_no_trailers(self, parsed):
         types, end_location = parsed.from_generic
@@ -373,7 +376,7 @@ class AsdaParser(sly.Parser):
     # expression trailers
     # ~~~~~~~~~~~~~~~~~~~
 
-    @_('"(" expression ")"')
+    @_('"(" expression ")"')      # noqa
     def simple_expression_no_trailers(self, parsed):
         return parsed.expression
 
@@ -382,7 +385,7 @@ class AsdaParser(sly.Parser):
         dot_location = self.create_location(parsed.index, len(parsed[0]))
         return ('attribute', parsed.ID, dot_location)
 
-    @_('"(" expression_list ")"')
+    @_('"(" expression_list ")"')      # noqa
     def trailer(self, parsed):
         start_index = parsed.index
         end_index = self.last_token_offset() + len(')')
@@ -393,7 +396,7 @@ class AsdaParser(sly.Parser):
     def expression_list(self, parsed):
         return []
 
-    @_('nonempty_expression_list')
+    @_('nonempty_expression_list')      # noqa
     def expression_list(self, parsed):
         return parsed.nonempty_expression_list
 
@@ -401,7 +404,7 @@ class AsdaParser(sly.Parser):
     def nonempty_expression_list(self, parsed):
         return parsed.nonempty_expression_list + [parsed.expression]
 
-    @_('expression')
+    @_('expression')      # noqa
     def nonempty_expression_list(self, parsed):
         return [parsed.expression]
 
@@ -417,7 +420,7 @@ class AsdaParser(sly.Parser):
     def type_list(self, parsed):
         return parsed.type_list + [parsed.type]
 
-    @_('type')
+    @_('type')      # noqa
     def type_list(self, parsed):
         return [parsed.type]
 
@@ -429,7 +432,7 @@ class AsdaParser(sly.Parser):
     def generic_name_list(self, parsed):
         return parsed.generic_name_list + [parsed.generic_name]
 
-    @_('generic_name')
+    @_('generic_name')      # noqa
     def generic_name_list(self, parsed):
         return [parsed.generic_name]
 

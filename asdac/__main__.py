@@ -110,7 +110,7 @@ def main():
         colorama.init()
         red_function = make_red
     else:
-        red_function = lambda string: string
+        red_function = lambda string: string    # noqa
 
     if args.outfile is None:
         if args.infile is sys.stdin:
