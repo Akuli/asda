@@ -16,10 +16,26 @@ def eprint(*args, **kwargs):
 
 
 def source2bytecode(infile, compiled_dir, quiet):
+    output_path = common.get_compiled_path(compiled_dir, infile.name)
+
+    infile_stat = os.stat(infile.fileno())
+    try:
+        outfile_stat = os.stat(output_path)
+    except FileNotFoundError:
+        compiling = True
+    else:
+        # compile only if source file is newer than compiled file
+        compiling = (infile_stat.st_mtime > outfile_stat.st_mtime)
+
     if not quiet:
-        out_path = common.get_compiled_path(compiled_dir, infile.name)
-        eprint("Compiling:", infile.name, "-->",
-               os.path.relpath(out_path, '.'))
+        if compiling:
+            eprint("Compiling: %s --> %s" % (
+                infile.name, os.path.relpath(output_path, '.')))
+        else:
+            eprint("No need to recompile %s" % infile.name)
+
+    if not compiling:
+        return
 
     source = infile.read()
 
@@ -78,8 +94,8 @@ def make_red(string):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'infile', type=argparse.FileType('r', **common.OPEN_KWARGS),
-        help="source code file")
+        'infiles', type=argparse.FileType('r', **common.OPEN_KWARGS),
+        nargs=argparse.ONE_OR_MORE, help="source code file")
     parser.add_argument(
         # argparse.FileType('wb') would open the file even if compiling fails
         '--compiled-dir', default='asda-compiled',
@@ -105,15 +121,16 @@ def main():
     else:
         red_function = lambda string: string    # noqa
 
-    if args.infile is sys.stdin:
+    if sys.stdin in args.infiles:
         parser.error("reading from stdin is not supported")
 
-    try:
-        with args.infile:
-            source2bytecode(args.infile, compiled_dir, args.quiet)
-    except common.CompileError as e:
-        report_compile_error(e, red_function)
-        sys.exit(1)
+    for file in args.infiles:
+        try:
+            with file:
+                source2bytecode(file, compiled_dir, args.quiet)
+        except common.CompileError as e:
+            report_compile_error(e, red_function)
+            sys.exit(1)
 
 
 if __name__ == '__main__':
