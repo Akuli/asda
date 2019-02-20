@@ -1,4 +1,22 @@
 import itertools
+import os
+
+
+def get_compiled_path(compiled_dir, source_path):
+    relative = os.path.relpath(source_path, os.path.dirname(compiled_dir))
+    relative += 'c'     # lel.asda --> lel.asdac
+
+    # avoid having weird things happening
+    relative_parts = ('dotdot' if part == '..' else part
+                      for part in relative.split(os.sep))
+    return os.path.join(compiled_dir, os.sep.join(relative_parts))
+
+
+# use the_file.name to access the path that get_compiled_filename() returned
+def open_compiled_file_write(compiled_dir, source_filename):
+    path = get_compiled_path(compiled_dir, source_filename)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    return open(path, 'wb')
 
 
 # these are for reading source files, as specified in docs/syntax.md

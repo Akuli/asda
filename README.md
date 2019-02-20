@@ -65,8 +65,10 @@ There isn't much [documentation](docs/) yet, but there are many
 
 ### Can I compile and run with just one command?
 
+Not yet, but you can combine the two commands conveniently with `&&`:
+
 ```
-$ python3 -m asdac hello.asda -o - | python3 -m pyasda -
+$ python3 -m asdac hello.asda && python3 -m pyasda asda-compiled/hello.asdac
 ```
 
 ### Is the documentation outdated?

@@ -18,14 +18,13 @@ def asdac_run(monkeypatch, tmp_path):
 
     def run(code, opts=(), exit_code=0):
         path = next(paths)
-        with open(path, 'w', encoding='utf-8',
+        os.mkdir(path)
+        os.chdir(path)
+        with open('file.asda', 'w', encoding='utf-8',
                   newline=random.choice(['\n', '\r\n'])) as file:
             file.write(code)
 
-        monkeypatch.setattr(
-            sys, 'argv',
-            ['asdac', path, '-o', os.devnull] + list(opts))
-
+        monkeypatch.setattr(sys, 'argv', ['asdac', 'file.asda'])
         try:
             asdac.__main__.main()
             code = 0
@@ -56,10 +55,10 @@ def test_error_simple(asdac_run, monkeypatch):
     assert colorama.Fore.RED in sys.stderr.getvalue()
 
     match = re.fullmatch((
-        r'Compiling: .* --> .*\n'
+        r'Compiling: file\.asda --> asda-compiled%sfile\.asdac\n'
         r'error in .*:1,10...1,13: variable not found: lol\n'
         r'\n'
-        r'    (.*)\n'
+        r'    (.*)\n' % re.escape(os.sep)
     ), sys.stderr.getvalue())
     assert match is not None, sys.stderr.getvalue()
     assert match.group(1) == 'let asd = ' + red('lol')
@@ -81,7 +80,7 @@ def test_error_empty_location(asdac_run, monkeypatch):
         '\n    print("{%s}")\n' % red(MARKER))
 
 
-def test_o_needed_stdin(asdac_run, monkeypatch, capsys):
+def test_cant_read_stdin(asdac_run, monkeypatch, capsys):
     monkeypatch.setattr(sys, 'argv', ['asdac', '-'])
     with pytest.raises(SystemExit) as error:
         asdac.__main__.main()
@@ -89,8 +88,7 @@ def test_o_needed_stdin(asdac_run, monkeypatch, capsys):
     assert error.value.code == 2
     output, errors = capsys.readouterr()
     assert not output
-    assert errors.endswith(
-        'the -o option is needed when reading source from stdin\n')
+    assert errors.endswith("reading from stdin is not supported\n")
 
 
 def test_bom(asdac_run, capsys):

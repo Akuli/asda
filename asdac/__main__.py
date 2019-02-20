@@ -15,13 +15,11 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-def source2bytecode(infile, outfile_name, quiet):
+def source2bytecode(infile, compiled_dir, quiet):
     if not quiet:
-        # without printable_outfile_name it's possible to get this:
-        #    Compiling: <stdin> --> -
-        printable_outfile_name = (
-            '<stdout>' if outfile_name == '-' else outfile_name)
-        eprint("Compiling:", infile.name, "-->", printable_outfile_name)
+        out_path = common.get_compiled_path(compiled_dir, infile.name)
+        eprint("Compiling:", infile.name, "-->",
+               os.path.relpath(out_path, '.'))
 
     source = infile.read()
 
@@ -35,13 +33,7 @@ def source2bytecode(infile, outfile_name, quiet):
     opcode = opcoder.create_opcode(cooked, infile.name, source)
     bytecode = bytecoder.create_bytecode(opcode)
 
-    # usually argparse.FileType would handle this, but see below
-    if outfile_name == '-':
-        outfile = sys.stdout.buffer
-    else:
-        outfile = open(outfile_name, 'wb')
-
-    with outfile:
+    with common.open_compiled_file_write(compiled_dir, infile.name) as outfile:
         outfile.write(b'asda')
         outfile.write(bytecode)
 
@@ -90,9 +82,8 @@ def main():
         help="source code file")
     parser.add_argument(
         # argparse.FileType('wb') would open the file even if compiling fails
-        '-o', '--outfile',
-        help=("name of the resulting bytecode file, default is a file in an "
-              "asda-compiled subdirectory of where the source file is"))
+        '--compiled-dir', default='asda-compiled',
+        help="directory for compiled asda files, default is ./asda-compiled")
     parser.add_argument(
         '-q', '--quiet', action='store_true',
         help="display less output")
@@ -100,6 +91,8 @@ def main():
         '--color', choices=['auto', 'always', 'never'], default='auto',
         help="should error messages be displayed with colors?")
     args = parser.parse_args()
+
+    compiled_dir = os.path.abspath(args.compiled_dir)
 
     color_dict = {
         'always': True,
@@ -112,20 +105,12 @@ def main():
     else:
         red_function = lambda string: string    # noqa
 
-    if args.outfile is None:
-        if args.infile is sys.stdin:
-            parser.error(
-                "the -o option is needed when reading source from stdin")
-
-        args.outfile = os.path.join(
-            os.path.dirname(args.infile.name),
-            'asda-compiled',
-            os.path.splitext(os.path.basename(args.infile.name))[0] + '.asdac')
-        os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
+    if args.infile is sys.stdin:
+        parser.error("reading from stdin is not supported")
 
     try:
         with args.infile:
-            source2bytecode(args.infile, args.outfile, args.quiet)
+            source2bytecode(args.infile, compiled_dir, args.quiet)
     except common.CompileError as e:
         report_compile_error(e, red_function)
         sys.exit(1)
