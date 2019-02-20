@@ -16,9 +16,10 @@ class AsdaLexer(sly.Lexer):
     literals = {'+', '-', '*', '=', '`', ';', ':', '.', ',',
                 '[', ']', '(', ')'}
     tokens = {
-        INTEGER, ID, STRING, NEWLINE, INDENT, DEDENT,       # noqa
-        LET, IF, ELIF, ELSE, WHILE, FOR, VOID, RETURN, FUNC, YIELD,  # noqa
-        EQ, NE, ARROW}      # noqa
+        INTEGER, ID, STRING, NEWLINE, INDENT, DEDENT,   # noqa
+        IF, ELIF, ELSE, WHILE, FOR, FUNC,               # noqa
+        LET, VOID, RETURN, YIELD, EXPORT,               # noqa
+        EQ, NE, ARROW}                                  # noqa
 
     INTEGER = r'[1-9][0-9]*|0'
     ID = r'(?:%s|_)(?:%s|[0-9_])*' % (_LETTER_REGEX, _LETTER_REGEX)
@@ -39,6 +40,7 @@ class AsdaLexer(sly.Lexer):
     ID['return'] = RETURN   # noqa
     ID['func'] = FUNC       # noqa
     ID['yield'] = YIELD     # noqa
+    ID['export'] = EXPORT   # noqa
 
     # because sly doesn't like multi-character literals
     # if you try changing that here, then sly's parser won't like it
