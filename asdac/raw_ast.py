@@ -1,8 +1,9 @@
 import collections
 import functools
-import itertools
+import operator
 
 import more_itertools
+import sly
 
 from . import common, string_parser, tokenizer
 
@@ -36,63 +37,6 @@ PrefixOperator = _astclass('PrefixOperator', ['operator', 'expression'])
 BinaryOperator = _astclass('BinaryOperator', ['operator', 'lhs', 'rhs'])
 
 
-class _TokenIterator:
-
-    def __init__(self, filename, token_iterable):
-        self.filename = filename
-        self._iterator = iter(token_iterable)
-
-    # get the location of a token
-    def locate(self, token):
-        return common.Location(self.filename, token.index, len(token.value))
-
-    def copy(self):
-        self._iterator, copied = itertools.tee(self._iterator)
-        return _TokenIterator(self.filename, copied)
-
-    def _check_token(self, token, kind, value):
-        error = functools.partial(common.CompileError,
-                                  location=self.locate(token))
-        if value is not None and token.value != value:
-            raise error("expected %r, got %r" % (value, token.value))
-        if kind is not None and token.type != kind:
-            raise error("expected %s, got %r" % (kind, token.value))
-
-    def coming_up(self, kind=None, value=None):
-        try:
-            token = next(self.copy()._iterator)
-        except StopIteration:
-            # end of file before the token
-            return False
-
-        try:
-            self._check_token(token, kind, value)
-        except common.CompileError:
-            return False
-        return True
-
-    def next_token(self, required_kind=None, required_value=None):
-        try:
-            result = next(self._iterator)
-        except StopIteration as e:      # pragma: no cover
-            # this shouldn't happen if the asda code is invalid, because the
-            # tokenizer puts a newline token at the end anyway and this should
-            # get that and fail at _check_token() instead
-            #
-            # not-very-latest pythons suppress StopIteration if raised in
-            # generator function, so make sure to be explicit
-            raise RuntimeError("there's a bug in asdac") from e
-        self._check_token(result, required_kind, required_value)
-        return result
-
-    def eof(self):
-        try:
-            next(self.copy()._iterator)
-            return False
-        except StopIteration:
-            return True
-
-
 def _duplicate_check(iterable, what_are_they):
     seen = set()
     for name, location in iterable:
@@ -107,17 +51,41 @@ def _to_string(parsed):
     return FuncCall(location, GetAttr(location, parsed, 'to_string'), [])
 
 
-class _Parser:
+# i need to be able to parse an expression that can't be a statement
+# currently the only way to implement that is to parse a statement and check
+# whether that is an expression
+# i wish sly's parsers supported inheritance so i could do this less shittily
+_expression_classes = set()
 
-    def __init__(self, tokens):
-        assert isinstance(tokens, _TokenIterator)
-        self.tokens = tokens
 
-    # because this is used in so many places
-    def locate(self, token):
-        return self.tokens.locate(token)
+def _expression_class(klass):
+    _expression_classes.add(klass)
+    return lambda func: func
 
-    def _handle_string_literal(self, string, location):
+
+class AsdaParser(sly.Parser):
+    tokens = tokenizer.AsdaLexer.tokens | tokenizer.AsdaLexer.literals - {':'}
+    precedence = (
+        ('left', '`'),   # yes, this works with just the first token type
+        ('nonassoc', EQ, NE),
+        ('left', '+', '-'),    # FIXME: prefix minus
+        ('left', '*'),
+    )
+
+    def __init__(self, filename):
+        super().__init__()
+        self.filename = filename
+        self.create_location = functools.partial(common.Location, filename)
+
+    def error(self, token):
+        assert token is not None
+        location = common.Location(
+            self.filename, token.index, len(token.value))
+        raise common.CompileError("syntax error", location)
+
+    @_expression_class(String)
+    @_expression_class(StrJoin)
+    def handle_string_literal(self, string, location):
         assert len(string) >= 2 and string[0] == '"' and string[-1] == '"'
         content = string[1:-1]
         content_location = common.Location(
@@ -134,21 +102,21 @@ class _Parser:
                     part_location.filename, value,
                     initial_offset=part_location.offset)
 
-                # make sure that there are some tokens, otherwise a thing in
-                # _TokenIterator fails
-                #
-                # the parse() function at end of this file does that too,
-                # because it does nothing if there are no tokens
-                spyed, tokens = more_itertools.spy(tokens)
-                if not spyed:
+                parser = AsdaParser(self.filename)
+                parsed = parser.parse(tokens)
+                try:
+                    [expression] = parsed
+                except ValueError:
+                    if parsed:
+                        wanted = "exactly 1 expression"
+                    else:
+                        wanted = "some code"
                     raise common.CompileError(
-                        "you must put some code between { and }",
+                        "you must put %s between { and }" % wanted,
                         part_location)
 
-                parser = _Parser(_TokenIterator(self.tokens.filename, tokens))
-                parts.append(_to_string(parser.parse_expression()))
-                parser.tokens.next_token('NEWLINE')    # added by tokenizer
-                assert parser.tokens.eof()   # if fails, string isn't one-line
+                assert isinstance(expression, tuple(_expression_classes))
+                parts.append(_to_string(expression))
 
             else:   # pragma: no cover
                 raise NotImplementedError(kind)
@@ -163,356 +131,316 @@ class _Parser:
         else:
             return StrJoin(location, parts)
 
-    def _from_generic(self, name_token):
-        self.tokens.next_token('[')
-        types, closing_bracket = self.parse_commasep_list(
-            self.parse_type, ']', False)
+    # abstracts away a sly implementation detail
+    def last_token_offset(self):
+        return self.symstack[-1].index
+
+    @_('statements statement')
+    def statements(self, parsed):
+        return parsed.statements + [parsed.statement]
+
+    @_('')
+    def statements(self, parsed):
+        return []
+
+    @_('oneline_statement NEWLINE')
+    def statement(self, parsed):
+        return parsed.oneline_statement
+
+    # types
+    # ~~~~~
+
+    @_('ID')
+    def type(self, parsed):
+        return GetType(self.create_location(parsed.index, len(parsed.ID)),
+                       parsed.ID)
+
+    @_('ID from_generic')
+    def type(self, parsed):
+        types, end_offset = parsed.from_generic
         return FromGeneric(
-            self.locate(name_token) + self.locate(closing_bracket),
-            name_token.value, types)
+            self.create_location(parsed.index, end_offset - parsed.index),
+            parsed.ID, types)
 
-    # see docs/syntax.md
-    def parse_simple_expression(self):
-        first_token = self.tokens.next_token()
-        if first_token.type == 'INTEGER':
-            result = Integer(self.locate(first_token), int(first_token.value))
-        elif first_token.type == 'ID':
-            if self.tokens.coming_up('['):
-                result = self._from_generic(first_token)
-            else:
-                result = GetVar(self.locate(first_token), first_token.value)
-        elif first_token.type == 'STRING':
-            result = self._handle_string_literal(
-                first_token.value, self.locate(first_token))
-        elif first_token.type == '(':
-            result = self.parse_expression()
-            self.tokens.next_token(')')
-        else:
-            raise common.CompileError(
-                "expected an expression, got %r" % first_token.value,
-                self.locate(first_token))
+    # control flow statements
+    # ~~~~~~~~~~~~~~~~~~~~~~~
 
-        while True:
-            if self.tokens.coming_up('.'):
-                self.tokens.next_token('.')
-                attribute = self.tokens.next_token('ID')
-                result = GetAttr(result.location + self.locate(attribute),
-                                 result, attribute.value)
-            elif self.tokens.coming_up('('):
-                self.tokens.next_token('(')
-                args, last_paren = self.parse_commasep_list(
-                    self.parse_expression, ')', True)
-                result = FuncCall((self.locate(first_token) +
-                                   self.locate(last_paren)),
-                                  result, args)
-            else:
-                break
+    @_('WHILE expression block')
+    def statement(self, parsed):
+        return While(self.create_location(parsed.index, len(parsed.WHILE)),
+                     parsed.expression, parsed.block)
 
-        return result
+    @_('FOR oneline_statement ";" expression ";" oneline_statement block')
+    def statement(self, parsed):
+        return For(self.create_location(parsed.index, len(parsed.FOR)),
+                   parsed.oneline_statement0, parsed.expression,
+                   parsed.oneline_statement1, parsed.block)
 
-    def parse_expression(self, *, allow_infix_syntax=True):
-        operator_specs = [
-            # these are (op_set, allow_chaining) tuples
-            #
-            # a OP b OP c is:
-            #   * (a OP b) OP c, if allow_chaining is True
-            #   * an error, if allow_chaining is False
-            ({'*', '/'}, True),
-            ({'+', '-'}, True),
-            ({'==', '!='}, False),
-        ]
-        if allow_infix_syntax:
-            operator_specs.append(({'`'}, True))
+    @_('IF expression block elif_parts else_part')
+    def statement(self, parsed):
+        return If(self.create_location(parsed.index, len(parsed.IF)),
+                  [(parsed.expression, parsed.block)] + parsed.elif_parts,
+                  parsed.else_part)
 
-        # every other element of funny_stuff is an expression, every other is
-        # (operator string, an operator token) or ('`', a function expression)
-        # the second element of those is called "info" because i couldn't come
-        # up with a better name
-        funny_stuff = []
+    @_('elif_parts elif_part')
+    def elif_parts(self, parsed):
+        return parsed.elif_parts + [parsed.elif_part]
 
-        # currently '-' is the only prefix operator
-        if self.tokens.coming_up('-'):
-            # make sure that e.g. -a-b and -a+b do the right thing
-            funny_stuff.append(None)    # handled later
-            funny_stuff.append(('-', self.tokens.next_token()))
-        funny_stuff.append(self.parse_simple_expression())
+    @_('')
+    def elif_parts(self, parsed):
+        return []
 
-        while any(self.tokens.coming_up(op)
-                  for op_set, allow_chaining in operator_specs
-                  for op in op_set):
-            token = self.tokens.next_token()
-            if token.value == '`':
-                # infix syntax:  a `f` b  does the same thing as  f(a, b)
-                funny_stuff.append(
-                    ('`', self.parse_expression(allow_infix_syntax=False)))
-                self.tokens.next_token('`')
-            else:
-                funny_stuff.append((token.value, token))
+    @_('ELIF expression block')
+    def elif_part(self, parsed):
+        return (parsed.expression, parsed.block)
 
-            funny_stuff.append(self.parse_simple_expression())
+    @_('ELSE block')
+    def else_part(self, parsed):
+        return parsed.block
 
-        # "merge" things together so that precedences are correct
-        for op_set, allow_chaining in operator_specs:
-            # find all places where those operators are
-            indexes = [index - len(funny_stuff)     # relative to end
-                       for index, value_and_info in enumerate(funny_stuff)
-                       if index % 2 == 1 and value_and_info[0] in op_set]
+    @_('')
+    def else_part(self, parsed):
+        return []
 
-            if not allow_chaining:
-                for index1, index2 in zip(indexes, indexes[1:]):
-                    if index1 + 2 == index2:
-                        # the indexes are as next to each other as they can be
-                        # i.e. there's 1 expression between them
-                        # that's b in the below error message
-                        op1, token1 = funny_stuff[index1]
-                        op2, token2 = funny_stuff[index2]
-                        raise common.CompileError(
-                            "'a %s b %s c' is invalid syntax" % (op1, op2),
-                            location=self.locate(token1) + self.locate(token2))
+    # function definitions
+    # ~~~~~~~~~~~~~~~~~~~~
 
-            # must go from beginning to end, because a+b+c means (a+b)+c
-            # indexes start at end to avoid issues with them getting "outdated"
-            for index in indexes:
-                start = index-1
-                # python's funny corner case: stuff[-1:0] != stuff[-1:]
-                end = None if index+2 == 0 else index+2
-                lhs, (op, info), rhs = funny_stuff[start:end]
+    @_('type ID')
+    def arg_spec(self, parsed):
+        return (parsed.type, parsed.ID,
+                self.create_location(parsed.index, len(parsed.ID)))
 
-                if lhs is None:     # the prefixing, see above
-                    assert op == '-'
-                    result = PrefixOperator(
-                        self.locate(info) + rhs.location, op, rhs)
-                else:
-                    location = lhs.location + rhs.location
-                    if op == '`':
-                        result = FuncCall(location, info, [lhs, rhs])
-                    else:
-                        result = BinaryOperator(location, op, lhs, rhs)
+    @_('')
+    def arg_spec_list(self, parsed):
+        return []
 
-                funny_stuff[start:end] = [result]
+    @_('nonempty_arg_spec_list')
+    def arg_spec_list(self, parsed):
+        return parsed.nonempty_arg_spec_list
 
-        [result] = funny_stuff
-        return result
+    @_('nonempty_arg_spec_list "," arg_spec')
+    def nonempty_arg_spec_list(self, parsed):
+        return parsed.nonempty_arg_spec_list + [parsed.arg_spec]
 
-    def parse_commasep_list(self, parse_callback, end_op, allow_empty):
-        if self.tokens.coming_up(end_op):
-            if not allow_empty:
-                raise common.CompileError(
-                    "expected 1 or more comma-separated items, got 0",
-                    self.locate(self.tokens.next_token(end_op)))
-            result = []
-        else:
-            result = [parse_callback()]
-            while self.tokens.coming_up(','):
-                self.tokens.next_token(',')
-                result.append(parse_callback())
-            # TODO: allow a trailing comma?
+    @_('arg_spec')
+    def nonempty_arg_spec_list(self, parsed):
+        return [parsed.arg_spec]
 
-        return (result, self.tokens.next_token(end_op))
-
-    def parse_let_statement(self):
-        let = self.tokens.next_token('KEYWORD', 'let')
-        varname = self.tokens.next_token('ID')
-        self.tokens.next_token('=')
-        value = self.parse_expression()
-        return Let(self.locate(let) + value.location, varname.value, value)
-
-    def parse_block(self):
-        self.tokens.next_token('INDENT')
-
-        body = []
-        while not self.tokens.coming_up('DEDENT'):
-            body.append(self.parse_statement())
-
-        self.tokens.next_token('DEDENT')
-        return body
-
-    def parse_if_statement(self):
-        self.tokens.next_token('KEYWORD', 'if')
-        condition = self.parse_expression()
-        body = self.parse_block()
-        ifs = [(condition, body)]
-
-        while self.tokens.coming_up('KEYWORD', 'elif'):
-            self.tokens.next_token('KEYWORD', 'elif')
-
-            # python evaluates tuple elements in order
-            ifs.append((self.parse_expression(), self.parse_block()))
-
-        if self.tokens.coming_up('KEYWORD', 'else'):
-            self.tokens.next_token('KEYWORD', 'else')
-            else_body = self.parse_block()
-        else:
-            else_body = []
-
-        # using condition.location is not ideal, but not used in many places
-        return If(condition.location, ifs, else_body)
-
-    def parse_while(self):
-        while_keyword = self.tokens.next_token('KEYWORD', 'while')
-        condition = self.parse_expression()
-        body = self.parse_block()
-        return While(self.locate(while_keyword) + condition.location,
-                     condition, body)
-
-    # for init; cond; incr:
-    #     body
-    def parse_for(self):
-        for_keyword = self.tokens.next_token('KEYWORD', 'for')
-        init = self.parse_statement(allow_multiline=False)
-        self.tokens.next_token(';')
-        cond = self.parse_expression()
-        self.tokens.next_token(';')
-        incr = self.parse_statement(allow_multiline=False)
-        body = self.parse_block()
-        return For(self.locate(for_keyword) + incr.location,
-                   init, cond, incr, body)
-
-    # TODO: update this when not all type names are id tokens
-    def parse_type(self):
-        first_token = self.tokens.next_token('ID')
-        if self.tokens.coming_up('['):
-            result = self._from_generic(first_token)
-        else:
-            result = GetType(self.locate(first_token), first_token.value)
-        return result
-
-    def parse_arg_spec(self):
-        tybe = self.parse_type()
-        varname = self.tokens.next_token('ID')
-        return (tybe, varname.value, self.locate(varname))
-
-    def parse_func_definition(self):
-        self.tokens.next_token('KEYWORD', 'func')
-        name = self.tokens.next_token('ID')
-
-        if self.tokens.coming_up('['):
-            def parse_a_generic():
-                token = self.tokens.next_token('ID')
-                return (token.value, self.locate(token))
-
-            self.tokens.next_token('[')
-            generics, closing_bracket = self.parse_commasep_list(
-                parse_a_generic, ']', False)
+    @_('FUNC ID "(" arg_spec_list ")" ARROW return_type block')
+    @_('FUNC ID create_generic "(" arg_spec_list ")" ARROW return_type block')
+    def statement(self, parsed):
+        generics = getattr(parsed, 'create_generic', None)
+        if generics is not None:
             _duplicate_check(generics, "generic type")
+        _duplicate_check(((arg[1], arg[2]) for arg in parsed.arg_spec_list),
+                         "argument")
 
-        else:
-            generics = None
+        return FuncDefinition(
+            self.create_location(parsed.index, len(parsed.FUNC)), parsed.ID,
+            generics, parsed.arg_spec_list, parsed.return_type, parsed.block)
 
-        self.tokens.next_token('(')
-        args, close_paren = self.parse_commasep_list(
-            self.parse_arg_spec, ')', True)
-        _duplicate_check(((arg[1], arg[2]) for arg in args), "argument")
+    @_('VOID')
+    def return_type(self, parsed):
+        return None
 
-        self.tokens.next_token('->')
+    @_('type')
+    def return_type(self, parsed):
+        return parsed.type
 
-        if self.tokens.coming_up('KEYWORD', 'void'):
-            returntype = None
-            void = self.tokens.next_token('KEYWORD', 'void')
-            type_location = self.locate(void)
-        else:
-            returntype = self.parse_type()
-            type_location = returntype.location
+    @_('INDENT statements DEDENT')
+    def block(self, parsed):
+        return parsed.statements
 
-        body = _Parser(self.tokens).parse_block()
+    # one-line statements
+    # ~~~~~~~~~~~~~~~~~~~
 
-        # the location of a function definition is just the first line,
-        # because the body can get quite long
-        location = type_location + self.locate(close_paren)
-        return FuncDefinition(location, name.value, generics, args,
-                              returntype, body)
+    @_('LET ID "=" expression')
+    def oneline_statement(self, parsed):
+        end = (parsed.expression.location.offset +
+               parsed.expression.location.length)
+        return Let(self.create_location(parsed.index, end - parsed.index),
+                   parsed.ID, parsed.expression)
 
-    def parse_return(self):
-        return_keyword = self.tokens.next_token('KEYWORD', 'return')
-        if self.tokens.coming_up('NEWLINE'):
-            value = None
-            location = self.locate(return_keyword)
-        else:
-            value = self.parse_expression()
-            location = self.locate(return_keyword) + value.location
-        return Return(location, value)
+    @_('YIELD expression')
+    def oneline_statement(self, parsed):
+        return Yield(self.create_location(parsed.index, len(parsed.YIELD)),
+                     parsed.expression)
 
-    def parse_yield(self):
-        yield_keyword = self.tokens.next_token('KEYWORD', 'yield')
-        value = self.parse_expression()
-        return Yield(self.locate(yield_keyword) + value.location, value)
+    @_('RETURN expression')
+    def oneline_statement(self, parsed):
+        return Return(self.create_location(parsed.index, len(parsed.RETURN)),
+                      parsed.expression)
 
-    def parse_void_statement(self):
-        void = self.tokens.next_token('KEYWORD', 'void')
-        return VoidStatement(self.locate(void))
+    @_('RETURN')
+    def oneline_statement(self, parsed):
+        return Return(self.create_location(parsed.index, len(parsed.RETURN)),
+                      None)
 
-    def parse_statement(self, *, allow_multiline=True):
-        if self.tokens.coming_up('KEYWORD', 'if'):
-            result = self.parse_if_statement()
-            is_multiline = True
+    @_('VOID')
+    def oneline_statement(self, parsed):
+        return VoidStatement(
+            self.create_location(parsed.index, len(parsed.VOID)))
 
-        elif self.tokens.coming_up('KEYWORD', 'while'):
-            result = self.parse_while()
-            is_multiline = True
+    @_('expression')
+    def oneline_statement(self, parsed):
+        return parsed.expression
 
-        elif self.tokens.coming_up('KEYWORD', 'for'):
-            result = self.parse_for()
-            is_multiline = True
+    @_('ID "=" expression')
+    def oneline_statement(self, parsed):
+        target_location = self.create_location(parsed.index, len(parsed.ID))
+        return SetVar(target_location + parsed.expression.location,
+                      parsed.ID, parsed.expression)
 
-        elif self.tokens.coming_up('KEYWORD', 'func'):
-            result = self.parse_func_definition()
-            is_multiline = True
+    # expressions and operators
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        elif self.tokens.coming_up('KEYWORD', 'let'):
-            result = self.parse_let_statement()
-            is_multiline = False
+    @_('simple_expression')
+    def expression(self, parsed):
+        return parsed.simple_expression
 
-        elif self.tokens.coming_up('KEYWORD', 'return'):
-            result = self.parse_return()
-            is_multiline = False
+    @_expression_class(BinaryOperator)
+    @_('expression "+" expression',
+       'expression "-" expression',
+       'expression "*" expression',
+       'expression EQ expression',
+       'expression NE expression')
+    def expression(self, parsed):
+        lhs = parsed.expression0
+        rhs = parsed.expression1
+        return BinaryOperator(lhs.location + rhs.location, parsed[1], lhs, rhs)
 
-        elif self.tokens.coming_up('KEYWORD', 'yield'):
-            result = self.parse_yield()
-            is_multiline = False
+    @_expression_class(PrefixOperator)
+    @_('"-" expression')
+    def expression(self, parsed):
+        op_location = self.create_location(parsed.index, len('-'))
+        return PrefixOperator(
+            op_location + parsed.expression.location, '-', parsed.expression)
+        raise RuntimeError
 
-        elif self.tokens.coming_up('KEYWORD', 'void'):
-            result = self.parse_void_statement()
-            is_multiline = False
+    @_expression_class(FuncCall)
+    @_('expression "`" expression "`" expression')
+    def expression(self, parsed):
+        lhs = parsed.expression0
+        function = parsed.expression1
+        rhs = parsed.expression2
+        return FuncCall(lhs.location + rhs.location, function, [lhs, rhs])
 
-        else:
-            is_multiline = False
+    # simple expressions
+    # ~~~~~~~~~~~~~~~~~~
 
-            first_expr = self.parse_expression()
-            if self.tokens.coming_up('='):
-                if not isinstance(first_expr, GetVar):
-                    raise common.CompileError(
-                        "expected a variable", first_expr.location)
-                self.tokens.next_token('=')
-                value = self.parse_expression()
-                result = SetVar(first_expr.location + value.location,
-                                first_expr.varname, value)
+    @_expression_class(GetAttr)
+    @_expression_class(FuncCall)
+    @_('simple_expression trailer')
+    def simple_expression(self, parsed):
+        kind, value, location = parsed.trailer
+        if kind == 'attribute':
+            return GetAttr(location, parsed.simple_expression, value)
+        if kind == 'call':
+            return FuncCall(location, parsed.simple_expression, value)
+        raise NotImplementedError(kind)     # pragma: no cover
 
-            elif isinstance(first_expr, FuncCall):
-                result = first_expr
+    @_('simple_expression_no_trailers')
+    def simple_expression(self, parsed):
+        return parsed.simple_expression_no_trailers
 
-            else:
-                raise common.CompileError(
-                    "expected a let, a variable assignment, an if, a while, "
-                    "a for, a return, a yield, a function definition or a "
-                    "function call",
-                    first_expr.location)
+    @_('STRING')
+    def simple_expression_no_trailers(self, parsed):
+        location = common.Location(
+            self.filename, parsed.index, len(parsed.STRING))
+        return self.handle_string_literal(
+            parsed.STRING, location)
 
-        if is_multiline:
-            if not allow_multiline:
-                raise common.CompileError(
-                    "expected a one-line statement", result.location)
-            # whatever gave the result has already handled the newline
-        else:
-            if allow_multiline:
-                self.tokens.next_token('NEWLINE')
+    @_expression_class(Integer)
+    @_('INTEGER')
+    def simple_expression_no_trailers(self, parsed):
+        return Integer(self.create_location(parsed.index, len(parsed.INTEGER)),
+                       int(parsed.INTEGER))
 
-        return result
+    @_expression_class(GetVar)
+    @_('ID')
+    def simple_expression_no_trailers(self, parsed):
+        return GetVar(self.create_location(parsed.index, len(parsed.ID)),
+                      parsed.ID)
+
+    @_expression_class(FromGeneric)
+    @_('ID from_generic')
+    def simple_expression_no_trailers(self, parsed):
+        types, end_location = parsed.from_generic
+        return FromGeneric(
+            self.create_location(parsed.index, end_location - parsed.index),
+            parsed.ID, types)
+
+    # expression trailers
+    # ~~~~~~~~~~~~~~~~~~~
+
+    @_('"(" expression ")"')
+    def simple_expression_no_trailers(self, parsed):
+        return parsed.expression
+
+    @_('"." ID')
+    def trailer(self, parsed):
+        dot_location = self.create_location(parsed.index, len(parsed[0]))
+        return ('attribute', parsed.ID, dot_location)
+
+    @_('"(" expression_list ")"')
+    def trailer(self, parsed):
+        start_index = parsed.index
+        end_index = self.last_token_offset() + len(')')
+        location = self.create_location(start_index, end_index - start_index)
+        return ('call', parsed.expression_list, location)
+
+    @_('')
+    def expression_list(self, parsed):
+        return []
+
+    @_('nonempty_expression_list')
+    def expression_list(self, parsed):
+        return parsed.nonempty_expression_list
+
+    @_('nonempty_expression_list "," expression')
+    def nonempty_expression_list(self, parsed):
+        return parsed.nonempty_expression_list + [parsed.expression]
+
+    @_('expression')
+    def nonempty_expression_list(self, parsed):
+        return [parsed.expression]
+
+    # generics
+    # ~~~~~~~~
+
+    @_('"[" type_list "]"')
+    def from_generic(self, parsed):
+        end_of_close_bracket_offset = self.last_token_offset() + len(']')
+        return (parsed.type_list, end_of_close_bracket_offset)
+
+    @_('type_list "," type')
+    def type_list(self, parsed):
+        return parsed.type_list + [parsed.type]
+
+    @_('type')
+    def type_list(self, parsed):
+        return [parsed.type]
+
+    @_('"[" generic_name_list "]"')
+    def create_generic(self, parsed):
+        return parsed.generic_name_list
+
+    @_('generic_name_list "," generic_name')
+    def generic_name_list(self, parsed):
+        return parsed.generic_name_list + [parsed.generic_name]
+
+    @_('generic_name')
+    def generic_name_list(self, parsed):
+        return [parsed.generic_name]
+
+    @_('ID')
+    def generic_name(self, parsed):
+        return (parsed.ID, self.create_location(parsed.index, len(parsed.ID)))
 
 
-# this does the tokenizing because string formatting things need to invoke the
-# tokenizer anyway
 def parse(filename, code):
-    tokens = _TokenIterator(filename, tokenizer.tokenize(filename, code))
-    parser = _Parser(tokens)
-    while not tokens.eof():
-        yield parser.parse_statement()
+    return AsdaParser(filename).parse(tokenizer.tokenize(filename, code))
+
+
+if __name__ == '__main__':
+    print(parse('', '-x*y'))

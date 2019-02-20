@@ -18,15 +18,12 @@ def parse(code):
 def test_not_an_expression_or_a_statement():
     with pytest.raises(CompileError) as error:
         parse('print(])')
-    assert error.value.message == "expected an expression, got ']'"
+    assert error.value.message == "syntax error"
     assert error.value.location == location(6, 1)
 
-    with pytest.raises(CompileError) as error:
-        parse('"lol"')
-    assert error.value.message == (
-        "expected a let, a variable assignment, an if, a while, a for, "
-        "a return, a yield, a function definition or a function call")
-    assert error.value.location == location(0, 5)
+
+def test_dumb_statement():
+    assert parse('"lol"') == [String(location(0, 5), 'lol')]
 
 
 def test_parentheses_do_nothing(monkeypatch):
@@ -46,23 +43,23 @@ def test_backtick_function_call(monkeypatch):
     assert parse('x `f` y `g` z') != parse('x `(f` y `g)` z')
 
 
+def test_prefix_minus(monkeypatch):
+    monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
+    assert parse('x == -1') == parse('x == (-1)')
+    assert parse('1 + -2 + 3 --4') == parse('1 + (-2) + 3 - (-4)')
+
+
 def test_invalid_operator_stuff():
     with pytest.raises(CompileError) as error:
         parse('let x = +1')
-    assert error.value.message == "expected an expression, got '+'"
+    assert error.value.message == "syntax error"
     assert error.value.location == location(8, 1)
-
-    # TODO: this needs a better error message
-    with pytest.raises(CompileError) as error:
-        parse('let x = 1 + -2')
-    assert error.value.message == "expected an expression, got '-'"
-    assert error.value.location == location(12, 1)
 
     for ops in itertools.product(['==', '!='], repeat=2):
         with pytest.raises(CompileError) as error:
             parse('x %s y %s z' % ops)
-        assert error.value.message == "'a %s b %s c' is invalid syntax" % ops
-        assert error.value.location == location(2, 7)
+        assert error.value.message == "syntax error"
+        assert error.value.location == location(7, 2)
 
 
 def test_empty_string():
@@ -101,7 +98,7 @@ def test_joined_strings():
 def test_generics():
     assert parse('magic_function[Str, Generator[Int]](x)') == [
         FuncCall(
-            location(0, 38),
+            location(35, 3),
             function=FromGeneric(
                 location(0, 35),
                 name='magic_function',
@@ -123,17 +120,16 @@ def test_generics():
 
     with pytest.raises(CompileError) as error:
         parse('lol[]')
-    assert error.value.message == (
-        "expected 1 or more comma-separated items, got 0")
+    assert error.value.message == "syntax error"
     assert error.value.location == location(4, 1)
 
 
 def test_method_call():
     assert parse('"hello".uppercase()') == [
         FuncCall(
-            location(0, 19),
+            location(17, 2),
             function=GetAttr(
-                location(0, 17),
+                location(7, 1),
                 obj=String(location(0, 7),
                            python_string='hello'),
                 attrname='uppercase',
@@ -146,7 +142,7 @@ def test_method_call():
 def test_for():
     assert parse('for let x = a; b; x = c:\n    print(x)') == [
         For(
-            location(0, 23),
+            location(0, 3),
             init=Let(
                 location(4, 9),
                 varname='x',
@@ -160,7 +156,7 @@ def test_for():
             ),
             body=[
                 FuncCall(
-                    location(29, 8),
+                    location(34, 3),
                     function=GetVar(location(29, 5),
                                     varname='print'),
                     args=[GetVar(location(35, 1),
@@ -174,15 +170,15 @@ def test_for():
 def test_no_multiline_statement():
     with pytest.raises(CompileError) as error:
         parse('for while true:\n    print("hi")')
-    assert error.value.message == "expected a one-line statement"
-    assert error.value.location == location(4, 10)
+    assert error.value.message == "syntax error"
+    assert error.value.location == location(4, 5)
 
 
 def test_assign_to_non_variable():
     with pytest.raises(CompileError) as error:
         parse('print("lol") = x')
-    assert error.value.message == "expected a variable"
-    assert error.value.location == location(0, 12)
+    assert error.value.message == "syntax error"
+    assert error.value.location == location(13, 1)
 
 
 def test_repeated():

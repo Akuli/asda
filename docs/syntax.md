@@ -224,13 +224,9 @@ and they are considered a part of the simple expression:
 - **Function calls** consist of `( )` with zero or more comma-separated
   expressions in between.
 
-An expression consists of an optional `-` and one or more operator-separated
-simple expressions. For example, `-a + b + c` is valid syntax, and so is `-a`,
-but `a + -b` isn't because there are two operators between `a` and `b`. Note
-that `a + (-b)` is valid, because `(-b)` with the parentheses is a simple
-expression. Also, `x == -1` is not valid syntax because that also contains two
-operators between `x` and `1`. I think this is dumb and I might change the
-syntax to allow this later.
+An expression consists of one or more operator-separated or `-` prefixed simple
+expressions. For example, `-a + b + c` is valid syntax, and so are `-a` and
+`a + -b`.
 
 Here is an operator precedence list. It works so that operators higher on the
 list are applied first. Operators of the same precedence are applied
@@ -363,6 +359,9 @@ there are also statements that take up more than one line. Here a "body" means
     ```
 
     Now `generate_hellos()` and `generate_more_hellos()` work the same way.
+
+- **Expression statements** consist of an [expression]. They evaluate the
+  expression, and ignore the resulting value.
 
 
 ### Multiline Statements

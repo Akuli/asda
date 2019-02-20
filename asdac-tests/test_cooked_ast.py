@@ -35,10 +35,10 @@ def test_function_calling_errors():
                  'x')
     doesnt_parse('print("a", "b")',
                  "cannot call print(Str) with arguments of types: Str, Str",
-                 'print("a", "b")')
+                 '("a", "b")')
     doesnt_parse('print()',
                  "cannot call print(Str) with no arguments",
-                 'print()')
+                 '()')
 
 
 # lol
@@ -66,13 +66,13 @@ def test_generic_func_not_found():
 def test_missing_attribute():
     doesnt_parse('"hello".boobs()',
                  "Str objects have no 'boobs' method",
-                 '"hello".boobs')
+                 '.')
 
 
 def test_void_function_wrong_call():
     doesnt_parse('let x = print("boo")',
                  "print(Str) doesn't return a value",
-                 'print("boo")')
+                 '("boo")')
 
 
 def test_unknown_types():
@@ -105,7 +105,7 @@ def test_return_errors():
     for suffix in [' "lol"', '']:
         doesnt_parse('return' + suffix,
                      "return outside function",
-                     'return' + suffix)
+                     'return')
 
     doesnt_parse('func lol() -> void:\n    return "blah"',
                  "cannot return a value from a void function",
@@ -121,7 +121,7 @@ def test_return_errors():
 def test_yield_errors():
     doesnt_parse('yield "lol"',
                  "yield outside function",
-                 'yield "lol"')
+                 'yield')
     doesnt_parse('func lol() -> Generator[Str]:\n    yield print',
                  "should yield Str, not print(Str)",
                  'print')
@@ -130,18 +130,18 @@ def test_yield_errors():
         doesnt_parse('func lol() -> %s:\n    yield "hi"' % returntype,
                      ("cannot yield in a function that doesn't return "
                       "Generator[something]"),
-                     'yield "hi"')
+                     'yield')
 
     doesnt_parse(
         'func lol() -> Generator[Str]:\n    yield "lol"\n    return "Boo"',
         "cannot return a value from a function that yields",
-        'return "Boo"')
+        'return')
 
 
 def test_operator_errors():
     doesnt_parse('let x = 1 / 2',
-                 "sorry, division is not supported yet :(",
-                 '1 / 2')
+                 "unexpected '/'",      # actually it doesn't even tokenize
+                 '/')
     doesnt_parse('let x = -"blah"',
                  "expected -Int, got -Str",
                  '-"blah"')
@@ -169,7 +169,7 @@ def test_yield_finding_bugs():
     doesnt_parse('func lol() -> void:\n  for yield x; y; z():\n    xyz()',
                  ("cannot yield in a function that doesn't return "
                   "Generator[something]"),
-                 'yield x')
+                 'yield')
 
     # the yield is in a nested function, should work!
     parse('''

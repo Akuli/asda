@@ -48,17 +48,17 @@ def test_automatic_trailing_newline():
 
 def test_keyword_in_id():
     assert tokenize('func funcy ffunc func') == [
-        Token('KEYWORD', 'func', 0),
+        Token('FUNC', 'func', 0),
         Token('ID', 'funcy', 5),
         Token('ID', 'ffunc', 11),
-        Token('KEYWORD', 'func', 17),
+        Token('FUNC', 'func', 17),
         Token('NEWLINE', '\n', 21),
     ]
 
 
 def test_indent():
     assert tokenize('if x:\n  y') == [
-        Token('KEYWORD', 'if', 0),
+        Token('IF', 'if', 0),
         Token('ID', 'x', 3),
         Token('INDENT', '  ', 6),
         Token('ID', 'y', 8),

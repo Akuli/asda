@@ -13,9 +13,12 @@ _LETTER_REGEX = r'\p{Lu}|\p{Ll}|\p{Lo}'    # not available in stdlib re module
 class AsdaLexer(sly.Lexer):
     regex_module = regex
 
-    literals = {'+', '-', '*', '/', '=', '`', ';', ':', '.', ',',
+    literals = {'+', '-', '*', '=', '`', ';', ':', '.', ',',
                 '[', ']', '(', ')'}
-    tokens = {INTEGER, ID, KEYWORD, STRING, NEWLINE, INDENT}      # noqa
+    tokens = {
+        INTEGER, ID, STRING, NEWLINE, INDENT, DEDENT,       # noqa
+        LET, IF, ELIF, ELSE, WHILE, FOR, VOID, RETURN, FUNC, YIELD,  # noqa
+        EQ, NE, ARROW}      # noqa
 
     INTEGER = r'[1-9][0-9]*|0'
     ID = r'(?:%s|_)(?:%s|[0-9_])*' % (_LETTER_REGEX, _LETTER_REGEX)
@@ -26,26 +29,26 @@ class AsdaLexer(sly.Lexer):
     IGNORE_SPACES = r' '
     IGNORE_COMMENT = r'#.*'
 
-    ID['let'] = KEYWORD     # noqa
-    ID['if'] = KEYWORD      # noqa
-    ID['elif'] = KEYWORD    # noqa
-    ID['else'] = KEYWORD    # noqa
-    ID['while'] = KEYWORD   # noqa
-    ID['for'] = KEYWORD     # noqa
-    ID['void'] = KEYWORD    # noqa
-    ID['return'] = KEYWORD  # noqa
-    ID['func'] = KEYWORD    # noqa
-    ID['yield'] = KEYWORD   # noqa
+    ID['let'] = LET         # noqa
+    ID['if'] = IF           # noqa
+    ID['elif'] = ELIF       # noqa
+    ID['else'] = ELSE       # noqa
+    ID['while'] = WHILE     # noqa
+    ID['for'] = FOR         # noqa
+    ID['void'] = VOID       # noqa
+    ID['return'] = RETURN   # noqa
+    ID['func'] = FUNC       # noqa
+    ID['yield'] = YIELD     # noqa
+
+    # because sly doesn't like multi-character literals
+    # if you try changing that here, then sly's parser won't like it
+    EQ = r'=='
+    NE = r'!='
+    ARROW = r'->'
 
     def __init__(self, filename):
         super().__init__()
         self.filename = filename
-
-    # sly wants the literals set to contain single characters only
-    @_(r'==|!=|->')     # noqa
-    def multicharacter_literal(self, token):
-        token.type = token.value
-        return token
 
     BLANK_LINE = lambda self, token: None       # noqa
     IGNORE_SPACES = lambda self, token: None    # noqa
