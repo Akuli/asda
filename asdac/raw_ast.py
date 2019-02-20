@@ -31,6 +31,7 @@ VoidStatement = _astclass('VoidStatement', [])
 If = _astclass('If', ['ifs', 'else_body'])
 While = _astclass('While', ['condition', 'body'])
 For = _astclass('For', ['init', 'cond', 'incr', 'body'])
+ExportLet = _astclass('ExportLet', ['varname', 'value'])
 PrefixOperator = _astclass('PrefixOperator', ['operator', 'expression'])
 BinaryOperator = _astclass('BinaryOperator', ['operator', 'lhs', 'rhs'])
 
@@ -117,6 +118,7 @@ class AsdaParser(sly.Parser):
                         "you must put %s between { and }" % wanted,
                         part_location)
 
+                # FIXME: this shouldn't be an assert!
                 assert isinstance(expression, tuple(_expression_classes))
                 parts.append(_to_string(expression))
 
@@ -258,11 +260,13 @@ class AsdaParser(sly.Parser):
     # ~~~~~~~~~~~~~~~~~~~
 
     @_('LET ID "=" expression')
+    @_('EXPORT LET ID "=" expression')
     def oneline_statement(self, parsed):
         end = (parsed.expression.location.offset +
                parsed.expression.location.length)
-        return Let(self.create_location(parsed.index, end - parsed.index),
-                   parsed.ID, parsed.expression)
+        klass = ExportLet if hasattr(parsed, 'EXPORT') else Let
+        return klass(self.create_location(parsed.index, end - parsed.index),
+                     parsed.ID, parsed.expression)
 
     @_('YIELD expression')      # noqa
     def oneline_statement(self, parsed):
