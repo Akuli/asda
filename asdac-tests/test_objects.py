@@ -5,7 +5,9 @@ from asdac.common import CompileError, Location
 
 
 def parse(code):
-    return list(cooked_ast.cook(raw_ast.parse('test file', code)))
+    cooked, exports = cooked_ast.cook(raw_ast.parse('test file', code))
+    assert isinstance(cooked, list)
+    return cooked
 
 
 def doesnt_parse(code, message, bad_code):

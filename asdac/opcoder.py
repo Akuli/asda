@@ -64,7 +64,7 @@ class OpCode:
     def __init__(self, nargs):
         self.nargs = nargs
         self.ops = []
-        self.local_vars = list(range(nargs))
+        self.local_vars = [ArgMarker(i) for i in range(nargs)]
 
     def add_local_var(self):
         var = VarMarker()
@@ -338,10 +338,11 @@ class _OpCoder:
 
     def do_body(self, statements):
         for statement in statements:
+            assert not isinstance(statement, list)
             self.do_statement(statement)
 
 
-def create_opcode(cooked, filename, source_code):
+def create_opcode(cooked_statements, exports, filename, source_code):
     line_start_offsets = []
     offset = 0
     for line in io.StringIO(source_code):
@@ -358,7 +359,11 @@ def create_opcode(cooked, filename, source_code):
         ))
     })
 
-    output = OpCode(0)
-    _OpCoder(output, builtin_opcoder).do_body(cooked)
+    # exported symbols are kinda like arguments
+    output = OpCode(len(exports))
+    file_opcoder = _OpCoder(output, builtin_opcoder)
+    for arg_marker, name in zip(output.local_vars, exports.keys()):
+        file_opcoder.local_vars[name] = arg_marker
+    file_opcoder.do_body(cooked_statements)
     output.fix_none_linenos()
     return output

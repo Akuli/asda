@@ -48,8 +48,8 @@ def source2bytecode(infile, compiled_dir, quiet, always_recompile):
     # output file gets left untouched if it exists and no invalid output files
     # are created
     raw = raw_ast.parse(infile.name, source)
-    cooked = cooked_ast.cook(raw)
-    opcode = opcoder.create_opcode(cooked, infile.name, source)
+    cooked, exports = cooked_ast.cook(raw)
+    opcode = opcoder.create_opcode(cooked, exports, infile.name, source)
     bytecode = bytecoder.create_bytecode(opcode)
 
     with common.open_compiled_file_write(compiled_dir, infile.name) as outfile:

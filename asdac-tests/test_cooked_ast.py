@@ -4,8 +4,15 @@ from asdac import raw_ast, cooked_ast, objects
 from asdac.common import CompileError, Location
 
 
-def parse(code):
-    return list(cooked_ast.cook(raw_ast.parse('test file', code)))
+def parse(code, want_exports=False):
+    cooked, exports = cooked_ast.cook(raw_ast.parse('test file', code))
+    assert isinstance(cooked, list)
+
+    if want_exports:
+        return (cooked, exports)
+
+    assert not exports
+    return cooked
 
 
 def doesnt_parse(code, message, bad_code):
@@ -232,3 +239,11 @@ if TRUE:
     assert parse(code % 'void') == parse(code % '')
     assert (parse('for void; TRUE; void:\n    print("Hi")') ==
             parse('while TRUE:\n    print("Hi")'))
+
+
+def test_exporting():
+    cooked, exports = parse('let x = 1\nexport let y = 2', want_exports=True)
+    assert exports == {'y': objects.BUILTIN_TYPES['Int']}
+    x_create, y_create = cooked
+    assert isinstance(x_create, cooked_ast.CreateLocalVar)
+    assert isinstance(y_create, cooked_ast.SetVar)

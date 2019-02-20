@@ -169,6 +169,7 @@ class _BytecodeWriter:
             if isinstance(op.var, opcoder.ArgMarker):
                 self.bytecode.add_uint16(op.var.index)
             else:
+                assert isinstance(op.var, opcoder.VarMarker)
                 self.bytecode.add_uint16(varlists[op.level].index(op.var))
             return
 

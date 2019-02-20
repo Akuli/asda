@@ -1,11 +1,11 @@
-from collections import namedtuple
+import collections
 
 from . import raw_ast, common, objects
 
 
 def _astclass(name, fields):
     # type is set to None for statements
-    return namedtuple(name, ['location', 'type'] + fields)
+    return collections.namedtuple(name, ['location', 'type'] + fields)
 
 
 StrConstant = _astclass('StrConstant', ['python_string'])
@@ -79,7 +79,8 @@ class _Chef:
             self.level = parent_chef.level + 1
 
         # keys are strings, values are types
-        self.local_vars = {}
+        self.exports = {}
+        self.local_vars = collections.ChainMap({}, self.exports)
         self.local_generic_funcs = {}
         self.local_types = {}
 
@@ -458,10 +459,25 @@ class _Chef:
         body = self.cook_body(raw.body)
         return Loop(raw.location, None, init, cond, incr, body)
 
+    def _check_can_import_export(self, location):
+        # 0 = built-in chef, 1 = file-level chef, 2 = global function chef, etc
+        if self.level != 1:
+            raise common.CompileError(
+                "import and export cannot be used inside functions", location)
+
+    def cook_export_let(self, raw):
+        self._check_name_not_exist(raw.varname, 'variable', raw.location)
+        self._check_can_import_export(raw.location)
+        value = self.cook_expression(raw.value)
+        self.exports[raw.varname] = value.type
+        return SetVar(raw.location, None, raw.varname, self.level, value)
+
     # note that this returns None for a void statement, cook_body() handles it
     def cook_statement(self, raw_statement):
         if isinstance(raw_statement, raw_ast.Let):
             return self.cook_let(raw_statement)
+        if isinstance(raw_statement, raw_ast.ExportLet):
+            return self.cook_export_let(raw_statement)
         if isinstance(raw_statement, raw_ast.SetVar):
             return self.cook_setvar(raw_statement)
         if isinstance(raw_statement, raw_ast.FuncCall):
@@ -492,4 +508,7 @@ def cook(raw_ast_statements):
     builtin_chef = _Chef(None)
     builtin_chef.local_vars.update(objects.BUILTIN_OBJECTS)
     builtin_chef.local_generic_funcs.update(objects.BUILTIN_GENERIC_FUNCS)
-    return _Chef(builtin_chef).cook_body(raw_ast_statements)
+
+    file_chef = _Chef(builtin_chef)
+    cooked_statements = file_chef.cook_body(raw_ast_statements)
+    return (cooked_statements, file_chef.exports)
