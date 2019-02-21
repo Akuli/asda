@@ -1,4 +1,6 @@
+import collections
 import functools
+import io
 
 from . import common, objects, opcoder
 
@@ -25,6 +27,7 @@ YIELD = b'Y'
 BOOL_NEGATION = b'!'
 JUMP_IF = b'J'
 END_OF_BODY = b'E'
+EXPORT_SECTION = b'e'
 
 PLUS = b'+'
 MINUS = b'-'
@@ -249,10 +252,27 @@ class _BytecodeWriter:
             self.write_op(op, varlists)
         self.bytecode.add_byte(END_OF_BODY)
 
+    def write_export_section(self, exports):
+        # _BytecodeReader reads this with seek
+        export_beginning = len(self.bytecode.byte_array)
 
-def create_bytecode(opcode):
+        assert isinstance(exports, collections.OrderedDict)
+        self.bytecode.add_byte(EXPORT_SECTION)
+        self.bytecode.add_uint32(len(exports))
+        for name, tybe in exports.items():
+            self.bytecode.write_string(name)
+            self.write_type(tybe)
+
+        self.bytecode.add_uint32(export_beginning)
+
+
+def create_bytecode(opcode, exports):
     output = _ByteCode()
+    output.byte_array.extend(b'asda')
+
     # the built-in varlist is None because all builtins are implemented
     # as ArgMarkers, so they don't need a varlist
-    _BytecodeWriter(output).run(opcode, [None])
+    writer = _BytecodeWriter(output)
+    writer.run(opcode, [None])
+    writer.write_export_section(exports)
     return output.byte_array

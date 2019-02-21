@@ -1,4 +1,5 @@
 import argparse
+import collections
 import os
 import re
 import sys
@@ -47,13 +48,18 @@ def source2bytecode(infile, compiled_dir, quiet, always_recompile):
     # exception is likely raised before the output file is opened, and the
     # output file gets left untouched if it exists and no invalid output files
     # are created
+
     raw = raw_ast.parse(infile.name, source)
     cooked, exports = cooked_ast.cook(raw)
+
+    # need consistent order after this, doesn't really matter what that order
+    # is as long as it's consistently the same order in each step
+    exports = collections.OrderedDict(exports)
+
     opcode = opcoder.create_opcode(cooked, exports, infile.name, source)
-    bytecode = bytecoder.create_bytecode(opcode)
+    bytecode = bytecoder.create_bytecode(opcode, exports)
 
     with common.open_compiled_file_write(compiled_dir, infile.name) as outfile:
-        outfile.write(b'asda')
         outfile.write(bytecode)
 
 

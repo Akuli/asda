@@ -362,8 +362,10 @@ def create_opcode(cooked_statements, exports, filename, source_code):
     # exported symbols are kinda like arguments
     output = OpCode(len(exports))
     file_opcoder = _OpCoder(output, builtin_opcoder)
+    assert isinstance(exports, collections.OrderedDict)
     for arg_marker, name in zip(output.local_vars, exports.keys()):
         file_opcoder.local_vars[name] = arg_marker
+
     file_opcoder.do_body(cooked_statements)
     output.fix_none_linenos()
     return output
