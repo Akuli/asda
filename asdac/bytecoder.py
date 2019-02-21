@@ -276,3 +276,85 @@ def create_bytecode(opcode, exports):
     writer.run(opcode, [None])
     writer.write_export_section(exports)
     return output.byte_array
+
+
+# can't read anything, but can read the exports section
+class _BytecodeReader:
+
+    def __init__(self, file):
+        self.file = file
+
+    # errors on unexpected eof
+    def _read(self, size):
+        result = self.file.read(size)
+        if len(result) != size:
+            raise common.CompileError(
+                "the bytecode file %s seems to be truncated" % self.file.name)
+        return result
+
+    def _read_uint(self, size):
+        assert size % 8 == 0 and 0 < size <= 64, size
+        result = 0
+        for offset in range(0, size, 8):
+            result |= self._read(1)[0] << offset
+        return result
+
+    read_uint8 = functools.partialmethod(_read_uint, 8)
+    read_uint32 = functools.partialmethod(_read_uint, 32)
+
+    def read_string(self):
+        length = self.read_uint32()
+        utf8 = self._read(length)
+        return utf8.decode('utf-8')
+
+    def read_type(self, *, name_hint='<anonymous>'):
+        byte = self._read(1)
+        [byte_int] = byte
+
+        if byte == TYPE_BUILTIN:
+            index = self.read_uint8()
+            return list(objects.BUILTIN_TYPES.values())[index]
+
+        if byte == CREATE_FUNCTION:
+            returntype = self.read_type()
+            nargs = self.read_uint8()
+            argtypes = [self.read_type() for junk in range(nargs)]
+            return objects.FunctionType(name_prefix, argtypes, returntype)
+
+        if byte == TYPE_GENERATOR:
+            item_type = self.read_type()
+            return objects.GeneratorType(item_type)
+
+        raise common.CompileError(
+            "the file %s contains invalid type byte %#02x" % byte_int)
+
+    def check_asda_part(self):
+        if self.file.read(4) != b'asda':
+            raise common.CompileError(
+                ("the file %s doesn't seem like an asda bytecode file"
+                 % self.file.name))
+
+    def read_export_section(self):
+        self.file.seek(-32//8, io.SEEK_END)
+        new_seek_pos = self.read_uint32()
+        self.file.seek(new_seek_pos)
+        if self._read(1) != EXPORT_SECTION:
+            raise common.CompileError(
+                ("the file %s seems to have garbage at the end or something"
+                 % self.file.name))
+
+        result = {}
+        how_many = self.read_uint32()
+        for junk in range(how_many):
+            name = self.read_string()
+            tybe = self.read_type()
+            result[name] = tybe
+
+        return result
+
+
+# initial position of the file should be at the beginning
+def read_exports(bytecodefile):
+    reader = _BytecodeReader(bytecodefile)
+    reader.check_asda_part()
+    return reader.read_export_section()
