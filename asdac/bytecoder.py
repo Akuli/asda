@@ -278,18 +278,43 @@ def create_bytecode(opcode, exports):
     return output.byte_array
 
 
+class RecompileFixableError(Exception):
+    """Raised for errors that can be fixed by recompiling a file.
+
+    They happen when reading bytecode files, not when writing them. The file
+    that contains the problem is the_error.compiled_path, and the file that
+    should be recompiled is the_error.source_path. A user-displayable
+    description is in self.message.
+    """
+
+    def __init__(self, source_path, message):
+        self.source_path = source_path
+        self.compiled_path = common.get_compiled_path(source_path)
+        self.message = message
+
+    @property
+    def compiled_path(self):
+        return common.get_compiled_path(source_path)
+
+    def __str__(self):
+        return '%s (%s)' % (self.message, self.source_path)
+
+
 # can't read anything, but can read the exports section
 class _BytecodeReader:
 
-    def __init__(self, file):
+    def __init__(self, source_path, file):
+        self.source_path = source_path
         self.file = file
+
+    def error(self, message):
+        raise RecompileFixableError(self.source_path, message)
 
     # errors on unexpected eof
     def _read(self, size):
         result = self.file.read(size)
         if len(result) != size:
-            raise common.CompileError(
-                "the bytecode file %s seems to be truncated" % self.file.name)
+            self.error("the bytecode file seems to be truncated")
         return result
 
     def _read_uint(self, size):
@@ -325,23 +350,19 @@ class _BytecodeReader:
             item_type = self.read_type()
             return objects.GeneratorType(item_type)
 
-        raise common.CompileError(
-            "the file %s contains invalid type byte %#02x" % byte_int)
+        self.error("invalid type byte %#02x" % byte_int)
 
     def check_asda_part(self):
         if self.file.read(4) != b'asda':
-            raise common.CompileError(
-                ("the file %s doesn't seem like an asda bytecode file"
-                 % self.file.name))
+            self.error("the file is not an asda bytecode file")
 
     def read_export_section(self):
         self.file.seek(-32//8, io.SEEK_END)
         new_seek_pos = self.read_uint32()
         self.file.seek(new_seek_pos)
         if self._read(1) != EXPORT_SECTION:
-            raise common.CompileError(
-                ("the file %s seems to have garbage at the end or something"
-                 % self.file.name))
+            self.error("the file seems to contain garbage at the end, "
+                       "or maybe it's gotten truncated")
 
         result = {}
         how_many = self.read_uint32()
@@ -354,7 +375,7 @@ class _BytecodeReader:
 
 
 # initial position of the file should be at the beginning
-def read_exports(bytecodefile):
-    reader = _BytecodeReader(bytecodefile)
+def read_exports(source_path, bytecodefile):
+    reader = _BytecodeReader(source_path, bytecodefile)
     reader.check_asda_part()
     return reader.read_export_section()
