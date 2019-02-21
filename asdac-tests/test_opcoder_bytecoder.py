@@ -1,3 +1,5 @@
+import collections
+
 import pytest
 
 from asdac import raw_ast, cooked_ast, bytecoder
@@ -7,11 +9,13 @@ from asdac.opcoder import create_opcode, Return, DidntReturnError
 
 def opcode(code):
     cooked, exports = cooked_ast.cook(raw_ast.parse('test file', code))
-    return create_opcode(cooked, exports, 'test file', code)
+    assert exports == {}
+    return create_opcode(cooked, collections.OrderedDict(exports),
+                         'test file', code)
 
 
 def bytecode(code):
-    return bytecoder.create_bytecode(opcode(code))
+    return bytecoder.create_bytecode(opcode(code), collections.OrderedDict())
 
 
 def test_too_many_arguments():

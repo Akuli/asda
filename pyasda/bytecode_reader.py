@@ -27,6 +27,7 @@ YIELD = b'Y'
 NEGATION = b'!'
 JUMP_IF = b'J'
 END_OF_BODY = b'E'      # only used in bytecode files
+EXPORT_SECTION = b'e'   # only used in bytecode files
 
 PLUS = b'+'
 MINUS = b'-'
@@ -178,6 +179,6 @@ class _BytecodeReader:
 
 def read_bytecode(read_callback):
     result = _BytecodeReader(read_callback).read_body()
-    if read_callback(1) != b'':
-        raise ValueError("junk at the end of the compiled file")
+    if read_callback(1) != EXPORT_SECTION:
+        raise ValueError("the bytecode file ends unexpectedly")
     return result
