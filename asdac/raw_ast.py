@@ -31,6 +31,7 @@ VoidStatement = _astclass('VoidStatement', [])
 If = _astclass('If', ['ifs', 'else_body'])
 While = _astclass('While', ['condition', 'body'])
 For = _astclass('For', ['init', 'cond', 'incr', 'body'])
+Import = _astclass('Import', ['sourcepath', 'varname'])
 ExportLet = _astclass('ExportLet', ['varname', 'value'])
 PrefixOperator = _astclass('PrefixOperator', ['operator', 'expression'])
 BinaryOperator = _astclass('BinaryOperator', ['operator', 'lhs', 'rhs'])
@@ -86,9 +87,7 @@ class AsdaParser(sly.Parser):
             self.filename, token.index, len(token.value))
         raise common.CompileError("syntax error", location)
 
-    @_expression_class(String)
-    @_expression_class(StrJoin)
-    def handle_string_literal(self, string, location):
+    def handle_string_literal(self, string, location, allow_curly_braces):
         assert len(string) >= 2 and string[0] == '"' and string[-1] == '"'
         content = string[1:-1]
         content_location = common.Location(
@@ -101,6 +100,10 @@ class AsdaParser(sly.Parser):
                 parts.append(String(part_location, value))
 
             elif kind == 'code':
+                if not allow_curly_braces:
+                    raise common.CompileError(
+                        "cannot use {...} strings here", part_location)
+
                 tokens = tokenizer.tokenize(
                     part_location.filename, value,
                     initial_offset=part_location.offset)
@@ -125,15 +128,7 @@ class AsdaParser(sly.Parser):
             else:   # pragma: no cover
                 raise NotImplementedError(kind)
 
-        if len(parts) == 0:     # empty string
-            return String(location, '')
-        elif len(parts) == 1:
-            # _replace is a documented namedtuple method
-            # it has an underscore to allow creating a namedtuple with a field
-            # called replace
-            return parts[0]._replace(location=location)
-        else:
-            return StrJoin(location, parts)
+        return parts
 
     # abstracts away a sly implementation detail
     def last_token_offset(self):
@@ -259,6 +254,11 @@ class AsdaParser(sly.Parser):
     # one-line statements
     # ~~~~~~~~~~~~~~~~~~~
 
+    @_('IMPORT import_path AS ID')
+    def oneline_statement(self, parsed):    # noqa
+        return Import(self.create_location(parsed.index, len(parsed.IMPORT)),
+                      parsed.import_path, parsed.ID)
+
     @_('LET ID "=" expression')
     @_('EXPORT LET ID "=" expression')
     def oneline_statement(self, parsed):
@@ -297,6 +297,12 @@ class AsdaParser(sly.Parser):
         target_location = self.create_location(parsed.index, len(parsed.ID))
         return SetVar(target_location + parsed.expression.location,
                       parsed.ID, parsed.expression)
+
+    @_('STRING')
+    def import_path(self, parsed):
+        location = self.create_location(parsed.index, len(parsed.STRING))
+        path_parts = self.handle_string_literal(parsed.STRING, location, False)
+        return ''.join(string_ast.python_string for string_ast in path_parts)
 
     # expressions and operators
     # ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -350,12 +356,22 @@ class AsdaParser(sly.Parser):
     def simple_expression(self, parsed):
         return parsed.simple_expression_no_trailers
 
+    @_expression_class(String)
+    @_expression_class(StrJoin)
     @_('STRING')
     def simple_expression_no_trailers(self, parsed):
         location = common.Location(
             self.filename, parsed.index, len(parsed.STRING))
-        return self.handle_string_literal(
-            parsed.STRING, location)
+        parts = self.handle_string_literal(parsed.STRING, location, True)
+
+        if len(parts) == 0:     # empty string
+            return String(location, '')
+        if len(parts) == 1:
+            # _replace is a documented namedtuple method
+            # it has an underscore to allow creating a namedtuple with a field
+            # called replace
+            return parts[0]._replace(location=location)
+        return StrJoin(location, parts)
 
     @_expression_class(Integer)      # noqa
     @_('INTEGER')
