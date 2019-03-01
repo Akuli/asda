@@ -2,7 +2,7 @@ import functools
 
 import pytest
 
-from asdac.common import Compilation, CompileError, Location
+from asdac.common import Compilation, CompileError
 from asdac.tokenizer import tokenize as real_tokenize
 
 
@@ -37,15 +37,15 @@ def doesnt_tokenize(code, message, bad_code):
     assert error.value.location.length == len(bad_code)
 
 
-def test_automatic_trailing_newline():
-    tokens1 = tokenize('let x = y')
-    tokens2 = tokenize('let x = y\n')
+def test_automatic_trailing_newline(compiler):
+    tokens1 = compiler.tokenize('let x = y')
+    tokens2 = compiler.tokenize('let x = y\n')
     assert len(tokens1) == len(tokens2)
     assert all(map(tokens_equal, tokens1, tokens2))
 
 
-def test_keyword_in_id():
-    assert tokenize('func funcy ffunc func') == [
+def test_keyword_in_id(compiler):
+    assert compiler.tokenize('func funcy ffunc func') == [
         Token('FUNC', 'func', 0),
         Token('ID', 'funcy', 5),
         Token('ID', 'ffunc', 11),
@@ -54,8 +54,8 @@ def test_keyword_in_id():
     ]
 
 
-def test_indent():
-    assert tokenize('if x:\n  y') == [
+def test_indent(compiler):
+    assert compiler.tokenize('if x:\n  y') == [
         Token('IF', 'if', 0),
         Token('ID', 'x', 3),
         Token('INDENT', '  ', 6),
@@ -64,11 +64,10 @@ def test_indent():
         Token('DEDENT', '', 10),
     ]
 
-    doesnt_tokenize('if x:\n     y\n z',
-                    "the indentation is wrong",
-                    ' ')
+    compiler.doesnt_tokenize('if x:\n     y\n z',
+                             "the indentation is wrong", ' ')
 
-    assert tokenize('a:\n  b\nx:\n    y') == [
+    assert compiler.tokenize('a:\n  b\nx:\n    y') == [
         Token('ID', 'a', 0),
         Token('INDENT', '  ', 3),
         Token('ID', 'b', 5),
@@ -81,58 +80,51 @@ def test_indent():
         Token('DEDENT', '', 16),
     ]
 
-    doesnt_tokenize('x\n y',
-                    "indent without : and newline",
-                    ' ')
-    doesnt_tokenize('x:y',
-                    ": without newline and indent",
-                    ':')
+    compiler.doesnt_tokenize('x\n y', "indent without : and newline", ' ')
+    compiler.doesnt_tokenize('x:y', ": without newline and indent", ':')
 
 
-def test_tabs_forbidden_sorry():
-    doesnt_tokenize('print(\t"lol")',
-                    "tabs are not allowed in asda code",
-                    '\t')
-    doesnt_tokenize('print("\t")',
-                    "tabs are not allowed in asda code",
-                    '\t')
+def test_tabs_forbidden_sorry(compiler):
+    compiler.doesnt_tokenize('print(\t"lol")',
+                             "tabs are not allowed in asda code", '\t')
+    compiler.doesnt_tokenize('print("\t")',
+                             "tabs are not allowed in asda code", '\t')
 
     # tokenizer.py handles tab on first line as a special case, so this is
     # needed for better coverage
-    doesnt_tokenize('print("Boo")\nprint("\t")',
-                    "tabs are not allowed in asda code",
-                    '\t')
+    compiler.doesnt_tokenize('print("Boo")\nprint("\t")',
+                             "tabs are not allowed in asda code", '\t')
 
     # this should work, because it's backslash t, not an actual tab character
     # note r in front of the python string
-    tokenize(r'print("\t")')
+    compiler.tokenize(r'print("\t")')
 
 
-def test_strings():
+def test_strings(compiler):
     # string literals can contain \" and \\ just like in python
-    string1, string2, string3, fake_newline = tokenize(
+    string1, string2, string3, fake_newline = compiler.tokenize(
         r'"\"" "a \"lol\" b" "\\ back \\ slashes \\"')
     assert string1.value == r'"\""'
     assert string2.value == r'"a \"lol\" b"'
     assert string3.value == r'"\\ back \\ slashes \\"'
 
-    doesnt_tokenize(r'print("hello world\")', "invalid string",
-                    r'"hello world\")')
-    doesnt_tokenize('"{hello"', "invalid string", None)
-    doesnt_tokenize('"{{hello}"', "invalid string", None)
-    doesnt_tokenize('"hello}"', "invalid string", None)
-    doesnt_tokenize('"{hello}}"', "invalid string", None)
-    doesnt_tokenize(r'"\a"', "invalid string", None)
+    compiler.doesnt_tokenize(r'print("hello world\")', "invalid string",
+                             r'"hello world\")')
+    compiler.doesnt_tokenize('"{hello"', "invalid string", None)
+    compiler.doesnt_tokenize('"{{hello}"', "invalid string", None)
+    compiler.doesnt_tokenize('"hello}"', "invalid string", None)
+    compiler.doesnt_tokenize('"{hello}}"', "invalid string", None)
+    compiler.doesnt_tokenize(r'"\a"', "invalid string", None)
 
 
-def test_unknown_character():
-    doesnt_tokenize('@', "unexpected '@'", '@')
+def test_unknown_character(compiler):
+    compiler.doesnt_tokenize('@', "unexpected '@'", '@')
 
 
-def test_whitespace_ignoring(monkeypatch):
+def test_whitespace_ignoring(monkeypatch, compiler):
     Token = type(tokenize('a')[0])
     monkeypatch.setattr(Token, '__eq__', functools.partialmethod(
         tokens_equal, consider_index=False))
 
-    assert (tokenize('func lol ( Generator [ Str ] asd ) : \n    boo') ==
-            tokenize('func lol(Generator[Str]asd):\n    boo'))
+    assert (compiler.tokenize('func lol ( Generator [ Str ] asd ) : \n    boo')
+            == compiler.tokenize('func lol(Generator[Str]asd):\n    boo'))

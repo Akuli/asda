@@ -1,33 +1,10 @@
-import collections
-import os
-
 import pytest
 
-from asdac import raw_ast, cooked_ast, bytecoder
-from asdac.common import Compilation, CompileError
-from asdac.opcoder import create_opcode, Return, DidntReturnError
+from asdac.common import CompileError
+from asdac.opcoder import Return, DidntReturnError
 
 
-def _compilation_and_opcode(code):
-    compilation = Compilation('test file', '.')
-    raw, imports = raw_ast.parse(compilation, code)
-    cooked, exports = cooked_ast.cook(compilation, raw, {})
-    assert not imports
-    assert not exports
-    compilation.set_imports([])
-    compilation.set_exports(collections.OrderedDict())
-    return (compilation, create_opcode(compilation, cooked, code))
-
-
-def opcode(code):
-    return _compilation_and_opcode(code)[1]
-
-
-def bytecode(code):
-    return bytecoder.create_bytecode(*_compilation_and_opcode(code))
-
-
-def test_too_many_arguments():
+def test_too_many_arguments(compiler):
     args = list(map('Str s{}'.format, range(0xff + 1)))
     code = 'func lol(%s) -> void:\n    print("boo")' % ', '.join(args)
 
@@ -38,29 +15,31 @@ def test_too_many_arguments():
     # FIXME: the location being None is bad, opcode and bytecode should include
     # line numbers and filename everywhere
     with pytest.raises(CompileError) as error:
-        bytecode(code)
+        compiler.bytecode(code)
     assert error.value.message == (
         "this number does not fit in an unsigned 8-bit integer: %d" % (0xff+1))
     assert error.value.location is None     # FIXME
 
     # 0xff arguments should work, because 0xff fits in an 8-bit uint
-    bytecode('func lol(%s) -> void:\n    print("boo")' % ','.join(args[1:]))
+    compiler.bytecode(
+        'func lol(%s) -> void:\n    print("boo")' % ','.join(args[1:]))
 
 
-def test_implicit_return():
+def test_implicit_return(compiler):
     codes = [
         'func lol() -> void:\n    print("Boo")',
         'func lol() -> Generator[Str]:\n    yield "Boo"',
     ]
 
     for code in codes:
-        create_func, setvar = opcode(code).ops
+        create_func, setvar = compiler.opcode(code).ops
         implicit_return = create_func.body_opcode.ops[-1]
         assert isinstance(implicit_return, Return)
         assert not implicit_return.returns_a_value
 
 
-def test_missing_return():
-    create_func, setvar = opcode('func lol() -> Str:\n    print("Boo")').ops
+def test_missing_return(compiler):
+    create_func, setvar = compiler.opcode(
+        'func lol() -> Str:\n    print("Boo")').ops
     didnt_return_error = create_func.body_opcode.ops[-1]
     assert isinstance(didnt_return_error, DidntReturnError)

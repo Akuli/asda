@@ -12,40 +12,32 @@ import pytest
 # lol
 class AnyCompilation(Compilation):
     def __init__(self): pass
+
     def __eq__(self, other): return isinstance(other, Compilation)
 
 
 location = functools.partial(Location, AnyCompilation())
 
 
-def parse(code):
-    compilation = Compilation('test file', '.')
-    statements, imports = raw_ast.parse(compilation, code)
-    assert not imports
-    assert isinstance(statements, list)
-    return statements
+def test_not_an_expression_or_a_statement(compiler):
+    compiler.doesnt_raw_parse('print(])', "syntax error", ']')
 
 
-def test_not_an_expression_or_a_statement():
-    with pytest.raises(CompileError) as error:
-        parse('print(])')
-    assert error.value.message == "syntax error"
-    assert error.value.location == location(6, 1)
+def test_dumb_statement(compiler):
+    assert compiler.raw_parse('"lol"') == [String(location(0, 5), 'lol')]
 
 
-def test_dumb_statement():
-    assert parse('"lol"') == [String(location(0, 5), 'lol')]
-
-
-def test_parentheses_do_nothing(monkeypatch):
+def test_parentheses_do_nothing(compiler, monkeypatch):
     monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
-    assert (parse('let x = y') ==
-            parse('let x = (y)') ==
-            parse('let x = (((y)))'))
+    assert (compiler.raw_parse('let x = y') ==
+            compiler.raw_parse('let x = (y)') ==
+            compiler.raw_parse('let x = (((y)))'))
 
 
-def test_backtick_function_call(monkeypatch):
+def test_backtick_function_call(compiler, monkeypatch):
     monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
+    parse = compiler.raw_parse      # pep8 line length
+
     assert parse('x `f` y') == parse('f(x, y)')
     assert parse('(x `f` y) `g` z') == parse('g(f(x, y), z)')
     assert parse('x `f` (y `g` z)') == parse('f(x, g(y, z))')
@@ -54,47 +46,40 @@ def test_backtick_function_call(monkeypatch):
     assert parse('x `f` y `g` z') != parse('x `(f` y `g)` z')
 
 
-def test_prefix_minus(monkeypatch):
+def test_prefix_minus(compiler, monkeypatch):
     monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
-    assert parse('x == -1') == parse('x == (-1)')
-    assert parse('1 + -2 + 3 --4') == parse('1 + (-2) + 3 - (-4)')
+    assert compiler.raw_parse('x == -1') == compiler.raw_parse('x == (-1)')
+    assert compiler.raw_parse('1 + -2 + 3 --4') == compiler.raw_parse(
+        '1 + (-2) + 3 - (-4)')
 
 
-def test_invalid_operator_stuff():
-    with pytest.raises(CompileError) as error:
-        parse('let x = +1')
-    assert error.value.message == "syntax error"
-    assert error.value.location == location(8, 1)
-
+def test_invalid_operator_stuff(compiler):
+    compiler.doesnt_raw_parse('let x = +1', "syntax error", '+')
     for ops in itertools.product(['==', '!='], repeat=2):
-        with pytest.raises(CompileError) as error:
-            parse('x %s y %s z' % ops)
-        assert error.value.message == "syntax error"
-        assert error.value.location == location(7, 2)
+        compiler.doesnt_raw_parse('x %s y %s z' % ops, "syntax error", ops[1])
 
 
-def test_empty_string():
-    [string] = parse('print("")')[0].args
+def test_empty_string(compiler):
+    [string] = compiler.raw_parse('print("")')[0].args
     assert string.location == location(6, 2)
     assert string.python_string == ''
 
 
-def test_empty_braces_in_string():
-    with pytest.raises(CompileError) as error1:
-        parse('print("{}")')
-    with pytest.raises(CompileError) as error2:
-        parse('print("{ }")')
+def test_empty_braces_in_string(compiler):
+    text = "you must put some code between { and }"
 
-    column = len('print("{')
-    assert error1.value.message == "you must put some code between { and }"
-    assert error2.value.message == "you must put some code between { and }"
-    assert error1.value.location == location(column, 0)
-    assert error2.value.location == location(column, 1)
+    compiler.doesnt_raw_parse('print("{ }")', text, ' ')
+
+    # doesnt_raw_parse doesn't work for this because the location is empty
+    with pytest.raises(CompileError) as error:
+        compiler.raw_parse('print("{}")')
+    assert error.value.message == text
+    assert error.value.location == location(len('print("{'), 0)
 
 
 # corner cases are handled in asdac.string_parser
-def test_joined_strings():
-    [string] = parse('print("a {b}")')[0].args
+def test_joined_strings(compiler):
+    [string] = compiler.raw_parse('print("a {b}")')[0].args
     assert isinstance(string, raw_ast.StrJoin)
     assert string.location == location(6, 7)
 
@@ -106,8 +91,8 @@ def test_joined_strings():
     assert isinstance(b, raw_ast.FuncCall)      # implicit .to_string()
 
 
-def test_generics():
-    assert parse('magic_function[Str, Generator[Int]](x)') == [
+def test_generics(compiler):
+    assert compiler.raw_parse('magic_function[Str, Generator[Int]](x)') == [
         FuncCall(
             location(35, 3),
             function=FromGeneric(
@@ -129,14 +114,11 @@ def test_generics():
         ),
     ]
 
-    with pytest.raises(CompileError) as error:
-        parse('lol[]')
-    assert error.value.message == "syntax error"
-    assert error.value.location == location(4, 1)
+    compiler.doesnt_raw_parse('lol[]', "syntax error", ']')
 
 
-def test_method_call():
-    assert parse('"hello".uppercase()') == [
+def test_method_call(compiler):
+    assert compiler.raw_parse('"hello".uppercase()') == [
         FuncCall(
             location(17, 2),
             function=GetAttr(
@@ -150,8 +132,8 @@ def test_method_call():
     ]
 
 
-def test_for():
-    assert parse('for let x = a; b; x = c:\n    print(x)') == [
+def test_for(compiler):
+    assert compiler.raw_parse('for let x = a; b; x = c:\n    print(x)') == [
         For(
             location(0, 3),
             init=Let(
@@ -178,27 +160,17 @@ def test_for():
     ]
 
 
-def test_no_multiline_statement():
-    with pytest.raises(CompileError) as error:
-        parse('for while true:\n    print("hi")')
-    assert error.value.message == "syntax error"
-    assert error.value.location == location(4, 5)
+def test_no_multiline_statement(compiler):
+    compiler.doesnt_raw_parse('for while true:\n    print("hi")',
+                              "syntax error", 'while')
 
 
-def test_assign_to_non_variable():
-    with pytest.raises(CompileError) as error:
-        parse('print("lol") = x')
-    assert error.value.message == "syntax error"
-    assert error.value.location == location(13, 1)
+def test_assign_to_non_variable(compiler):
+    compiler.doesnt_raw_parse('print("lol") = x', "syntax error", '=')
 
 
-def test_repeated():
-    with pytest.raises(CompileError) as error:
-        parse('func lol[T, T]() -> void:\n    print("Boo")')
-    assert error.value.message == "repeated generic type name: T"
-    assert error.value.location == location(12, 1)
-
-    with pytest.raises(CompileError) as error:
-        parse('func lol(Str x, Bool x) -> void:\n    print("Boo")')
-    assert error.value.message == "repeated argument name: x"
-    assert error.value.location == location(21, 1)
+def test_repeated(compiler):
+    compiler.doesnt_raw_parse('func lol[T, T]() -> void:\n    void',
+                              "repeated generic type name: T", 'T')
+    compiler.doesnt_raw_parse('func lol(Str x, Bool x) -> void:\n    void',
+                              "repeated argument name: x", 'x')
