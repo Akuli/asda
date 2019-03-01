@@ -10,7 +10,7 @@ from asdac.opcoder import create_opcode, Return, DidntReturnError
 
 def opcode(code):
     raw, imports = raw_ast.parse(os.path.abspath('test file'), code)
-    cooked, exports = cooked_ast.cook(raw)
+    cooked, exports = cooked_ast.cook(raw, {}, '')
     assert not imports
     assert not exports
     return create_opcode(cooked, collections.OrderedDict(exports),

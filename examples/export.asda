@@ -1,7 +1,7 @@
 print("Export example is running")
 
 # TODO: this sucks, should have syntax like 'export func ...'
-func print_message_() -> void:
-    print("This is the message")
+func print_message_(Str message) -> void:
+    print("This is the message: {message}")
 
 export let print_message = print_message_

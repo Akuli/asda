@@ -16,6 +16,7 @@ LookupVar = _astclass('LookupVar', ['varname', 'level'])
 LookupAttr = _astclass('LookupAttr', ['obj', 'attrname'])
 LookupGenericFunction = _astclass('LookupGenericFunction',
                                   ['funcname', 'types', 'level'])
+LookupModule = _astclass('LookupModule', [])
 CreateFunction = _astclass('CreateFunction',
                            ['name', 'argnames', 'body', 'yields'])
 CreateGenericFunction = _astclass('CreateGenericFunction',
@@ -78,9 +79,16 @@ class _Chef:
         else:
             self.level = parent_chef.level + 1
 
+        # import_dicts is a dict with paths as keys, {name: type} dicts as
+        # values, or None if can't import at this level
+        self.import_dicts = None
+        self.compiled_dir = None
+
         # keys are strings, values are types
-        self.exports = {}
-        self.local_vars = collections.ChainMap({}, self.exports)
+        self.local_export_vars = {}
+        self.local_import_vars = {}
+        self.local_vars = collections.ChainMap(
+            {}, self.local_export_vars, self.local_import_vars)
         self.local_generic_funcs = {}
         self.local_types = {}
 
@@ -460,8 +468,7 @@ class _Chef:
         return Loop(raw.location, None, init, cond, incr, body)
 
     def _check_can_import_export(self, location):
-        # 0 = built-in chef, 1 = file-level chef, 2 = global function chef, etc
-        if self.level != 1:
+        if self.import_dicts is None:
             raise common.CompileError(
                 "import and export cannot be used inside functions", location)
 
@@ -469,8 +476,19 @@ class _Chef:
         self._check_name_not_exist(raw.varname, 'variable', raw.location)
         self._check_can_import_export(raw.location)
         value = self.cook_expression(raw.value)
-        self.exports[raw.varname] = value.type
+        self.local_export_vars[raw.varname] = value.type
         return SetVar(raw.location, None, raw.varname, self.level, value)
+
+    def cook_import(self, raw: raw_ast.Import):
+        self._check_name_not_exist(raw.varname, 'variable', raw.location)
+        self._check_can_import_export(raw.location)
+        module_type = objects.ModuleType(
+            raw.source_path,
+            common.get_compiled_path(self.compiled_dir, raw.source_path),
+            self.import_dicts[raw.source_path])
+        self.local_import_vars[raw.varname] = module_type
+        module = LookupModule(raw.location, module_type)
+        return CreateLocalVar(raw.location, None, raw.varname, module)
 
     # note that this returns None for a void statement, cook_body() handles it
     def cook_statement(self, raw_statement):
@@ -496,6 +514,8 @@ class _Chef:
             return self.cook_while(raw_statement)
         if isinstance(raw_statement, raw_ast.For):
             return self.cook_for(raw_statement)
+        if isinstance(raw_statement, raw_ast.Import):
+            return self.cook_import(raw_statement)
 
         assert False, raw_statement     # pragma: no cover
 
@@ -504,11 +524,13 @@ class _Chef:
                 if cooked is not None]
 
 
-def cook(raw_ast_statements):
+def cook(raw_ast_statements, imports, compiled_dir):
     builtin_chef = _Chef(None)
     builtin_chef.local_vars.update(objects.BUILTIN_OBJECTS)
     builtin_chef.local_generic_funcs.update(objects.BUILTIN_GENERIC_FUNCS)
 
     file_chef = _Chef(builtin_chef)
+    file_chef.import_dicts = imports
+    file_chef.compiled_dir = compiled_dir
     cooked_statements = file_chef.cook_body(raw_ast_statements)
-    return (cooked_statements, file_chef.exports)
+    return (cooked_statements, file_chef.local_export_vars)

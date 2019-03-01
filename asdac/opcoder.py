@@ -31,6 +31,7 @@ BoolConstant = _op_class('BoolConstant', ['python_bool'])
 CreateFunction = _op_class('CreateFunction', [
     'name', 'functype', 'yields', 'body_opcode'])
 LookupVar = _op_class('LookupVar', ['level', 'var'])
+LookupModule = _op_class('LookupModule', ['compiled_path'])
 # tuples have an index() method, avoid name clash with misspelling
 LookupMethod = _op_class('LookupMethod', ['type', 'indeks'])
 SetVar = _op_class('SetVar', ['level', 'var'])
@@ -244,6 +245,11 @@ class _OpCoder:
             self.output.ops.append(Equal(self._lineno(expression.location)))
             if isinstance(expression, cooked_ast.NotEqual):
                 self.output.ops.append(BoolNegation(None))
+
+        elif isinstance(expression, cooked_ast.LookupModule):
+            self.output.ops.append(LookupModule(
+                self._lineno(expression.location),
+                expression.type.compiled_path))
 
         else:
             assert False, expression    # pragma: no cover

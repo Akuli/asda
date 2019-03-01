@@ -30,7 +30,8 @@ def eprint(*args, **kwargs):
 #
 # TODO: error handling for bytecoder.RecompileFixableError
 # TODO: quiet or verbose arguments
-def source2bytecode(source_path, compiled_path):
+def source2bytecode(source_path, compiled_dir):
+    compiled_path = common.get_compiled_path(compiled_dir, source_path)
     eprint("Compiling: %s --> %s" % (
         os.path.relpath(source_path, '.'),
         os.path.relpath(compiled_path, '.')))
@@ -40,15 +41,19 @@ def source2bytecode(source_path, compiled_path):
 
     raw, imports = raw_ast.parse(source_path, source)
     import_dicts = (yield imports)
-    cooked, exports = cooked_ast.cook(raw)
+    cooked, exports = cooked_ast.cook(raw, import_dicts, compiled_dir)
 
     # need consistent order after this, doesn't really matter what that order
     # is as long as it's consistently the same order in each step
     exports = collections.OrderedDict(exports)
 
     opcode = opcoder.create_opcode(cooked, exports, source_path, source)
+    import_pairs = [
+        (source_path, common.get_compiled_path(compiled_dir, source_path))
+        for source_path in import_dicts.keys()
+    ]
     bytecode = bytecoder.create_bytecode(
-        source_path, compiled_path, opcode, import_dicts, exports)
+        source_path, compiled_path, opcode, import_pairs, exports)
 
     # if you change this, make sure that the last step before opening the
     # output file does NOT produce an iterator, so that if something fails, an
@@ -59,10 +64,7 @@ def source2bytecode(source_path, compiled_path):
     with open(compiled_path, 'wb') as outfile:
         outfile.write(bytecode)
 
-    # to make using this function a bit easier
-    # this way it doesn't raise StopIteration when you call .next() on it the
-    # last time
-    yield
+    yield exports
 
 
 class CompileManager:
@@ -80,13 +82,14 @@ class CompileManager:
         compiled_path = common.get_compiled_path(
             self.compiled_dir, source_path)
 
-        generator = source2bytecode(source_path, compiled_path)
+        generator = source2bytecode(source_path, self.compiled_dir)
         depends_on = next(generator)
         for source_path in depends_on:
             self.compile(source_path)
 
         exports = generator.send({path: self.compiled_files[path]
                                   for path in depends_on})
+        assert isinstance(exports, dict), exports
         self.compiled_files[source_path] = exports
 
 

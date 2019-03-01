@@ -80,6 +80,17 @@ class GeneratorType(Type):
         self.itemtype = itemtype
 
 
+class ModuleType(Type):
+
+    def __init__(self, compiled_path, exports):
+        super().__init__(OBJECT)
+        self.compiled_path = compiled_path
+        for index, obj in enumerate(exports):
+            # FIXME: good way to name these methods or not have the methods
+            add_method(self, 'method' + str(index),
+                       (lambda this, *, obj=obj: obj), [], obj.type)
+
+
 class String(Object):
 
     def __init__(self, python_string):

@@ -1,6 +1,7 @@
 import collections
 import functools
 import io
+import os
 
 from . import common, objects, opcoder
 
@@ -16,6 +17,7 @@ NEGATIVE_INT_CONSTANT = b'2'
 TRUE_CONSTANT = b'T'
 FALSE_CONSTANT = b'F'
 LOOKUP_METHOD = b'm'
+LOOKUP_MODULE = b'M'       # also used when bytecoding a type
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
 STR_JOIN = b'j'
@@ -115,7 +117,7 @@ class _BytecodeWriter:
                                self.compiled_path)
 
     def write_path(self, path):
-        relative2 = os.path.dirname(compiled_path)
+        relative2 = os.path.dirname(self.compiled_path)
         relative_path = os.path.relpath(path, relative2)
         self.bytecode.write_string(relative_path.replace(os.sep, '/'))
 
@@ -136,6 +138,10 @@ class _BytecodeWriter:
         elif isinstance(tybe, objects.GeneratorType):
             self.bytecode.add_byte(TYPE_GENERATOR)
             self.write_type(tybe.item_type)
+
+        elif isinstance(tybe, objects.ModuleType):
+            self.bytecode.add_byte(LOOKUP_MODULE)
+            self.write_path(tybe.compiled_path)
 
         elif tybe is None:
             self.bytecode.add_byte(TYPE_VOID)
@@ -211,19 +217,24 @@ class _BytecodeWriter:
             self.bytecode.add_uint16(self.jumpmarker2index[op.marker])
             return
 
-        elif isinstance(op, opcoder.LookupMethod):
+        if isinstance(op, opcoder.LookupMethod):
             self.bytecode.add_byte(LOOKUP_METHOD)
             self.write_type(op.type)
             self.bytecode.add_uint16(op.indeks)
             return
 
-        elif isinstance(op, opcoder.StrJoin):
+        if isinstance(op, opcoder.StrJoin):
             self.bytecode.add_byte(STR_JOIN)
             self.bytecode.add_uint16(op.how_many_parts)
             return
 
         if isinstance(op, opcoder.JumpMarker):
             # already handled in run()
+            return
+
+        if isinstance(op, opcoder.LookupModule):
+            self.bytecode.add_byte(LOOKUP_MODULE)
+            self.write_path(op.compiled_path)
             return
 
         simple_things = [
@@ -382,6 +393,7 @@ class _BytecodeReader:
         relative_to = os.path.dirname(self.compiled_path)
         return os.path.join(relative_to, relative_path)
 
+    # TODO: module types?
     def read_type(self, *, name_hint='<unknown name>'):
         byte = self._read(1)
         [byte_int] = byte

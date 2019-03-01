@@ -18,10 +18,12 @@ examples_dir = os.path.join(
 def compiler(tmp_path, monkeypatch, capsys):
     # python has a built-in compile function, so creating my own 'compile'
     # function would be bad style
-    # this is probably even worse style :DD  MUHAHAA
+    # this is even worse style :DD  MUHAHAA
     def compi1e(filename):
         monkeypatch.chdir(tmp_path)
-        shutil.copy(os.path.join(examples_dir, filename), '.')
+        for other_file in os.listdir(examples_dir):
+            if other_file.endswith('.asda'):
+                shutil.copy(os.path.join(examples_dir, other_file), '.')
 
         monkeypatch.setattr(sys, 'argv', ['asdac', filename])
         asdac.__main__.main()
@@ -29,7 +31,8 @@ def compiler(tmp_path, monkeypatch, capsys):
         out, err = capsys.readouterr()
         assert not out
 
-        match = re.fullmatch(r'Compiling: (.*) --> (.*)\n', err)
+        match = re.search(r'^Compiling: (.*) --> (.*)\n', err)
+        assert all(line.startswith('Compiling: ') for line in err.splitlines())
         assert match is not None, repr(err)
         assert match.group(1) == filename
         return match.group(2)

@@ -1,5 +1,6 @@
 import collections
 import functools
+import os
 
 from . import objects
 
@@ -16,6 +17,7 @@ TRUE_CONSTANT = b'T'            # only used in bytecode files
 FALSE_CONSTANT = b'F'           # only used in bytecode files
 CONSTANT = b'C'                 # not used at all in bytecode files
 LOOKUP_METHOD = b'm'
+LOOKUP_MODULE = b'M'    # also used in types
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
 STR_JOIN = b'j'
@@ -49,11 +51,12 @@ Op = collections.namedtuple('Op', ['lineno', 'kind', 'args'])
 
 class _BytecodeReader:
 
-    def __init__(self, compiled_path, read_callback):
+    def __init__(self, compiled_path, file):
         self.compiled_path = compiled_path
-        self._callback = read_callback    # no error on eof, returns b''
+        self.file = file
         self._push_buffer = bytearray()
         self._lineno = 1
+        self.module_objects = None
 
     # errors on unexpected eof
     def _read(self, size):
@@ -62,7 +65,7 @@ class _BytecodeReader:
             part1.append(self._push_buffer.pop())
             size -= 1
 
-        part2 = self._callback(size)
+        part2 = self.file.read(size)
         if len(part2) != size:
             raise RuntimeError("the bytecode file seems to be truncated")
         return bytes(part1) + part2
@@ -110,20 +113,22 @@ class _BytecodeReader:
             index = self.read_uint8()
             return list(objects.types.values())[index]
 
-        elif magic == CREATE_FUNCTION:
+        if magic == CREATE_FUNCTION:
             returntype = self.read_type()
             nargs = self.read_uint8()
             argtypes = [self.read_type() for junk in range(nargs)]
             return objects.FunctionType(argtypes, returntype)
 
-        elif magic == TYPE_VOID:
+        if magic == TYPE_VOID:
             return None
 
-        elif magic == TYPE_GENERATOR:
+        if magic == TYPE_GENERATOR:
             return objects.GeneratorType(self.read_type())
 
-        else:
-            assert False
+        if magic == LOOKUP_MODULE:
+            return self.module_objects[self.read_path()].type
+
+        assert False, magic
 
     def read_path(self):
         relative_path = self.read_string().replace('/', os.sep)
@@ -137,9 +142,7 @@ class _BytecodeReader:
         how_many = self.read_uint32()
         result = []
         for lel in range(how_many):
-            source_path = self.read_path()
-            compiled_path = self.read_path()
-            result.append((source_path, compiled_path))
+            result.append(self.read_path())
 
         return result
 
@@ -181,6 +184,8 @@ class _BytecodeReader:
                 args = (self.read_uint8(), self.read_uint16())
             elif magic == LOOKUP_METHOD:
                 args = (self.read_type(), self.read_uint16())
+            elif magic == LOOKUP_MODULE:
+                args = (self.read_path(),)
             elif magic == CREATE_FUNCTION:
                 self._unread(magic[0])
                 tybe = self.read_type()
@@ -196,13 +201,15 @@ class _BytecodeReader:
         return Code(how_many_local_vars, opcode)
 
 
-def read_bytecode(compiled_path, read_callback):
-    reader = _BytecodeReader(compiled_path, read_callback)
-    imports = reader.read_imports()
-    if imports:
-        raise RuntimeError("imports not supported yet :(")
+def read_bytecode(compiled_path, file):
+    if file.read(4) != b'asda':
+        raise RuntimeError(
+            "doesn't look like a compiled asda file: " + compiled_path)
 
-    result = reader.read_body()
-    if read_callback(1) != IMPORT_SECTION:
+    reader = _BytecodeReader(compiled_path, file)
+    reader.module_objects = yield reader.read_imports()
+    opcode = reader.read_body()
+
+    if file.read(1) != IMPORT_SECTION:
         raise ValueError("the bytecode file ends unexpectedly")
-    return result
+    yield opcode

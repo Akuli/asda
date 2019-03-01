@@ -94,6 +94,12 @@ BUILTIN_TYPES['Str'].add_method('uppercase', [], BUILTIN_TYPES['Str'])
 BUILTIN_TYPES['Str'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 BUILTIN_TYPES['Int'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 
+BUILTIN_OBJECTS = collections.OrderedDict([
+    ('print', FunctionType('print', [BUILTIN_TYPES['Str']])),
+    ('TRUE', BUILTIN_TYPES['Bool']),
+    ('FALSE', BUILTIN_TYPES['Bool']),
+])
+
 
 class GeneratorType(Type):
 
@@ -110,11 +116,22 @@ class GeneratorType(Type):
         return GeneratorType(self.item_type.undo_generics(type_dict))
 
 
-BUILTIN_OBJECTS = collections.OrderedDict([
-    ('print', FunctionType('print', [BUILTIN_TYPES['Str']])),
-    ('TRUE', BUILTIN_TYPES['Bool']),
-    ('FALSE', BUILTIN_TYPES['Bool']),
-])
+class ModuleType(Type):
+
+    def __init__(self, source_path, compiled_path, exports):
+        super().__init__('<module from "%s">' % source_path, OBJECT)
+        self.source_path = source_path
+        self.compiled_path = compiled_path
+        self.exports = exports
+        for name, tybe in exports.items():
+            # TODO: should be attributes not methods, but currently all
+            #       attributes are methods
+            self.add_method(name, [], tybe)
+
+    def __eq__(self, other):
+        if not isinstance(other, ModuleType):
+            return NotImplemented
+        return self.source_path == other.source_path
 
 
 class GenericMarker(Type):

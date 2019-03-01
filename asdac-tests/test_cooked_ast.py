@@ -7,7 +7,7 @@ from asdac.common import CompileError, Location
 def parse(code, want_exports=False):
     raw_statements, imports = raw_ast.parse('test file', code)
     assert not imports
-    cooked, exports = cooked_ast.cook(raw_statements)
+    cooked, exports = cooked_ast.cook(raw_statements, {}, '')
     assert isinstance(cooked, list)
 
     if want_exports:
