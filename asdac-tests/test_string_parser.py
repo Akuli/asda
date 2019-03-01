@@ -1,19 +1,26 @@
 import pytest
 
 from asdac import string_parser
-from asdac.common import CompileError, Location
+from asdac.common import Compilation, CompileError, Location
 
 
 START_OFFSET = 123
 
 
-def location(start_offset, end_offset):
-    return Location('test file', START_OFFSET + start_offset,
+# lol
+class AnyCompilation(Compilation):
+    def __init__(self): pass
+    def __eq__(self, other): return isinstance(other, Compilation)
+
+
+def location(start_offset, end_offset, *, compilation=AnyCompilation()):
+    return Location(compilation, START_OFFSET + start_offset,
                     end_offset - start_offset)
 
 
 def parse(string):
-    return list(string_parser.parse(string, location(0, len(string))))
+    loc = location(0, len(string), compilation=Compilation('test file', '.'))
+    return list(string_parser.parse(string, loc))
 
 
 # the argument is not called location because there's a global location() func

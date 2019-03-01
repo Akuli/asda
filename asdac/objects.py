@@ -118,12 +118,11 @@ class GeneratorType(Type):
 
 class ModuleType(Type):
 
-    def __init__(self, source_path, compiled_path, exports):
-        super().__init__('<module from "%s">' % source_path, OBJECT)
-        self.source_path = source_path
-        self.compiled_path = compiled_path
-        self.exports = exports
-        for name, tybe in exports.items():
+    def __init__(self, compilation: common.Compilation):
+        super().__init__(
+            '<module from "%s">' % compilation.source_path, OBJECT)
+        self.compilation = compilation
+        for name, tybe in compilation.exports.items():
             # TODO: should be attributes not methods, but currently all
             #       attributes are methods
             self.add_method(name, [], tybe)

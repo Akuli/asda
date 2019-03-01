@@ -17,51 +17,44 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-# should be used like this:
-#   1. call it, does nothing and returns a generator
-#   2. call next(the_generator), that returns a list of source file names that
-#      need to be compiled before continuing
-#   3. compile the other source files if they need compiling
-#   4. call the_generator.send(a dict) where the dict is like this:
-#        {source file name: exports of that source file}
-#      the dict should come from compiling all the other source files
-#      the send returns a dict of exports
-#   5. finally, you're done with using this function :D
-#
 # TODO: error handling for bytecoder.RecompileFixableError
 # TODO: quiet or verbose arguments
-def source2bytecode(source_path, compiled_dir):
-    compiled_path = common.get_compiled_path(compiled_dir, source_path)
-    eprint("Compiling: %s --> %s" % (
-        os.path.relpath(source_path, '.'),
-        os.path.relpath(compiled_path, '.')))
+def source2bytecode(compilation: common.Compilation):
+    """Compiles a file.
 
-    with open(source_path, 'r', **common.OPEN_KWARGS) as file:
+    Should be used like this:
+    1.  Call this function. It does nothing and returns a generator.
+    2.  Call next(the_generator). That returns a list of source file names that
+        the file being compiled imports.
+    3.  Compile the imported files.
+    4.  Call the_generator.send(a dict) where the dict's keys are the paths
+        from step 2 and the values are Compilation objects.
+    5.  Finally, you're done with using this function :D
+    """
+    eprint("Compiling: %s --> %s" % (
+        os.path.relpath(compilation.source_path, '.'),
+        os.path.relpath(compilation.compiled_path, '.')))
+
+    with compilation.open_source_file() as file:
         source = file.read()
 
-    raw, imports = raw_ast.parse(source_path, source)
-    import_dicts = (yield imports)
-    cooked, exports = cooked_ast.cook(raw, import_dicts, compiled_dir)
+    raw, imports = raw_ast.parse(compilation, source)
+    import_compilation_dict = yield imports
+    compilation.set_imports(list(import_compilation_dict.values()))
+    cooked, exports = cooked_ast.cook(compilation, raw,
+                                      import_compilation_dict)
+    compilation.set_exports(exports)
 
-    # need consistent order after this, doesn't really matter what that order
-    # is as long as it's consistently the same order in each step
-    exports = collections.OrderedDict(exports)
-
-    opcode = opcoder.create_opcode(cooked, exports, source_path, source)
-    import_pairs = [
-        (source_path, common.get_compiled_path(compiled_dir, source_path))
-        for source_path in import_dicts.keys()
-    ]
-    bytecode = bytecoder.create_bytecode(
-        source_path, compiled_path, opcode, import_pairs, exports)
+    opcode = opcoder.create_opcode(compilation, cooked, source)
+    bytecode = bytecoder.create_bytecode(compilation, opcode)
 
     # if you change this, make sure that the last step before opening the
     # output file does NOT produce an iterator, so that if something fails, an
     # exception is likely raised before the output file is opened, and the
     # output file gets left untouched if it exists and no invalid output files
     # are created
-    os.makedirs(os.path.dirname(compiled_path), exist_ok=True)
-    with open(compiled_path, 'wb') as outfile:
+    os.makedirs(os.path.dirname(compilation.compiled_path), exist_ok=True)
+    with open(compilation.compiled_path, 'wb') as outfile:
         outfile.write(bytecode)
 
     yield exports
@@ -72,25 +65,23 @@ class CompileManager:
     def __init__(self, compiled_dir):
         self.compiled_dir = compiled_dir
 
-        # {source path: (imports as absolute source paths, exports)}
-        self.compiled_files = {}
+        # {compilation.source_path: compilation}
+        self.source_path_2_compilation = {}
 
     def compile(self, source_path):
-        if source_path in self.compiled_files:
+        if source_path in self.source_path_2_compilation:
             return
 
-        compiled_path = common.get_compiled_path(
-            self.compiled_dir, source_path)
+        compilation = common.Compilation(source_path, self.compiled_dir)
+        self.source_path_2_compilation[source_path] = compilation
 
-        generator = source2bytecode(source_path, self.compiled_dir)
+        generator = source2bytecode(compilation)
         depends_on = next(generator)
-        for source_path in depends_on:
-            self.compile(source_path)
+        for imported_path in depends_on:
+            self.compile(imported_path)
 
-        exports = generator.send({path: self.compiled_files[path]
-                                  for path in depends_on})
-        assert isinstance(exports, dict), exports
-        self.compiled_files[source_path] = exports
+        generator.send({path: self.source_path_2_compilation[path]
+                        for path in depends_on})
 
 
 def report_compile_error(error, red_function):
@@ -184,6 +175,9 @@ def main():
     except common.CompileError as e:
         report_compile_error(e, red_function)
         sys.exit(1)
+
+    for compilation in compile_manager.source_path_2_compilation.values():
+        assert compilation.state == common.CompilationState.DONE
 
 
 if __name__ == '__main__':

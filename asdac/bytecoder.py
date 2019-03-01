@@ -102,10 +102,9 @@ class _ByteCode:
 
 class _BytecodeWriter:
 
-    def __init__(self, bytecode, source_path, compiled_path):
+    def __init__(self, bytecode, compilation):
         self.bytecode = bytecode
-        self.source_path = source_path
-        self.compiled_path = compiled_path
+        self.compilation = compilation
 
         # the bytecode doesn't contain jump markers, and it instead jumps by
         # index, it turns out to be much easier to figure out the indexes
@@ -113,11 +112,10 @@ class _BytecodeWriter:
         self.jumpmarker2index = {}
 
     def _create_subwriter(self):
-        return _BytecodeWriter(self.bytecode, self.source_path,
-                               self.compiled_path)
+        return _BytecodeWriter(self.bytecode, self.compilation)
 
     def write_path(self, path):
-        relative2 = os.path.dirname(self.compiled_path)
+        relative2 = os.path.dirname(self.compilation.compiled_path)
         relative_path = os.path.relpath(path, relative2)
         self.bytecode.write_string(relative_path.replace(os.sep, '/'))
 
@@ -141,7 +139,7 @@ class _BytecodeWriter:
 
         elif isinstance(tybe, objects.ModuleType):
             self.bytecode.add_byte(LOOKUP_MODULE)
-            self.write_path(tybe.compiled_path)
+            self.write_path(tybe.compilation.compiled_path)
 
         elif tybe is None:
             self.bytecode.add_byte(TYPE_VOID)
@@ -275,12 +273,11 @@ class _BytecodeWriter:
             self.write_op(op, varlists)
         self.bytecode.add_byte(END_OF_BODY)
 
-    # imports is a list of (source, compiled) pairs
     # this can be used to write either one of the two import sections
-    def write_import_section(self, imports):
+    def write_import_section(self, paths):
         self.bytecode.add_byte(IMPORT_SECTION)
-        self.bytecode.add_uint32(len(imports))
-        for path in imports:
+        self.bytecode.add_uint32(len(paths))
+        for path in paths:
             self.write_path(path)
 
     def write_export_section(self, exports):
@@ -312,52 +309,49 @@ class _BytecodeWriter:
 #
 # all paths are relative to the bytecode file's directory and have '/' as
 # the separator
-def create_bytecode(source_path, compiled_path, opcode, imports, exports):
+def create_bytecode(compilation, opcode):
     output = _ByteCode()
     output.byte_array.extend(b'asda')
 
-    writer = _BytecodeWriter(output, source_path, compiled_path)
-    writer.write_import_section([compiled for source, compiled in imports])
+    writer = _BytecodeWriter(output, compilation)
+    writer.write_import_section([
+        import_compilation.compiled_path
+        for import_compilation in compilation.imports])
 
     # the built-in varlist is None because all builtins are implemented
     # as ArgMarkers, so they don't need a varlist
     writer.run(opcode, [None])
 
-    writer.write_import_section([source for source, compiled in imports])
-    writer.write_export_section(exports)
+    writer.write_import_section([
+        import_compilation.source_path
+        for import_compilation in compilation.imports])
+    writer.write_export_section(compilation.exports)
     return output.byte_array
 
 
 class RecompileFixableError(Exception):
     """Raised for errors that can be fixed by recompiling a file.
 
-    They happen when reading bytecode files, not when writing them. The file
-    that contains the problem is the_error.compiled_path, and the file that
-    should be recompiled is the_error.source_path. A user-displayable
-    description is in the_error.message.
+    They happen when reading bytecode files, not when writing them.
     """
 
-    def __init__(self, source_path, compiled_path, message):
-        self.source_path = source_path
-        self.compiled_path = compiled_path
+    def __init__(self, compilation, message):
+        self.compilation = compilation
         self.message = message
 
     def __str__(self):
-        return '%s (%s --> %s)' % (self.message, self.source_path,
-                                   self.compiled_path)
+        return '%s (%r)' % (self.message, self.compilation)
 
 
 # can't read anything, but can read the exports section
 class _BytecodeReader:
 
-    def __init__(self, source_path, compiled_path, file):
-        self.source_path = source_path
-        self.compiled_path = compiled_path
+    def __init__(self, compilation, file):
+        self.compilation = compilation
         self.file = file
 
     def error(self, message):
-        raise RecompileFixableError(self.source_path, self.compiled_path,
-                                    message)
+        raise RecompileFixableError(self.compilation, message)
 
     # errors on unexpected eof
     def _read(self, size):
@@ -390,7 +384,7 @@ class _BytecodeReader:
 
     def read_path(self):
         relative_path = self.read_string().replace('/', os.sep)
-        relative_to = os.path.dirname(self.compiled_path)
+        relative_to = os.path.dirname(self.compilation.compiled_path)
         return os.path.join(relative_to, relative_path)
 
     # TODO: module types?
@@ -424,7 +418,8 @@ class _BytecodeReader:
         self.file.seek(new_seek_pos)
 
     # returns a list of absolute source file paths
-    def read_import_section(self):
+    # TODO: can this return compilation objects instead?
+    def read_second_import_section(self):
         if self._read(1) != IMPORT_SECTION:
             self.error(
                 "the file doesn't seem to have a valid second import section")
@@ -432,9 +427,7 @@ class _BytecodeReader:
         result = []
         how_many = self.read_uint32()
         for junk in range(how_many):
-            source_path = self.read_path()
-            compiled_path = self.read_path()
-            result.append((source_path, compiled_path))
+            result.append(self.read_path())
         return result
 
     def read_export_section(self):
@@ -459,7 +452,7 @@ def read_imports_and_exports(source_path, compiled_path):
         reader = _BytecodeReader(source_path, compiled_path, file)
         reader.check_asda_part()
         reader.seek_to_import_section_beginning()
-        imports = reader.read_import_section()
+        imports = reader.read_second_import_section()
         exports = reader.read_export_section()
         reader.should_be_at_end()
 

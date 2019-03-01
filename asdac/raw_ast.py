@@ -77,23 +77,23 @@ class AsdaParser(sly.Parser):
         ('left', '*'),
     )
 
-    def __init__(self, filename):
+    def __init__(self, compilation):
         super().__init__()
-        self.filename = os.path.abspath(filename)
-        self.create_location = functools.partial(common.Location, filename)
+        self.compilation = compilation
+        self.create_location = functools.partial(common.Location, compilation)
         self.import_paths = []      # absolute paths of source files
 
     def error(self, token):
         assert token is not None
         location = common.Location(
-            self.filename, token.index, len(token.value))
+            self.compilation, token.index, len(token.value))
         raise common.CompileError("syntax error", location)
 
     def handle_string_literal(self, string, location, allow_curly_braces):
         assert len(string) >= 2 and string[0] == '"' and string[-1] == '"'
         content = string[1:-1]
         content_location = common.Location(
-            location.filename, location.offset + 1, location.length - 2)
+            location.compilation, location.offset + 1, location.length - 2)
 
         parts = []
         for kind, value, part_location in string_parser.parse(
@@ -107,10 +107,10 @@ class AsdaParser(sly.Parser):
                         "cannot use {...} strings here", part_location)
 
                 tokens = tokenizer.tokenize(
-                    part_location.filename, value,
+                    part_location.compilation, value,
                     initial_offset=part_location.offset)
 
-                parser = AsdaParser(self.filename)
+                parser = AsdaParser(self.compilation)
                 parsed = parser.parse(tokens)
                 try:
                     [expression] = parsed
@@ -267,7 +267,7 @@ class AsdaParser(sly.Parser):
         location = self.create_location(parsed.index, len(parsed.STRING))
         path_parts = self.handle_string_literal(parsed.STRING, location, False)
         path = ''.join(string_ast.python_string for string_ast in path_parts)
-        return os.path.join(os.path.dirname(self.filename),
+        return os.path.join(os.path.dirname(self.compilation.source_path),
                             path.replace('/', os.sep))
 
     @_('LET ID "=" expression')
@@ -366,7 +366,7 @@ class AsdaParser(sly.Parser):
     @_('STRING')
     def simple_expression_no_trailers(self, parsed):
         location = common.Location(
-            self.filename, parsed.index, len(parsed.STRING))
+            self.compilation, parsed.index, len(parsed.STRING))
         parts = self.handle_string_literal(parsed.STRING, location, True)
 
         if len(parts) == 0:     # empty string
@@ -466,9 +466,9 @@ class AsdaParser(sly.Parser):
         return (parsed.ID, self.create_location(parsed.index, len(parsed.ID)))
 
 
-def parse(filename, code):
-    parser = AsdaParser(filename)
-    statements = parser.parse(tokenizer.tokenize(filename, code))
+def parse(compilation, code):
+    parser = AsdaParser(compilation)
+    statements = parser.parse(tokenizer.tokenize(compilation, code))
     assert statements is not iter(statements)       # must not be lazy iterator
     return (statements, parser.import_paths)
 

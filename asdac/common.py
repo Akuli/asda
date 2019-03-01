@@ -1,43 +1,86 @@
+import collections
+import enum
 import itertools
 import os
 
 
-def get_compiled_path(compiled_dir, source_path):
-    relative = os.path.relpath(source_path, os.path.dirname(compiled_dir))
-    relative += 'c'     # lel.asda --> lel.asdac
-
-    # avoid having weird things happening
-    relative_parts = ('dotdot' if part == '..' else part
-                      for part in relative.split(os.sep))
-    return os.path.join(compiled_dir, os.sep.join(relative_parts))
+class CompilationState(enum.Enum):
+    NOTHING_DONE = 0
+    IMPORTS_KNOWN = 1
+    EXPORTS_KNOWN = 2
+    DONE = 3
 
 
-# these are for reading source files, as specified in docs/syntax.md
-OPEN_KWARGS = {
-    'encoding': 'utf-8-sig',    # like 'utf-8', but ignores a BOM
-    # python accepts both LF and CRLF by default
-}
+class Compilation:
+    """Represents a source file and its corresponding bytecode file."""
+
+    def __init__(self, source_path, compiled_dir):
+        self.source_path = source_path
+        self.compiled_path = self._get_bytecode_path(compiled_dir)
+
+        self.state = CompilationState.NOTHING_DONE
+        self.imports = None     # list of other Compilation objects
+        self.exports = None     # ordered dict like {name: type}
+
+    def _get_bytecode_path(self, compiled_dir):
+        relative = os.path.relpath(self.source_path,
+                                   os.path.dirname(compiled_dir))
+        relative += 'c'     # lel.asda --> lel.asdac
+
+        # avoid having weird things happening
+        def handle_dotdot(string):
+            return 'dotdot' if string == '..' else string
+
+        relative = os.sep.join(map(handle_dotdot, relative.split(os.sep)))
+
+        return os.path.join(compiled_dir, relative)
+
+    def __repr__(self):
+        return '<%s of %s>' % (type(self).__name__, self.source_path)
+
+    def open_source_file(self):
+        # see docs/syntax.md
+        # python accepts both LF and CRLF by default, but the default encoding
+        # is platform-dependent (not utf8 on windows, lol)
+        # utf-8-sig is like utf-8 but it ignores the bom, if there is a bom
+        return open(self.source_path, 'r', encoding='utf-8-sig')
+
+    def set_imports(self, import_compilations):
+        assert self.state == CompilationState.NOTHING_DONE
+        assert isinstance(import_compilations, list)
+        self.state = CompilationState.IMPORTS_KNOWN
+        self.imports = import_compilations
+
+    def set_exports(self, exports):
+        assert self.state == CompilationState.IMPORTS_KNOWN
+        assert isinstance(exports, collections.OrderedDict)
+        self.state = CompilationState.DONE
+        self.exports = exports
+
+    def set_done(self):
+        assert self.state == CompilationState.EXPORTS_KNOWN
+        self.state = CompilationState.DONE
 
 
 class Location:
 
-    def __init__(self, filename, offset, length):
+    def __init__(self, compilation, offset, length):
         # these make debugging a lot easier, don't delete these
-        assert isinstance(filename, str)
+        assert isinstance(compilation, Compilation)
         assert offset >= 0
         assert length >= 0
 
-        self.filename = filename
+        self.compilation = compilation
         self.offset = offset
         self.length = length
 
     def __repr__(self):
         return 'Location(%r, %r, %r)' % (
-            self.filename, self.offset, self.length)
+            self.compilation, self.offset, self.length)
 
     # raises OSError
     def _read_before_value_after(self):
-        with open(self.filename, 'r', **OPEN_KWARGS) as file:
+        with self.compilation.open_source_file() as file:
             before = file.read(self.offset)
             value = file.read(self.length)
 
@@ -70,22 +113,25 @@ class Location:
             endcolumn = len((before + value).rsplit('\n', 1)[-1])
 
         return '%s:%s,%s...%s,%s' % (
-            self.filename, startline, startcolumn, endline, endcolumn)
+            self.compilation.source_path,
+            startline, startcolumn, endline, endcolumn)
 
     def __eq__(self, other):
         if not isinstance(other, Location):
             return NotImplemented
-        return ((self.filename, self.offset, self.length) ==
-                (other.filename, other.offset, other.length))
+        return ((self.compilation, self.offset, self.length) ==
+                (other.compilation, other.offset, other.length))
 
     # because operator magic is fun
     def __add__(self, other):
         if not isinstance(other, Location):
             return NotImplemented
+        if self.compilation is not other.compilation:
+            raise TypeError("cannot add locations of different compilations")
 
         start = min(self.offset, other.offset)
         end = max(self.offset + self.length, other.offset + other.length)
-        return Location(self.filename, start, end - start)
+        return Location(self.compilation, start, end - start)
 
     def get_source(self):
         """Reads the code from the source file. Raises OSError on failure.

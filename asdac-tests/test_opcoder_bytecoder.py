@@ -4,22 +4,27 @@ import os
 import pytest
 
 from asdac import raw_ast, cooked_ast, bytecoder
-from asdac.common import CompileError
+from asdac.common import Compilation, CompileError
 from asdac.opcoder import create_opcode, Return, DidntReturnError
 
 
-def opcode(code):
-    raw, imports = raw_ast.parse(os.path.abspath('test file'), code)
-    cooked, exports = cooked_ast.cook(raw, {}, '')
+def _compilation_and_opcode(code):
+    compilation = Compilation('test file', '.')
+    raw, imports = raw_ast.parse(compilation, code)
+    cooked, exports = cooked_ast.cook(compilation, raw, {})
     assert not imports
     assert not exports
-    return create_opcode(cooked, collections.OrderedDict(exports),
-                         os.path.abspath('test file'), code)
+    compilation.set_imports([])
+    compilation.set_exports(collections.OrderedDict())
+    return (compilation, create_opcode(compilation, cooked, code))
+
+
+def opcode(code):
+    return _compilation_and_opcode(code)[1]
 
 
 def bytecode(code):
-    return bytecoder.create_bytecode(
-        '', '', opcode(code), [], collections.OrderedDict())
+    return bytecoder.create_bytecode(*_compilation_and_opcode(code))
 
 
 def test_too_many_arguments():

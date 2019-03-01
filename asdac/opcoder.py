@@ -100,12 +100,12 @@ class _OpCoder:
     def __init__(self, output_opcode: OpCode, parent_coder):
         self.output = output_opcode
         self.parent_coder = parent_coder
-        if isinstance(parent_coder, tuple):     # this is dumb
+        if isinstance(parent_coder, tuple):     # FIXME: this is dumb
             self.level = 0
-            self.filename, self.line_start_offsets = parent_coder
+            self.compilation, self.line_start_offsets = parent_coder
         elif isinstance(parent_coder, _OpCoder):
             self.level = parent_coder.level + 1
-            self.filename = parent_coder.filename
+            self.compilation = parent_coder.compilation
             self.line_start_offsets = parent_coder.line_start_offsets
         else:
             raise TypeError
@@ -128,8 +128,7 @@ class _OpCoder:
         #    2
         #    >>> bisect.bisect(offsets, 10)
         #    3
-        assert location.filename == self.filename, (
-            location.filename, self.filename)
+        assert location.compilation == self.compilation
         return bisect.bisect(self.line_start_offsets, location.offset)
 
     def do_function_call(self, call):
@@ -249,7 +248,7 @@ class _OpCoder:
         elif isinstance(expression, cooked_ast.LookupModule):
             self.output.ops.append(LookupModule(
                 self._lineno(expression.location),
-                expression.type.compiled_path))
+                expression.type.compilation.compiled_path))
 
         else:
             assert False, expression    # pragma: no cover
@@ -349,14 +348,14 @@ class _OpCoder:
             self.do_statement(statement)
 
 
-def create_opcode(cooked_statements, exports, filename, source_code):
+def create_opcode(compilation, cooked_statements, source_code):
     line_start_offsets = []
     offset = 0
     for line in io.StringIO(source_code):
         line_start_offsets.append(offset)
         offset += len(line)
 
-    builtin_opcoder = _OpCoder(None, (filename, line_start_offsets))
+    builtin_opcoder = _OpCoder(None, (compilation, line_start_offsets))
     builtin_opcoder.line_start_offsets.extend(line_start_offsets)
     builtin_opcoder.local_vars.update({
         name: ArgMarker(index)
@@ -367,10 +366,9 @@ def create_opcode(cooked_statements, exports, filename, source_code):
     })
 
     # exported symbols are kinda like arguments
-    output = OpCode(len(exports))
+    output = OpCode(len(compilation.exports))
     file_opcoder = _OpCoder(output, builtin_opcoder)
-    assert isinstance(exports, collections.OrderedDict)
-    for arg_marker, name in zip(output.local_vars, exports.keys()):
+    for arg_marker, name in zip(output.local_vars, compilation.exports.keys()):
         file_opcoder.local_vars[name] = arg_marker
 
     file_opcoder.do_body(cooked_statements)

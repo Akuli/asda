@@ -79,13 +79,10 @@ class _Chef:
         else:
             self.level = parent_chef.level + 1
 
-        # import_dicts is a dict with paths as keys, {name: type} dicts as
-        # values, or None if can't import at this level
-        self.import_dicts = None
-        self.compiled_dir = None
+        self.import_compilations = None    # None if can't import at this level
 
         # keys are strings, values are types
-        self.local_export_vars = {}
+        self.local_export_vars = collections.OrderedDict()
         self.local_import_vars = {}
         self.local_vars = collections.ChainMap(
             {}, self.local_export_vars, self.local_import_vars)
@@ -468,7 +465,7 @@ class _Chef:
         return Loop(raw.location, None, init, cond, incr, body)
 
     def _check_can_import_export(self, location):
-        if self.import_dicts is None:
+        if self.import_compilations is None:
             raise common.CompileError(
                 "import and export cannot be used inside functions", location)
 
@@ -483,9 +480,7 @@ class _Chef:
         self._check_name_not_exist(raw.varname, 'variable', raw.location)
         self._check_can_import_export(raw.location)
         module_type = objects.ModuleType(
-            raw.source_path,
-            common.get_compiled_path(self.compiled_dir, raw.source_path),
-            self.import_dicts[raw.source_path])
+            self.import_compilations[raw.source_path])
         self.local_import_vars[raw.varname] = module_type
         module = LookupModule(raw.location, module_type)
         return CreateLocalVar(raw.location, None, raw.varname, module)
@@ -524,13 +519,12 @@ class _Chef:
                 if cooked is not None]
 
 
-def cook(raw_ast_statements, imports, compiled_dir):
+def cook(compilation, raw_ast_statements, import_compilation_dict):
     builtin_chef = _Chef(None)
     builtin_chef.local_vars.update(objects.BUILTIN_OBJECTS)
     builtin_chef.local_generic_funcs.update(objects.BUILTIN_GENERIC_FUNCS)
 
     file_chef = _Chef(builtin_chef)
-    file_chef.import_dicts = imports
-    file_chef.compiled_dir = compiled_dir
+    file_chef.import_compilations = import_compilation_dict
     cooked_statements = file_chef.cook_body(raw_ast_statements)
     return (cooked_statements, file_chef.local_export_vars)

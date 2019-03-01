@@ -43,7 +43,7 @@ def parse(string, string_location):
 
     def create_location(start_offset, end_offset):
         return common.Location(
-            string_location.filename, string_location.offset + start_offset,
+            string_location.compilation, string_location.offset + start_offset,
             end_offset - start_offset)
 
     for match in re.finditer(_PARSING_REGEX, string):

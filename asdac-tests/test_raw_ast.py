@@ -4,22 +4,23 @@ import itertools
 from asdac import raw_ast
 from asdac.raw_ast import (For, FuncCall, FromGeneric, GetAttr,
                            GetType, GetVar, Let, SetVar, String)
-from asdac.common import CompileError, Location
+from asdac.common import Compilation, CompileError, Location
 
 import pytest
 
 
 # lol
-class AnyString(str):
-    def __eq__(self, other):
-        return isinstance(other, str)
+class AnyCompilation(Compilation):
+    def __init__(self): pass
+    def __eq__(self, other): return isinstance(other, Compilation)
 
 
-location = functools.partial(Location, AnyString())
+location = functools.partial(Location, AnyCompilation())
 
 
 def parse(code):
-    statements, imports = raw_ast.parse('test file', code)
+    compilation = Compilation('test file', '.')
+    statements, imports = raw_ast.parse(compilation, code)
     assert not imports
     assert isinstance(statements, list)
     return statements

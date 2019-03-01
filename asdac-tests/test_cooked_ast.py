@@ -1,13 +1,14 @@
 import pytest
 
 from asdac import raw_ast, cooked_ast, objects
-from asdac.common import CompileError, Location
+from asdac.common import Compilation, CompileError, Location
 
 
 def parse(code, want_exports=False):
-    raw_statements, imports = raw_ast.parse('test file', code)
+    compilation = Compilation('test source', '.')
+    raw_statements, imports = raw_ast.parse(compilation, code)
     assert not imports
-    cooked, exports = cooked_ast.cook(raw_statements, {}, '')
+    cooked, exports = cooked_ast.cook(compilation, raw_statements, {})
     assert isinstance(cooked, list)
 
     if want_exports:

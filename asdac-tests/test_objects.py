@@ -1,12 +1,13 @@
 import pytest
 
 from asdac import raw_ast, cooked_ast
-from asdac.common import CompileError, Location
+from asdac.common import Compilation, CompileError, Location
 
 
 def parse(code):
-    raw, imports = raw_ast.parse('test file', code)
-    cooked, exports = cooked_ast.cook(raw, {}, '')
+    compilation = Compilation('test file', '.')
+    raw, imports = raw_ast.parse(compilation, code)
+    cooked, exports = cooked_ast.cook(compilation, raw, {})
     assert isinstance(cooked, list)
     return cooked
 
@@ -18,7 +19,8 @@ def doesnt_parse(code, message, bad_code):
     index = code.rindex(bad_code)
 
     assert error.value.message == message
-    assert error.value.location == Location('test file', index, len(bad_code))
+    assert error.value.location.offset == index
+    assert error.value.location.length == len(bad_code)
 
 
 def test_generic_lookup_errors():

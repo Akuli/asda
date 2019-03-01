@@ -49,9 +49,9 @@ class AsdaLexer(sly.Lexer):
     NE = r'!='
     ARROW = r'->'
 
-    def __init__(self, filename):
+    def __init__(self, compilation):
         super().__init__()
-        self.filename = filename
+        self.compilation = compilation
 
     BLANK_LINE = lambda self, token: None       # noqa
     IGNORE_SPACES = lambda self, token: None    # noqa
@@ -66,9 +66,9 @@ class AsdaLexer(sly.Lexer):
             except IndexError:
                 length = len(token.value)
             raise common.CompileError("invalid string", common.Location(
-                self.filename, token.index, length))
+                self.compilation, token.index, length))
 
-        location = common.Location(self.filename, token.index, 1)
+        location = common.Location(self.compilation, token.index, 1)
         if token.value[0].isprintable():
             raise common.CompileError(
                 # TODO: this is confusing if token.value[0] == "'"
@@ -79,23 +79,23 @@ class AsdaLexer(sly.Lexer):
 
 # tabs are disallowed because they aren't used for indentation and you can use
 # "\t" to get a string that contains a tab
-def _tab_check(filename, code, initial_offset):
+def _tab_check(compilation, code, initial_offset):
     try:
-        first_tab_offset = initial_offset + code.index('\t')
+        first_tab = initial_offset + code.index('\t')
     except ValueError:
         return
 
     raise common.CompileError("tabs are not allowed in asda code",
-                              common.Location(filename, first_tab_offset, 1))
+                              common.Location(compilation, first_tab, 1))
 
 
-def _raw_tokenize(filename, code, initial_offset):
-    _tab_check(filename, code, initial_offset)
+def _raw_tokenize(compilation, code, initial_offset):
+    _tab_check(compilation, code, initial_offset)
 
     if not code.endswith('\n'):
         code += '\n'
 
-    lexer = AsdaLexer(filename)
+    lexer = AsdaLexer(compilation)
     for token in lexer.tokenize(code):
         token.index += initial_offset
         yield token
@@ -110,11 +110,11 @@ def _copy_token(sly_token, **kwargs):
     return result
 
 
-def _get_location(filename, token):
-    return common.Location(filename, token.index, len(token.value))
+def _get_location(complation, token):
+    return common.Location(complation, token.index, len(token.value))
 
 
-def _handle_indents_and_dedents(filename, tokens, initial_offset):
+def _handle_indents_and_dedents(complation, tokens, initial_offset):
     # this code took a while to figure out... don't ask me to comment it more
     indent_levels = [0]
     new_line_starting = True
@@ -144,7 +144,7 @@ def _handle_indents_and_dedents(filename, tokens, initial_offset):
                 if indent_level not in indent_levels:
                     raise common.CompileError(
                         "the indentation is wrong",
-                        _get_location(filename, fake_token))
+                        _get_location(complation, fake_token))
                 while indent_level != indent_levels[-1]:
                     yield _copy_token(fake_token, type='DEDENT')
                     del indent_levels[-1]
@@ -166,7 +166,7 @@ def _handle_indents_and_dedents(filename, tokens, initial_offset):
 
 
 # the only allowed sequence that contains colon or indent is: colon \n indent
-def _check_colons(filename, tokens):
+def _check_colons(complation, tokens):
     staggered = more_itertools.stagger(tokens, offsets=(-2, -1, 0))
     for token1, token2, token3 in staggered:
         assert token3 is not None
@@ -178,14 +178,14 @@ def _check_colons(filename, tokens):
                     token2.type != 'NEWLINE'):
                 raise common.CompileError(
                     "indent without : and newline",
-                    _get_location(filename, token3))
+                    _get_location(complation, token3))
 
         if token1 is not None and token1.type == ':':
             assert token2 is not None and token3 is not None
             if token2.type != 'NEWLINE' or token3.type != 'INDENT':
                 raise common.CompileError(
                     ": without newline and indent",
-                    _get_location(filename, token1))
+                    _get_location(complation, token1))
 
         yield token3
 
@@ -202,10 +202,10 @@ def _remove_colons(tokens):
             yield token1
 
 
-def tokenize(filename, code, *, initial_offset=0):
+def tokenize(complation, code, *, initial_offset=0):
     assert initial_offset >= 0
-    tokens = _raw_tokenize(filename, code, initial_offset)
-    tokens = _handle_indents_and_dedents(filename, tokens, initial_offset)
-    tokens = _check_colons(filename, tokens)
+    tokens = _raw_tokenize(complation, code, initial_offset)
+    tokens = _handle_indents_and_dedents(complation, tokens, initial_offset)
+    tokens = _check_colons(complation, tokens)
     tokens = _remove_colons(tokens)
     return tokens
