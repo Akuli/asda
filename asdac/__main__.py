@@ -1,6 +1,4 @@
 import argparse
-import collections
-import contextlib
 import os
 import re
 import sys
@@ -181,8 +179,4 @@ def main():
 
 
 if __name__ == '__main__':
-    #import time
-    #start = time.perf_counter()
     main()
-    #end = time.perf_counter()
-    #print((end-start)*1000, 'ms')

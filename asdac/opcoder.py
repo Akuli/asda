@@ -48,7 +48,7 @@ Plus = _op_class('Plus', [])
 Minus = _op_class('Minus', [])
 PrefixMinus = _op_class('PrefixMinus', [])
 Times = _op_class('Times', [])
-#Divide = _op_class('Divide', [])
+# Divide = _op_class('Divide', [])
 Equal = _op_class('Equal', [])
 
 
@@ -228,7 +228,7 @@ class _OpCoder:
                 (cooked_ast.Plus, Plus),
                 (cooked_ast.Minus, Minus),
                 (cooked_ast.Times, Times),
-#                (cooked_ast.Divide, Divide),
+                # (cooked_ast.Divide, Divide),
                 (cooked_ast.Equal, Equal),
                 (cooked_ast.NotEqual, Equal),   # see below
             ]

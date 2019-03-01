@@ -270,7 +270,7 @@ class AsdaParser(sly.Parser):
         return os.path.join(os.path.dirname(self.compilation.source_path),
                             path.replace('/', os.sep))
 
-    @_('LET ID "=" expression')
+    @_('LET ID "=" expression')    # noqa
     @_('EXPORT LET ID "=" expression')
     def oneline_statement(self, parsed):
         end = (parsed.expression.location.offset +

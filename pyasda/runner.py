@@ -22,7 +22,8 @@ class RunResult(enum.Enum):
     DIDNT_RETURN = 4
 
 
-def _create_function_object(definition_scope, modules, tybe, name, code, yields):
+def _create_function_object(definition_scope, modules, tybe, name, code,
+                            yields):
     def python_func(*args):
         scope = _create_subscope(definition_scope, code.how_many_local_vars)
         for index, arg in enumerate(args):
@@ -113,7 +114,8 @@ class _Runner:
                 del self.stack[-1]
 
             elif opcode == bytecode_reader.CREATE_FUNCTION:
-                self.stack.append(_create_function_object(self.scope, self.modules, *args))
+                self.stack.append(_create_function_object(
+                    self.scope, self.modules, *args))
 
             elif opcode == bytecode_reader.VOID_RETURN:
                 assert not self.stack
@@ -164,7 +166,7 @@ class _Runner:
                 self.stack.append(self.modules[path])
 
             elif opcode in {bytecode_reader.PLUS, bytecode_reader.MINUS,
-                            bytecode_reader.TIMES, #bytecode_reader.DIVIDE,
+                            bytecode_reader.TIMES,  # bytecode_reader.DIVIDE,
                             bytecode_reader.EQUAL}:
                 rhs = self.stack.pop()
                 lhs = self.stack.pop()
@@ -215,5 +217,6 @@ class Interpreter:
 
         # file_scope.local_vars contains more stuff than just the exports, but
         # the exports are guaranteed to be first
-        module = objects.Object(objects.ModuleType(path, file_scope.local_vars))
+        module = objects.Object(objects.ModuleType(path, file_scope.local_vars)
+                                )
         self.modules[path] = module

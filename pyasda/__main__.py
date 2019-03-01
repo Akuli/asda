@@ -1,7 +1,6 @@
 import argparse
-import sys
 
-from . import bytecode_reader, runner
+from . import runner
 
 
 def main():

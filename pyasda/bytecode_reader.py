@@ -35,7 +35,7 @@ PLUS = b'+'
 MINUS = b'-'
 PREFIX_MINUS = b'_'
 TIMES = b'*'
-#DIVIDE = b'/'
+# DIVIDE = b'/'
 EQUAL = b'='
 
 # these are only used in bytecode files
@@ -173,7 +173,7 @@ class _BytecodeReader:
                 args = (objects.FALSE,)
             elif magic in {POP_ONE, DIDNT_RETURN_ERROR, NEGATION, YIELD,
                            VOID_RETURN, VALUE_RETURN, PLUS, MINUS,
-                           PREFIX_MINUS, TIMES, #DIVIDE,
+                           PREFIX_MINUS, TIMES,  # DIVIDE,
                            EQUAL}:
                 args = ()
             elif magic in {CALL_VOID_FUNCTION, CALL_RETURNING_FUNCTION}:

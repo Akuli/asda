@@ -34,7 +34,7 @@ Plus = _astclass('Plus', ['lhs', 'rhs'])
 Minus = _astclass('Minus', ['lhs', 'rhs'])
 PrefixMinus = _astclass('PrefixMinus', ['prefixed'])
 Times = _astclass('Times', ['lhs', 'rhs'])
-#Divide = _astclass('Divide', ['lhs', 'rhs'])
+# Divide = _astclass('Divide', ['lhs', 'rhs'])
 Equal = _astclass('Equal', ['lhs', 'rhs'])
 NotEqual = _astclass('NotEqual', ['lhs', 'rhs'])
 
