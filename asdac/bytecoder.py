@@ -27,6 +27,7 @@ YIELD = b'Y'
 BOOL_NEGATION = b'!'
 JUMP_IF = b'J'
 END_OF_BODY = b'E'
+IMPORT_SECTION = b'i'
 EXPORT_SECTION = b'e'
 
 PLUS = b'+'
@@ -99,13 +100,24 @@ class _ByteCode:
 
 class _BytecodeWriter:
 
-    def __init__(self, bytecode):
+    def __init__(self, bytecode, source_path, compiled_path):
         self.bytecode = bytecode
+        self.source_path = source_path
+        self.compiled_path = compiled_path
 
         # the bytecode doesn't contain jump markers, and it instead jumps by
         # index, it turns out to be much easier to figure out the indexes
         # beforehand
         self.jumpmarker2index = {}
+
+    def _create_subwriter(self):
+        return _BytecodeWriter(self.bytecode, self.source_path,
+                               self.compiled_path)
+
+    def write_path(self, path):
+        relative2 = os.path.dirname(compiled_path)
+        relative_path = os.path.relpath(path, relative2)
+        self.bytecode.write_string(relative_path.replace(os.sep, '/'))
 
     def write_type(self, tybe):
         if tybe in objects.BUILTIN_TYPES.values():
@@ -163,7 +175,7 @@ class _BytecodeWriter:
             self.bytecode.add_byte(1 if op.yields else 0)
             self.bytecode.write_string(op.name)
 
-            _BytecodeWriter(self.bytecode).run(op.body_opcode, varlists)
+            self._create_subwriter().run(op.body_opcode, varlists)
             return
 
         if isinstance(op, opcoder.LookupVar):
@@ -252,10 +264,15 @@ class _BytecodeWriter:
             self.write_op(op, varlists)
         self.bytecode.add_byte(END_OF_BODY)
 
-    def write_export_section(self, exports):
-        # _BytecodeReader reads this with seek
-        export_beginning = len(self.bytecode.byte_array)
+    # imports is a list of (source, compiled) pairs
+    # this can be used to write either one of the two import sections
+    def write_import_section(self, imports):
+        self.bytecode.add_byte(IMPORT_SECTION)
+        self.bytecode.add_uint32(len(imports))
+        for path in imports:
+            self.write_path(path)
 
+    def write_export_section(self, exports):
         assert isinstance(exports, collections.OrderedDict)
         self.bytecode.add_byte(EXPORT_SECTION)
         self.bytecode.add_uint32(len(exports))
@@ -263,17 +280,39 @@ class _BytecodeWriter:
             self.bytecode.write_string(name)
             self.write_type(tybe)
 
-        self.bytecode.add_uint32(export_beginning)
+    # imports is a list of source file paths
+    # exports is a dict with names as keys and types as values
+    def write_end_import_export_sections(self, imports, exports):
+        # _BytecodeReader reads this with seek
+        seek_index = len(self.bytecode.byte_array)
+        self.write_import_section(imports)
+        self.write_export_section(exports)
+        self.bytecode.add_uint32(seek_index)
 
 
-def create_bytecode(opcode, exports):
+# structure of a bytecode file:
+#   1.  the bytes b'asda'
+#   2.  list of imports, bytecode file paths, for the interpreter
+#   3.  the actual bytecode
+#   4.  list of imports, source file paths, for the compiler
+#   5.  list of exports, names and types, for the compiler
+#   6.  number of bytes in parts 1, 2 and 3, as an uint32
+#       the compiler uses this to efficiently read exports and imports
+#
+# all paths are relative to the bytecode file's directory and have '/' as
+# the separator
+def create_bytecode(source_path, compiled_path, opcode, imports, exports):
     output = _ByteCode()
     output.byte_array.extend(b'asda')
 
+    writer = _BytecodeWriter(output, source_path, compiled_path)
+    writer.write_import_section([compiled for source, compiled in imports])
+
     # the built-in varlist is None because all builtins are implemented
     # as ArgMarkers, so they don't need a varlist
-    writer = _BytecodeWriter(output)
     writer.run(opcode, [None])
+
+    writer.write_import_section([source for source, compiled in imports])
     writer.write_export_section(exports)
     return output.byte_array
 
@@ -284,31 +323,30 @@ class RecompileFixableError(Exception):
     They happen when reading bytecode files, not when writing them. The file
     that contains the problem is the_error.compiled_path, and the file that
     should be recompiled is the_error.source_path. A user-displayable
-    description is in self.message.
+    description is in the_error.message.
     """
 
-    def __init__(self, source_path, message):
+    def __init__(self, source_path, compiled_path, message):
         self.source_path = source_path
-        self.compiled_path = common.get_compiled_path(source_path)
+        self.compiled_path = compiled_path
         self.message = message
 
-    @property
-    def compiled_path(self):
-        return common.get_compiled_path(source_path)
-
     def __str__(self):
-        return '%s (%s)' % (self.message, self.source_path)
+        return '%s (%s --> %s)' % (self.message, self.source_path,
+                                   self.compiled_path)
 
 
 # can't read anything, but can read the exports section
 class _BytecodeReader:
 
-    def __init__(self, source_path, file):
+    def __init__(self, source_path, compiled_path, file):
         self.source_path = source_path
+        self.compiled_path = compiled_path
         self.file = file
 
     def error(self, message):
-        raise RecompileFixableError(self.source_path, message)
+        raise RecompileFixableError(self.source_path, self.compiled_path,
+                                    message)
 
     # errors on unexpected eof
     def _read(self, size):
@@ -330,9 +368,21 @@ class _BytecodeReader:
     def read_string(self):
         length = self.read_uint32()
         utf8 = self._read(length)
-        return utf8.decode('utf-8')
+        if len(utf8) != length:
+            self.error("unexpected end of file when reading a string")
 
-    def read_type(self, *, name_hint='<anonymous>'):
+        try:
+            return utf8.decode('utf-8')
+        except UnicodeDecodeError:
+            bad = utf8.decode('utf-8', errors='replace')
+            self.error("the file contains a string of invalid utf-8: " + bad)
+
+    def read_path(self):
+        relative_path = self.read_string().replace('/', os.sep)
+        relative_to = os.path.dirname(self.compiled_path)
+        return os.path.join(relative_to, relative_path)
+
+    def read_type(self, *, name_hint='<unknown name>'):
         byte = self._read(1)
         [byte_int] = byte
 
@@ -344,7 +394,7 @@ class _BytecodeReader:
             returntype = self.read_type()
             nargs = self.read_uint8()
             argtypes = [self.read_type() for junk in range(nargs)]
-            return objects.FunctionType(name_prefix, argtypes, returntype)
+            return objects.FunctionType(name_hint, argtypes, returntype)
 
         if byte == TYPE_GENERATOR:
             item_type = self.read_type()
@@ -356,26 +406,49 @@ class _BytecodeReader:
         if self.file.read(4) != b'asda':
             self.error("the file is not an asda bytecode file")
 
-    def read_export_section(self):
+    def seek_to_import_section_beginning(self):
         self.file.seek(-32//8, io.SEEK_END)
         new_seek_pos = self.read_uint32()
         self.file.seek(new_seek_pos)
+
+    # returns a list of absolute source file paths
+    def read_import_section(self):
+        if self._read(1) != IMPORT_SECTION:
+            self.error(
+                "the file doesn't seem to have a valid second import section")
+
+        result = []
+        how_many = self.read_uint32()
+        for junk in range(how_many):
+            source_path = self.read_path()
+            compiled_path = self.read_path()
+            result.append((source_path, compiled_path))
+        return result
+
+    def read_export_section(self):
         if self._read(1) != EXPORT_SECTION:
-            self.error("the file seems to contain garbage at the end, "
-                       "or maybe it's gotten truncated")
+            self.error("the file doesn't seem to have a valid export section")
 
         result = {}
         how_many = self.read_uint32()
         for junk in range(how_many):
             name = self.read_string()
-            tybe = self.read_type()
+            tybe = self.read_type(name_hint=name)
             result[name] = tybe
-
         return result
 
+    def should_be_at_end(self):
+        if self._read(1) != b'':
+            self.error("the file seems to contain garbage at the end")
 
-# initial position of the file should be at the beginning
-def read_exports(source_path, bytecodefile):
-    reader = _BytecodeReader(source_path, bytecodefile)
-    reader.check_asda_part()
-    return reader.read_export_section()
+
+def read_imports_and_exports(source_path, compiled_path):
+    with open(compiled_path, 'rb') as file:
+        reader = _BytecodeReader(source_path, compiled_path, file)
+        reader.check_asda_part()
+        reader.seek_to_import_section_beginning()
+        imports = reader.read_import_section()
+        exports = reader.read_export_section()
+        reader.should_be_at_end()
+
+    return (imports, exports)

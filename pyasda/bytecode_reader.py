@@ -27,7 +27,7 @@ YIELD = b'Y'
 NEGATION = b'!'
 JUMP_IF = b'J'
 END_OF_BODY = b'E'      # only used in bytecode files
-EXPORT_SECTION = b'e'   # only used in bytecode files
+IMPORT_SECTION = b'i'   # only used in bytecode files
 
 PLUS = b'+'
 MINUS = b'-'
@@ -49,7 +49,8 @@ Op = collections.namedtuple('Op', ['lineno', 'kind', 'args'])
 
 class _BytecodeReader:
 
-    def __init__(self, read_callback):
+    def __init__(self, compiled_path, read_callback):
+        self.compiled_path = compiled_path
         self._callback = read_callback    # no error on eof, returns b''
         self._push_buffer = bytearray()
         self._lineno = 1
@@ -124,6 +125,24 @@ class _BytecodeReader:
         else:
             assert False
 
+    def read_path(self):
+        relative_path = self.read_string().replace('/', os.sep)
+        relative_to = os.path.dirname(self.compiled_path)
+        return os.path.join(relative_to, relative_path)
+
+    def read_imports(self):
+        if self.read_magic() != IMPORT_SECTION:
+            raise RuntimeError("oh no!")
+
+        how_many = self.read_uint32()
+        result = []
+        for lel in range(how_many):
+            source_path = self.read_path()
+            compiled_path = self.read_path()
+            result.append((source_path, compiled_path))
+
+        return result
+
     def read_body(self):
         how_many_local_vars = self.read_uint16()
         opcode = []
@@ -177,8 +196,13 @@ class _BytecodeReader:
         return Code(how_many_local_vars, opcode)
 
 
-def read_bytecode(read_callback):
-    result = _BytecodeReader(read_callback).read_body()
-    if read_callback(1) != EXPORT_SECTION:
+def read_bytecode(compiled_path, read_callback):
+    reader = _BytecodeReader(compiled_path, read_callback)
+    imports = reader.read_imports()
+    if imports:
+        raise RuntimeError("imports not supported yet :(")
+
+    result = reader.read_body()
+    if read_callback(1) != IMPORT_SECTION:
         raise ValueError("the bytecode file ends unexpectedly")
     return result

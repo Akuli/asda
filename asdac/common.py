@@ -12,13 +12,6 @@ def get_compiled_path(compiled_dir, source_path):
     return os.path.join(compiled_dir, os.sep.join(relative_parts))
 
 
-# use the_file.name to access the path that get_compiled_filename() returned
-def open_compiled_file_write(compiled_dir, source_filename):
-    path = get_compiled_path(compiled_dir, source_filename)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    return open(path, 'wb')
-
-
 # these are for reading source files, as specified in docs/syntax.md
 OPEN_KWARGS = {
     'encoding': 'utf-8-sig',    # like 'utf-8', but ignores a BOM

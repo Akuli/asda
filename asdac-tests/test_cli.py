@@ -91,6 +91,7 @@ def test_cant_read_stdin(asdac_run, monkeypatch, capsys):
     assert errors.endswith("reading from stdin is not supported\n")
 
 
+@pytest.mark.xfail
 def test_always_recompile_option(monkeypatch, tmp_path, capsys):
     os.chdir(str(tmp_path))
     with open('file.asda', 'w', encoding='utf-8') as file:

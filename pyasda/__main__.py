@@ -22,7 +22,7 @@ def main():
                   file=sys.stderr)
             sys.exit(1)
 
-        opcode = bytecode_reader.read_bytecode(file.read)
+        opcode = bytecode_reader.read_bytecode(file.name, file.read)
         runner.run_file(opcode)
 
 

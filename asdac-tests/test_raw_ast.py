@@ -8,11 +8,21 @@ from asdac.common import CompileError, Location
 
 import pytest
 
-location = functools.partial(Location, 'test file')
+
+# lol
+class AnyString(str):
+    def __eq__(self, other):
+        return isinstance(other, str)
+
+
+location = functools.partial(Location, AnyString())
 
 
 def parse(code):
-    return list(raw_ast.parse('test file', code))
+    statements, imports = raw_ast.parse('test file', code)
+    assert not imports
+    assert isinstance(statements, list)
+    return statements
 
 
 def test_not_an_expression_or_a_statement():

@@ -1,5 +1,6 @@
 import collections
 import functools
+import os
 
 import sly
 
@@ -78,8 +79,9 @@ class AsdaParser(sly.Parser):
 
     def __init__(self, filename):
         super().__init__()
-        self.filename = filename
+        self.filename = os.path.abspath(filename)
         self.create_location = functools.partial(common.Location, filename)
+        self.import_paths = []      # absolute paths of source files
 
     def error(self, token):
         assert token is not None
@@ -256,8 +258,17 @@ class AsdaParser(sly.Parser):
 
     @_('IMPORT import_path AS ID')
     def oneline_statement(self, parsed):    # noqa
+        self.import_paths.append(parsed.import_path)
         return Import(self.create_location(parsed.index, len(parsed.IMPORT)),
                       parsed.import_path, parsed.ID)
+
+    @_('STRING')
+    def import_path(self, parsed):
+        location = self.create_location(parsed.index, len(parsed.STRING))
+        path_parts = self.handle_string_literal(parsed.STRING, location, False)
+        path = ''.join(string_ast.python_string for string_ast in path_parts)
+        return os.path.join(os.path.dirname(self.filename),
+                            path.replace('/', os.sep))
 
     @_('LET ID "=" expression')
     @_('EXPORT LET ID "=" expression')
@@ -297,12 +308,6 @@ class AsdaParser(sly.Parser):
         target_location = self.create_location(parsed.index, len(parsed.ID))
         return SetVar(target_location + parsed.expression.location,
                       parsed.ID, parsed.expression)
-
-    @_('STRING')
-    def import_path(self, parsed):
-        location = self.create_location(parsed.index, len(parsed.STRING))
-        path_parts = self.handle_string_literal(parsed.STRING, location, False)
-        return ''.join(string_ast.python_string for string_ast in path_parts)
 
     # expressions and operators
     # ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -462,7 +467,10 @@ class AsdaParser(sly.Parser):
 
 
 def parse(filename, code):
-    return AsdaParser(filename).parse(tokenizer.tokenize(filename, code))
+    parser = AsdaParser(filename)
+    statements = parser.parse(tokenizer.tokenize(filename, code))
+    assert statements is not iter(statements)       # must not be lazy iterator
+    return (statements, parser.import_paths)
 
 
 if __name__ == '__main__':

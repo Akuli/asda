@@ -127,7 +127,8 @@ class _OpCoder:
         #    2
         #    >>> bisect.bisect(offsets, 10)
         #    3
-        assert location.filename == self.filename
+        assert location.filename == self.filename, (
+            location.filename, self.filename)
         return bisect.bisect(self.line_start_offsets, location.offset)
 
     def do_function_call(self, call):

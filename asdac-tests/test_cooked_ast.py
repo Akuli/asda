@@ -5,7 +5,9 @@ from asdac.common import CompileError, Location
 
 
 def parse(code, want_exports=False):
-    cooked, exports = cooked_ast.cook(raw_ast.parse('test file', code))
+    raw_statements, imports = raw_ast.parse('test file', code)
+    assert not imports
+    cooked, exports = cooked_ast.cook(raw_statements)
     assert isinstance(cooked, list)
 
     if want_exports:
@@ -21,7 +23,8 @@ def doesnt_parse(code, message, bad_code):
 
     index = code.rindex(bad_code)
     assert error.value.message == message
-    assert error.value.location == Location('test file', index, len(bad_code))
+    assert error.value.location.offset == index
+    assert error.value.location.length == len(bad_code)
 
 
 def test_reusing_names():
@@ -46,12 +49,6 @@ def test_function_calling_errors():
     doesnt_parse('print()',
                  "cannot call print(Str) with no arguments",
                  '()')
-
-
-# lol
-class Anything:
-    def __eq__(self, other):
-        return True
 
 
 def test_nested_generic_types():
@@ -217,8 +214,8 @@ def test_non_bool_cond():
 def test_joined_string_location_corner_case():
     let, print_ = parse('let x = 1\nprint("hello {x}")')
     [join] = print_.args
-    assert join.location == Location(
-        'test file', 16, len('"hello {x}"'))
+    assert join.location.offset == len('let x = 1\nprint(')
+    assert join.location.length == len('"hello {x}"')
 
 
 def test_string_formatting_with_bad_type():
