@@ -97,21 +97,22 @@ class OpCode:
 
 class _OpCoder:
 
-    def __init__(self, output_opcode: OpCode, parent_coder):
+    def __init__(self, output_opcode, compilation, line_start_offsets):
         self.output = output_opcode
-        self.parent_coder = parent_coder
-        if isinstance(parent_coder, tuple):     # FIXME: this is dumb
-            self.level = 0
-            self.compilation, self.line_start_offsets = parent_coder
-        elif isinstance(parent_coder, _OpCoder):
-            self.level = parent_coder.level + 1
-            self.compilation = parent_coder.compilation
-            self.line_start_offsets = parent_coder.line_start_offsets
-        else:
-            raise TypeError
+        self.parent_coder = None
+        self.level = 0
+        self.compilation = compilation
+        self.line_start_offsets = line_start_offsets
 
         # {varname: VarMarker or ArgMarker}
         self.local_vars = {}
+
+    def create_subcoder(self, output_opcode):
+        result = _OpCoder(output_opcode, self.compilation,
+                          self.line_start_offsets)
+        result.parent_coder = self
+        result.level = self.level + 1
+        return result
 
     # returns line number so that 1 means first line
     def _lineno(self, location):
@@ -179,7 +180,7 @@ class _OpCoder:
         # object should be
         elif isinstance(expression, cooked_ast.CreateFunction):
             function_opcode = OpCode(len(expression.argnames))
-            opcoder = _OpCoder(function_opcode, self)
+            opcoder = self.create_subcoder(function_opcode)
             for index, argname in enumerate(expression.argnames):
                 opcoder.local_vars[argname] = ArgMarker(index)
 
@@ -346,7 +347,7 @@ def create_opcode(compilation, cooked_statements, source_code):
         line_start_offsets.append(offset)
         offset += len(line)
 
-    builtin_opcoder = _OpCoder(None, (compilation, line_start_offsets))
+    builtin_opcoder = _OpCoder(None, compilation, line_start_offsets)
     builtin_opcoder.line_start_offsets.extend(line_start_offsets)
     builtin_opcoder.local_vars.update({
         name: ArgMarker(index)
@@ -358,7 +359,7 @@ def create_opcode(compilation, cooked_statements, source_code):
 
     # exported symbols are kinda like arguments
     output = OpCode(len(compilation.exports))
-    file_opcoder = _OpCoder(output, builtin_opcoder)
+    file_opcoder = builtin_opcoder.create_subcoder(output)
     for arg_marker, name in zip(output.local_vars, compilation.exports.keys()):
         file_opcoder.local_vars[name] = arg_marker
 

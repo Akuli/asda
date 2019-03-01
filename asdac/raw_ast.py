@@ -333,7 +333,6 @@ class AsdaParser(sly.Parser):
         op_location = self.create_location(parsed.index, len('-'))
         return PrefixOperator(
             op_location + parsed.expression.location, '-', parsed.expression)
-        raise RuntimeError
 
     @_expression_class(FuncCall)      # noqa
     @_('expression "`" expression "`" expression')
