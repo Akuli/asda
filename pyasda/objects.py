@@ -1,5 +1,3 @@
-# right now this file looks like a skeleton of boilerplate, but it works
-
 import collections
 import functools
 import itertools
@@ -100,10 +98,6 @@ class String(Object):
     def __repr__(self):
         return '<%s.%s: %r>' % (type(self).__module__, type(self).__name__,
                                 self.python_string)
-
-
-INT64_MIN = -2**63
-INT64_MAX = 2**63 - 1
 
 
 class Integer(Object):

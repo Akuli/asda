@@ -213,44 +213,35 @@ class _OpCoder:
             self.output.ops.append(LookupMethod(
                 self._lineno(expression.location), expression.obj.type, index))
 
-        elif isinstance(expression, cooked_ast.Plus):
-            self.do_expression(expression.lhs)
-            self.do_expression(expression.rhs)
-            self.output.ops.append(Plus(self._lineno(expression.location)))
-
-        elif isinstance(expression, cooked_ast.Minus):
-            self.do_expression(expression.lhs)
-            self.do_expression(expression.rhs)
-            self.output.ops.append(Minus(self._lineno(expression.location)))
+        elif isinstance(expression, cooked_ast.LookupModule):
+            self.output.ops.append(LookupModule(
+                self._lineno(expression.location),
+                expression.type.compilation.compiled_path))
 
         elif isinstance(expression, cooked_ast.PrefixMinus):
             self.do_expression(expression.prefixed)
             self.output.ops.append(PrefixMinus(
                 self._lineno(expression.location)))
 
-        elif isinstance(expression, cooked_ast.Times):
-            self.do_expression(expression.lhs)
-            self.do_expression(expression.rhs)
-            self.output.ops.append(Times(self._lineno(expression.location)))
-
-#        elif isinstance(expression, cooked_ast.Divide):
-#            self.do_expression(expression.lhs)
-#            self.do_expression(expression.rhs)
-#            self.output.ops.append(Divide(self._lineno(expression.location)))
-
-        elif isinstance(expression, (cooked_ast.Equal, cooked_ast.NotEqual)):
-            self.do_expression(expression.lhs)
-            self.do_expression(expression.rhs)
-            self.output.ops.append(Equal(self._lineno(expression.location)))
-            if isinstance(expression, cooked_ast.NotEqual):
-                self.output.ops.append(BoolNegation(None))
-
-        elif isinstance(expression, cooked_ast.LookupModule):
-            self.output.ops.append(LookupModule(
-                self._lineno(expression.location),
-                expression.type.compilation.compiled_path))
-
         else:
+            binary_operators = [
+                (cooked_ast.Plus, Plus),
+                (cooked_ast.Minus, Minus),
+                (cooked_ast.Times, Times),
+#                (cooked_ast.Divide, Divide),
+                (cooked_ast.Equal, Equal),
+                (cooked_ast.NotEqual, Equal),   # see below
+            ]
+            for cooked_ast_class, opcoder_class in binary_operators:
+                if isinstance(expression, cooked_ast_class):
+                    self.do_expression(expression.lhs)
+                    self.do_expression(expression.rhs)
+                    self.output.ops.append(opcoder_class(
+                        self._lineno(expression.location)))
+                    if isinstance(expression, cooked_ast.NotEqual):
+                        self.output.ops.append(BoolNegation(None))
+                    return
+
             assert False, expression    # pragma: no cover
 
     def do_statement(self, statement):

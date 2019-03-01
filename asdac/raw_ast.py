@@ -471,7 +471,3 @@ def parse(compilation, code):
     statements = parser.parse(tokenizer.tokenize(compilation, code))
     assert statements is not iter(statements)       # must not be lazy iterator
     return (statements, parser.import_paths)
-
-
-if __name__ == '__main__':
-    print(parse('', '-x*y'))

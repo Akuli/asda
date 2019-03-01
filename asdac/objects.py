@@ -4,14 +4,13 @@ Even though types and generic functions are not objects in asda, they are
 here as well.
 """
 
-import abc
 import collections
 import itertools
 
 from asdac import common
 
 
-class Type(metaclass=abc.ABCMeta):
+class Type:
 
     def __init__(self, name, parent_type):
         self.name = name
