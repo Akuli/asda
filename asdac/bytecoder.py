@@ -17,7 +17,7 @@ NEGATIVE_INT_CONSTANT = b'2'
 TRUE_CONSTANT = b'T'
 FALSE_CONSTANT = b'F'
 LOOKUP_ATTRIBUTE = b'.'
-LOOKUP_MODULE = b'M'       # also used when bytecoding a type
+IMPORT_MODULE = b'M'       # also used when bytecoding a type
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
 STR_JOIN = b'j'
@@ -138,7 +138,7 @@ class _BytecodeWriter:
             self.write_type(tybe.item_type)
 
         elif isinstance(tybe, objects.ModuleType):
-            self.bytecode.add_byte(LOOKUP_MODULE)
+            self.bytecode.add_byte(IMPORT_MODULE)
             self.write_path(tybe.compilation.compiled_path)
 
         elif tybe is None:
@@ -231,7 +231,7 @@ class _BytecodeWriter:
             return
 
         if isinstance(op, opcoder.LookupModule):
-            self.bytecode.add_byte(LOOKUP_MODULE)
+            self.bytecode.add_byte(IMPORT_MODULE)
             self.write_path(op.compiled_path)
             return
 
@@ -300,11 +300,10 @@ class _BytecodeWriter:
 
 # structure of a bytecode file:
 #   1.  the bytes b'asda'
-#   2.  list of imports, bytecode file paths, for the interpreter
-#   3.  the actual bytecode
-#   4.  list of imports, source file paths, for the compiler
-#   5.  list of exports, names and types, for the compiler
-#   6.  number of bytes in parts 1, 2 and 3, as an uint32
+#   2.  the actual bytecode
+#   3.  list of imports, source file paths, for the compiler
+#   4.  list of exports, names and types, for the compiler
+#   5.  number of bytes in parts 1, 2 and 3, as an uint32
 #       the compiler uses this to efficiently read exports and imports
 #
 # all paths are relative to the bytecode file's directory and have '/' as
@@ -314,9 +313,6 @@ def create_bytecode(compilation, opcode):
     output.byte_array.extend(b'asda')
 
     writer = _BytecodeWriter(output, compilation)
-    writer.write_import_section([
-        import_compilation.compiled_path
-        for import_compilation in compilation.imports])
 
     # the built-in varlist is None because all builtins are implemented
     # as ArgMarkers, so they don't need a varlist
@@ -411,7 +407,7 @@ class _BytecodeReader:
         if self.file.read(4) != b'asda':
             self.error("the file is not an asda bytecode file")
 
-    def seek_to_import_section_beginning(self):
+    def seek_to_end_sections(self):
         self.file.seek(-32//8, io.SEEK_END)
         new_seek_pos = self.read_uint32()
         self.file.seek(new_seek_pos)
@@ -446,7 +442,7 @@ def read_imports_and_exports(compilation):
     with open(compilation.compiled_path, 'rb') as file:
         reader = _BytecodeReader(compilation, file)
         reader.check_asda_part()
-        reader.seek_to_import_section_beginning()
+        reader.seek_to_end_sections()
         imports = reader.read_second_import_section()
         exports = reader.read_export_section()
 

@@ -17,7 +17,7 @@ TRUE_CONSTANT = b'T'            # only used in bytecode files
 FALSE_CONSTANT = b'F'           # only used in bytecode files
 CONSTANT = b'C'                 # not used at all in bytecode files
 LOOKUP_ATTRIBUTE = b'.'
-LOOKUP_MODULE = b'M'    # also used in types
+IMPORT_MODULE = b'M'    # also used in types
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
 STR_JOIN = b'j'
@@ -51,12 +51,12 @@ Op = collections.namedtuple('Op', ['lineno', 'kind', 'args'])
 
 class _BytecodeReader:
 
-    def __init__(self, compiled_path, file):
+    def __init__(self, compiled_path, file, module_getter):
         self.compiled_path = compiled_path
         self.file = file
         self._push_buffer = bytearray()
         self._lineno = 1
-        self.module_objects = None
+        self.get_module = module_getter
 
     # errors on unexpected eof
     def _read(self, size):
@@ -125,8 +125,8 @@ class _BytecodeReader:
         if magic == TYPE_GENERATOR:
             return objects.GeneratorType(self.read_type())
 
-        if magic == LOOKUP_MODULE:
-            return self.module_objects[self.read_path()].type
+        if magic == IMPORT_MODULE:
+            return self.get_module(self.read_path()).type
 
         assert False, magic
 
@@ -184,7 +184,7 @@ class _BytecodeReader:
                 args = (self.read_uint8(), self.read_uint16())
             elif magic == LOOKUP_ATTRIBUTE:
                 args = (self.read_type(), self.read_uint16())
-            elif magic == LOOKUP_MODULE:
+            elif magic == IMPORT_MODULE:
                 args = (self.read_path(),)
             elif magic == CREATE_FUNCTION:
                 self._unread(magic[0])
@@ -201,15 +201,13 @@ class _BytecodeReader:
         return Code(how_many_local_vars, opcode)
 
 
-def read_bytecode(compiled_path, file):
+def read_bytecode(compiled_path, file, module_getter):
     if file.read(4) != b'asda':
         raise RuntimeError(
             "doesn't look like a compiled asda file: " + compiled_path)
 
-    reader = _BytecodeReader(compiled_path, file)
-    reader.module_objects = yield reader.read_imports()
-    opcode = reader.read_body()
+    opcode = _BytecodeReader(compiled_path, file, module_getter).read_body()
 
     if file.read(1) != IMPORT_SECTION:
         raise ValueError("the bytecode file ends unexpectedly")
-    yield opcode
+    return opcode

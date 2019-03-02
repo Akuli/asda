@@ -22,13 +22,13 @@ class RunResult(enum.Enum):
     DIDNT_RETURN = 4
 
 
-def _create_function_object(definition_scope, modules, tybe, name, code,
+def _create_function_object(definition_scope, interpreter, tybe, name, code,
                             yields):
     def python_func(*args):
         scope = _create_subscope(definition_scope, code.how_many_local_vars)
         for index, arg in enumerate(args):
             scope.local_vars[index] = arg
-        runner = _Runner(code, scope, modules)
+        runner = _Runner(code, scope, interpreter)
 
         if not yields:
             result, value = runner.run()
@@ -56,12 +56,12 @@ def _create_function_object(definition_scope, modules, tybe, name, code,
 
 class _Runner:
 
-    def __init__(self, code, scope, modules):
+    def __init__(self, code, scope, interpreter):
         self.scope = scope
         self.stack = []
         self.opcodes = more_itertools.seekable(code.opcodes)
         self.opcodes_len = len(code.opcodes)
-        self.modules = modules
+        self.interpreter = interpreter
 
     # returns (RunResult, value) where value is one of:
     #   * yielded value
@@ -115,7 +115,7 @@ class _Runner:
 
             elif opcode == bytecode_reader.CREATE_FUNCTION:
                 self.stack.append(_create_function_object(
-                    self.scope, self.modules, *args))
+                    self.scope, self.interpreter, *args))
 
             elif opcode == bytecode_reader.VOID_RETURN:
                 assert not self.stack
@@ -159,10 +159,9 @@ class _Runner:
             elif opcode == bytecode_reader.PREFIX_MINUS:
                 self.stack[-1] = self.stack[-1].prefix_minus()
 
-            elif opcode == bytecode_reader.LOOKUP_MODULE:
+            elif opcode == bytecode_reader.IMPORT_MODULE:
                 [path] = args
-                assert self.modules[path] is not None
-                self.stack.append(self.modules[path])
+                self.stack.append(self.interpreter.import_path(path))
 
             elif opcode in {bytecode_reader.PLUS, bytecode_reader.MINUS,
                             bytecode_reader.TIMES,  # bytecode_reader.DIVIDE,
@@ -196,26 +195,30 @@ class Interpreter:
         self.modules = {}
         self.global_scope = _Scope(objects.BUILTINS, [])
 
-    def import_path(self, path):
+    # creates a module object, but doesn't run the module's code
+    def get_module(self, path):
         path = os.path.abspath(path)
-
         if path in self.modules:
             return self.modules[path]
 
+        module = objects.Object(objects.ModuleType(path))
+        self.modules[path] = module
+        return module
+
+    # runs the module's code if that hasn't been done yet
+    def import_path(self, path):
+        path = os.path.abspath(path)
+        module = self.get_module(path)
+        if module.type.loaded:
+            return module
+
         with open(path, 'rb') as file:
-            generator = bytecode_reader.read_bytecode(path, file)
-            imports = next(generator)
-            for path_to_import in imports:
-                self.import_path(path_to_import)
-            opcode = generator.send(self.modules)
+            opcode = bytecode_reader.read_bytecode(path, file, self.get_module)
 
         file_scope = _create_subscope(self.global_scope,
                                       opcode.how_many_local_vars)
-        result = _Runner(opcode, file_scope, self.modules).run()
+        result = _Runner(opcode, file_scope, self).run()
         assert result == (RunResult.DIDNT_RETURN, None), result
 
-        # file_scope.local_vars contains more stuff than just the exports, but
-        # the exports are guaranteed to be first
-        module = objects.Object(objects.ModuleType(path, file_scope.local_vars)
-                                )
-        self.modules[path] = module
+        module.type.load(file_scope.local_vars)
+        return module

@@ -1,3 +1,7 @@
+Before import
 Export example is running
-Hello World!
+After import
+After second import
+
+exporter.hello is: Hello World!
 This is the message: Hi

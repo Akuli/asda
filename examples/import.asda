@@ -1,3 +1,12 @@
+print("Before import")
 import "export.asda" as exporter
-print(exporter.hello)
+print("After import")
+
+# the module is cached, this doesn't actually run export.asda again:
+import "export.asda" as exporter2
+print("After second import")
+
+print("")
+
+print("exporter.hello is: {exporter.hello}")
 exporter.print_message("Hi")

@@ -6,11 +6,11 @@ import itertools
 class Type:
 
     def __init__(self, base):
-        self.attributes = []    # (is_method, value) pairs
+        self._attributes = []   # (is_method, value) pairs
         self.base_type = base   # None for OBJECT
 
     def get_attribute(self, objekt, indeks):
-        is_method, value = self.attributes[indeks]
+        is_method, value = self._attributes[indeks]
         if is_method:
             # value is a Function
             return value.method_bind(objekt)
@@ -53,7 +53,7 @@ class Function(Object):
 
 def add_method(tybe, name, python_func, argtypes, returntype):
     functype = FunctionType(itertools.chain([tybe], argtypes), returntype)
-    tybe.attributes.append((True, Function(functype, name, python_func)))
+    tybe._attributes.append((True, Function(functype, name, python_func)))
 
 
 types = collections.OrderedDict([
@@ -85,15 +85,28 @@ class GeneratorType(Type):
         self.itemtype = itemtype
 
 
+# not all ModuleTypes are usable, only loaded ones are
+#
+# this is because modules are loaded when they are first imported, not when the
+# bytecode file containing the module is loaded, that allows doing more magic
 class ModuleType(Type):
 
-    def __init__(self, compiled_path, exports):
+    def __init__(self, compiled_path):
         super().__init__(OBJECT)
+        self._attributes = None
         self.compiled_path = compiled_path
 
-        assert not self.attributes
-        for objekt in exports:
-            self.attributes.append((False, objekt))
+    # this is not really needed, it's just for debuggability
+    def get_attribute(self, *args, **kwargs):
+        assert self.loaded
+        return super().get_attribute(*args, **kwargs)
+
+    def load(self, exported_objects):
+        self._attributes = [(False, objekt) for objekt in exported_objects]
+
+    @property
+    def loaded(self):
+        return (self._attributes is not None)
 
 
 class String(Object):
