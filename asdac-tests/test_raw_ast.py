@@ -140,6 +140,7 @@ def test_for(compiler):
                 location(4, 9),
                 varname='x',
                 value=GetVar(location(12, 1), varname='a'),
+                export=False,
             ),
             cond=GetVar(location(15, 1), varname='b'),
             incr=SetVar(

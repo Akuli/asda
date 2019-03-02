@@ -14,7 +14,7 @@ def _astclass(name, fields):
 Integer = _astclass('Integer', ['python_int'])
 String = _astclass('String', ['python_string'])
 StrJoin = _astclass('StrJoin', ['parts'])
-Let = _astclass('Let', ['varname', 'value'])
+Let = _astclass('Let', ['varname', 'value', 'export'])
 SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['varname'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
@@ -24,7 +24,7 @@ FromGeneric = _astclass('FromGeneric', ['name', 'types'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
 # generics is a list of (typename, location) pairs, or None
 FuncDefinition = _astclass('FuncDefinition', [
-    'funcname', 'generics', 'args', 'returntype', 'body'])
+    'funcname', 'generics', 'args', 'returntype', 'body', 'export'])
 Return = _astclass('Return', ['value'])
 Yield = _astclass('Yield', ['value'])
 VoidStatement = _astclass('VoidStatement', [])
@@ -33,7 +33,6 @@ If = _astclass('If', ['ifs', 'else_body'])
 While = _astclass('While', ['condition', 'body'])
 For = _astclass('For', ['init', 'cond', 'incr', 'body'])
 Import = _astclass('Import', ['source_path', 'varname'])
-ExportLet = _astclass('ExportLet', ['varname', 'value'])
 PrefixOperator = _astclass('PrefixOperator', ['operator', 'expression'])
 BinaryOperator = _astclass('BinaryOperator', ['operator', 'lhs', 'rhs'])
 
@@ -132,9 +131,12 @@ class AsdaParser(sly.Parser):
 
         return parts
 
-    # abstracts away a sly implementation detail
     def last_token_offset(self):
+        # abstracts away a sly implementation detail
         return self.symstack[-1].index
+
+    # statements list and stuff
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~
 
     @_('statements statement')
     def statements(self, parsed):
@@ -228,8 +230,10 @@ class AsdaParser(sly.Parser):
     def nonempty_arg_spec_list(self, parsed):
         return [parsed.arg_spec]
 
-    @_('FUNC ID "(" arg_spec_list ")" ARROW return_type block')      # noqa
-    @_('FUNC ID create_generic "(" arg_spec_list ")" ARROW return_type block')
+    @_('maybe_export FUNC ID "(" arg_spec_list ")" '    # noqa
+       'ARROW return_type block')
+    @_('maybe_export FUNC ID create_generic "(" arg_spec_list ")" '
+       'ARROW return_type block')
     def statement(self, parsed):
         generics = getattr(parsed, 'create_generic', None)
         if generics is not None:
@@ -239,7 +243,8 @@ class AsdaParser(sly.Parser):
 
         return FuncDefinition(
             self.create_location(parsed.index, len(parsed.FUNC)), parsed.ID,
-            generics, parsed.arg_spec_list, parsed.return_type, parsed.block)
+            generics, parsed.arg_spec_list, parsed.return_type, parsed.block,
+            parsed.maybe_export)
 
     @_('VOID')
     def return_type(self, parsed):
@@ -270,14 +275,12 @@ class AsdaParser(sly.Parser):
         return os.path.join(os.path.dirname(self.compilation.source_path),
                             path.replace('/', os.sep))
 
-    @_('LET ID "=" expression')    # noqa
-    @_('EXPORT LET ID "=" expression')
+    @_('maybe_export LET ID "=" expression')    # noqa
     def oneline_statement(self, parsed):
         end = (parsed.expression.location.offset +
                parsed.expression.location.length)
-        klass = ExportLet if hasattr(parsed, 'EXPORT') else Let
-        return klass(self.create_location(parsed.index, end - parsed.index),
-                     parsed.ID, parsed.expression)
+        return Let(self.create_location(parsed.index, end - parsed.index),
+                   parsed.ID, parsed.expression, parsed.maybe_export)
 
     @_('YIELD expression')      # noqa
     def oneline_statement(self, parsed):
@@ -463,6 +466,17 @@ class AsdaParser(sly.Parser):
     @_('ID')
     def generic_name(self, parsed):
         return (parsed.ID, self.create_location(parsed.index, len(parsed.ID)))
+
+    # misc
+    # ~~~~
+
+    @_('EXPORT')
+    def maybe_export(self, parsed):
+        return True
+
+    @_('')
+    def maybe_export(self, parsed):
+        return False
 
 
 def parse(compilation, code):

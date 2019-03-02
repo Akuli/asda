@@ -278,12 +278,6 @@ class _Chef:
 
         assert False, tybe   # pragma: no cover
 
-    def cook_let(self, raw):
-        self._check_name_not_exist(raw.varname, 'variable', raw.location)
-        value = self.cook_expression(raw.value)
-        self.local_vars[raw.varname] = value.type
-        return CreateLocalVar(raw.location, None, raw.varname, value)
-
     def cook_setvar(self, raw):
         cooked_value = self.cook_expression(raw.value)
         varname = raw.varname
@@ -306,6 +300,21 @@ class _Chef:
                     raw.location)
 
             chef = chef.parent_chef
+
+    def _create_local_var_or_export(self, location, varname, value, exporting):
+        if exporting:
+            self._check_can_import_export(location)
+            self.local_export_vars[varname] = value.type
+            return SetVar(location, None, varname, self.level, value)
+
+        self.local_vars[varname] = value.type
+        return CreateLocalVar(location, None, varname, value)
+
+    def cook_let(self, raw):
+        self._check_name_not_exist(raw.varname, 'variable', raw.location)
+        value = self.cook_expression(raw.value)
+        return self._create_local_var_or_export(raw.location, raw.varname,
+                                                value, raw.export)
 
     # TODO: allow functions to call themselves
     def cook_function_definition(self, raw):
@@ -351,11 +360,15 @@ class _Chef:
         body = list(map(subchef.cook_statement, raw.body))
 
         if raw.generics is None:
-            self.local_vars[raw.funcname] = functype
-            return CreateLocalVar(raw.location, None, raw.funcname,
-                                  CreateFunction(raw.location, functype,
-                                                 raw.funcname, argnames, body,
-                                                 yield_location is not None))
+            value = CreateFunction(raw.location, functype, raw.funcname,
+                                   argnames, body, yield_location is not None)
+            return self._create_local_var_or_export(
+                raw.location, raw.funcname, value, raw.export)
+
+        if raw.export:
+            raise common.CompileError(
+                "sorry, generic functions can't be exported yet :(",
+                raw.location)
 
         generic_obj = objects.Generic(markers, functype)
         self.local_generic_funcs[raw.funcname] = generic_obj
@@ -466,13 +479,6 @@ class _Chef:
             raise common.CompileError(
                 "import and export cannot be used inside functions", location)
 
-    def cook_export_let(self, raw):
-        self._check_name_not_exist(raw.varname, 'variable', raw.location)
-        self._check_can_import_export(raw.location)
-        value = self.cook_expression(raw.value)
-        self.local_export_vars[raw.varname] = value.type
-        return SetVar(raw.location, None, raw.varname, self.level, value)
-
     def cook_import(self, raw: raw_ast.Import):
         self._check_name_not_exist(raw.varname, 'variable', raw.location)
         self._check_can_import_export(raw.location)
@@ -486,8 +492,6 @@ class _Chef:
     def cook_statement(self, raw_statement):
         if isinstance(raw_statement, raw_ast.Let):
             return self.cook_let(raw_statement)
-        if isinstance(raw_statement, raw_ast.ExportLet):
-            return self.cook_export_let(raw_statement)
         if isinstance(raw_statement, raw_ast.SetVar):
             return self.cook_setvar(raw_statement)
         if isinstance(raw_statement, raw_ast.FuncCall):

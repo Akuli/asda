@@ -1,2 +1,3 @@
 import "export.asda" as exporter
+print(exporter.hello)
 exporter.print_message("Hi")

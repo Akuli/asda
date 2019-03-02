@@ -201,3 +201,9 @@ def test_exporting(compiler):
     x_create, y_create = cooked
     assert isinstance(x_create, cooked_ast.CreateLocalVar)
     assert isinstance(y_create, cooked_ast.SetVar)
+
+
+def test_exporting_generic_func(compiler):
+    compiler.doesnt_cooked_parse(
+        'export func lol[T]() -> void:\n    void',
+        "sorry, generic functions can't be exported yet :(", 'func')
