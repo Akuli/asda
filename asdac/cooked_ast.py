@@ -164,19 +164,16 @@ class _Chef:
                                raw_expression.python_int)
 
         if isinstance(raw_expression, raw_ast.GetAttr):
-            # currently all attributes are method names
             obj = self.cook_expression(raw_expression.obj)
             try:
-                tybe = obj.type.methods[raw_expression.attrname]
+                tybe = obj.type.attributes[raw_expression.attrname]
             except KeyError as e:
                 raise common.CompileError(
-                    # remember to replace 'method' with 'attribute' when other
-                    # attributes exist!
-                    "%s objects have no '%s' method" % (
+                    "%s objects have no '%s' attribute" % (
                         obj.type.name, raw_expression.attrname),
                     raw_expression.location)
 
-            return LookupAttr(raw_expression.location, tybe.without_this_arg(),
+            return LookupAttr(raw_expression.location, tybe,
                               obj, raw_expression.attrname)
 
         if isinstance(raw_expression, raw_ast.FuncCall):

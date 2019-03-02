@@ -6,8 +6,15 @@ import itertools
 class Type:
 
     def __init__(self, base):
-        self.methods = []
+        self.attributes = []    # (is_method, value) pairs
         self.base_type = base   # None for OBJECT
+
+    def get_attribute(self, objekt, indeks):
+        is_method, value = self.attributes[indeks]
+        if is_method:
+            # value is a Function
+            return value.method_bind(objekt)
+        return value
 
 
 OBJECT = Type(None)     # the asda base class of all asda objects
@@ -46,7 +53,7 @@ class Function(Object):
 
 def add_method(tybe, name, python_func, argtypes, returntype):
     functype = FunctionType(itertools.chain([tybe], argtypes), returntype)
-    tybe.methods.append(Function(functype, name, python_func))
+    tybe.attributes.append((True, Function(functype, name, python_func)))
 
 
 types = collections.OrderedDict([
@@ -83,10 +90,10 @@ class ModuleType(Type):
     def __init__(self, compiled_path, exports):
         super().__init__(OBJECT)
         self.compiled_path = compiled_path
-        for index, obj in enumerate(exports):
-            # FIXME: good way to name these methods or not have the methods
-            add_method(self, 'method' + str(index),
-                       (lambda this, *, obj=obj: obj), [], obj.type)
+
+        assert not self.attributes
+        for objekt in exports:
+            self.attributes.append((False, objekt))
 
 
 class String(Object):

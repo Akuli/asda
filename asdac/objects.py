@@ -16,16 +16,15 @@ class Type:
         self.name = name
         self.parent_type = parent_type      # OBJECT's parent_type is None
 
-        # keys are names, values are FunctionTypes with 'this' as first arg
-        self.methods = collections.OrderedDict()
+        # keys are names, values are types
+        self.attributes = collections.OrderedDict()
 
     def undo_generics(self, type_dict):
         return self
 
     def add_method(self, name, argtypes, returntype):
-        self.methods[name] = FunctionType(
-            self.name + '.' + name, itertools.chain([self], argtypes),
-            returntype, is_method=True)
+        self.attributes[name] = FunctionType(
+            self.name + '.' + name, argtypes, returntype)
 
     def __repr__(self):
         return '<%s type %r>' % (__name__, self.name)
@@ -36,26 +35,14 @@ OBJECT = Type('Object', None)
 
 class FunctionType(Type):
 
-    def __init__(self, name_prefix, argtypes=(), returntype=None, *,
-                 is_method=False):
+    def __init__(self, name_prefix, argtypes=(), returntype=None):
         self.argtypes = list(argtypes)
 
         argtype_names = [argtype.name for argtype in self.argtypes]
-        if is_method:
-            del argtype_names[0]
-
         super().__init__('%s(%s)' % (name_prefix, ', '.join(argtype_names)),
                          OBJECT)
         self.returntype = returntype
         self.name_prefix = name_prefix
-        self._is_method = is_method
-
-    def __repr__(self):
-        result = super().__repr__()
-        assert result[-1] == '>'
-        if self._is_method:
-            return result[:-1] + ', is a method>'
-        return result
 
     def __eq__(self, other):
         if not isinstance(other, FunctionType):
@@ -65,12 +52,6 @@ class FunctionType(Type):
         return (self.argtypes == other.argtypes and
                 self.returntype == other.returntype)
 
-    def without_this_arg(self):
-        assert self._is_method
-        return FunctionType(
-            self.name_prefix, self.argtypes[1:], self.returntype,
-            is_method=False)
-
     def undo_generics(self, type_dict, new_name_prefix=None):
         if new_name_prefix is None:
             new_name_prefix = self.name_prefix
@@ -79,8 +60,7 @@ class FunctionType(Type):
             new_name_prefix,
             [tybe.undo_generics(type_dict) for tybe in self.argtypes],
             (None if self.returntype is None else
-             self.returntype.undo_generics(type_dict)),
-            is_method=self._is_method)
+             self.returntype.undo_generics(type_dict)))
 
 
 BUILTIN_TYPES = collections.OrderedDict([
@@ -122,9 +102,7 @@ class ModuleType(Type):
             '<module from "%s">' % compilation.source_path, OBJECT)
         self.compilation = compilation
         for name, tybe in compilation.exports.items():
-            # TODO: should be attributes not methods, but currently all
-            #       attributes are methods
-            self.add_method(name, [], tybe)
+            self.attributes[name] = tybe
 
     def __eq__(self, other):
         if not isinstance(other, ModuleType):

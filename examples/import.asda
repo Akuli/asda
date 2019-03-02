@@ -1,4 +1,2 @@
 import "export.asda" as exporter
-
-# hopefully the double call won't be needed anymore soon
-exporter.print_message()("Hi")
+exporter.print_message("Hi")

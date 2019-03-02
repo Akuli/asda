@@ -33,7 +33,7 @@ CreateFunction = _op_class('CreateFunction', [
 LookupVar = _op_class('LookupVar', ['level', 'var'])
 LookupModule = _op_class('LookupModule', ['compiled_path'])
 # tuples have an index() method, avoid name clash with misspelling
-LookupMethod = _op_class('LookupMethod', ['type', 'indeks'])
+LookupAttribute = _op_class('LookupAttribute', ['type', 'indeks'])
 SetVar = _op_class('SetVar', ['level', 'var'])
 CallFunction = _op_class('CallFunction', ['nargs', 'returns_a_value'])
 StrJoin = _op_class('StrJoin', ['how_many_parts'])
@@ -209,9 +209,9 @@ class _OpCoder:
 
         elif isinstance(expression, cooked_ast.LookupAttr):
             self.do_expression(expression.obj)
-            method_names = list(expression.obj.type.methods.keys())
-            index = method_names.index(expression.attrname)
-            self.output.ops.append(LookupMethod(
+            attribute_names = list(expression.obj.type.attributes.keys())
+            index = attribute_names.index(expression.attrname)
+            self.output.ops.append(LookupAttribute(
                 self._lineno(expression.location), expression.obj.type, index))
 
         elif isinstance(expression, cooked_ast.LookupModule):

@@ -66,11 +66,55 @@ class CompileManager:
         # {compilation.source_path: compilation}
         self.source_path_2_compilation = {}
 
+    # there are 2 kinds of up to datenesses to consider:
+    #   * has the source file been modified since the previous compilation?
+    #   * have the files that are imported been recompiled, or will they need
+    #     to be recompiled since the previous compilation?
+
+    def _compiled_is_up2date_with_source(self, compilation):
+        try:
+            compiled_mtime = os.path.getmtime(compilation.compiled_path)
+        except FileNotFoundError:
+            return False
+        return compiled_mtime >= os.path.getmtime(compilation.source_path)
+
+    def _compiled_is_up2date_with_imports(self, compilation,
+                                          import_compilations):
+        compilation_mtime = os.path.getmtime(compilation.compiled_path)
+        return all(
+            compilation_mtime >= os.path.getmtime(import_.compiled_path)
+            for import_ in import_compilations)
+
     def compile(self, source_path):
         if source_path in self.source_path_2_compilation:
+            compilation = self.source_path_2_compilation[source_path]
+            assert compilation.state == common.CompilationState.DONE
             return
 
         compilation = common.Compilation(source_path, self.compiled_dir)
+        if self._compiled_is_up2date_with_source(compilation):
+            # there is a chance that nothing needs to be compiled
+            # but can't be sure yet
+            imports, exports = bytecoder.read_imports_and_exports(compilation)
+
+            import_compilations = []
+            for imported_path in imports:
+                self.compile(imported_path)
+                import_compilations.append(
+                    self.source_path_2_compilation[imported_path])
+
+            # now we can check
+            if self._compiled_is_up2date_with_imports(compilation,
+                                                      import_compilations):
+                print("No need to recompile",
+                      os.path.relpath(source_path, '.'), file=sys.stderr)
+                compilation = common.Compilation(
+                    source_path, self.compiled_dir)
+                compilation.set_imports(import_compilations)
+                compilation.set_exports(exports)
+                self.source_path_2_compilation[source_path] = compilation
+                return
+
         self.source_path_2_compilation[source_path] = compilation
 
         generator = source2bytecode(compilation)

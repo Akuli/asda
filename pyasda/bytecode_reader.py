@@ -16,7 +16,7 @@ NEGATIVE_INT_CONSTANT = b'2'    # only used in bytecode files
 TRUE_CONSTANT = b'T'            # only used in bytecode files
 FALSE_CONSTANT = b'F'           # only used in bytecode files
 CONSTANT = b'C'                 # not used at all in bytecode files
-LOOKUP_METHOD = b'm'
+LOOKUP_ATTRIBUTE = b'.'
 LOOKUP_MODULE = b'M'    # also used in types
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
@@ -182,7 +182,7 @@ class _BytecodeReader:
                 args = (self.read_uint16(),)
             elif magic in {LOOKUP_VAR, SET_VAR}:
                 args = (self.read_uint8(), self.read_uint16())
-            elif magic == LOOKUP_METHOD:
+            elif magic == LOOKUP_ATTRIBUTE:
                 args = (self.read_type(), self.read_uint16())
             elif magic == LOOKUP_MODULE:
                 args = (self.read_path(),)

@@ -43,7 +43,7 @@ def test_generic_func_not_found(compiler):
 
 def test_missing_attribute(compiler):
     compiler.doesnt_cooked_parse(
-        '"hello".boobs()', "Str objects have no 'boobs' method", '.')
+        'let x = "hello".boobs', "Str objects have no 'boobs' attribute", '.')
 
 
 def test_void_function_wrong_call(compiler):
@@ -176,7 +176,8 @@ def test_joined_string_location_corner_case(compiler):
 
 def test_string_formatting_with_bad_type(compiler):
     compiler.doesnt_cooked_parse(
-        'print("{TRUE}")', "Bool objects have no 'to_string' method", 'TRUE')
+        'print("{TRUE}")', "Bool objects have no 'to_string' attribute",
+        'TRUE')
 
 
 def test_void_statement(monkeypatch, compiler):

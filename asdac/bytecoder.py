@@ -16,7 +16,7 @@ NON_NEGATIVE_INT_CONSTANT = b'1'
 NEGATIVE_INT_CONSTANT = b'2'
 TRUE_CONSTANT = b'T'
 FALSE_CONSTANT = b'F'
-LOOKUP_METHOD = b'm'
+LOOKUP_ATTRIBUTE = b'.'
 LOOKUP_MODULE = b'M'       # also used when bytecoding a type
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
@@ -215,8 +215,8 @@ class _BytecodeWriter:
             self.bytecode.add_uint16(self.jumpmarker2index[op.marker])
             return
 
-        if isinstance(op, opcoder.LookupMethod):
-            self.bytecode.add_byte(LOOKUP_METHOD)
+        if isinstance(op, opcoder.LookupAttribute):
+            self.bytecode.add_byte(LOOKUP_ATTRIBUTE)
             self.write_type(op.type)
             self.bytecode.add_uint16(op.indeks)
             return
@@ -322,10 +322,9 @@ def create_bytecode(compilation, opcode):
     # as ArgMarkers, so they don't need a varlist
     writer.run(opcode, [None])
 
-    writer.write_import_section([
-        import_compilation.source_path
-        for import_compilation in compilation.imports])
-    writer.write_export_section(compilation.exports)
+    writer.write_end_import_export_sections(
+        [import_compilation.source_path
+         for import_compilation in compilation.imports], compilation.exports)
     return output.byte_array
 
 
@@ -373,8 +372,6 @@ class _BytecodeReader:
     def read_string(self):
         length = self.read_uint32()
         utf8 = self._read(length)
-        if len(utf8) != length:
-            self.error("unexpected end of file when reading a string")
 
         try:
             return utf8.decode('utf-8')
@@ -385,12 +382,11 @@ class _BytecodeReader:
     def read_path(self):
         relative_path = self.read_string().replace('/', os.sep)
         relative_to = os.path.dirname(self.compilation.compiled_path)
-        return os.path.join(relative_to, relative_path)
+        return os.path.abspath(os.path.join(relative_to, relative_path))
 
     # TODO: module types?
     def read_type(self, *, name_hint='<unknown name>'):
         byte = self._read(1)
-        [byte_int] = byte
 
         if byte == TYPE_BUILTIN:
             index = self.read_uint8()
@@ -406,7 +402,10 @@ class _BytecodeReader:
             item_type = self.read_type()
             return objects.GeneratorType(item_type)
 
-        self.error("invalid type byte %#02x" % byte_int)
+        if byte == TYPE_VOID:
+            return None
+
+        self.error("invalid type byte %r" % byte)
 
     def check_asda_part(self):
         if self.file.read(4) != b'asda':
@@ -434,7 +433,7 @@ class _BytecodeReader:
         if self._read(1) != EXPORT_SECTION:
             self.error("the file doesn't seem to have a valid export section")
 
-        result = {}
+        result = collections.OrderedDict()
         how_many = self.read_uint32()
         for junk in range(how_many):
             name = self.read_string()
@@ -442,18 +441,13 @@ class _BytecodeReader:
             result[name] = tybe
         return result
 
-    def should_be_at_end(self):
-        if self._read(1) != b'':
-            self.error("the file seems to contain garbage at the end")
 
-
-def read_imports_and_exports(source_path, compiled_path):
-    with open(compiled_path, 'rb') as file:
-        reader = _BytecodeReader(source_path, compiled_path, file)
+def read_imports_and_exports(compilation):
+    with open(compilation.compiled_path, 'rb') as file:
+        reader = _BytecodeReader(compilation, file)
         reader.check_asda_part()
         reader.seek_to_import_section_beginning()
         imports = reader.read_second_import_section()
         exports = reader.read_export_section()
-        reader.should_be_at_end()
 
     return (imports, exports)
