@@ -1,5 +1,6 @@
 # pytest file that compiles and runs the examples
 import os
+import pathlib
 import re
 import shutil
 import subprocess
@@ -10,8 +11,7 @@ import pytest
 import asdac.__main__
 import pyasda.__main__
 
-examples_dir = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'examples')
+examples_dir = pathlib.Path(__file__).absolute().parent.parent / 'examples'
 
 
 @pytest.fixture
@@ -21,11 +21,11 @@ def compiler(tmp_path, monkeypatch, capsys):
     # this is even worse style :DD  MUHAHAA
     def compi1e(filename):
         monkeypatch.chdir(tmp_path)
-        for other_file in os.listdir(examples_dir):
-            if other_file.endswith('.asda'):
-                shutil.copy(os.path.join(examples_dir, other_file), '.')
+        for other_file in examples_dir.iterdir():
+            if other_file.suffix == '.asda':
+                shutil.copy(str(other_file), '.')
 
-        monkeypatch.setattr(sys, 'argv', ['asdac', filename])
+        monkeypatch.setattr(sys, 'argv', ['asdac', str(filename)])
         asdac.__main__.main()
 
         out, err = capsys.readouterr()
@@ -44,7 +44,7 @@ def compiler(tmp_path, monkeypatch, capsys):
 @pytest.fixture
 def runner(monkeypatch, capsys):
     def run(filename):
-        monkeypatch.setattr(sys, 'argv', ['pyasda', filename])
+        monkeypatch.setattr(sys, 'argv', ['pyasda', str(filename)])
         pyasda.__main__.main()
 
         out, err = capsys.readouterr()
@@ -59,19 +59,18 @@ def create_test_func(filename):
         compiled = compiler(filename + '.asda')
         output = runner(compiled)
 
-        output_path = os.path.join(examples_dir, 'output', filename + '.txt')
-        with open(output_path, 'r') as file:
+        output_path = examples_dir / 'output' / (filename + '.txt')
+        with output_path.open('r', encoding='utf-8') as file:
             assert output == file.read()
 
     # magic is fun
-    test_func.__name__ = test_func.__qualname__ = 'test_%s_example' % filename
+    test_func.__name__ = test_func.__qualname__ = 'test_%s_example' % path.stem
     globals()[test_func.__name__] = test_func
 
 
-for name, ext in map(os.path.splitext,
-                     os.listdir(os.path.join(examples_dir, 'output'))):
-    if ext == '.txt':
-        create_test_func(name)
+for path in (examples_dir / 'output').iterdir():
+    if path.suffix == '.txt':
+        create_test_func(path.stem)
 
 
 # can't use the runner that other tests use because running must be interrupted
@@ -79,7 +78,7 @@ def test_while_example(compiler):
     compiled = compiler('while.asda')
 
     env = dict(os.environ)
-    env['PYTHONPATH'] = os.path.dirname(examples_dir)
+    env['PYTHONPATH'] = str(examples_dir.parent)
     process = subprocess.Popen([sys.executable, '-m', 'pyasda', compiled],
                                stdout=subprocess.PIPE, env=env)
 
@@ -94,8 +93,9 @@ def test_while_example(compiler):
 
 
 def test_all_examples_tested():
-    for name, ext in map(os.path.splitext, os.listdir(examples_dir)):
-        if ext == '.asda' and ('test_%s_example' % name) not in globals():
+    for path in examples_dir.iterdir():
+        if (path.suffix == '.asda' and
+                ('test_%s_example' % path.stem) not in globals()):
             raise RuntimeError(
-                "test_%s_example() not found, maybe %s.asda is not tested?"
-                % (name, name))
+                "test_%s_example() not found, maybe %s is not tested?"
+                % (path.stem, path.name))

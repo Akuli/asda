@@ -2,6 +2,7 @@
 import io
 import itertools
 import os
+import pathlib
 import random
 import re
 import sys
@@ -12,17 +13,14 @@ import pytest
 import asdac.__main__
 
 
-here = os.path.dirname(os.path.abspath(__file__))
-
-
 @pytest.fixture
 def asdac_compile(monkeypatch, tmp_path):
-    paths = (os.path.join(str(tmp_path), str(i)) for i in itertools.count())
+    paths = (tmp_path / str(i) for i in itertools.count())
 
     def run(code, opts=(), exit_code=0):
         path = next(paths)
-        os.mkdir(path)
-        os.chdir(path)
+        path.mkdir()
+        os.chdir(str(path))
         with open('file.asda', 'w', encoding='utf-8',
                   newline=random.choice(['\n', '\r\n'])) as file:
             file.write(code)
@@ -110,8 +108,7 @@ def test_invalid_arg_errors(monkeypatch, capsys, tmp_path):
 
     assert run('-').endswith(": reading from stdin is not supported\n")
 
-    lol = os.path.join('asda-compiled', 'lol.asda')
-    with open(lol, 'w') as file:
-        pass
-    assert run(lol).endswith(
+    lol = pathlib.Path('asda-compiled', 'lol.asda')
+    lol.touch()
+    assert run(str(lol)).endswith(
         ": refusing to compile '%s' because it is in 'asda-compiled'\n" % lol)

@@ -1,6 +1,7 @@
 import collections
 import functools
 import os
+import pathlib
 
 from . import objects
 
@@ -131,9 +132,11 @@ class _BytecodeReader:
         assert False, magic
 
     def read_path(self):
-        relative_path = self.read_string().replace('/', os.sep)
-        relative_to = os.path.dirname(self.compiled_path)
-        return os.path.join(relative_to, relative_path)
+        relative_path = pathlib.Path(*self.read_string().split('/'))
+        result = self.compiled_path.parent / relative_path
+
+        # os.path.abspath deletes '..' parts from paths
+        return pathlib.Path(os.path.abspath(str(result)))
 
     def read_imports(self):
         if self.read_magic() != IMPORT_SECTION:

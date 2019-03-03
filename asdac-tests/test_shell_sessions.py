@@ -1,6 +1,7 @@
 # pytest file that runs the things in shell-sessions/
 import codecs
 import os
+import pathlib
 import re
 import shutil
 import sys
@@ -10,30 +11,23 @@ import pytest
 
 import asdac.__main__
 
-sessions_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            'shell-sessions')
+sessions_dir = pathlib.Path(__file__).absolute().parent / 'shell-sessions'
 
 
 @pytest.fixture
 def shell_session_environment(tmp_path):
     os.chdir(str(tmp_path))
-    for file in os.listdir(os.path.join(sessions_dir, 'files')):
-        shutil.copy(os.path.join(sessions_dir, 'files', file), '.')
+    for file in (sessions_dir / 'files').iterdir():
+        shutil.copy(str(file), '.')
     with open('bom.asda', 'wb') as file:
         file.write(codecs.BOM_UTF8 + b'print("Hello")\n')
     with open('bombom.asda', 'wb') as file:
         file.write(codecs.BOM_UTF8 + codecs.BOM_UTF8 + b'print("Hello")\n')
 
 
-def touch(path):
-    time.sleep(0.05)    # sometimes fails without this
-    os.utime(path, None)
-
-
-def create_test_func(filename):
+def create_test_func(path):
     def test_func(shell_session_environment, monkeypatch, capsys):
-        with open(os.path.join(sessions_dir, filename + '.txt'), 'r',
-                  encoding='utf-8') as file:
+        with path.open('r', encoding='utf-8') as file:
             session = file.read().replace(r'<\uFEFF>', '\uFEFF')
 
         for command, output in re.findall(r'^\$ (.*)\n([^\$]*)', session,
@@ -46,7 +40,9 @@ def create_test_func(filename):
             if program == '#':
                 actual_output = ''
             elif program == 'touch':
-                touch(*args)
+                time.sleep(0.05)    # sometimes fails without this
+                [path_string] = args
+                pathlib.Path(path_string).touch()
                 actual_output = ''
             elif program == 'asdac':
                 monkeypatch.setattr(sys, 'argv', ['asdac'] + args)
@@ -65,11 +61,10 @@ def create_test_func(filename):
             assert expected_output == actual_output
 
     # magic is fun
-    test_func.__name__ = test_func.__qualname__ = (
-        'test_%s_session' % filename)
+    test_func.__name__ = test_func.__qualname__ = 'test_%s_session' % path.stem
     globals()[test_func.__name__] = test_func
 
 
-for name, ext in map(os.path.splitext, os.listdir(sessions_dir)):
-    if ext == '.txt':
-        create_test_func(name)
+for path in sessions_dir.iterdir():
+    if path.suffix == '.txt':
+        create_test_func(path)

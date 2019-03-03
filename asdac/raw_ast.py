@@ -275,8 +275,7 @@ class AsdaParser(sly.Parser):
         location = self.create_location(parsed.index, len(parsed.STRING))
         path_parts = self.handle_string_literal(parsed.STRING, location, False)
         path = ''.join(string_ast.python_string for string_ast in path_parts)
-        return os.path.join(os.path.dirname(self.compilation.source_path),
-                            path.replace('/', os.sep))
+        return self.compilation.source_path.parent / path.replace('/', os.sep)
 
     @_('maybe_export LET ID "=" expression')    # noqa
     def oneline_statement(self, parsed):

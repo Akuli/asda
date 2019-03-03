@@ -3,7 +3,26 @@ import contextlib
 import enum
 import itertools
 import os
+import pathlib
 import sys
+
+
+# TODO: on windows, relpath doesn't work for things that are on a different
+#       drive
+def relpath(path, relative2='.'):
+    """os.path.relpath for pathlib. Returns a pathlib.Path."""
+    # needs str() because os.path doesn't like path objects on python 3.5
+    return pathlib.Path(os.path.relpath(str(path), str(relative2)))
+
+
+def path_string(path):
+    """Converts a pathlib.Path to a human-readable string."""
+    return str(relpath(path))
+
+
+def resolve_dotdots(path):
+    """Converts pathlib.Path('a/../b') to pathlib.Path('b')."""
+    return pathlib.Path(os.path.normpath(str(path)))
 
 
 class Messager:
@@ -70,7 +89,7 @@ class Compilation:
     """Represents a source file and its corresponding bytecode file."""
 
     def __init__(self, source_path, compiled_dir, messager):
-        self.messager = messager.with_prefix(os.path.relpath(source_path))
+        self.messager = messager.with_prefix(path_string(source_path))
 
         self.source_path = source_path
         self.compiled_path = self._get_bytecode_path(compiled_dir)
@@ -80,17 +99,15 @@ class Compilation:
         self.exports = None     # ordered dict like {name: type}
 
     def _get_bytecode_path(self, compiled_dir):
-        relative = os.path.relpath(self.source_path,
-                                   os.path.dirname(compiled_dir))
-        relative += 'c'     # lel.asda --> lel.asdac
+        relative = relpath(self.source_path, compiled_dir.parent)
+        relative_c = relative.with_name(relative.name + 'c')
 
         # avoid having weird things happening
         def handle_dotdot(string):
             return 'dotdot' if string == '..' else string
 
-        relative = os.sep.join(map(handle_dotdot, relative.split(os.sep)))
-
-        return os.path.join(compiled_dir, relative)
+        literal_dotdots = pathlib.Path(*map(handle_dotdot, relative_c.parts))
+        return compiled_dir / literal_dotdots
 
     def __repr__(self):
         return '<%s of %s>' % (type(self).__name__, self.source_path)
@@ -100,7 +117,7 @@ class Compilation:
         # python accepts both LF and CRLF by default, but the default encoding
         # is platform-dependent (not utf8 on windows, lol)
         # utf-8-sig is like utf-8 but it ignores the bom, if there is a bom
-        return open(self.source_path, 'r', encoding='utf-8-sig')
+        return self.source_path.open('r', encoding='utf-8-sig')
 
     def set_imports(self, import_compilations):
         assert self.state == CompilationState.NOTHING_DONE
@@ -170,7 +187,7 @@ class Location:
             endcolumn = len((before + value).rsplit('\n', 1)[-1])
 
         return '%s:%s,%s...%s,%s' % (
-            os.path.relpath(self.compilation.source_path),
+            path_string(self.compilation.source_path),
             startline, startcolumn, endline, endcolumn)
 
     def __eq__(self, other):

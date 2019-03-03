@@ -1,6 +1,6 @@
 import argparse
 import functools
-import os
+import pathlib
 import re
 import sys
 import textwrap
@@ -46,15 +46,15 @@ def source2bytecode(compilation: common.Compilation):
     compilation.messager(3, "Creating bytecode...")
     bytecode = bytecoder.create_bytecode(compilation, opcode)
 
-    compilation.messager(3, 'Writing bytecode to "%s"...' % os.path.relpath(
+    compilation.messager(3, 'Writing bytecode to "%s"...' % common.path_string(
         compilation.compiled_path))
     # if you change this, make sure that the last step before opening the
     # output file does NOT produce an iterator, so that if something fails, an
     # exception is likely raised before the output file is opened, and the
     # output file gets left untouched if it exists and no invalid output files
     # are created
-    os.makedirs(os.path.dirname(compilation.compiled_path), exist_ok=True)
-    with open(compilation.compiled_path, 'wb') as outfile:
+    compilation.compiled_path.parent.mkdir(parents=True, exist_ok=True)
+    with compilation.compiled_path.open('wb') as outfile:
         outfile.write(bytecode)
 
     compilation.set_done()
@@ -80,13 +80,13 @@ class CompileManager:
 
     def _compiled_is_up2date_with_source(self, compilation):
         try:
-            compiled_mtime = os.path.getmtime(compilation.compiled_path)
+            compiled_mtime = compilation.compiled_path.stat().st_mtime
         except FileNotFoundError:
             compilation.messager(3, (
                 "Compiled file not found. Need to recompile."))
             return False
 
-        if compiled_mtime < os.path.getmtime(compilation.source_path):
+        if compiled_mtime < compilation.source_path.stat().st_mtime:
             compilation.messager(3, (
                 "The source file is newer than the compiled file. "
                 "Need to recompile."))
@@ -98,25 +98,25 @@ class CompileManager:
 
     def _compiled_is_up2date_with_imports(self, compilation,
                                           import_compilations):
-        compilation_mtime = os.path.getmtime(compilation.compiled_path)
+        compilation_mtime = compilation.compiled_path.stat().st_mtime
         for import_ in import_compilations:
-            if compilation_mtime < os.path.getmtime(import_.compiled_path):
+            if compilation_mtime < import_.compiled_path.stat().st_mtime:
                 compilation.messager(3, (
                     '"%s" is older than "%s". Need to recompile.' % (
-                        os.path.relpath(compilation.compiled_path),
-                        os.path.relpath(import_.compiled_path))))
+                        common.path_string(compilation.compiled_path),
+                        common.path_string(import_.compiled_path))))
                 return False
 
         compilation.messager(3, (
             'No imported files have been recompiled after compiling "%s".' % (
-                os.path.relpath(compilation.compiled_path))))
+                common.path_string(compilation.compiled_path))))
         return True
 
     def _compile_imports(self, compilation, imported_paths):
         for path in imported_paths:
             with compilation.messager.indented(2, (
                     '"%s" is imported. ' "Making sure that it's compiled."
-                    % os.path.relpath(path))):
+                    % common.path_string(path))):
                 self.compile(path)
 
     def compile(self, source_path):
@@ -124,15 +124,15 @@ class CompileManager:
             compilation = self.source_path_2_compilation[source_path]
             assert compilation.state == common.CompilationState.DONE
             compilation.messager(
-                2, (('This has been compiled already (to "%s"). Not compiling '
-                     'again.') % os.path.relpath(compilation.compiled_path)))
+                2, ('This has been compiled already (to "%s"). Not compiling '
+                    'again.' % common.path_string(compilation.compiled_path)))
             return
 
         compilation = common.Compilation(source_path, self.compiled_dir,
                                          self.messager)
         with compilation.messager.indented(
                 2, ('Checking if this needs to be compiled to "%s"...'
-                    % os.path.relpath(compilation.compiled_path))):
+                    % common.path_string(compilation.compiled_path))):
 
             if self._compiled_is_up2date_with_source(compilation):
                 # there is a chance that nothing needs to be compiled
@@ -203,6 +203,10 @@ def make_red(string):
     return colorama.Fore.RED + string + colorama.Fore.RESET
 
 
+def path_from_user(string):
+    return common.resolve_dotdots(pathlib.Path(string).absolute())
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -238,17 +242,15 @@ def main():
 
     messager = common.Messager(args.verbosity)
 
-    compiled_dir = os.path.abspath(args.compiled_dir)
+    compiled_dir = path_from_user(args.compiled_dir)
+    args.infiles = list(map(path_from_user, args.infiles))
     for source_path in args.infiles:
-        # yes, this is the best way to check subpathness in python
-        nice_source_path = os.path.normcase(os.path.abspath(source_path))
-        nice_compiled_dir = os.path.normcase(compiled_dir)
-        if nice_source_path.startswith(nice_compiled_dir + os.sep):
+        if compiled_dir in source_path.parents:
             # I don't even want to think about the corner cases that allowing
             # this would create
             parser.error("refusing to compile '%s' because it is in '%s'"
-                         % (os.path.relpath(source_path),
-                            os.path.relpath(compiled_dir)))
+                         % (common.path_string(source_path),
+                            common.path_string(compiled_dir)))
 
     color_dict = {
         'always': True,
@@ -263,8 +265,8 @@ def main():
 
     compile_manager = CompileManager(compiled_dir, messager)
     try:
-        for file in args.infiles:
-            compile_manager.compile(os.path.abspath(file))
+        for path in args.infiles:
+            compile_manager.compile(path)
     except common.CompileError as e:
         report_compile_error(e, red_function)
         sys.exit(1)

@@ -1,6 +1,7 @@
 import collections
 import enum
 import os
+import pathlib
 
 import more_itertools
 
@@ -197,7 +198,9 @@ class Interpreter:
 
     # creates a module object, but doesn't run the module's code
     def get_module(self, path):
-        path = os.path.abspath(path)
+        # this uses os.path.abspath because it replaces 'a/../b' with 'b'
+        path = pathlib.Path(os.path.abspath(str(path)))
+
         if path in self.modules:
             return self.modules[path]
 
@@ -207,12 +210,12 @@ class Interpreter:
 
     # runs the module's code if that hasn't been done yet
     def import_path(self, path):
-        path = os.path.abspath(path)
         module = self.get_module(path)
         if module.type.loaded:
             return module
 
-        with open(path, 'rb') as file:
+        path = module.type.compiled_path   # no '..' parts, see get_module()
+        with path.open('rb') as file:
             opcode = bytecode_reader.read_bytecode(path, file, self.get_module)
 
         file_scope = _create_subscope(self.global_scope,

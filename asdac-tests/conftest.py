@@ -1,4 +1,5 @@
 import collections
+import pathlib
 import types
 
 import pytest
@@ -13,7 +14,8 @@ def compiler():
 
     def new_compilation():
         nonlocal compilation
-        compilation = common.Compilation('test file', '.', common.Messager(-1))
+        compilation = common.Compilation('test file', pathlib.Path('.'),
+                                         common.Messager(-1))
 
     def tokenize(code):
         new_compilation()

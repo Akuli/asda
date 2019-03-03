@@ -2,6 +2,7 @@ import collections
 import functools
 import io
 import os
+import pathlib
 
 from . import common, objects, opcoder
 
@@ -115,9 +116,9 @@ class _BytecodeWriter:
         return _BytecodeWriter(self.bytecode, self.compilation)
 
     def write_path(self, path):
-        relative2 = os.path.dirname(self.compilation.compiled_path)
-        relative_path = os.path.relpath(path, relative2)
-        self.bytecode.write_string(relative_path.replace(os.sep, '/'))
+        relative2 = self.compilation.compiled_path.parent
+        relative_path = common.relpath(path, relative2)
+        self.bytecode.write_string(str(relative_path).replace(os.sep, '/'))
 
     def write_type(self, tybe):
         if tybe in objects.BUILTIN_TYPES.values():
@@ -377,8 +378,9 @@ class _BytecodeReader:
 
     def read_path(self):
         relative_path = self.read_string().replace('/', os.sep)
-        relative_to = os.path.dirname(self.compilation.compiled_path)
-        return os.path.abspath(os.path.join(relative_to, relative_path))
+        relative_to = self.compilation.compiled_path.parent
+        assert relative_to.is_absolute()
+        return common.resolve_dotdots(relative_to / relative_path)
 
     # TODO: module types?
     def read_type(self, *, name_hint='<unknown name>'):
@@ -440,13 +442,13 @@ class _BytecodeReader:
 
 def read_imports_and_exports(compilation):
     with compilation.messager.indented(3, "Reading the compiled file..."):
-        with open(compilation.compiled_path, 'rb') as file:
+        with compilation.compiled_path.open('rb') as file:
             reader = _BytecodeReader(compilation, file)
             reader.check_asda_part()
             reader.seek_to_end_sections()
             imports = reader.read_second_import_section()
             exports = reader.read_export_section()
             compilation.messager(4, "Imported files: " + (
-                ', '.join(map(os.path.relpath, imports)) or '(none)'))
+                ', '.join(map(common.path_string, imports)) or '(none)'))
 
     return (imports, exports)
