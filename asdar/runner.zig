@@ -10,7 +10,7 @@ pub const Scope = struct {
     parent_scopes: []*Scope,
 
     fn initGlobal(allocator: *std.mem.Allocator) !Scope {
-        const locals = try std.mem.dupe(allocator, ?*Object, builtins.builtin_array[0..]);
+        const locals = try std.mem.dupe(allocator, ?*Object, builtins.object_array[0..]);
         errdefer allocator.free(locals);
         const scopes = try allocator.alloc(*Scope, 0);
         errdefer allocator.free(scopes);

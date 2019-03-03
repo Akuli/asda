@@ -27,6 +27,10 @@ fn mainInner(args: []const []u8) u8 {
                     std.debug.warn("{}: cannot read {}: Unknown op byte 0x{x}\n", program, filename, byte);
                     return 1;
                 },
+                bcreader.ReadResult.InvalidTypeByte => |byte| {
+                    std.debug.warn("{}: cannot read {}: Unknown type byte 0x{x}\n", program, filename, byte);
+                    return 1;
+                },
                 bcreader.ReadResult.ByteCode => |code| {
                     defer code.destroy();
 

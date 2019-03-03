@@ -1,7 +1,9 @@
 // bytecode reader
 
 const std = @import("std");
-const Object = @import("objtyp.zig").Object;
+const builtins = @import("builtins.zig");
+const objtyp = @import("objtyp.zig");
+const Object = objtyp.Object;
 const objects = @import("objects/index.zig");
 
 const StreamType = std.io.InStream(std.os.File.InStream.Error);
@@ -98,6 +100,12 @@ pub const Code = struct {
 pub const ReadResult = union(enum) {
     ByteCode: Code,
     InvalidOpByte: u8,
+    InvalidTypeByte: u8,
+};
+
+const ReadTypeResult = union(enum) {
+    Type: ?*objtyp.Type,
+    InvalidByte: u8,
 };
 
 const BytecodeReader = struct {
@@ -117,6 +125,20 @@ const BytecodeReader = struct {
 
         try self.in.readNoEof(result);
         return result;
+    }
+
+    fn readType(self: *BytecodeReader, firstByte: ?u8) !ReadTypeResult {
+        const magic = firstByte orelse try self.in.readByte();
+
+        switch(magic) {
+            TYPE_BUILTIN => {
+                const index = try self.in.readIntLittle(u8);
+                return ReadTypeResult{ .Type = builtins.type_array[index] };
+            },
+            else => {
+                return ReadTypeResult{ .InvalidByte = magic };
+            },
+        }
     }
 
     fn readBody(self: *BytecodeReader) !ReadResult {
@@ -175,6 +197,18 @@ const BytecodeReader = struct {
                     const nargs = try self.in.readIntLittle(u8);
                     break :blk Op.Data{ .CallFunction = Op.CallFunctionData{ .returning = ret, .nargs = nargs }};
                 },
+                CREATE_FUNCTION => blk: {
+                    const typ = switch(try self.readType(CREATE_FUNCTION)) {
+                        ReadTypeResult.InvalidByte => |byte| {
+                            return ReadResult{ .InvalidTypeByte = byte };
+                        },
+                        ReadTypeResult.Type => |typ| typ,
+                    };
+                    std.debug.warn("ASDFPOASFOKPK");
+                    //const yields = switch(try self.in.readByte()) {
+                    //}
+                    return ReadResult{ .InvalidOpByte = 1 };
+                },
                 else => {
                     return ReadResult{ .InvalidOpByte = opbyte };
                 },
@@ -210,7 +244,7 @@ pub fn readByteCode(allocator: *std.mem.Allocator, stream: *StreamType) !ReadRes
     const result = try reader.readBody();
 
     switch(result) {
-        ReadResult.InvalidOpByte => {},
+        ReadResult.InvalidOpByte, ReadResult.InvalidTypeByte => {},
         ReadResult.ByteCode => {
             if ((try stream.readByte()) != IMPORT_SECTION) {
                 return error.BytecodeEndsUnexpectedly;

@@ -25,9 +25,15 @@ var print_type = objects.function.FunctionType.initComptimeVoid([]const *objtyp.
 var print_value = objects.function.newComptime("print", &print_type, objects.function.Fn{ .Void = printFn });
 pub const print = &print_value;
 
-pub const builtin_array = []const *Object {
+pub const object_array = []const *Object {
     print,
     objects.boolean.TRUE,
     objects.boolean.FALSE,
     // TODO: add next[T]() here
+};
+pub const type_array = []const *objtyp.Type{
+    objects.string.typ,
+    objects.boolean.typ,     // FIXME: should be int, but there is no int yet :(
+    objects.boolean.typ,
+    objects.boolean.typ,     // FIXME: should be Object, but types don't have parent types and inheritance yet
 };
