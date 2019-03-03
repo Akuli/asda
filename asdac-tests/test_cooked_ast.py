@@ -207,3 +207,11 @@ def test_exporting_generic_func(compiler):
     compiler.doesnt_cooked_parse(
         'export func lol[T]() -> void:\n    void',
         "sorry, generic functions can't be exported yet :(", 'func')
+
+
+def test_import_export_funny_places(compiler):
+    compiler.cooked_parse(
+        'func lol() -> void:\n    import "lel.asda" as lel')
+    compiler.doesnt_cooked_parse(
+        'func lol() -> void:\n    export let wut = "woot"',
+        "export cannot be used in a function", 'let wut = "woot"')

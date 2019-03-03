@@ -76,10 +76,10 @@ class _Chef:
         self.parent_chef = parent_chef
         if parent_chef is None:
             self.level = 0
+            self.import_compilations = None
         else:
             self.level = parent_chef.level + 1
-
-        self.import_compilations = None    # None if can't import at this level
+            self.import_compilations = parent_chef.import_compilations
 
         # keys are strings, values are types
         self.local_export_vars = collections.OrderedDict()
@@ -303,7 +303,7 @@ class _Chef:
 
     def _create_local_var_or_export(self, location, varname, value, exporting):
         if exporting:
-            self._check_can_import_export(location)
+            self._check_can_export(location)
             self.local_export_vars[varname] = value.type
             return SetVar(location, None, varname, self.level, value)
 
@@ -474,14 +474,15 @@ class _Chef:
         body = self.cook_body(raw.body)
         return Loop(raw.location, None, init, cond, incr, body)
 
-    def _check_can_import_export(self, location):
-        if self.import_compilations is None:
+    def _check_can_export(self, location):
+        # 0 = global chef, 1 = file chef, 2 = function chef, etc
+        if self.level != 1:
+            assert self.level >= 2
             raise common.CompileError(
-                "import and export cannot be used inside functions", location)
+                "export cannot be used in a function", location)
 
     def cook_import(self, raw: raw_ast.Import):
         self._check_name_not_exist(raw.varname, 'variable', raw.location)
-        self._check_can_import_export(raw.location)
         module_type = objects.ModuleType(
             self.import_compilations[raw.source_path])
         self.local_import_vars[raw.varname] = module_type

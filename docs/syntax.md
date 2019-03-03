@@ -276,6 +276,26 @@ there are also statements that take up more than one line. Here a "body" means
   whether it is a local variable or some other variable, like a built-in
   variable).
 
+    If there is an `export` keyword in front of the `let`, the variable is
+    exported so that other asda files can import the exporting asda file and
+    use that variable. For example, if you have this in `a.asda`...
+
+    ```js
+    export let message = "lol"
+    ```
+
+    ...and this in `b.asda`...
+
+    ```js
+    import "a.asda" as a
+    print(a.message)
+    ```
+
+    ...then compiling `b.asda` will also compile `a.asda` automatically, and
+    running `b.asda` will print `lol`.
+
+    `export let` statements can't be in functions.
+
     Note that if you have some code like this...
 
     ```js
@@ -302,6 +322,24 @@ there are also statements that take up more than one line. Here a "body" means
     else:
         x = 456
     ```
+
+- **Import statements** allow you to use the exports of another asda file as
+  shown above. They can be anywhere in the code, even in functions. They are
+  like `import "filename" as varname`.
+
+  The `"filename"` can be any [string token] that does not contain unescaped
+  `{` or `}`, and it's treated as a name of an asda source file, relative to the
+  directory of the file that the `import` statement is in. Always use `/` as the
+  path separators with `import`; the `/` characters will be replaced with
+  whatever is appropriate for the operating system, such as `\` on Windows.
+
+  `import` creates a variable named `varname` just like `let`. The variable is
+  set to a module object. The module object has attributes whose names and
+  values are what was exported in the file that's being imported.
+
+  If the same is imported multiple times (possibly from different files), then
+  every `import` gives the same module object, and the file is executed only
+  once.
 
 - **Assignment statements** are like `varname = value` without a `let`, but
   otherwise similar to let statements. They change the value of a variable. The
@@ -417,7 +455,9 @@ there are also statements that take up more than one line. Here a "body" means
   `(` and `)` with zero or more comma-separated argument specifications between
   them, then `->` (it's an operator token), then a return [type] or the keyword
   `void`, and then a body. Each argument specification consists of a type and an
-  [identifier].
+  [identifier]. If there is an `export` keyword in front of `func`, the variable
+  that is created is also exported (see `let` documentation in
+  [single-line statements]).
 
     Between the function name and the `(`, there may be `[` and `]` with one or
     more [identifiers] between them. This creates a [generic] function, and the
@@ -441,6 +481,7 @@ There are two kinds of types:
 [comments]: #comments
 [expression]: #expression
 [statement]: #statements
+[single-line statements]: #single-line-statements
 [indentation]: #indentation
 [identifier]: #identifier-tokens
 [identifiers]: #identifier-tokens

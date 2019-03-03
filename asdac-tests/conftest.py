@@ -14,8 +14,8 @@ def compiler():
 
     def new_compilation():
         nonlocal compilation
-        compilation = common.Compilation('test file', pathlib.Path('.'),
-                                         common.Messager(-1))
+        compilation = common.Compilation(
+            pathlib.Path('test file'), pathlib.Path('.'), common.Messager(-1))
 
     def tokenize(code):
         new_compilation()
@@ -34,7 +34,19 @@ def compiler():
         return raw_statements
 
     def cooked_parse(code, want_exports=False):
-        cooked, exports = cooked_ast.cook(compilation, raw_parse(code), {})
+        new_compilation()
+        raw_statements, imports = raw_ast.parse(compilation, code)
+
+        import_compilations = {}
+        for path in imports:
+            import_compilations[path] = common.Compilation(
+                pathlib.Path(path), pathlib.Path('.'), compilation.messager)
+            import_compilations[path].set_imports([])
+            import_compilations[path].set_exports(collections.OrderedDict())
+        compilation.set_imports(list(import_compilations.values()))
+
+        cooked, exports = cooked_ast.cook(compilation, raw_statements,
+                                          import_compilations)
         assert isinstance(cooked, list)
 
         if want_exports:
@@ -45,7 +57,6 @@ def compiler():
 
     def opcode(code):
         cooked = cooked_parse(code)     # changes compilation
-        compilation.set_imports([])
         compilation.set_exports(collections.OrderedDict())
         return opcoder.create_opcode(compilation, cooked, code)
 
