@@ -1,0 +1,8 @@
+$ asdac bom.asda
+bom.asda: Compiling...
+
+$ asdac bombom.asda
+bombom.asda: Compiling...
+error in bombom.asda:1,0...1,1: unexpected character U+FEFF
+
+    <\uFEFF>print("Hello")

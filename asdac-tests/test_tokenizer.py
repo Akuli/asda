@@ -1,10 +1,5 @@
 import functools
 
-import pytest
-
-from asdac.common import Compilation, CompileError, Messager
-from asdac.tokenizer import tokenize as real_tokenize
-
 
 def tokens_equal(a, b, *, consider_index=True):
     if consider_index:

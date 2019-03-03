@@ -1,3 +1,5 @@
+$ # tests asdac's -q and -v flags
+
 $ touch lib.asda
 
 $ asdac -q main.asda

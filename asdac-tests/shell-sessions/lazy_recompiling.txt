@@ -1,0 +1,33 @@
+$ asdac main.asda
+main.asda: Compiling...
+lib.asda: Compiling...
+
+$ asdac main.asda
+Nothing was compiled because the source files haven't changed since the previous compilation.
+
+$ touch lib.asda
+
+$ asdac main.asda
+lib.asda: Compiling...
+main.asda: Compiling...
+
+$ touch main.asda
+
+$ asdac main.asda
+main.asda: Compiling...
+
+$ touch lib.asda
+
+$ touch main.asda
+
+$ asdac main.asda
+main.asda: Compiling...
+lib.asda: Compiling...
+
+$ touch main.asda
+
+$ touch lib.asda
+
+$ asdac main.asda
+main.asda: Compiling...
+lib.asda: Compiling...

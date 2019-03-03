@@ -5,7 +5,6 @@ here as well.
 """
 
 import collections
-import itertools
 
 from asdac import common
 

@@ -1,12 +1,10 @@
-import codecs
-import functools
+# see also test_shell_sessions.txt
 import io
 import itertools
 import os
 import random
 import re
 import sys
-import time
 
 import colorama
 import pytest
@@ -105,83 +103,3 @@ def test_cant_read_stdin(asdac_compile, monkeypatch, capsys):
     output, errors = capsys.readouterr()
     assert not output
     assert errors.endswith("reading from stdin is not supported\n")
-
-
-def test_bom(asdac_compile, capsys):
-    bom = codecs.BOM_UTF8.decode('utf-8')
-
-    asdac_compile('print("hello")', exit_code=0)
-    asdac_compile(bom + 'print("hello")', exit_code=0)
-    output, errors = capsys.readouterr()
-    assert not output
-    assert errors.count('\n') == 2
-
-    asdac_compile(bom + bom + 'print("hello")', exit_code=1)
-    output, errors = capsys.readouterr()
-    assert not output
-    assert re.fullmatch(
-        (r"(.*): Compiling\.\.\.\n"
-         r"error in \1:1,0...1,1: unexpected character U\+FEFF\n[\S\s]*"),
-        errors) is not None
-
-
-def touch(path):
-    time.sleep(0.05)    # sometimes fails without this
-    os.utime(path, None)
-
-
-@pytest.fixture
-def main_and_lib(tmp_path):
-    os.chdir(str(tmp_path))
-    with open('main.asda', 'w', encoding='utf-8') as file:
-        file.write('import "lib.asda" as lib\nprint(lib.message)')
-    with open('lib.asda', 'w', encoding='utf-8') as file:
-        file.write('export let message = "Hello"')
-
-
-# TODO: add an --always-recompile option and test it here
-def test_not_recompiling_when_not_needed(main_and_lib, asdac_compile_file):
-    run = functools.partial(asdac_compile_file, 'main.asda')
-    nothing_done = ("Nothing was compiled because the source files haven't "
-                    "changed since the previous compilation.\n")
-
-    assert run() == "main.asda: Compiling...\nlib.asda: Compiling...\n"
-    assert run() == nothing_done
-    assert run() == nothing_done
-
-    touch('main.asda')
-    assert run() == "main.asda: Compiling...\n"
-    assert run() == nothing_done
-
-    touch('lib.asda')
-    assert run() == "lib.asda: Compiling...\nmain.asda: Compiling...\n"
-    assert run() == nothing_done
-
-    touch('main.asda')
-    touch('lib.asda')
-    assert run() == "main.asda: Compiling...\nlib.asda: Compiling...\n"
-    assert run() == nothing_done
-
-
-# tests verbosities and messages
-def test_asdac_session_txt(main_and_lib, asdac_compile_file):
-    with open(os.path.join(here, 'asdac-session.txt'),
-              encoding='utf-8') as file:
-        session = file.read()
-
-    for command, output in re.findall(r'^\$ (.*)\n([^\$]*)', session,
-                                      flags=re.MULTILINE):
-        print(command, file=sys.__stderr__)
-        program, *args = command.split()
-        expected_output = output.rstrip()
-        if expected_output:
-            expected_output += '\n'
-
-        if program == 'touch':
-            touch(*args)
-            actual_output = ''
-        elif program == 'asdac':
-            actual_output = asdac_compile_file(*args)
-        else:
-            assert False, command
-        assert expected_output == actual_output, command

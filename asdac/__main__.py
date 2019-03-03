@@ -136,7 +136,8 @@ class CompileManager:
             if self._compiled_is_up2date_with_source(compilation):
                 # there is a chance that nothing needs to be compiled
                 # but can't be sure yet
-                imports, exports = bytecoder.read_imports_and_exports(compilation)
+                imports, exports = bytecoder.read_imports_and_exports(
+                    compilation)
                 self._compile_imports(compilation, imports)
                 import_compilations = [self.source_path_2_compilation[path]
                                        for path in imports]

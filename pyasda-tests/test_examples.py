@@ -31,7 +31,8 @@ def compiler(tmp_path, monkeypatch, capsys):
         out, err = capsys.readouterr()
         assert not out
 
-        assert all(line.endswith(': Compiling...') for line in err.splitlines())
+        assert all(line.endswith(': Compiling...')
+                   for line in err.splitlines())
         match = re.search(r'^(.*): Compiling\.\.\.\n', err)
         assert match is not None, repr(err)
         assert match.group(1) == filename

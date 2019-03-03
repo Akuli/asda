@@ -474,7 +474,7 @@ class AsdaParser(sly.Parser):
     def maybe_export(self, parsed):
         return True
 
-    @_('')
+    @_('')      # noqa
     def maybe_export(self, parsed):
         return False
 
