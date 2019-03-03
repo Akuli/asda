@@ -15,7 +15,8 @@ const NON_NEGATIVE_INT_CONSTANT: u8 = '1';
 const NEGATIVE_INT_CONSTANT: u8 = '2';
 const TRUE_CONSTANT: u8 = 'T';
 const FALSE_CONSTANT: u8 = 'F';
-const LOOKUP_METHOD: u8 = 'm';
+const LOOKUP_ATTRIBUTE: u8 = '.';
+const IMPORT_MODULE: u8 = 'M';
 const CALL_VOID_FUNCTION: u8 = '(';
 const CALL_RETURNING_FUNCTION: u8 = ')';
 const STR_JOIN: u8 = 'j';
@@ -27,6 +28,17 @@ const YIELD: u8 = 'Y';
 const NEGATION: u8 = '!';
 const JUMP_IF: u8 = 'J';
 const END_OF_BODY: u8 = 'E';
+const IMPORT_SECTION: u8 = 'i';
+
+const PLUS: u8 = '+';
+const MINUS: u8 = '-';
+const PREFIX_MINUS: u8 = '_';
+const TIMES: u8 = '*';
+const EQUAL: u8 = '=';
+
+const TYPE_BUILTIN: u8 = 'b';
+const TYPE_GENERATOR: u8 = 'G';
+const TYPE_VOID: u8 = 'v';
 
 
 pub const Op = struct {
@@ -200,9 +212,8 @@ pub fn readByteCode(allocator: *std.mem.Allocator, stream: *StreamType) !ReadRes
     switch(result) {
         ReadResult.InvalidOpByte => {},
         ReadResult.ByteCode => {
-            var tmp_buf = []u8{ 0 };
-            if (0 != try stream.read(tmp_buf[0..])) {
-                return error.BytecodeTrailingGarbage;
+            if ((try stream.readByte()) != IMPORT_SECTION) {
+                return error.BytecodeEndsUnexpectedly;
             }
         },
     }

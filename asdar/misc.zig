@@ -26,7 +26,7 @@ pub fn errorToString(err: anyerror) []const u8 {
         // errors that bcreader.zig uses
         error.BytecodeNotAnAsdaFile => "This does not look like an asda bytecode file",
         error.BytecodeRepeatedLineno => "Repeated line number information in bytecode",
-        error.BytecodeTrailingGarbage => "The bytecode file seems to have garbage at the end",
+        error.BytecodeEndsUnexpectedly => "The bytecode file ends unexpectedly",
 
         else => @errorName(err),
     };
