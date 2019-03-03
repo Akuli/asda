@@ -31,11 +31,11 @@ def compiler(tmp_path, monkeypatch, capsys):
         out, err = capsys.readouterr()
         assert not out
 
-        match = re.search(r'^Compiling: (.*) --> (.*)\n', err)
-        assert all(line.startswith('Compiling: ') for line in err.splitlines())
+        assert all(line.endswith(': Compiling...') for line in err.splitlines())
+        match = re.search(r'^(.*): Compiling\.\.\.\n', err)
         assert match is not None, repr(err)
         assert match.group(1) == filename
-        return match.group(2)
+        return 'asda-compiled' + os.sep + match.group(1) + 'c'
 
     return compi1e
 

@@ -1,4 +1,5 @@
 import argparse
+import functools
 import os
 import re
 import sys
@@ -9,14 +10,7 @@ import colorama
 from . import bytecoder, common, cooked_ast, opcoder, raw_ast
 
 
-# functools.partial(print, file=sys.stderr) doesn't work because tests
-# change sys.stderr
-def eprint(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
-
-
 # TODO: error handling for bytecoder.RecompileFixableError
-# TODO: quiet or verbose arguments
 def source2bytecode(compilation: common.Compilation):
     """Compiles a file.
 
@@ -29,23 +23,31 @@ def source2bytecode(compilation: common.Compilation):
         from step 2 and the values are Compilation objects.
     5.  Finally, you're done with using this function :D
     """
-    eprint("Compiling: %s --> %s" % (
-        os.path.relpath(compilation.source_path, '.'),
-        os.path.relpath(compilation.compiled_path, '.')))
+    compilation.messager(0, "Compiling...")
 
+    compilation.messager(3, "Reading the source file...")
     with compilation.open_source_file() as file:
         source = file.read()
 
+    compilation.messager(3, "Parsing...")
     raw, imports = raw_ast.parse(compilation, source)
     import_compilation_dict = yield imports
     compilation.set_imports(list(import_compilation_dict.values()))
+
+    # TODO: better message for cooking?
+    compilation.messager(3, "Processing the parsed AST...")
     cooked, exports = cooked_ast.cook(compilation, raw,
                                       import_compilation_dict)
     compilation.set_exports(exports)
 
+    compilation.messager(3, "Creating opcode...")
     opcode = opcoder.create_opcode(compilation, cooked, source)
+
+    compilation.messager(3, "Creating bytecode...")
     bytecode = bytecoder.create_bytecode(compilation, opcode)
 
+    compilation.messager(3, 'Writing bytecode to "%s"...' % os.path.relpath(
+        compilation.compiled_path))
     # if you change this, make sure that the last step before opening the
     # output file does NOT produce an iterator, so that if something fails, an
     # exception is likely raised before the output file is opened, and the
@@ -60,8 +62,12 @@ def source2bytecode(compilation: common.Compilation):
 
 class CompileManager:
 
-    def __init__(self, compiled_dir):
+    def __init__(self, compiled_dir, messager):
+        # remains False forever if all compiled files are up to date
+        self.something_was_compiled = False
+
         self.compiled_dir = compiled_dir
+        self.messager = messager
 
         # {compilation.source_path: compilation}
         self.source_path_2_compilation = {}
@@ -75,58 +81,93 @@ class CompileManager:
         try:
             compiled_mtime = os.path.getmtime(compilation.compiled_path)
         except FileNotFoundError:
+            compilation.messager(3, (
+                "Compiled file not found. Need to recompile."))
             return False
-        return compiled_mtime >= os.path.getmtime(compilation.source_path)
+
+        if compiled_mtime < os.path.getmtime(compilation.source_path):
+            compilation.messager(3, (
+                "The source file is newer than the compiled file. "
+                "Need to recompile."))
+            return False
+
+        compilation.messager(3, (
+            "The compiled file is newer than the source file."))
+        return True
 
     def _compiled_is_up2date_with_imports(self, compilation,
                                           import_compilations):
         compilation_mtime = os.path.getmtime(compilation.compiled_path)
-        return all(
-            compilation_mtime >= os.path.getmtime(import_.compiled_path)
-            for import_ in import_compilations)
+        for import_ in import_compilations:
+            if compilation_mtime < os.path.getmtime(import_.compiled_path):
+                compilation.messager(3, (
+                    '"%s" is older than "%s". Need to recompile.' % (
+                        os.path.relpath(compilation.compiled_path),
+                        os.path.relpath(import_.compiled_path))))
+                return False
+
+        compilation.messager(3, (
+            'No imported files have been recompiled after compiling "%s".' % (
+                os.path.relpath(compilation.compiled_path))))
+        return True
+
+    def _compile_imports(self, compilation, imported_paths):
+        for path in imported_paths:
+            with compilation.messager.indented(2, (
+                    '"%s" is imported. ' "Making sure that it's compiled."
+                    % os.path.relpath(path))):
+                self.compile(path)
 
     def compile(self, source_path):
         if source_path in self.source_path_2_compilation:
             compilation = self.source_path_2_compilation[source_path]
             assert compilation.state == common.CompilationState.DONE
+            compilation.messager(
+                2, (('This has been compiled already (to "%s"). Not compiling '
+                     'again.') % os.path.relpath(compilation.compiled_path)))
             return
 
-        compilation = common.Compilation(source_path, self.compiled_dir)
-        if self._compiled_is_up2date_with_source(compilation):
-            # there is a chance that nothing needs to be compiled
-            # but can't be sure yet
-            imports, exports = bytecoder.read_imports_and_exports(compilation)
+        compilation = common.Compilation(source_path, self.compiled_dir,
+                                         self.messager)
+        with compilation.messager.indented(
+                2, ('Checking if this needs to be compiled to "%s"...'
+                    % os.path.relpath(compilation.compiled_path))):
 
-            import_compilations = []
-            for imported_path in imports:
-                self.compile(imported_path)
-                import_compilations.append(
-                    self.source_path_2_compilation[imported_path])
+            if self._compiled_is_up2date_with_source(compilation):
+                # there is a chance that nothing needs to be compiled
+                # but can't be sure yet
+                imports, exports = bytecoder.read_imports_and_exports(compilation)
+                self._compile_imports(compilation, imports)
+                import_compilations = [self.source_path_2_compilation[path]
+                                       for path in imports]
 
-            # now we can check
-            if self._compiled_is_up2date_with_imports(compilation,
-                                                      import_compilations):
-                print("No need to recompile",
-                      os.path.relpath(source_path, '.'), file=sys.stderr)
-                compilation = common.Compilation(
-                    source_path, self.compiled_dir)
-                compilation.set_imports(import_compilations)
-                compilation.set_exports(exports)
-                self.source_path_2_compilation[source_path] = compilation
-                return
+                # now we can check
+                if self._compiled_is_up2date_with_imports(compilation,
+                                                          import_compilations):
+                    # TODO: is creating the new Compilation object really
+                    #       needed?
+                    compilation = common.Compilation(
+                        source_path, self.compiled_dir, self.messager)
+                    compilation.messager(1, "No need to recompile.")
+                    compilation.set_imports(import_compilations)
+                    compilation.set_exports(exports)
+                    self.source_path_2_compilation[source_path] = compilation
+                    return
 
         self.source_path_2_compilation[source_path] = compilation
 
         generator = source2bytecode(compilation)
         depends_on = next(generator)
-        for imported_path in depends_on:
-            self.compile(imported_path)
+        self._compile_imports(compilation, depends_on)
 
         generator.send({path: self.source_path_2_compilation[path]
                         for path in depends_on})
+        self.something_was_compiled = True
 
 
 def report_compile_error(error, red_function):
+    eprint = functools.partial(print, file=sys.stderr)
+
     if error.location is None:
         eprint("error: %s" % error.message)
         return
@@ -177,16 +218,26 @@ def main():
         help=("always compile all files, even if they have already been "
               "compiled and the compiled files are newer than the source "
               "files"))
-#    parser.add_argument(
-#        '-q', '--quiet', action='store_true',
-#        help="display less output")
     parser.add_argument(
         '--color', choices=['auto', 'always', 'never'], default='auto',
         help="should error messages be displayed with colors?")
+
+    verbosity_group = parser.add_mutually_exclusive_group()
+    verbosity_group.add_argument(
+        '-q', '--quiet', dest='verbosity', action='store_const',
+        const=-1, default=0,
+        help="print less messages about what is being done")
+    verbosity_group.add_argument(
+        '-v', '--verbose', dest='verbosity', action='count',
+        help=("print more messages, can be given many times for even more "
+              "printing"))
+
     args = parser.parse_args()
 
     if '-' in args.infiles:
         parser.error("reading from stdin is not supported")
+
+    messager = common.Messager(args.verbosity)
 
     compiled_dir = os.path.abspath(args.compiled_dir)
     for source_path in args.infiles:
@@ -210,7 +261,7 @@ def main():
     else:
         red_function = lambda string: string    # noqa
 
-    compile_manager = CompileManager(compiled_dir)
+    compile_manager = CompileManager(compiled_dir, messager)
     try:
         for file in args.infiles:
             compile_manager.compile(os.path.abspath(file))
@@ -220,6 +271,10 @@ def main():
 
     for compilation in compile_manager.source_path_2_compilation.values():
         assert compilation.state == common.CompilationState.DONE
+
+    if not compile_manager.something_was_compiled:
+        messager(0, ("Nothing was compiled because the source files haven't "
+                     "changed since the previous compilation."))
 
 
 if __name__ == '__main__':

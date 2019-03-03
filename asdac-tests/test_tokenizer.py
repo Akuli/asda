@@ -2,7 +2,7 @@ import functools
 
 import pytest
 
-from asdac.common import Compilation, CompileError
+from asdac.common import Compilation, CompileError, Messager
 from asdac.tokenizer import tokenize as real_tokenize
 
 
@@ -19,22 +19,6 @@ class Token:
         self.type, self.value, self.index = args
 
     __eq__ = tokens_equal
-
-
-def tokenize(code):
-    return list(real_tokenize(Compilation('test file', '.'), code))
-
-
-def doesnt_tokenize(code, message, bad_code):
-    if bad_code is None:
-        bad_code = code
-
-    with pytest.raises(CompileError) as error:
-        tokenize(code)
-
-    assert error.value.message == message
-    assert error.value.location.offset == code.rindex(bad_code)
-    assert error.value.location.length == len(bad_code)
 
 
 def test_automatic_trailing_newline(compiler):
@@ -122,7 +106,7 @@ def test_unknown_character(compiler):
 
 
 def test_whitespace_ignoring(monkeypatch, compiler):
-    Token = type(tokenize('a')[0])
+    Token = type(compiler.tokenize('a')[0])
     monkeypatch.setattr(Token, '__eq__', functools.partialmethod(
         tokens_equal, consider_index=False))
 

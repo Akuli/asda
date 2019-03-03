@@ -1,7 +1,62 @@
 import collections
+import contextlib
 import enum
 import itertools
 import os
+import sys
+
+
+class Messager:
+    """Prints fancy messages to stderr.
+
+    Unlike plain prints, this handles:
+        * --verbose and --quiet arguments
+        * prefixing every line with some string when wanted
+        * indenting related messages so that it's easier to read them
+
+    The "verbosity" is -1 if --quiet was used, and the number of times that
+    --verbose was given otherwise (so usually it's zero).
+    """
+
+    def __init__(self, verbosity):
+        self.verbosity = verbosity
+        self.parent_messager = None
+        self.prefix = ''
+
+    # because magic is fun
+    def __call__(self, min_verbosity, string):
+        message = self.prefix + string
+        if self.parent_messager is None:
+            if self.verbosity >= min_verbosity:
+                print(message, file=sys.stderr)
+                return True
+            return False
+
+        return self.parent_messager(min_verbosity, message)
+
+    @contextlib.contextmanager
+    def indented(self, min_verbosity, string):
+        if not self(min_verbosity, string):
+            yield
+            return
+
+        parentmost = self
+        while parentmost.parent_messager is not None:
+            parentmost = parentmost.parent_messager
+
+        spaces = ' ' * 2
+        parentmost.prefix = spaces + parentmost.prefix
+        try:
+            yield
+        finally:
+            assert parentmost.prefix.startswith(spaces)
+            parentmost.prefix = parentmost.prefix[len(spaces):]
+
+    def with_prefix(self, prefix):
+        result = Messager(self.verbosity)
+        result.parent_messager = self
+        result.prefix = prefix + ': '
+        return result
 
 
 class CompilationState(enum.Enum):
@@ -14,7 +69,9 @@ class CompilationState(enum.Enum):
 class Compilation:
     """Represents a source file and its corresponding bytecode file."""
 
-    def __init__(self, source_path, compiled_dir):
+    def __init__(self, source_path, compiled_dir, messager):
+        self.messager = messager.with_prefix(os.path.relpath(source_path))
+
         self.source_path = source_path
         self.compiled_path = self._get_bytecode_path(compiled_dir)
 
@@ -54,7 +111,7 @@ class Compilation:
     def set_exports(self, exports):
         assert self.state == CompilationState.IMPORTS_KNOWN
         assert isinstance(exports, collections.OrderedDict)
-        self.state = CompilationState.DONE
+        self.state = CompilationState.DONE      # FIXME
         self.exports = exports
 
     def set_done(self):
@@ -113,7 +170,7 @@ class Location:
             endcolumn = len((before + value).rsplit('\n', 1)[-1])
 
         return '%s:%s,%s...%s,%s' % (
-            self.compilation.source_path,
+            os.path.relpath(self.compilation.source_path),
             startline, startcolumn, endline, endcolumn)
 
     def __eq__(self, other):

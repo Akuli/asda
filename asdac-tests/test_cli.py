@@ -14,6 +14,9 @@ import pytest
 import asdac.__main__
 
 
+here = os.path.dirname(os.path.abspath(__file__))
+
+
 @pytest.fixture
 def asdac_compile(monkeypatch, tmp_path):
     paths = (os.path.join(str(tmp_path), str(i)) for i in itertools.count())
@@ -39,16 +42,12 @@ def asdac_compile(monkeypatch, tmp_path):
 
 @pytest.fixture
 def asdac_compile_file(monkeypatch, capsys):
-    def run(file):
-        monkeypatch.setattr(sys, 'argv', ['asdac', file])
+    def run(file, *extra_options):
+        monkeypatch.setattr(sys, 'argv', ['asdac', file] + list(extra_options))
         asdac.__main__.main()
         output, errors = capsys.readouterr()
         assert not output
-
-        # i don't care about the order, but there must be no duplicates
-        lines = errors.replace(os.sep, '/').splitlines()
-        assert len(set(lines)) == len(lines), lines
-        return set(lines)
+        return errors.replace(os.sep, '/')
 
     return run
 
@@ -73,11 +72,10 @@ def test_error_simple(asdac_compile, monkeypatch):
     assert colorama.Fore.RED in sys.stderr.getvalue()
 
     match = re.fullmatch((
-        r'Compiling: file\.asda --> asda-compiled%sfile\.asdac\n'
-        r'error in .*:1,10...1,13: variable not found: lol\n'
+        r'file\.asda: Compiling\.\.\.\n'
+        r'error in file\.asda:1,10...1,13: variable not found: lol\n'
         r'\n'
-        r'    (.*)\n' % re.escape(os.sep)
-    ), sys.stderr.getvalue())
+        r'    (.*)\n'), sys.stderr.getvalue())
     assert match is not None, sys.stderr.getvalue()
     assert match.group(1) == 'let asd = ' + red('lol')
 
@@ -122,8 +120,8 @@ def test_bom(asdac_compile, capsys):
     output, errors = capsys.readouterr()
     assert not output
     assert re.fullmatch(
-        (r"Compiling: .* --> .*\n"
-         r"error in .*: unexpected character U\+FEFF\n[\S\s]*"),
+        (r"(.*): Compiling\.\.\.\n"
+         r"error in \1:1,0...1,1: unexpected character U\+FEFF\n[\S\s]*"),
         errors) is not None
 
 
@@ -132,38 +130,58 @@ def touch(path):
     os.utime(path, None)
 
 
-# TODO: add an --always-recompile option and test it here
-def test_not_recompiling_when_not_needed(tmp_path, asdac_compile_file):
+@pytest.fixture
+def main_and_lib(tmp_path):
     os.chdir(str(tmp_path))
     with open('main.asda', 'w', encoding='utf-8') as file:
         file.write('import "lib.asda" as lib\nprint(lib.message)')
     with open('lib.asda', 'w', encoding='utf-8') as file:
         file.write('export let message = "Hello"')
 
+
+# TODO: add an --always-recompile option and test it here
+def test_not_recompiling_when_not_needed(main_and_lib, asdac_compile_file):
     run = functools.partial(asdac_compile_file, 'main.asda')
+    nothing_done = ("Nothing was compiled because the source files haven't "
+                    "changed since the previous compilation.\n")
 
-    assert run() == {"Compiling: main.asda --> asda-compiled/main.asdac",
-                     "Compiling: lib.asda --> asda-compiled/lib.asdac"}
-    assert run() == {"No need to recompile main.asda",
-                     "No need to recompile lib.asda"}
-    assert run() == {"No need to recompile main.asda",
-                     "No need to recompile lib.asda"}
+    assert run() == "main.asda: Compiling...\nlib.asda: Compiling...\n"
+    assert run() == nothing_done
+    assert run() == nothing_done
 
     touch('main.asda')
-    assert run() == {"Compiling: main.asda --> asda-compiled/main.asdac",
-                     "No need to recompile lib.asda"}
-    assert run() == {"No need to recompile main.asda",
-                     "No need to recompile lib.asda"}
+    assert run() == "main.asda: Compiling...\n"
+    assert run() == nothing_done
 
     touch('lib.asda')
-    assert run() == {"Compiling: main.asda --> asda-compiled/main.asdac",
-                     "Compiling: lib.asda --> asda-compiled/lib.asdac"}
-    assert run() == {"No need to recompile main.asda",
-                     "No need to recompile lib.asda"}
+    assert run() == "lib.asda: Compiling...\nmain.asda: Compiling...\n"
+    assert run() == nothing_done
 
     touch('main.asda')
     touch('lib.asda')
-    assert run() == {"Compiling: main.asda --> asda-compiled/main.asdac",
-                     "Compiling: lib.asda --> asda-compiled/lib.asdac"}
-    assert run() == {"No need to recompile main.asda",
-                     "No need to recompile lib.asda"}
+    assert run() == "main.asda: Compiling...\nlib.asda: Compiling...\n"
+    assert run() == nothing_done
+
+
+# tests verbosities and messages
+def test_asdac_session_txt(main_and_lib, asdac_compile_file):
+    with open(os.path.join(here, 'asdac-session.txt'),
+              encoding='utf-8') as file:
+        session = file.read()
+
+    for command, output in re.findall(r'^\$ (.*)\n([^\$]*)', session,
+                                      flags=re.MULTILINE):
+        print(command, file=sys.__stderr__)
+        program, *args = command.split()
+        expected_output = output.rstrip()
+        if expected_output:
+            expected_output += '\n'
+
+        if program == 'touch':
+            touch(*args)
+            actual_output = ''
+        elif program == 'asdac':
+            actual_output = asdac_compile_file(*args)
+        else:
+            assert False, command
+        assert expected_output == actual_output, command

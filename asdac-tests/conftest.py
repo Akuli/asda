@@ -13,7 +13,7 @@ def compiler():
 
     def new_compilation():
         nonlocal compilation
-        compilation = common.Compilation('test file', '.')
+        compilation = common.Compilation('test file', '.', common.Messager(-1))
 
     def tokenize(code):
         new_compilation()

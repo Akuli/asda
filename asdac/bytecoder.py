@@ -439,11 +439,14 @@ class _BytecodeReader:
 
 
 def read_imports_and_exports(compilation):
-    with open(compilation.compiled_path, 'rb') as file:
-        reader = _BytecodeReader(compilation, file)
-        reader.check_asda_part()
-        reader.seek_to_end_sections()
-        imports = reader.read_second_import_section()
-        exports = reader.read_export_section()
+    with compilation.messager.indented(3, "Reading the compiled file..."):
+        with open(compilation.compiled_path, 'rb') as file:
+            reader = _BytecodeReader(compilation, file)
+            reader.check_asda_part()
+            reader.seek_to_end_sections()
+            imports = reader.read_second_import_section()
+            exports = reader.read_export_section()
+            compilation.messager(4, "Imported files: " + (
+                ', '.join(map(os.path.relpath, imports)) or '(none)'))
 
     return (imports, exports)
