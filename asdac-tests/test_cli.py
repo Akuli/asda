@@ -94,12 +94,24 @@ def test_error_empty_location(asdac_compile, monkeypatch):
         '\n    print("{%s}")\n' % red(MARKER))
 
 
-def test_cant_read_stdin(asdac_compile, monkeypatch, capsys):
-    monkeypatch.setattr(sys, 'argv', ['asdac', '-'])
-    with pytest.raises(SystemExit) as error:
-        asdac.__main__.main()
+def test_invalid_arg_errors(monkeypatch, capsys, tmp_path):
+    os.chdir(str(tmp_path))
+    os.mkdir('asda-compiled')
 
-    assert error.value.code == 2
-    output, errors = capsys.readouterr()
-    assert not output
-    assert errors.endswith("reading from stdin is not supported\n")
+    def run(*args):
+        monkeypatch.setattr(sys, 'argv', ['asdac'] + list(args))
+        with pytest.raises(SystemExit) as error:
+            asdac.__main__.main()
+
+        assert error.value.code == 2
+        output, errors = capsys.readouterr()
+        assert not output
+        return errors
+
+    assert run('-').endswith(": reading from stdin is not supported\n")
+
+    lol = os.path.join('asda-compiled', 'lol.asda')
+    with open(lol, 'w') as file:
+        pass
+    assert run(lol).endswith(
+        ": refusing to compile '%s' because it is in 'asda-compiled'\n" % lol)

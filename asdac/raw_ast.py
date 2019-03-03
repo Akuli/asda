@@ -122,8 +122,11 @@ class AsdaParser(sly.Parser):
                         "you must put %s between { and }" % wanted,
                         part_location)
 
-                # FIXME: this shouldn't be an assert!
-                assert isinstance(expression, tuple(_expression_classes))
+                if not isinstance(expression, tuple(_expression_classes)):
+                    raise common.CompileError(
+                        "expected an expression, got a statement",
+                        expression.location)
+
                 parts.append(_to_string(expression))
 
             else:   # pragma: no cover

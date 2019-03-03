@@ -111,7 +111,7 @@ class Compilation:
     def set_exports(self, exports):
         assert self.state == CompilationState.IMPORTS_KNOWN
         assert isinstance(exports, collections.OrderedDict)
-        self.state = CompilationState.DONE      # FIXME
+        self.state = CompilationState.EXPORTS_KNOWN
         self.exports = exports
 
     def set_done(self):

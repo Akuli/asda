@@ -77,6 +77,12 @@ def test_empty_braces_in_string(compiler):
     assert error.value.location == location(len('print("{'), 0)
 
 
+def test_statement_in_braces(compiler):
+    compiler.doesnt_raw_parse(
+        'print("{let x = 1}")', "expected an expression, got a statement",
+        'let x = 1')
+
+
 # corner cases are handled in asdac.string_parser
 def test_joined_strings(compiler):
     [string] = compiler.raw_parse('print("a {b}")')[0].args

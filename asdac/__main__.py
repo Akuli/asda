@@ -57,6 +57,7 @@ def source2bytecode(compilation: common.Compilation):
     with open(compilation.compiled_path, 'wb') as outfile:
         outfile.write(bytecode)
 
+    compilation.set_done()
     yield exports
 
 
@@ -145,13 +146,10 @@ class CompileManager:
                 # now we can check
                 if self._compiled_is_up2date_with_imports(compilation,
                                                           import_compilations):
-                    # TODO: is creating the new Compilation object really
-                    #       needed?
-                    compilation = common.Compilation(
-                        source_path, self.compiled_dir, self.messager)
                     compilation.messager(1, "No need to recompile.")
                     compilation.set_imports(import_compilations)
                     compilation.set_exports(exports)
+                    compilation.set_done()
                     self.source_path_2_compilation[source_path] = compilation
                     return
 
@@ -249,7 +247,8 @@ def main():
             # I don't even want to think about the corner cases that allowing
             # this would create
             parser.error("refusing to compile '%s' because it is in '%s'"
-                         % (source_path, compiled_dir))
+                         % (os.path.relpath(source_path),
+                            os.path.relpath(compiled_dir)))
 
     color_dict = {
         'always': True,
@@ -271,12 +270,12 @@ def main():
         sys.exit(1)
 
     for compilation in compile_manager.source_path_2_compilation.values():
-        assert compilation.state == common.CompilationState.DONE
+        assert compilation.state == common.CompilationState.DONE, compilation
 
     if not compile_manager.something_was_compiled:
         messager(0, ("Nothing was compiled because the source files haven't "
                      "changed since the previous compilation."))
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':      # pragma: no cover
     main()
