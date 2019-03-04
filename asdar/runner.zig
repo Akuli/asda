@@ -1,4 +1,5 @@
 const std = @import("std");
+const Interp = @import("interp.zig").Interp;
 const Object = @import("objtyp.zig").Object;
 const bcreader = @import("bcreader.zig");
 const builtins = @import("builtins.zig");
@@ -82,14 +83,15 @@ const RunResult = union(enum) {
 };
 
 const Runner = struct {
+    interp: *Interp,
     scope: *Scope,
     stack: std.ArrayList(*Object),    // TODO: give this a size hint calculated by the compiler
     ops: []bcreader.Op,
 
-    fn init(allocator: *std.mem.Allocator, ops: []bcreader.Op, scope: *Scope) Runner {
+    fn init(interp: *Interp, allocator: *std.mem.Allocator, ops: []bcreader.Op, scope: *Scope) Runner {
         const stack = std.ArrayList(*Object).init(allocator);
         errdefer stack.deinit();
-        return Runner{ .scope = scope, .stack = stack, .ops = ops };
+        return Runner{ .scope = scope, .stack = stack, .ops = ops, .interp = interp };
     }
 
     // yes this is needed, otherwise doesn't compile
@@ -137,7 +139,7 @@ const Runner = struct {
                     if (calldata.returning) {
                         std.debug.panic("not implemented yet :(");
                     } else {
-                        try objects.function.callVoid(func, args);
+                        try objects.function.callVoid(self.interp, func, args);
                     }
                 },
                 bcreader.Op.Data.Constant => |obj| {
@@ -179,12 +181,16 @@ const Runner = struct {
 
 
 pub fn runFile(allocator: *std.mem.Allocator, code: bcreader.Code) !void {
+    var interp: Interp = undefined;
+    interp.init();
+    defer interp.deinit();
+
     var global_scope = try Scope.initGlobal(allocator);
     defer global_scope.destroy();
     var file_scope = try global_scope.initSub(code.nlocalvars);
     defer file_scope.destroy();
 
-    var runner = Runner.init(allocator, code.ops, &file_scope);
+    var runner = Runner.init(&interp, allocator, code.ops, &file_scope);
     defer runner.destroy();
 
     const result = try runner.run();

@@ -1,15 +1,15 @@
 const std = @import("std");
+const Interp = @import("interp.zig").Interp;
 const objtyp = @import("objtyp.zig");
 const Object = objtyp.Object;
 const objects = @import("objects/index.zig");
 
-fn printFn(data: *objtyp.ObjectData, args: []const *Object) anyerror!void {
-    // TODO: don't hardcode std.heap.c_allocator
-    // TODO: is calling getStdOut every time bad?
+fn printFn(interp: *Interp, data: *objtyp.ObjectData, args: []const *Object) anyerror!void {
     std.debug.assert(args.len == 1);
-    const utf8 = try objects.string.toUtf8(std.heap.c_allocator, args[0]);
-    defer std.heap.c_allocator.free(utf8);
+    const utf8 = try objects.string.toUtf8(interp.object_allocator, args[0]);
+    defer interp.object_allocator.free(utf8);
 
+    // TODO: is calling getStdOut every time bad?
     const stdout = try std.io.getStdOut();
     try stdout.write(utf8);
     try stdout.write("\n");

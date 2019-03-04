@@ -6,6 +6,7 @@
 comptime {
     _ = @import("bcreader.zig");
     _ = @import("builtins.zig");
+    _ = @import("interp.zig");
     _ = @import("main.zig");
     _ = @import("misc.zig");
     _ = @import("objtyp.zig");

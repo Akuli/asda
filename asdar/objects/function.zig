@@ -1,4 +1,5 @@
 const std = @import("std");
+const Interp = @import("../interp.zig").Interp;
 const objtyp = @import("../objtyp.zig");
 const Object = objtyp.Object;
 
@@ -16,12 +17,12 @@ pub const FunctionType = struct {
 };
 
 pub const Fn = union(enum) {
-    Returning: fn(data: *objtyp.ObjectData, []const *Object) anyerror!*Object,
-    Void: fn(data: *objtyp.ObjectData, []const *Object) anyerror!void,
+    Returning: fn(interp: *Interp, data: *objtyp.ObjectData, []const *Object) anyerror!*Object,
+    Void: fn(interp: *Interp, data: *objtyp.ObjectData, []const *Object) anyerror!void,
 };
 
 pub const Data = struct {
-    allocator: ?*std.mem.Allocator,    // for allocator.destroy()ing data
+    allocator: ?*std.mem.Allocator,    // for allocator.destroy()ing passed_data
     name: []const u8,   // should be e.g. statically allocated, this won't handle freeing
     zig_fn: Fn,
     passed_data: *objtyp.ObjectData,   // must be pointer to avoid union that contains itself, which is why allocator is needed
@@ -82,10 +83,10 @@ test "function newComptime" {
     }
 }
 
-pub fn callReturning(func: *Object, args: []const *Object) !*Object {
-    return try func.data.value.FunctionValue.zig_fn.Returning(func.data.FunctionData.passed_data, args);
+pub fn callReturning(interp: *Interp, func: *Object, args: []const *Object) !*Object {
+    return try func.data.value.FunctionValue.zig_fn.Returning(interp, func.data.FunctionData.passed_data, args);
 }
 
-pub fn callVoid(func: *Object, args: []const *Object) !void {
-    try func.data.FunctionData.zig_fn.Void(func.data.FunctionData.passed_data, args);
+pub fn callVoid(interp: *Interp, func: *Object, args: []const *Object) !void {
+    try func.data.FunctionData.zig_fn.Void(interp, func.data.FunctionData.passed_data, args);
 }
