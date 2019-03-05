@@ -10,7 +10,7 @@ const objects = @import("objects/index.zig");
 const StreamType = std.io.InStream(std.os.File.InStream.Error);
 
 const SET_LINENO: u8 = 'L';
-const CREATE_FUNCTION: u8 = 'f';
+const CREATE_FUNCTION: u8 = 'f';    // also used in types
 const LOOKUP_VAR: u8 = 'v';
 const SET_VAR: u8 = 'V';
 const STR_CONSTANT: u8 = '"';
@@ -47,18 +47,24 @@ const TYPE_VOID: u8 = 'v';
 pub const Op = struct {
     pub const VarData = struct{ level: u8, index: u16 };
     pub const CallFunctionData = struct{ returning: bool, nargs: u8 };
+    pub const CreateFunctionData = struct{ typ: *objtyp.Type, name: []u8, body: Code };
 
     pub const Data = union(enum) {
         LookupVar: VarData,
         SetVar: VarData,
+        CreateFunction: CreateFunctionData,
         CallFunction: CallFunctionData,
         Constant: *Object,
         Negation: void,
+        PopOne: void,
         JumpIf: u16,
+        Return: bool,   // true to return a value, false for void return
+        DidntReturnError: void,
 
         pub fn destroy(self: Op.Data) void {
             switch(self) {
                 Op.Data.Constant => |obj| obj.decref(),
+                Op.Data.CreateFunction => |data| data.body.destroy(),
                 else => {},
             }
         }
@@ -114,13 +120,26 @@ const BytecodeReader = struct {
         return result;
     }
 
-    fn readType(self: *BytecodeReader, firstByte: ?u8) !*objtyp.Type {
+    // anyerror is needed because this calls itself, the compiler gets confused without anyerror
+    fn readType(self: *BytecodeReader, firstByte: ?u8) anyerror!*objtyp.Type {
         const magic = firstByte orelse try self.in.readByte();
 
         switch(magic) {
             TYPE_BUILTIN => {
                 const index = try self.in.readIntLittle(u8);
                 return builtins.type_array[index];
+            },
+            CREATE_FUNCTION => {
+                const returntype = try self.readType(null);
+                const nargs = try self.in.readIntLittle(u8);
+                const argtypes = try self.interp.import_arena_allocator.alloc(*objtyp.Type, nargs);
+                for (argtypes) |*arg| {
+                    arg.* = try self.readType(null);
+                }
+
+                const functype = try self.interp.import_arena_allocator.create(objtyp.Type);
+                functype.* = objects.function.FunctionType.initComptimeReturning(argtypes, returntype);
+                return functype;
             },
             else => {
                 self.errorByte.* = magic;
@@ -129,7 +148,7 @@ const BytecodeReader = struct {
         }
     }
 
-    fn readBody(self: *BytecodeReader) !Code {
+    fn readBody(self: *BytecodeReader) anyerror!Code {
         const nlocals = try self.in.readIntLittle(u16);
 
         var ops = std.ArrayList(Op).init(self.interp.import_arena_allocator);
@@ -179,6 +198,10 @@ const BytecodeReader = struct {
                     };
                 },
                 NEGATION => Op.Data{ .Negation = void{} },      // TODO: is void{} best way?
+                POP_ONE => Op.Data{ .PopOne = void{} },
+                DIDNT_RETURN_ERROR => Op.Data{ .DidntReturnError = void{} },
+                VOID_RETURN => Op.Data{ .Return = false },
+                VALUE_RETURN => Op.Data{ .Return = true },
                 JUMP_IF => Op.Data{ .JumpIf = try self.in.readIntLittle(u16) },
                 CALL_VOID_FUNCTION, CALL_RETURNING_FUNCTION => blk: {
                     const ret = (opbyte == CALL_RETURNING_FUNCTION);
@@ -187,14 +210,17 @@ const BytecodeReader = struct {
                 },
                 CREATE_FUNCTION => blk: {
                     const typ = try self.readType(CREATE_FUNCTION);
-                    std.debug.warn("ASDFPOASFOKPK");
                     const yields = switch(try self.in.readByte()) {
                         0 => false,
                         else => unreachable,    // TODO: yielding functions
                     };
-                    return error.OmgLol;
+                    const name = try self.readString();
+                    const body = try self.readBody();
+                    errdefer body.destroy();
+                    break :blk Op.Data{ .CreateFunction = Op.CreateFunctionData{ .typ = typ, .name = name, .body = body }};
                 },
                 else => {
+                    self.errorByte.* = opbyte;
                     return error.BytecodeInvalidOpByte;
                 },
             };

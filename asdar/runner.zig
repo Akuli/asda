@@ -1,6 +1,7 @@
 const std = @import("std");
 const Interp = @import("interp.zig").Interp;
-const Object = @import("objtyp.zig").Object;
+const objtyp = @import("objtyp.zig");
+const Object = objtyp.Object;
 const bcreader = @import("bcreader.zig");
 const builtins = @import("builtins.zig");
 const objects = @import("objects/index.zig");
@@ -77,6 +78,13 @@ test "very basic scope creating" {
     assert(file_scope.parent_scopes[0] == &global_scope);
 }
 
+
+fn asdaFunctionFnReturning(interp: *Interp, data: *objtyp.ObjectData, args: []const *objtyp.Object) anyerror!*Object {
+    std.debug.assert(args.len == 1);
+    args[0].incref();
+    return args[0];
+}
+
 const RunResult = union(enum) {
     Returned: ?*Object,  // value is null for void return
     DidntReturn,
@@ -113,34 +121,51 @@ const Runner = struct {
                     const scope = self.scope.getForLevel(vardata.level);
                     scope.local_vars[vardata.index] = self.stack.pop();
                 },
+                bcreader.Op.Data.CreateFunction => |createdata| {
+                    std.debug.assert(createdata.typ.Function.returntype != null);     // TODO
+                    const the_fn = objects.function.Fn{ .Returning = asdaFunctionFnReturning };
+
+                    var func: *Object = undefined;
+                    {
+                        const data = try self.interp.object_allocator.create(objtyp.ObjectData);
+                        errdefer data.destroy();
+                        data.* = objtyp.ObjectData{ .BcreaderCode = createdata.body };
+                        func = try objects.function.new(self.interp, createdata.name, createdata.typ, the_fn, data);
+                    }
+                    errdefer func.decref();
+
+                    try self.stack.append(func);
+                },
                 bcreader.Op.Data.CallFunction => |calldata| {
                     const n = self.stack.count();
                     const args = self.stack.toSliceConst()[(n - calldata.nargs)..n];
                     const func = self.stack.at(n - calldata.nargs - 1);
-                    defer {
-                        for (args) |arg| {
-                            arg.decref();
-                        }
-                        func.decref();
-
-                        if (calldata.returning) {
-                            // n: number of things in the stack initially
-                            // -calldata.nargs: arguments popped from stack
-                            // -1: func was popped from stack
-                            // +1: return value pushed to stack
-                            self.stack.shrink(n - calldata.nargs - 1 + 1);
-                        } else {
-                            // same as above but with no return value pushed
-                            self.stack.shrink(n - calldata.nargs - 1);
-                        }
-                    }
 
                     std.debug.assert(args.len == calldata.nargs);
                     if (calldata.returning) {
-                        std.debug.panic("not implemented yet :(");
+                        const ret = try objects.function.callReturning(self.interp, func, args);
+                        self.stack.set(n - calldata.nargs - 1, ret);
                     } else {
                         try objects.function.callVoid(self.interp, func, args);
                     }
+
+                    // nothing went wrong, have to decref all the things
+                    // otherwise they are left in the stack and destroy() decrefs
+                    if (calldata.returning) {
+                        // n: number of things in the stack initially
+                        // -calldata.nargs: arguments popped from stack
+                        // -1: func was popped from stack
+                        // +1: return value pushed to stack
+                        self.stack.shrink(n - calldata.nargs - 1 + 1);
+                    } else {
+                        // same as above but with no return value pushed
+                        self.stack.shrink(n - calldata.nargs - 1);
+                    }
+
+                    for (args) |arg| {
+                        arg.decref();
+                    }
+                    func.decref();
                 },
                 bcreader.Op.Data.Constant => |obj| {
                     try self.stack.append(obj);
@@ -152,6 +177,20 @@ const Runner = struct {
                     defer old.decref();
                     const new = objects.boolean.fromZigBool(!objects.boolean.toZigBool(old));
                     self.stack.set(last, new);
+                },
+                bcreader.Op.Data.Return => |returns_a_value| {
+                    var value: ?*Object = null;
+                    if (returns_a_value) {
+                        value = self.stack.pop();
+                    }
+                    std.debug.assert(self.stack.count() == 0);
+                    return RunResult{ .Returned = value };
+                },
+                bcreader.Op.Data.PopOne => {
+                    self.stack.pop().decref();
+                },
+                bcreader.Op.Data.DidntReturnError => {
+                    std.debug.panic("a non-void function didn't return");
                 },
                 bcreader.Op.Data.JumpIf => {},
             }

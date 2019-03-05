@@ -1,6 +1,7 @@
 // Object and Type
 
 const std = @import("std");
+const bcreader = @import("bcreader.zig");
 const Interp = @import("interp.zig").Interp;
 const objects = @import("objects/index.zig");
 const runner = @import("runner.zig");
@@ -35,16 +36,17 @@ pub const object_type = &object_type_value;
 pub const ObjectData = union(enum) {
     StringData: objects.string.Data,
     FunctionData: objects.function.Data,
-    RunnerScope: runner.Scope,
+    //RunnerScope: runner.Scope,
+    BcreaderCode: bcreader.Code,    // will NOT be destroyed
     NoData,
 
     pub fn destroy(self: ObjectData) void {
         switch(self) {
-            ObjectData.NoData => { },
+            ObjectData.NoData, ObjectData.BcreaderCode => { },
 
             // combining these into one makes the compiled executable segfault
             ObjectData.FunctionData => |val| val.destroy(),
-            ObjectData.RunnerScope => |val| val.destroy(),
+            //ObjectData.RunnerScope => |val| val.destroy(),
             ObjectData.StringData => |val| val.destroy(),
         }
     }
@@ -84,16 +86,16 @@ pub const Object = struct {
         return obj;
     }
 
-    pub fn incref(this: *Object) void {
-        this.refcount += 1;
+    pub fn incref(self: *Object) void {
+        self.refcount += 1;
     }
 
-    pub fn decref(this: *Object) void {
-        this.refcount -= 1;
-        if (this.refcount == 0) {
+    pub fn decref(self: *Object) void {
+        self.refcount -= 1;
+        if (self.refcount == 0) {
             // this should never happen for comptime-created objects
-            this.data.destroy();
-            this.interp.?.object_allocator.destroy(this);
+            self.data.destroy();
+            self.interp.?.object_allocator.destroy(self);
         }
     }
 };

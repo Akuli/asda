@@ -22,7 +22,7 @@ pub const Fn = union(enum) {
 };
 
 pub const Data = struct {
-    allocator: ?*std.mem.Allocator,    // for allocator.destroy()ing passed_data
+    allocator: ?*std.mem.Allocator,    // for allocator.destroy()ing passed_data,   TODO: replace with an interp pointer
     name: []const u8,   // should be e.g. statically allocated, this won't handle freeing
     zig_fn: Fn,
     passed_data: *objtyp.ObjectData,   // must be pointer to avoid union that contains itself, which is why allocator is needed
@@ -31,11 +31,8 @@ pub const Data = struct {
         return Data{ .allocator = null, .name = name, .zig_fn = zig_fn, .passed_data = passed_data };
     }
 
-    fn init(allocator: *std.mem.Allocator, name: []const u8, zig_fn: Fn, passed_data: objtyp.ObjectData) !Data {
-        const pdata = try allocator.create(objtyp.ObjectData);
-        errdefer allocator.destroy(pdata);
-        pdata.* = passed_data;
-        return Data{ .allocator = allocator, .name = name, .zig_fn = zig_fn, .passed_data = pdata };
+    fn init(allocator: *std.mem.Allocator, name: []const u8, zig_fn: Fn, passed_data: *objtyp.ObjectData) Data {
+        return Data{ .allocator = allocator, .name = name, .zig_fn = zig_fn, .passed_data = passed_data };
     }
 
     pub fn destroy(self: Data) void {
@@ -50,26 +47,33 @@ fn testFn(interp: *Interp, data: *objtyp.ObjectData, objs: []const *Object) anye
     return objs[0];
 }
 
+var no_data = objtyp.ObjectData{ .NoData = void{} };
+
 // passed_data should be e.g. statically allocated, and will NOT be destroyed
 // if it isn't, make it statically allocated or use init()
-pub fn newComptimeWithPassedData(name: []const u8, typ: *objtyp.Type, zig_fn: Fn, passed_data: *objtyp.ObjectData) Object {
+pub fn newComptime(name: []const u8, typ: *objtyp.Type, zig_fn: Fn, passed_data: ?*objtyp.ObjectData) Object {
     // TODO: figure out why this doesn't work
     //switch(zig_fn) {
     //    Fn.Returning => std.debug.assert(typ.Function.returntype != null),
     //    Fn.Void => std.debug.assert(typ.Function.returntype == null),
     //}
 
-    const data = objtyp.ObjectData{ .FunctionData = Data.initComptime(name, zig_fn, passed_data) };
+    const data = objtyp.ObjectData{ .FunctionData = Data.initComptime(name, zig_fn, passed_data orelse &no_data) };
     return Object.initComptime(typ, data);
 }
 
-var no_data = objtyp.ObjectData{ .NoData = void{} };
-
-pub fn newComptime(name: []const u8, typ: *objtyp.Type, zig_fn: Fn) Object {
-    return newComptimeWithPassedData(name, typ, zig_fn, &no_data);
+// passed_data should be allocated with interp.object_allocator
+pub fn new(interp: *Interp, name: []const u8, typ: *objtyp.Type, zig_fn: Fn, passed_data: ?*objtyp.ObjectData) !*Object {
+    const passed_data_notnull = passed_data orelse blk: {
+        const res = try interp.object_allocator.create(objtyp.ObjectData);
+        res.* = no_data;
+        break :blk res;
+        // FIXME: should errdefer a dealloc nicely
+    };
+    const data = objtyp.ObjectData{ .FunctionData = Data.init(interp.object_allocator, name, zig_fn, passed_data_notnull) };
+    return Object.init(interp, typ, data);
 }
 
-// tests newComptimeWithPassedData because newComptime calls it
 test "function newComptime" {
     const assert = std.debug.assert;
     const string = @import("string.zig");
@@ -84,7 +88,7 @@ test "function newComptime" {
 }
 
 pub fn callReturning(interp: *Interp, func: *Object, args: []const *Object) !*Object {
-    return try func.data.value.FunctionValue.zig_fn.Returning(interp, func.data.FunctionData.passed_data, args);
+    return try func.data.FunctionData.zig_fn.Returning(interp, func.data.FunctionData.passed_data, args);
 }
 
 pub fn callVoid(interp: *Interp, func: *Object, args: []const *Object) !void {

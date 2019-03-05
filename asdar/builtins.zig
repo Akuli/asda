@@ -27,7 +27,7 @@ test "builtins printFn" {
 }
 
 var print_type = objects.function.FunctionType.initComptimeVoid([]const *objtyp.Type{ objects.string.typ });
-var print_value = objects.function.newComptime("print", &print_type, objects.function.Fn{ .Void = printFn });
+var print_value = objects.function.newComptime("print", &print_type, objects.function.Fn{ .Void = printFn }, null);
 pub const print = &print_value;
 
 pub const object_array = []const *Object {
