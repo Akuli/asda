@@ -94,26 +94,14 @@ pub const Code = struct {
     }
 };
 
-// invalid op byte error would be quite useless if one doesn't know what the invalid byte is
-// TODO: also include the offset of the invalid byte?
-pub const ReadResult = union(enum) {
-    ByteCode: Code,
-    InvalidOpByte: u8,
-    InvalidTypeByte: u8,
-};
-
-const ReadTypeResult = union(enum) {
-    Type: ?*objtyp.Type,
-    InvalidByte: u8,
-};
-
 const BytecodeReader = struct {
     interp: *Interp,
     in: *StreamType,
     lineno: u32,
+    errorByte: *?u8,
 
-    fn init(interp: *Interp, in: *StreamType) BytecodeReader {
-        return BytecodeReader{ .interp = interp, .in = in, .lineno = 1 };
+    fn init(interp: *Interp, in: *StreamType, errorByte: *?u8) BytecodeReader {
+        return BytecodeReader{ .interp = interp, .in = in, .lineno = 1, .errorByte = errorByte };
     }
 
     // return value must be freed with the allocator
@@ -126,21 +114,22 @@ const BytecodeReader = struct {
         return result;
     }
 
-    fn readType(self: *BytecodeReader, firstByte: ?u8) !ReadTypeResult {
+    fn readType(self: *BytecodeReader, firstByte: ?u8) !*objtyp.Type {
         const magic = firstByte orelse try self.in.readByte();
 
         switch(magic) {
             TYPE_BUILTIN => {
                 const index = try self.in.readIntLittle(u8);
-                return ReadTypeResult{ .Type = builtins.type_array[index] };
+                return builtins.type_array[index];
             },
             else => {
-                return ReadTypeResult{ .InvalidByte = magic };
+                self.errorByte.* = magic;
+                return error.BytecodeInvalidTypeByte;
             },
         }
     }
 
-    fn readBody(self: *BytecodeReader) !ReadResult {
+    fn readBody(self: *BytecodeReader) !Code {
         const nlocals = try self.in.readIntLittle(u16);
 
         var ops = std.ArrayList(Op).init(self.interp.import_arena_allocator);
@@ -197,19 +186,16 @@ const BytecodeReader = struct {
                     break :blk Op.Data{ .CallFunction = Op.CallFunctionData{ .returning = ret, .nargs = nargs }};
                 },
                 CREATE_FUNCTION => blk: {
-                    const typ = switch(try self.readType(CREATE_FUNCTION)) {
-                        ReadTypeResult.InvalidByte => |byte| {
-                            return ReadResult{ .InvalidTypeByte = byte };
-                        },
-                        ReadTypeResult.Type => |typ| typ,
-                    };
+                    const typ = try self.readType(CREATE_FUNCTION);
                     std.debug.warn("ASDFPOASFOKPK");
-                    //const yields = switch(try self.in.readByte()) {
-                    //}
-                    return ReadResult{ .InvalidOpByte = 1 };
+                    const yields = switch(try self.in.readByte()) {
+                        0 => false,
+                        else => unreachable,    // TODO: yielding functions
+                    };
+                    return error.OmgLol;
                 },
                 else => {
-                    return ReadResult{ .InvalidOpByte = opbyte };
+                    return error.BytecodeInvalidOpByte;
                 },
             };
             errdefer opdata.destroy();
@@ -217,10 +203,10 @@ const BytecodeReader = struct {
             try ops.append(Op{ .lineno = self.lineno, .data = opdata });
         }
 
-        return ReadResult{ .ByteCode = Code{
+        return Code{
             .nlocalvars = nlocals,
             .ops = ops.toOwnedSlice(),
-        }};
+        };
     }
 };
 
@@ -233,21 +219,18 @@ fn readAsdaBytes(stream: *StreamType) !bool {
     return std.mem.eql(u8, buf, "asda");
 }
 
-pub fn readByteCode(interp: *Interp, stream: *StreamType) !ReadResult {
+pub fn readByteCode(interp: *Interp, stream: *StreamType, errorByte: *?u8) !Code {
     if (!(try readAsdaBytes(stream))) {
         return error.BytecodeNotAnAsdaFile;
     }
 
-    var reader = BytecodeReader.init(interp, stream);
-    const result = try reader.readBody();
+    const result = try BytecodeReader.init(interp, stream, errorByte).readBody();
+    errdefer result.destroy();
 
-    switch(result) {
-        ReadResult.InvalidOpByte, ReadResult.InvalidTypeByte => {},
-        ReadResult.ByteCode => {
-            if ((try stream.readByte()) != IMPORT_SECTION) {
-                return error.BytecodeEndsUnexpectedly;
-            }
-        },
+    const byte = try stream.readByte();
+    if (byte != IMPORT_SECTION) {
+        errorByte.* = byte;
+        return error.BytecodeEndsUnexpectedly;
     }
 
     return result;

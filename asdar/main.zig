@@ -24,28 +24,21 @@ fn mainInner(args: []const []u8) u8 {
         defer interp.deinit();
 
         const stream = &f.inStream().stream;    // no idea why the last .stream is needed, but this works :D
-        if (bcreader.readByteCode(&interp, stream)) |res| {
-            switch(res) {
-                bcreader.ReadResult.InvalidOpByte => |byte| {
-                    std.debug.warn("{}: cannot read {}: Unknown op byte 0x{x}\n", program, filename, byte);
-                    return 1;
-                },
-                bcreader.ReadResult.InvalidTypeByte => |byte| {
-                    std.debug.warn("{}: cannot read {}: Unknown type byte 0x{x}\n", program, filename, byte);
-                    return 1;
-                },
-                bcreader.ReadResult.ByteCode => |code| {
-                    defer code.destroy();
+        var errorByte: ?u8 = null;    // TODO: don't use a special value
+        if (bcreader.readByteCode(&interp, stream, &errorByte)) |code| {
+            defer code.destroy();
 
-                    if (runner.runFile(&interp, code)) |_| {
-                        // ok
-                    } else |err| {
-                        std.debug.warn("{}: running {} failed: {}\n", program, filename, misc.errorToString(err));
-                    }
-                },
+            if (runner.runFile(&interp, code)) |_| {
+                // ok
+            } else |err| {
+                std.debug.warn("{}: running {} failed: {}\n", program, filename, misc.errorToString(err));
             }
         } else |err| {
-            std.debug.warn("{}: cannot read {}: {}\n", program, filename, misc.errorToString(err));
+            std.debug.warn("{}: cannot read {}: {}", program, filename, misc.errorToString(err));
+            if (errorByte) |byte| {
+                std.debug.warn(" 0x{x}", byte);
+            }
+            std.debug.warn("\n");
             return 1;
         }
     } else |err| {

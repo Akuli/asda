@@ -27,6 +27,8 @@ pub fn errorToString(err: anyerror) []const u8 {
         error.BytecodeNotAnAsdaFile => "This does not look like an asda bytecode file",
         error.BytecodeRepeatedLineno => "Repeated line number information in bytecode",
         error.BytecodeEndsUnexpectedly => "The bytecode file ends unexpectedly",
+        error.BytecodeInvalidTypeByte => "The bytecode contains an invalid type byte",
+        error.BytecodeInvalidOpByte => "The bytecode contains an invalid op byte",
 
         else => @errorName(err),
     };
