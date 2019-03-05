@@ -24,7 +24,7 @@ fn mainInner(args: []const []u8) u8 {
         defer interp.deinit();
 
         const stream = &f.inStream().stream;    // no idea why the last .stream is needed, but this works :D
-        var errorByte: ?u8 = null;    // TODO: don't use a special value
+        var errorByte: ?u8 = null;
         if (bcreader.readByteCode(&interp, stream, &errorByte)) |code| {
             defer code.destroy();
 
