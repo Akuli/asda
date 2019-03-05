@@ -22,6 +22,7 @@ test "builtins printFn" {
 
     var no_data = objtyp.ObjectData{ .NoData = void{} };
     const s = try objects.string.newFromUtf8(&interp, "Hello World!");
+    defer s.decref();
     try printFn(&interp, &no_data, []const *Object{ s });
 }
 
