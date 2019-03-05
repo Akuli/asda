@@ -46,7 +46,7 @@ pub const Data = struct {
     }
 };
 
-fn testFn(data: *objtyp.ObjectData, objs: []const *Object) anyerror!*Object {
+fn testFn(interp: *Interp, data: *objtyp.ObjectData, objs: []const *Object) anyerror!*Object {
     return objs[0];
 }
 

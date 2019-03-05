@@ -1,13 +1,12 @@
 const std = @import("std");
 const bcreader = @import("bcreader.zig");
+const Interp = @import("interp.zig").Interp;
 const misc = @import("misc.zig");
 const runner = @import("runner.zig");
 
 
 // because std.os.exit() doesn't run defers, which would otherwise leak memory
 fn mainInner(args: []const []u8) u8 {
-    const allocator = std.heap.c_allocator;
-
     if (args.len != 2) {
         // std.debug.warn writes to stderr
         std.debug.warn("Usage: {} bytecodefile\n", args[0]);
@@ -20,8 +19,12 @@ fn mainInner(args: []const []u8) u8 {
     if (std.os.File.openRead(filename)) |f| {
         defer f.close();
 
+        var interp: Interp = undefined;
+        interp.init();
+        defer interp.deinit();
+
         const stream = &f.inStream().stream;    // no idea why the last .stream is needed, but this works :D
-        if (bcreader.readByteCode(allocator, stream)) |res| {
+        if (bcreader.readByteCode(&interp, stream)) |res| {
             switch(res) {
                 bcreader.ReadResult.InvalidOpByte => |byte| {
                     std.debug.warn("{}: cannot read {}: Unknown op byte 0x{x}\n", program, filename, byte);
@@ -34,7 +37,7 @@ fn mainInner(args: []const []u8) u8 {
                 bcreader.ReadResult.ByteCode => |code| {
                     defer code.destroy();
 
-                    if (runner.runFile(allocator, code)) |_| {
+                    if (runner.runFile(&interp, code)) |_| {
                         // ok
                     } else |err| {
                         std.debug.warn("{}: running {} failed: {}\n", program, filename, misc.errorToString(err));

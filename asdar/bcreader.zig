@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const builtins = @import("builtins.zig");
+const Interp = @import("interp.zig").Interp;
 const objtyp = @import("objtyp.zig");
 const Object = objtyp.Object;
 const objects = @import("objects/index.zig");
@@ -72,7 +73,6 @@ pub const Op = struct {
 };
 
 pub const Code = struct {
-    allocator: *std.mem.Allocator,   // for freeing ops
     ops: []Op,
     nlocalvars: u16,
 
@@ -80,7 +80,6 @@ pub const Code = struct {
         for (self.ops) |op| {
             op.destroy();
         }
-        self.allocator.free(self.ops);
     }
 
     pub fn debugDump(self: *const Code) void {
@@ -109,19 +108,19 @@ const ReadTypeResult = union(enum) {
 };
 
 const BytecodeReader = struct {
-    allocator: *std.mem.Allocator,
+    interp: *Interp,
     in: *StreamType,
     lineno: u32,
 
-    fn init(allocator: *std.mem.Allocator, in: *StreamType) BytecodeReader {
-        return BytecodeReader{ .allocator = allocator, .in = in, .lineno = 1 };
+    fn init(interp: *Interp, in: *StreamType) BytecodeReader {
+        return BytecodeReader{ .interp = interp, .in = in, .lineno = 1 };
     }
 
     // return value must be freed with the allocator
     fn readString(self: *BytecodeReader) ![]u8 {
         const len = try self.in.readIntLittle(u32);
-        const result = try self.allocator.alloc(u8, len);
-        errdefer self.allocator.free(result);
+        // TODO: use a better allocator? this is usually temporary
+        const result = try self.interp.import_arena_allocator.alloc(u8, len);
 
         try self.in.readNoEof(result);
         return result;
@@ -144,8 +143,9 @@ const BytecodeReader = struct {
     fn readBody(self: *BytecodeReader) !ReadResult {
         const nlocals = try self.in.readIntLittle(u16);
 
-        var ops = std.ArrayList(Op).init(self.allocator);
+        var ops = std.ArrayList(Op).init(self.interp.import_arena_allocator);
         errdefer {
+            // TODO: delete this?
             var it = ops.iterator();
             while (it.next()) |op| {
                 op.destroy();
@@ -167,8 +167,7 @@ const BytecodeReader = struct {
                 END_OF_BODY => break,    // breaks while(true), does nothing to switch(opbyte)
                 STR_CONSTANT => blk: {
                     const value = try self.readString();
-                    defer self.allocator.free(value);
-                    const obj = try objects.string.newFromUtf8(self.allocator, value);
+                    const obj = try objects.string.newFromUtf8(self.interp, value);
                     break :blk Op.Data{ .Constant = obj };
                 },
                 TRUE_CONSTANT, FALSE_CONSTANT => blk: {
@@ -219,7 +218,6 @@ const BytecodeReader = struct {
         }
 
         return ReadResult{ .ByteCode = Code{
-            .allocator = self.allocator,
             .nlocalvars = nlocals,
             .ops = ops.toOwnedSlice(),
         }};
@@ -235,12 +233,12 @@ fn readAsdaBytes(stream: *StreamType) !bool {
     return std.mem.eql(u8, buf, "asda");
 }
 
-pub fn readByteCode(allocator: *std.mem.Allocator, stream: *StreamType) !ReadResult {
+pub fn readByteCode(interp: *Interp, stream: *StreamType) !ReadResult {
     if (!(try readAsdaBytes(stream))) {
         return error.BytecodeNotAnAsdaFile;
     }
 
-    var reader = BytecodeReader.init(allocator, stream);
+    var reader = BytecodeReader.init(interp, stream);
     const result = try reader.readBody();
 
     switch(result) {

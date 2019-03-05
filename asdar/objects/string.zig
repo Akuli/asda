@@ -1,5 +1,6 @@
 const std = @import("std");
 const assert = std.debug.assert;
+const Interp = @import("../interp.zig").Interp;
 const objtyp = @import("../objtyp.zig");
 const Object = objtyp.Object;
 
@@ -22,11 +23,12 @@ var type_value = objtyp.Type{ .Basic = objtyp.BasicType.init([]*Object { }) };
 pub const typ = &type_value;
 
 // unlike with new(), the string is responsible for freeing the unicode
+// unicode must have been allocated with interp.object_allocator
 // example usage:
 //
 //    var string: *Object = undefined;
 //    {
-//        const buf = try allocator.alloc(u32, 5);
+//        const buf = try interp.object_allocator.alloc(u32, 5);
 //        errdefer allocator.free(buf);
 //        buf[0] = 'a';
 //        buf[1] = 'b';
@@ -34,50 +36,58 @@ pub const typ = &type_value;
 //        buf[3] = 'd';
 //        buf[4] = 'e';
 //
-//        string = try objects.string.newNoCopy(std.heap.c_allocator, buf);
+//        string = try objects.string.newNoCopy(interp, buf);
 //    }
 //    defer string.decref();
 //
 //    // use the string
-pub fn newNoCopy(allocator: *std.mem.Allocator, unicode: []u32) !*Object {
-    return Object.init(allocator, typ, Data.init(allocator, unicode));
+pub fn newNoCopy(interp: *Interp, unicode: []u32) !*Object {
+    return Object.init(interp, typ, Data.init(interp.object_allocator, unicode));
 }
 
 test "string newNoCopy" {
+    var interp: Interp = undefined;
+    interp.init();
+    defer interp.deinit();
+
     var string: *Object = undefined;
     {
-        const buf = try std.heap.c_allocator.alloc(u32, 5);
-        errdefer std.heap.c_allocator.free(buf);
+        const buf = try interp.object_allocator.alloc(u32, 5);
+        errdefer interp.object_allocator.free(buf);
         buf[0] = 'a';
         buf[1] = 'b';
         buf[2] = 'c';
         buf[3] = 'd';
         buf[4] = 'e';
-        string = try newNoCopy(std.heap.c_allocator, buf);
+        string = try newNoCopy(&interp, buf);
     }
     defer string.decref();
 }
 
 // creates a new string that uses a copy of the unicode
-pub fn new(allocator: *std.mem.Allocator, unicode: []const u32) !*Object {
-    const dup = try std.mem.dupe(allocator, u32, unicode);
-    errdefer allocator.free(dup);
-    return newNoCopy(allocator, dup);
+pub fn new(interp: *Interp, unicode: []const u32) !*Object {
+    const dup = try std.mem.dupe(interp.object_allocator, u32, unicode);
+    errdefer interp.object_allocator.free(dup);
+    return newNoCopy(interp, dup);
 }
 
 test "string new" {
+    var interp: Interp = undefined;
+    interp.init();
+    defer interp.deinit();
+
     const arr = []u32{ 'a', 'b', 'c' };
 
-    const string = try new(std.heap.c_allocator, arr);
+    const string = try new(&interp, arr);
     defer string.decref();
 }
 
 // the nicest way to create a string object
 // the utf8 can be freed after calling this
-pub fn newFromUtf8(allocator: *std.mem.Allocator, utf8: []const u8) !*Object {
+pub fn newFromUtf8(interp: *Interp, utf8: []const u8) !*Object {
     // utf8 is never less bytes than the unicode, so utf8.len works here
-    var buf: []u32 = try allocator.alloc(u32, utf8.len);
-    errdefer allocator.free(buf);
+    var buf: []u32 = try interp.object_allocator.alloc(u32, utf8.len);
+    errdefer interp.object_allocator.free(buf);
 
     var i: usize = 0;
     var it = (try std.unicode.Utf8View.init(utf8)).iterator();
@@ -86,8 +96,8 @@ pub fn newFromUtf8(allocator: *std.mem.Allocator, utf8: []const u8) !*Object {
         i += 1;
     }
 
-    buf = allocator.shrink(u32, buf, i);
-    return newNoCopy(allocator, buf);
+    buf = interp.object_allocator.shrink(u32, buf, i);
+    return newNoCopy(interp, buf);
 }
 
 // returns the value of a string as unicode
@@ -114,7 +124,11 @@ pub fn toUtf8(allocator: *std.mem.Allocator, str: *Object) ![]u8 {
 }
 
 test "string newFromUtf8 toUnicode toUtf8" {
-    const string = try newFromUtf8(std.heap.c_allocator, "Pöö");
+    var interp: Interp = undefined;
+    interp.init();
+    defer interp.deinit();
+
+    const string = try newFromUtf8(&interp, "Pöö");
     defer string.decref();
 
     const arr = []u32{ 'P', 0xf6, 0xf6 };
@@ -126,7 +140,11 @@ test "string newFromUtf8 toUnicode toUtf8" {
 }
 
 test "string empty" {
-    const string = try newFromUtf8(std.heap.c_allocator, "");
+    var interp: Interp = undefined;
+    interp.init();
+    defer interp.deinit();
+
+    const string = try newFromUtf8(&interp, "");
     defer string.decref();
 
     assert(toUnicode(string).len == 0);

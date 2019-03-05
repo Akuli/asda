@@ -88,8 +88,8 @@ const Runner = struct {
     stack: std.ArrayList(*Object),    // TODO: give this a size hint calculated by the compiler
     ops: []bcreader.Op,
 
-    fn init(interp: *Interp, allocator: *std.mem.Allocator, ops: []bcreader.Op, scope: *Scope) Runner {
-        const stack = std.ArrayList(*Object).init(allocator);
+    fn init(interp: *Interp, ops: []bcreader.Op, scope: *Scope) Runner {
+        const stack = std.ArrayList(*Object).init(interp.object_allocator);
         errdefer stack.deinit();
         return Runner{ .scope = scope, .stack = stack, .ops = ops, .interp = interp };
     }
@@ -180,17 +180,13 @@ const Runner = struct {
 };
 
 
-pub fn runFile(allocator: *std.mem.Allocator, code: bcreader.Code) !void {
-    var interp: Interp = undefined;
-    interp.init();
-    defer interp.deinit();
-
-    var global_scope = try Scope.initGlobal(allocator);
+pub fn runFile(interp: *Interp, code: bcreader.Code) !void {
+    var global_scope = try Scope.initGlobal(interp.object_allocator);
     defer global_scope.destroy();
     var file_scope = try global_scope.initSub(code.nlocalvars);
     defer file_scope.destroy();
 
-    var runner = Runner.init(&interp, allocator, code.ops, &file_scope);
+    var runner = Runner.init(interp, code.ops, &file_scope);
     defer runner.destroy();
 
     const result = try runner.run();

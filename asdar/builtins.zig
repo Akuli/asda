@@ -16,9 +16,13 @@ fn printFn(interp: *Interp, data: *objtyp.ObjectData, args: []const *Object) any
 }
 
 test "builtins printFn" {
+    var interp: Interp = undefined;
+    interp.init();
+    defer interp.deinit();
+
     var no_data = objtyp.ObjectData{ .NoData = void{} };
-    const s = try objects.string.newFromUtf8(std.heap.c_allocator, "Hello World!");
-    try printFn(&no_data, []const *Object{ s });
+    const s = try objects.string.newFromUtf8(&interp, "Hello World!");
+    try printFn(&interp, &no_data, []const *Object{ s });
 }
 
 var print_type = objects.function.FunctionType.initComptimeVoid([]const *objtyp.Type{ objects.string.typ });

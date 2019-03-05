@@ -26,7 +26,8 @@ pub const Interp = struct {
 };
 
 test "interp creating and deleting" {
-    var interp = Interp.init();
+    var interp: Interp = undefined;
+    interp.init();
     defer interp.deinit();
 
     const buf = try interp.import_arena_allocator.alloc(u8, 5);
@@ -35,5 +36,4 @@ test "interp creating and deleting" {
     buf[2] = 'l';
     buf[3] = 'l';
     buf[4] = 'o';
-    std.debug.warn("{}\n", buf);
 }

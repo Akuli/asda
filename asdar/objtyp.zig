@@ -1,6 +1,7 @@
 // Object and Type
 
 const std = @import("std");
+const Interp = @import("interp.zig").Interp;
 const objects = @import("objects/index.zig");
 const runner = @import("runner.zig");
 
@@ -57,7 +58,7 @@ test "ObjectData" {
 pub const Object = struct {
     asda_type: *Type,
     refcount: u32,     // TODO: use an atomic?
-    allocator: ?*std.mem.Allocator,   // null for objects created at comptime
+    interp: ?*Interp,   // null for objects created at comptime
     data: ObjectData,
 
     // put the return value to a variable and use &that_variable everywhere
@@ -65,19 +66,19 @@ pub const Object = struct {
         return Object{
             .asda_type = typ,
             .refcount = 1,
-            .allocator = null,
+            .interp = null,
             .data = data orelse ObjectData{ .NoData = void{} },     // TODO: is this the best way to do this?
         };
     }
 
-    pub fn init(allocator: *std.mem.Allocator, typ: *Type, data: ?ObjectData) !*Object {
-        const obj = try allocator.create(Object);
-        errdefer allocator.destroy(obj);
+    pub fn init(interp: *Interp, typ: *Type, data: ?ObjectData) !*Object {
+        const obj = try interp.object_allocator.create(Object);
+        errdefer interp.object_allocator.destroy(obj);
 
         obj.* = Object{
             .asda_type = typ,
             .refcount = 1,
-            .allocator = allocator,
+            .interp = interp,
             .data = data orelse ObjectData{ .NoData = void{} },
         };
         return obj;
@@ -90,16 +91,20 @@ pub const Object = struct {
     pub fn decref(this: *Object) void {
         this.refcount -= 1;
         if (this.refcount == 0) {
+            // this should never happen for comptime-created objects
             this.data.destroy();
-            this.allocator.?.destroy(this);
+            this.interp.?.object_allocator.destroy(this);
         }
     }
 };
 
 test "basic object creation" {
     const assert = std.debug.assert;
+    var interp: Interp = undefined;
+    interp.init();
+    defer interp.deinit();
 
-    const obj = try Object.init(std.heap.c_allocator, object_type, null);
+    const obj = try Object.init(&interp, object_type, null);
     defer obj.decref();
 
     assert(obj.refcount == 1);
