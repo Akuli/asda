@@ -71,13 +71,14 @@ const Runner = struct {
                     var func: *Object = undefined;
                     {
                         const data = try self.interp.object_allocator.create(objtyp.ObjectData);
-                        errdefer data.destroy();
                         data.* = objtyp.ObjectData{ .AsdaFunctionState = AsdaFunctionState{
                             .code = createdata.body,
                             .definition_scope = self.scope,
                         }};
-                        func = try objects.function.new(self.interp, createdata.name, createdata.typ, the_fn, data);
                         data.AsdaFunctionState.definition_scope.incref();
+                        errdefer data.destroy(true);
+
+                        func = try objects.function.new(self.interp, createdata.name, createdata.typ, the_fn, data);
                     }
                     errdefer func.decref();
 
@@ -171,10 +172,11 @@ pub const AsdaFunctionState = struct {
     code: bcreader.Code,
     definition_scope: *Object,
 
-    pub fn destroy(self: AsdaFunctionState) void {
-        std.debug.warn("destroying an AsdaFunctionState");
+    pub fn destroy(self: AsdaFunctionState, decref_refs: bool) void {
         // doesn't destroy the code because that's allocated with interp.import_allocator
-        self.definition_scope.decref();
+        if (decref_refs) {
+            self.definition_scope.decref();
+        }
     }
 };
 

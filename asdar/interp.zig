@@ -1,4 +1,5 @@
 const std = @import("std");
+const GC = @import("gc.zig").GC;
 
 
 pub const Interp = struct {
@@ -13,14 +14,17 @@ pub const Interp = struct {
     pub import_arena_allocator: *std.mem.Allocator,
 
     import_arena: std.heap.ArenaAllocator,
+    pub gc: GC,
 
     pub fn init(self: *Interp) void {
         self.object_allocator = std.heap.c_allocator;
         self.import_arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
         self.import_arena_allocator = &self.import_arena.allocator;
+        self.gc = GC.init(self);
     }
 
     pub fn deinit(self: *Interp) void {
+        self.gc.onInterpreterExit();
         self.import_arena.deinit();
     }
 };

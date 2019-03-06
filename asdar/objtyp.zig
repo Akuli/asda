@@ -40,22 +40,22 @@ pub const ObjectData = union(enum) {
     AsdaFunctionState: runner.AsdaFunctionState,
     NoData,
 
-    pub fn destroy(self: ObjectData) void {
+    pub fn destroy(self: ObjectData, decref_refs: bool) void {
         switch(self) {
             ObjectData.NoData => { },
 
             // combining these into one makes the compiled executable segfault
-            ObjectData.FunctionData => |val| val.destroy(),
-            ObjectData.AsdaFunctionState => |val| val.destroy(),
-            ObjectData.ScopeData => |val| val.destroy(),
-            ObjectData.StringData => |val| val.destroy(),
+            ObjectData.FunctionData => |val| val.destroy(decref_refs),
+            ObjectData.AsdaFunctionState => |val| val.destroy(decref_refs),
+            ObjectData.ScopeData => |val| val.destroy(decref_refs),
+            ObjectData.StringData => |val| val.destroy(decref_refs),
         }
     }
 };
 
 test "ObjectData" {
     const objData = ObjectData{ .NoData = void{} };
-    defer objData.destroy();
+    defer objData.destroy(true);
 }
 
 pub const Object = struct {
@@ -84,6 +84,7 @@ pub const Object = struct {
             .interp = interp,
             .data = data orelse ObjectData{ .NoData = void{} },
         };
+        try interp.gc.onNewObject(obj);
         return obj;
     }
 
@@ -95,9 +96,17 @@ pub const Object = struct {
         self.refcount -= 1;
         if (self.refcount == 0) {
             // this should never happen for comptime-created objects
-            self.data.destroy();
-            self.interp.?.object_allocator.destroy(self);
+            self.interp.?.gc.onRefcountZero(self);
+            self.destroy(true);
         }
+    }
+
+    // can be called from gc.zig or decref()
+    // decref_refs is whether to decref other objects that this thing refers to (recursively)
+    // sometimes gc.zig needs to destroy things without that, but usually the recursive destruction is good
+    pub fn destroy(self: *Object, decref_refs: bool) void {
+        self.data.destroy(decref_refs);
+        self.interp.?.object_allocator.destroy(self);
     }
 };
 
