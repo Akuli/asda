@@ -36,18 +36,36 @@ pub const GC = struct {
     }
 
     pub fn onInterpreterExit(self: *GC) void {
-        self.checkRefcounts();
+        self.refcountDebug();
         self.destroyEverything();
         self.all.deinit();
     }
 
-    fn checkRefcounts(self: *GC) void {
-        if (self.all.count() != 0) {
-            std.debug.warn("possible refcount issue (or maybe it's just a reference cycle)\n");
-            var it = self.all.iterator();
-            while (it.next()) |kv| {
-                // TODO: print type information
-                std.debug.warn("  {*}: refcount={} type={}\n", kv.key, kv.key.refcount, @tagName(kv.key.asda_type.*));
+    // should be called only at exit
+    fn refcountDebug(self: *GC) void {
+        // figure out what the refcounts should be by destroying so that only refcounts change
+        var it = self.all.iterator();
+        while (it.next()) |kv| {
+            kv.value = kv.key.refcount;
+            kv.key.refcount = std.math.maxInt(u32);
+        }
+
+        it = self.all.iterator();
+        while (it.next()) |kv| {
+            kv.key.decref();
+        }
+
+        var problems = false;
+        it = self.all.iterator();
+        while (it.next()) |kv| {
+            const should_be = std.math.maxInt(u32) - kv.key.refcount;
+            const actual = kv.value;
+            if (actual != should_be) {
+                if (!problems) {
+                    std.debug.warn("*** refcount issues detected ***\n");
+                    problems = true;
+                }
+                std.debug.warn("  {*}: refcount={} (should be {}), asda_type={}\n", kv.key, actual, should_be, @tagName(kv.key.asda_type.*));
             }
         }
     }
@@ -55,7 +73,7 @@ pub const GC = struct {
     fn destroyEverything(self: *GC) void {
         var it = self.all.iterator();
         while (it.next()) |kv| {
-            kv.key.destroy(false);
+            kv.key.destroy(false, true);
         }
     }
 };

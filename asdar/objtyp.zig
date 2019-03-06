@@ -40,22 +40,22 @@ pub const ObjectData = union(enum) {
     AsdaFunctionState: runner.AsdaFunctionState,
     NoData,
 
-    pub fn destroy(self: ObjectData, decref_refs: bool) void {
+    pub fn destroy(self: ObjectData, decref_refs: bool, free_nonrefs: bool) void {
         switch(self) {
             ObjectData.NoData => { },
 
             // combining these into one makes the compiled executable segfault
-            ObjectData.FunctionData => |val| val.destroy(decref_refs),
-            ObjectData.AsdaFunctionState => |val| val.destroy(decref_refs),
-            ObjectData.ScopeData => |val| val.destroy(decref_refs),
-            ObjectData.StringData => |val| val.destroy(decref_refs),
+            ObjectData.FunctionData => |val| val.destroy(decref_refs, free_nonrefs),
+            ObjectData.AsdaFunctionState => |val| val.destroy(decref_refs, free_nonrefs),
+            ObjectData.ScopeData => |val| val.destroy(decref_refs, free_nonrefs),
+            ObjectData.StringData => |val| val.destroy(decref_refs, free_nonrefs),
         }
     }
 };
 
 test "ObjectData" {
     const objData = ObjectData{ .NoData = void{} };
-    defer objData.destroy(true);
+    defer objData.destroy(true, true);
 }
 
 pub const Object = struct {
@@ -97,15 +97,16 @@ pub const Object = struct {
         if (self.refcount == 0) {
             // this should never happen for comptime-created objects
             self.interp.?.gc.onRefcountZero(self);
-            self.destroy(true);
+            self.destroy(true, true);
         }
     }
 
     // can be called from gc.zig or decref()
     // decref_refs is whether to decref other objects that this thing refers to (recursively)
     // sometimes gc.zig needs to destroy things without that, but usually the recursive destruction is good
-    pub fn destroy(self: *Object, decref_refs: bool) void {
-        self.data.destroy(decref_refs);
+    // free_nonrefs is whether to do anything else than decref_refs stuff, usually that's true too
+    pub fn destroy(self: *Object, decref_refs: bool, free_nonrefs: bool) void {
+        self.data.destroy(decref_refs, free_nonrefs);
         self.interp.?.object_allocator.destroy(self);
     }
 };

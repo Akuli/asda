@@ -14,8 +14,10 @@ pub const Data = struct {
         return objtyp.ObjectData{ .StringData = value };
     }
 
-    pub fn destroy(self: Data, decref_refs: bool) void {
-        self.allocator.free(self.unicode);
+    pub fn destroy(self: Data, decref_refs: bool, free_nonrefs: bool) void {
+        if (free_nonrefs) {
+            self.allocator.free(self.unicode);
+        }
     }
 };
 

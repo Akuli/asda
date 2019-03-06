@@ -35,10 +35,12 @@ pub const Data = struct {
         return Data{ .allocator = allocator, .name = name, .zig_fn = zig_fn, .passed_data = passed_data };
     }
 
-    pub fn destroy(self: Data, decref_refs: bool) void {
+    pub fn destroy(self: Data, decref_refs: bool, free_nonrefs: bool) void {
         if (self.allocator) |allocator| {
-            self.passed_data.*.destroy(decref_refs);
-            allocator.destroy(self.passed_data);
+            self.passed_data.*.destroy(decref_refs, free_nonrefs);
+            if (free_nonrefs) {
+                allocator.destroy(self.passed_data);
+            }
         }
     }
 };

@@ -59,7 +59,7 @@ pub const Data = struct {
         };
     }
 
-    pub fn destroy(self: Data, decref_refs: bool) void {
+    pub fn destroy(self: Data, decref_refs: bool, free_nonrefs: bool) void {
         if (decref_refs) {
             for (self.local_vars) |obj| {
                 if (obj != null) {
@@ -70,8 +70,10 @@ pub const Data = struct {
                 obj.decref();
             }
         }
-        self.interp.object_allocator.free(self.local_vars);
-        self.interp.object_allocator.free(self.parent_scopes);
+        if (free_nonrefs) {
+            self.interp.object_allocator.free(self.local_vars);
+            self.interp.object_allocator.free(self.parent_scopes);
+        }
     }
 };
 
@@ -80,13 +82,13 @@ pub const typ = &type_value;
 
 pub fn createGlobal(interp: *Interp) !*Object {
     const data = try Data.initGlobal(interp);
-    errdefer data.destroy(true);
+    errdefer data.destroy(true, true);
     return try Object.init(interp, typ, objtyp.ObjectData{ .ScopeData = data });
 }
 
 pub fn createSub(parent: *Object, nlocals: u16) !*Object {
     const data = try Data.initSub(parent, nlocals);
-    errdefer data.destroy(true);
+    errdefer data.destroy(true, true);
     return try Object.init(parent.data.ScopeData.interp, typ, objtyp.ObjectData{ .ScopeData = data });
 }
 
