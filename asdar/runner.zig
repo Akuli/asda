@@ -6,78 +6,6 @@ const bcreader = @import("bcreader.zig");
 const builtins = @import("builtins.zig");
 const objects = @import("objects/index.zig");
 
-pub const Scope = struct {
-    allocator: *std.mem.Allocator,   // for local_vars and parent_scopes
-    local_vars: []?*Object,
-    parent_scopes: []*Scope,
-
-    fn initGlobal(allocator: *std.mem.Allocator) !Scope {
-        const locals = try std.mem.dupe(allocator, ?*Object, builtins.object_array[0..]);
-        errdefer allocator.free(locals);
-        const scopes = try allocator.alloc(*Scope, 0);
-        errdefer allocator.free(scopes);
-
-        for (locals) |obj| {
-            obj.?.incref();
-        }
-        return Scope{
-            .allocator = allocator,
-            .local_vars = locals,
-            .parent_scopes = scopes,
-        };
-    }
-
-    fn initSub(parent: *Scope, nlocals: u16) !Scope {
-        const locals = try parent.allocator.alloc(?*Object, nlocals);
-        errdefer parent.allocator.free(locals);
-        for (locals) |*obj| {
-            obj.* = null;
-        }
-
-        const parents = try parent.allocator.alloc(*Scope, parent.parent_scopes.len + 1);
-        errdefer parent.allocator.free(parents);
-        std.mem.copy(*Scope, parents, parent.parent_scopes);
-        parents[parent.parent_scopes.len] = parent;
-
-        return Scope{
-            .allocator = parent.allocator,
-            .local_vars = locals,
-            .parent_scopes = parents,
-        };
-    }
-
-    fn getForLevel(self: *Scope, level: u16) *Scope {
-        if (level == self.parent_scopes.len) {
-            return self;
-        }
-        std.debug.assert(level < self.parent_scopes.len);
-        return self.parent_scopes[level];
-    }
-
-    pub fn destroy(self: Scope) void {
-        for (self.local_vars) |obj| {
-            if (obj != null) {
-                obj.?.decref();
-            }
-        }
-        self.allocator.free(self.local_vars);
-        self.allocator.free(self.parent_scopes);
-    }
-};
-
-test "very basic scope creating" {
-    const assert = std.debug.assert;
-
-    var global_scope = try Scope.initGlobal(std.heap.c_allocator);
-    defer global_scope.destroy();
-    var file_scope = try global_scope.initSub(3);
-    defer file_scope.destroy();
-
-    assert(global_scope.parent_scopes.len == 0);
-    assert(file_scope.parent_scopes.len == 1);
-    assert(file_scope.parent_scopes[0] == &global_scope);
-}
-
 
 fn asdaFunctionFnReturning(interp: *Interp, data: *objtyp.ObjectData, args: []const *objtyp.Object) anyerror!*Object {
     std.debug.assert(args.len == 1);
@@ -92,11 +20,11 @@ const RunResult = union(enum) {
 
 const Runner = struct {
     interp: *Interp,
-    scope: *Scope,
+    scope: *Object,
     stack: std.ArrayList(*Object),    // TODO: give this a size hint calculated by the compiler
     ops: []bcreader.Op,
 
-    fn init(interp: *Interp, ops: []bcreader.Op, scope: *Scope) Runner {
+    fn init(interp: *Interp, ops: []bcreader.Op, scope: *Object) Runner {
         const stack = std.ArrayList(*Object).init(interp.object_allocator);
         errdefer stack.deinit();
         return Runner{ .scope = scope, .stack = stack, .ops = ops, .interp = interp };
@@ -112,14 +40,17 @@ const Runner = struct {
         while (i < self.ops.len) {
             switch(self.ops[i].data) {
                 bcreader.Op.Data.LookupVar => |vardata| {
-                    const scope = self.scope.getForLevel(vardata.level);
-                    const obj = scope.local_vars[vardata.index].?;
+                    const scope = objects.scope.getForLevel(self.scope, vardata.level);
+                    defer scope.decref();
+
+                    const obj = objects.scope.getLocalVars(scope)[vardata.index].?;
                     try self.stack.append(obj);
                     obj.incref();
                 },
                 bcreader.Op.Data.SetVar => |vardata| {
-                    const scope = self.scope.getForLevel(vardata.level);
-                    scope.local_vars[vardata.index] = self.stack.pop();
+                    const scope = objects.scope.getForLevel(self.scope, vardata.level);
+                    defer scope.decref();
+                    objects.scope.getLocalVars(scope)[vardata.index] = self.stack.pop();
                 },
                 bcreader.Op.Data.CreateFunction => |createdata| {
                     std.debug.assert(createdata.typ.Function.returntype != null);     // TODO
@@ -220,12 +151,12 @@ const Runner = struct {
 
 
 pub fn runFile(interp: *Interp, code: bcreader.Code) !void {
-    var global_scope = try Scope.initGlobal(interp.object_allocator);
-    defer global_scope.destroy();
-    var file_scope = try global_scope.initSub(code.nlocalvars);
-    defer file_scope.destroy();
+    const global_scope = try objects.scope.createGlobal(interp);
+    defer global_scope.decref();
+    const file_scope = try objects.scope.createSub(global_scope, code.nlocalvars);
+    defer file_scope.decref();
 
-    var runner = Runner.init(interp, code.ops, &file_scope);
+    var runner = Runner.init(interp, code.ops, file_scope);
     defer runner.destroy();
 
     const result = try runner.run();

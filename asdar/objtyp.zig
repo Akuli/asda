@@ -36,7 +36,7 @@ pub const object_type = &object_type_value;
 pub const ObjectData = union(enum) {
     StringData: objects.string.Data,
     FunctionData: objects.function.Data,
-    //RunnerScope: runner.Scope,
+    ScopeData: objects.scope.Data,
     BcreaderCode: bcreader.Code,    // will NOT be destroyed
     NoData,
 
@@ -46,7 +46,7 @@ pub const ObjectData = union(enum) {
 
             // combining these into one makes the compiled executable segfault
             ObjectData.FunctionData => |val| val.destroy(),
-            //ObjectData.RunnerScope => |val| val.destroy(),
+            ObjectData.ScopeData => |val| val.destroy(),
             ObjectData.StringData => |val| val.destroy(),
         }
     }
