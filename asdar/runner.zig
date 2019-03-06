@@ -30,11 +30,6 @@ const Runner = struct {
         return Runner{ .scope = scope, .stack = stack, .ops = ops, .interp = interp };
     }
 
-    // yes this is needed, otherwise doesn't compile
-    fn runHelper() RunResult {
-        return RunResult.DidntReturn;
-    }
-
     fn run(self: *Runner) !RunResult {
         var i: usize = 0;
         while (i < self.ops.len) {
@@ -137,7 +132,7 @@ const Runner = struct {
         }
 
         std.debug.assert(self.stack.count() == 0);
-        return Runner.runHelper();
+        return RunResult{ .DidntReturn = void {} };
     }
 
     fn destroy(self: Runner) void {
