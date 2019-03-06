@@ -121,7 +121,7 @@ const BytecodeReader = struct {
     }
 
     // anyerror is needed because this calls itself, the compiler gets confused without anyerror
-    fn readType(self: *BytecodeReader, firstByte: ?u8) anyerror!*objtyp.Type {
+    fn readType(self: *BytecodeReader, firstByte: ?u8) anyerror!?*objtyp.Type {
         const magic = firstByte orelse try self.in.readByte();
 
         switch(magic) {
@@ -134,12 +134,19 @@ const BytecodeReader = struct {
                 const nargs = try self.in.readIntLittle(u8);
                 const argtypes = try self.interp.import_arena_allocator.alloc(*objtyp.Type, nargs);
                 for (argtypes) |*arg| {
-                    arg.* = try self.readType(null);
+                    arg.* = (try self.readType(null)).?;
                 }
 
                 const functype = try self.interp.import_arena_allocator.create(objtyp.Type);
-                functype.* = objects.function.FunctionType.initComptimeReturning(argtypes, returntype);
+                if (returntype) |rt| {
+                    functype.* = objects.function.FunctionType.initComptimeReturning(argtypes, returntype.?);
+                } else {
+                    functype.* = objects.function.FunctionType.initComptimeVoid(argtypes);
+                }
                 return functype;
+            },
+            TYPE_VOID => {
+                return null;
             },
             else => {
                 self.errorByte.* = magic;
@@ -209,7 +216,7 @@ const BytecodeReader = struct {
                     break :blk Op.Data{ .CallFunction = Op.CallFunctionData{ .returning = ret, .nargs = nargs }};
                 },
                 CREATE_FUNCTION => blk: {
-                    const typ = try self.readType(CREATE_FUNCTION);
+                    const typ = (try self.readType(CREATE_FUNCTION)).?;
                     const yields = switch(try self.in.readByte()) {
                         0 => false,
                         else => unreachable,    // TODO: yielding functions

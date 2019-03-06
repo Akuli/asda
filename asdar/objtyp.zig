@@ -37,15 +37,16 @@ pub const ObjectData = union(enum) {
     StringData: objects.string.Data,
     FunctionData: objects.function.Data,
     ScopeData: objects.scope.Data,
-    BcreaderCode: bcreader.Code,    // will NOT be destroyed
+    AsdaFunctionState: runner.AsdaFunctionState,
     NoData,
 
     pub fn destroy(self: ObjectData) void {
         switch(self) {
-            ObjectData.NoData, ObjectData.BcreaderCode => { },
+            ObjectData.NoData => { },
 
             // combining these into one makes the compiled executable segfault
             ObjectData.FunctionData => |val| val.destroy(),
+            ObjectData.AsdaFunctionState => |val| val.destroy(),
             ObjectData.ScopeData => |val| val.destroy(),
             ObjectData.StringData => |val| val.destroy(),
         }

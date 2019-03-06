@@ -7,12 +7,6 @@ const builtins = @import("builtins.zig");
 const objects = @import("objects/index.zig");
 
 
-fn asdaFunctionFnReturning(interp: *Interp, data: *objtyp.ObjectData, args: []const *objtyp.Object) anyerror!*Object {
-    std.debug.assert(args.len == 1);
-    args[0].incref();
-    return args[0];
-}
-
 const RunResult = union(enum) {
     Returned: ?*Object,  // value is null for void return
     DidntReturn,
@@ -30,9 +24,33 @@ const Runner = struct {
         return Runner{ .scope = scope, .stack = stack, .ops = ops, .interp = interp };
     }
 
+    fn debugDump(self: *const Runner) void {
+        std.debug.warn("level {}\n", self.scope.data.ScopeData.parent_scopes.len);
+        std.debug.warn("stack: ");
+        for (self.stack.toSliceConst()) |obj| {
+            std.debug.warn("{*} ", obj);
+        }
+        std.debug.warn("\n");
+
+        std.debug.warn("local vars: ");
+        for (self.scope.data.ScopeData.local_vars) |maybe_obj| {
+            if (maybe_obj) |obj| {
+                std.debug.warn("{*} ", obj);
+            } else {
+                std.debug.warn("null ");
+            }
+        }
+        std.debug.warn("\n");
+    }
+
     fn run(self: *Runner) !RunResult {
         var i: usize = 0;
         while (i < self.ops.len) {
+            // uncomment to debug
+            //self.debugDump();
+            //std.debug.warn("doing next: {}\n", @tagName(self.ops[i].data));
+            //std.debug.warn("\n");
+
             switch(self.ops[i].data) {
                 bcreader.Op.Data.LookupVar => |vardata| {
                     const scope = objects.scope.getForLevel(self.scope, vardata.level);
@@ -48,15 +66,18 @@ const Runner = struct {
                     objects.scope.getLocalVars(scope)[vardata.index] = self.stack.pop();
                 },
                 bcreader.Op.Data.CreateFunction => |createdata| {
-                    std.debug.assert(createdata.typ.Function.returntype != null);     // TODO
                     const the_fn = objects.function.Fn{ .Returning = asdaFunctionFnReturning };
 
                     var func: *Object = undefined;
                     {
                         const data = try self.interp.object_allocator.create(objtyp.ObjectData);
                         errdefer data.destroy();
-                        data.* = objtyp.ObjectData{ .BcreaderCode = createdata.body };
+                        data.* = objtyp.ObjectData{ .AsdaFunctionState = AsdaFunctionState{
+                            .code = createdata.body,
+                            .definition_scope = self.scope,
+                        }};
                         func = try objects.function.new(self.interp, createdata.name, createdata.typ, the_fn, data);
+                        data.AsdaFunctionState.definition_scope.incref();
                     }
                     errdefer func.decref();
 
@@ -143,6 +164,38 @@ const Runner = struct {
         self.stack.deinit();
     }
 };
+
+
+// passed to functions defined in asda
+pub const AsdaFunctionState = struct {
+    code: bcreader.Code,
+    definition_scope: *Object,
+
+    pub fn destroy(self: AsdaFunctionState) void {
+        std.debug.warn("destroying an AsdaFunctionState");
+        // doesn't destroy the code because that's allocated with interp.import_allocator
+        self.definition_scope.decref();
+    }
+};
+
+fn asdaFunctionFnReturning(interp: *Interp, data: *objtyp.ObjectData, args: []const *objtyp.Object) anyerror!*Object {
+    const call_scope = try objects.scope.createSub(data.AsdaFunctionState.definition_scope, data.AsdaFunctionState.code.nlocalvars);
+    defer call_scope.decref();
+
+    var i: usize = 0;
+    for (args) |arg| {
+        objects.scope.getLocalVars(call_scope)[i] = arg;
+        arg.incref();
+        i += 1;
+    }
+
+    // data.AsdaFunctionState.code.nlocalvars
+    var runner = Runner.init(interp, data.AsdaFunctionState.code.ops, call_scope);
+    defer runner.destroy();
+
+    const result = try runner.run();
+    return result.Returned.?;
+}
 
 
 pub fn runFile(interp: *Interp, code: bcreader.Code) !void {
