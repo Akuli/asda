@@ -1,28 +1,45 @@
 #!/bin/bash
 set -e
 
-(cd .. && python3 -m asdac examples/*.asda)
+# usage:
+#   ./run.sh            runs all examples
+#   ./run.sh hello      runs examples/hello.asda
 
-echo "running zig build..."
-zig build
+#echo "running zig build..."
+#zig build
 
 ok=0
 fail=0
-for file in ../asda-compiled/examples/*; do
-    case "$file" in
-    */while.asdac)
-        ;;
-    *)
-        printf "\n*** %s ***\n\n" "$file"
-        set +e
-        if zig-cache/asdar "$file"; then
-            ((ok++))
-        else
-            ((fail++))
+
+run()
+{
+    local name=$1
+    echo ""
+    echo "*** $name ***"
+    echo ""
+
+    ( cd .. && python3 -m asdac "examples/$name.asda" )
+    set +e
+    if zig-cache/asdar "../asda-compiled/examples/$name.asdac"; then
+        ((ok++))
+    else
+        ((fail++))
+    fi
+    set -e
+}
+
+if [ $# = 0 ]; then
+    for file in ../examples/*.asda; do
+        name="$(basename "$file" | sed -e 's/\..*$//')"
+        if [ "$name" != "while" ]; then
+            run "$name"
         fi
-        set -e
-    esac
-done
+    done
+else
+    for file in "$@"; do
+        run "$file"
+    done
+fi
 
 echo ""
 echo "==================="
