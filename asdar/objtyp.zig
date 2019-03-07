@@ -107,7 +107,9 @@ pub const Object = struct {
     // free_nonrefs is whether to do anything else than decref_refs stuff, usually that's true too
     pub fn destroy(self: *Object, decref_refs: bool, free_nonrefs: bool) void {
         self.data.destroy(decref_refs, free_nonrefs);
-        self.interp.?.object_allocator.destroy(self);
+        if (free_nonrefs) {
+            self.interp.?.object_allocator.destroy(self);
+        }
     }
 };
 

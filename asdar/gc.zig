@@ -52,7 +52,7 @@ pub const GC = struct {
 
         it = self.all.iterator();
         while (it.next()) |kv| {
-            kv.key.decref();
+            kv.key.destroy(true, false);
         }
 
         var problems = false;
