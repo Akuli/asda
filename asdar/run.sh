@@ -2,8 +2,8 @@
 set -e
 
 # usage:
-#   ./run.sh            runs all examples
-#   ./run.sh hello      runs examples/hello.asda
+#   ./run.sh                    runs all examples
+#   ./run.sh examples/hello     runs examples/hello.asda
 
 #echo "running zig build..."
 #zig build
@@ -18,9 +18,9 @@ run()
     echo "*** $name ***"
     echo ""
 
-    ( cd .. && python3 -m asdac "examples/$name.asda" )
+    ( cd .. && python3 -m asdac "$name.asda" )
     set +e
-    if zig-cache/asdar "../asda-compiled/examples/$name.asdac"; then
+    if zig-cache/asdar "../asda-compiled/$name.asdac"; then
         ((ok++))
     else
         ((fail++))
@@ -30,14 +30,14 @@ run()
 
 if [ $# = 0 ]; then
     for file in ../examples/*.asda; do
-        name="$(basename "$file" | sed -e 's/\..*$//')"
-        if [ "$name" != "while" ]; then
-            run "$name"
+        name_wo_examples="$(basename "$file" | sed 's/\..*$//')"
+        if [ "$name_wo_examples" != "while" ]; then
+            run "examples/$name_wo_examples"
         fi
     done
 else
-    for file in "$@"; do
-        run "$file"
+    for name in "$@"; do
+        run "$name"
     done
 fi
 

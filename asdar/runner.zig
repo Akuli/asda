@@ -63,10 +63,18 @@ const Runner = struct {
                 bcreader.Op.Data.SetVar => |vardata| {
                     const scope = objects.scope.getForLevel(self.scope, vardata.level);
                     defer scope.decref();
+                    if (objects.scope.getLocalVars(scope)[vardata.index]) |old_value| {
+                        old_value.decref();
+                    }
                     objects.scope.getLocalVars(scope)[vardata.index] = self.stack.pop();
                 },
                 bcreader.Op.Data.CreateFunction => |createdata| {
-                    const the_fn = objects.function.Fn{ .Returning = asdaFunctionFnReturning };
+                    var the_fn: objects.function.Fn = undefined;
+                    if (createdata.typ.Function.returntype) |_| {
+                        the_fn = objects.function.Fn{ .Returning = asdaFunctionFnReturning };
+                    } else {
+                        the_fn = objects.function.Fn{ .Void = asdaFunctionFnVoid };
+                    }
 
                     var func: *Object = undefined;
                     {
@@ -180,6 +188,7 @@ pub const AsdaFunctionState = struct {
     }
 };
 
+// TODO: less copy/pasta!
 fn asdaFunctionFnReturning(interp: *Interp, data: *objtyp.ObjectData, args: []const *objtyp.Object) anyerror!*Object {
     const call_scope = try objects.scope.createSub(data.AsdaFunctionState.definition_scope, data.AsdaFunctionState.code.nlocalvars);
     defer call_scope.decref();
@@ -197,6 +206,25 @@ fn asdaFunctionFnReturning(interp: *Interp, data: *objtyp.ObjectData, args: []co
 
     const result = try runner.run();
     return result.Returned.?;
+}
+
+fn asdaFunctionFnVoid(interp: *Interp, data: *objtyp.ObjectData, args: []const *objtyp.Object) anyerror!void {
+    const call_scope = try objects.scope.createSub(data.AsdaFunctionState.definition_scope, data.AsdaFunctionState.code.nlocalvars);
+    defer call_scope.decref();
+
+    var i: usize = 0;
+    for (args) |arg| {
+        objects.scope.getLocalVars(call_scope)[i] = arg;
+        arg.incref();
+        i += 1;
+    }
+
+    // data.AsdaFunctionState.code.nlocalvars
+    var runner = Runner.init(interp, data.AsdaFunctionState.code.ops, call_scope);
+    defer runner.destroy();
+
+    const result = try runner.run();
+    std.debug.assert(result.Returned == null);
 }
 
 

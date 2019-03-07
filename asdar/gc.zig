@@ -1,6 +1,8 @@
 const std = @import("std");
 const Interp = @import("interp.zig").Interp;
-const Object = @import("objtyp.zig").Object;
+const objtyp = @import("objtyp.zig");
+const Object = objtyp.Object;
+const objects = @import("objects/index.zig");
 
 
 fn objectPtrHash(ptr: *Object) u32 {
@@ -16,6 +18,21 @@ fn objectPtrEq(a: *Object, b: *Object) bool {
 
 // u32 is used in checkRefcounts()
 const ObjectSet = std.HashMap(*Object, u32, objectPtrHash, objectPtrEq);
+
+
+fn refcountDebugObject(obj: *Object, actual_refcount: u32, expected_refcount: u32) void {
+    std.debug.warn("  {*}: refcount={} (should be {}), ",
+        obj, actual_refcount, expected_refcount);
+    if (obj.asda_type == objects.string.typ) {
+        if (objects.string.toUtf8(std.heap.c_allocator, obj)) |utf8| {
+            defer std.heap.c_allocator.free(utf8);
+            std.debug.warn("\"{}\"", utf8);
+        } else |err| {}
+    } else {
+        std.debug.warn("asda_type={*} {} ", obj.asda_type, @tagName(obj.asda_type.*));
+    }
+    std.debug.warn("\n");
+}
 
 
 pub const GC = struct {
@@ -63,9 +80,11 @@ pub const GC = struct {
             if (actual != should_be) {
                 if (!problems) {
                     std.debug.warn("*** refcount issues detected ***\n");
+                    objects.debugTypes();
+                    std.debug.warn("\n");
                     problems = true;
                 }
-                std.debug.warn("  {*}: refcount={} (should be {}), asda_type={}\n", kv.key, actual, should_be, @tagName(kv.key.asda_type.*));
+                refcountDebugObject(kv.key, actual, should_be);
             }
         }
     }
