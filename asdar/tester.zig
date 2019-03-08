@@ -1,7 +1,7 @@
 // imports all the files
 // useful for testing, this runs all tests:
 //
-//     $ zig test tester.zig --library c
+//     $ zig test tester.zig --library c --library gmp
 
 comptime {
     _ = @import("bcreader.zig");

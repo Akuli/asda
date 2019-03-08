@@ -7,6 +7,7 @@ pub fn build(b: *Builder) void {
     exe.setBuildMode(mode);
 
     exe.linkSystemLibrary("c");
+    exe.linkSystemLibrary("gmp");
 
     const run_step = b.step("run", "Run the app");
     const run_cmd = b.addCommand(".", b.env_map, [][]const u8{exe.getOutputPath()});

@@ -38,6 +38,7 @@ pub const ObjectData = union(enum) {
     FunctionData: objects.function.Data,
     ScopeData: objects.scope.Data,
     AsdaFunctionState: runner.AsdaFunctionState,
+    IntegerData: objects.integer.Data,
     NoData,
 
     pub fn destroy(self: ObjectData, decref_refs: bool, free_nonrefs: bool) void {
@@ -49,6 +50,7 @@ pub const ObjectData = union(enum) {
             ObjectData.AsdaFunctionState => |val| val.destroy(decref_refs, free_nonrefs),
             ObjectData.ScopeData => |val| val.destroy(decref_refs, free_nonrefs),
             ObjectData.StringData => |val| val.destroy(decref_refs, free_nonrefs),
+            ObjectData.IntegerData => |val| val.destroy(decref_refs, free_nonrefs),
         }
     }
 };

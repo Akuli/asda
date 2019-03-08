@@ -7,6 +7,8 @@ const objtyp = @import("objtyp.zig");
 const Object = objtyp.Object;
 const objects = @import("objects/index.zig");
 
+use @cImport(@cInclude("gmp.h"));
+
 const StreamType = std.io.InStream(std.os.File.InStream.Error);
 
 const SET_LINENO: u8 = 'L';
@@ -110,7 +112,6 @@ const BytecodeReader = struct {
         return BytecodeReader{ .interp = interp, .in = in, .lineno = 1, .errorByte = errorByte };
     }
 
-    // return value must be freed with the allocator
     fn readString(self: *BytecodeReader) ![]u8 {
         const len = try self.in.readIntLittle(u32);
         // TODO: use a better allocator? this is usually temporary
@@ -225,6 +226,14 @@ const BytecodeReader = struct {
                     const body = try self.readBody();
                     errdefer body.destroy();
                     break :blk Op.Data{ .CreateFunction = Op.CreateFunctionData{ .typ = typ, .name = name, .body = body }};
+                },
+                NON_NEGATIVE_INT_CONSTANT => blk: {
+                    const data = try self.readString();
+                    break :blk Op.Data{ .Constant = try objects.integer.newFromFunnyAsdaBytecodeNumberString(self.interp, data, false) };
+                },
+                NEGATIVE_INT_CONSTANT => blk: {
+                    const data = try self.readString();
+                    break :blk Op.Data{ .Constant = try objects.integer.newFromFunnyAsdaBytecodeNumberString(self.interp, data, true) };
                 },
                 else => {
                     self.errorByte.* = opbyte;
