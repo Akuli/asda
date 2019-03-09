@@ -6,17 +6,28 @@ const Interp = @import("interp.zig").Interp;
 const objects = @import("objects/index.zig");
 const runner = @import("runner.zig");
 
+// value is the value of that attribute or a method function, depending on is_method
+pub const Attribute = struct { is_method: bool, value: *Object };
+
 pub const Type = struct {
     // optional to work around a bug, never actually null, use getMethods() to access this
     // https://github.com/ziglang/zig/issues/1914
-    methods: ?[]*Object,
+    attributes: ?[]const Attribute,
 
-    pub fn init(methods: []*Object) Type {
-        return Type{ .methods = methods };
+    pub fn init(attributes: []const Attribute) Type {
+        return Type{ .attributes = attributes };
     }
 
-    pub fn getMethods(self: *Type) []*Object{
-        return self.methods.?;
+    pub fn getAttribute(self: *Type, interp: *Interp, obj: *Object, index: u16) !*Object {
+        std.debug.warn("index = {}, len = {}\n", index, self.attributes.?.len);
+        std.debug.warn("looking up from type {*}\n", self);
+        objects.debugTypes();
+        const attrib = self.attributes.?[index];
+        if (attrib.is_method) {
+            return try objects.function.newPartial(interp, attrib.value, []const *Object { obj });
+        }
+        attrib.value.incref();
+        return attrib.value;
     }
 };
 
@@ -31,6 +42,7 @@ pub const ObjectData = union(enum) {
     ScopeData: objects.scope.Data,
     AsdaFunctionState: runner.AsdaFunctionState,
     IntegerData: objects.integer.Data,
+    ObjectArrayList: std.ArrayList(*Object),
     NoData,
 
     pub fn destroy(self: ObjectData, decref_refs: bool, free_nonrefs: bool) void {
@@ -43,6 +55,16 @@ pub const ObjectData = union(enum) {
             ObjectData.ScopeData => |val| val.destroy(decref_refs, free_nonrefs),
             ObjectData.StringData => |val| val.destroy(decref_refs, free_nonrefs),
             ObjectData.IntegerData => |val| val.destroy(decref_refs, free_nonrefs),
+            ObjectData.ObjectArrayList => |arrlst| {
+                if (decref_refs) {
+                    for (arrlst.toSliceConst()) |obj| {
+                        obj.decref();
+                    }
+                }
+                if (free_nonrefs) {
+                    arrlst.deinit();
+                }
+            },
         }
     }
 };
@@ -123,5 +145,5 @@ test "basic object creation" {
     assert(obj.refcount == 1);
 
     assert(obj.asda_type == object_type);
-    assert(getMethods(obj.asda_type).len == 0);
+    assert(obj.asda_type.getMethods().len == 0);
 }

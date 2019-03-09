@@ -3,11 +3,30 @@ const assert = std.debug.assert;
 const Interp = @import("../interp.zig").Interp;
 const objtyp = @import("../objtyp.zig");
 const Object = objtyp.Object;
+const objects = @import("index.zig");
 
 use @cImport(@cInclude("gmp.h"));
 
 
-var type_value = objtyp.Type.init([]*Object { });
+fn toStringFn(interp: *Interp, data: *objtyp.ObjectData, args: []const *Object) anyerror!*Object {
+    std.debug.assert(args.len == 1);
+    const mpz = args[0].data.IntegerData.mpz;
+
+    const base = 10;
+    const buf = try interp.object_allocator.alloc(u8, mpz_sizeinbase(&mpz[0], base) + 2);   // see mpz_get_str docs
+    defer interp.object_allocator.free(buf);
+
+    _ = mpz_get_str(buf.ptr, base, &mpz[0]);
+
+    const len = std.mem.len(u8, buf.ptr);
+    return try objects.string.newFromUtf8(interp, buf[0..len]);
+}
+var tostring_value = objects.function.newComptime("to_string", objects.function.Fn{ .Returning = toStringFn }, null);
+
+
+var type_value = objtyp.Type.init([]objtyp.Attribute {
+    objtyp.Attribute{ .is_method = true, .value = &tostring_value },
+});
 pub const typ = &type_value;
 
 pub const Data = struct {

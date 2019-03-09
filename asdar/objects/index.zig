@@ -11,4 +11,5 @@ pub fn debugTypes() void {
     // function objects have several different types
     std.debug.warn("scope    = {*}\n", scope.typ);
     std.debug.warn("string   = {*}\n", string.typ);
+    std.debug.warn("integer  = {*}\n", integer.typ);
 }

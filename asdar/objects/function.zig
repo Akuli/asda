@@ -4,11 +4,10 @@ const objtyp = @import("../objtyp.zig");
 const Object = objtyp.Object;
 
 
-var void_type_value = objtyp.Type.init([]*Object { });
-var returning_type_value = objtyp.Type.init([]*Object { });
+var void_type_value = objtyp.Type.init([]objtyp.Attribute { });
+var returning_type_value = objtyp.Type.init([]objtyp.Attribute { });
 pub const void_type = &void_type_value;
 pub const returning_type = &returning_type_value;
-
 
 pub const Fn = union(enum) {
     Returning: fn(interp: *Interp, data: *objtyp.ObjectData, []const *Object) anyerror!*Object,
@@ -57,18 +56,16 @@ pub fn newComptime(name: []const u8, zig_fn: Fn, passed_data: ?*objtyp.ObjectDat
 }
 
 // passed_data should be allocated with interp.object_allocator
-pub fn new(interp: *Interp, name: []const u8, zig_fn: Fn, passed_data: ?*objtyp.ObjectData) !*Object {
-    const passed_data_notnull = passed_data orelse blk: {
-        const res = try interp.object_allocator.create(objtyp.ObjectData);
-        res.* = no_data;
-        break :blk res;
-        // FIXME: should errdefer a dealloc nicely
-    };
+pub fn new(interp: *Interp, name: []const u8, zig_fn: Fn, passed_data: ?objtyp.ObjectData) !*Object {
+    const data_ptr = try interp.object_allocator.create(objtyp.ObjectData);
+    errdefer interp.object_allocator.destroy(data_ptr);
+    data_ptr.* = passed_data orelse no_data;
+
     const typ = switch(zig_fn) {
         Fn.Returning => returning_type,
         Fn.Void => returning_type,
     };
-    const data = objtyp.ObjectData{ .FunctionData = Data.init(interp.object_allocator, name, zig_fn, passed_data_notnull) };
+    const data = objtyp.ObjectData{ .FunctionData = Data.init(interp.object_allocator, name, zig_fn, data_ptr) };
     return try Object.init(interp, typ, data);
 }
 
@@ -91,4 +88,43 @@ pub fn callReturning(interp: *Interp, func: *Object, args: []const *Object) !*Ob
 
 pub fn callVoid(interp: *Interp, func: *Object, args: []const *Object) !void {
     try func.data.FunctionData.zig_fn.Void(interp, func.data.FunctionData.passed_data, args);
+}
+
+fn partialFnVoid(interp: *Interp, data: *objtyp.ObjectData, args: []const *Object) anyerror!void {
+    const func = data.ObjectArrayList.at(0);
+    const all_args = try interp.object_allocator.alloc(*Object, data.ObjectArrayList.count() - 1 + args.len);
+    defer interp.object_allocator.free(all_args);
+    std.mem.copy(*Object, all_args, data.ObjectArrayList.toSliceConst()[1..]);
+    std.mem.copy(*Object, all_args[(data.ObjectArrayList.count() - 1)..], args);
+    try callVoid(interp, func, all_args);
+}
+
+fn partialFnReturning(interp: *Interp, data: *objtyp.ObjectData, args: []const *Object) anyerror!*Object {
+    const func = data.ObjectArrayList.at(0);
+    const all_args = try interp.object_allocator.alloc(*Object, data.ObjectArrayList.count() - 1 + args.len);
+    defer interp.object_allocator.free(all_args);
+    std.mem.copy(*Object, all_args, data.ObjectArrayList.toSliceConst()[1..]);
+    std.mem.copy(*Object, all_args[(data.ObjectArrayList.count() - 1)..], args);
+    return try callReturning(interp, func, all_args);
+}
+
+pub fn newPartial(interp: *Interp, func: *Object, extra_args: []const *Object) !*Object {
+    const zig_fn = switch(func.data.FunctionData.zig_fn) {
+        Fn.Returning => Fn{ .Returning = partialFnReturning },
+        Fn.Void => Fn{ .Void = partialFnVoid },
+    };
+
+    var arrlst = std.ArrayList(*Object).init(interp.object_allocator);
+    errdefer arrlst.deinit();
+    try arrlst.append(func);
+    for (extra_args) |arg| {
+        try arrlst.append(arg);
+    }
+
+    const res = try new(interp, "<partial>", zig_fn, objtyp.ObjectData{ .ObjectArrayList = arrlst });
+
+    for (arrlst.toSliceConst()) |obj| {
+        obj.incref();
+    }
+    return res;
 }

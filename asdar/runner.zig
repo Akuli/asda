@@ -78,8 +78,7 @@ const Runner = struct {
 
                     var func: *Object = undefined;
                     {
-                        const data = try self.interp.object_allocator.create(objtyp.ObjectData);
-                        data.* = objtyp.ObjectData{ .AsdaFunctionState = AsdaFunctionState{
+                        const data = objtyp.ObjectData{ .AsdaFunctionState = AsdaFunctionState{
                             .code = createdata.body,
                             .definition_scope = self.scope,
                         }};
@@ -147,6 +146,13 @@ const Runner = struct {
                 },
                 bcreader.Op.Data.DidntReturnError => {
                     std.debug.panic("a non-void function didn't return");
+                },
+                bcreader.Op.Data.LookupAttribute => |lookup| {
+                    const last = self.stack.count() - 1;
+                    const obj = self.stack.at(last);
+                    const new = try lookup.typ.getAttribute(self.interp, obj, lookup.index);
+                    obj.decref();
+                    self.stack.set(last, new);
                 },
                 bcreader.Op.Data.JumpIf => {},
             }

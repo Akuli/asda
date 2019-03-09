@@ -37,7 +37,7 @@ pub const object_array = []const *Object {
 };
 pub const type_array = []const *objtyp.Type{
     objects.string.typ,
-    objects.boolean.typ,     // FIXME: should be int, but there is no int yet :(
+    objects.integer.typ,
     objects.boolean.typ,
     objects.boolean.typ,     // FIXME: should be Object, but types don't have parent types and inheritance yet
 };

@@ -49,11 +49,13 @@ const TYPE_VOID: u8 = 'v';
 pub const Op = struct {
     pub const VarData = struct{ level: u8, index: u16 };
     pub const CallFunctionData = struct{ returning: bool, nargs: u8 };
+    pub const LookupAttributeData = struct{ typ: *objtyp.Type, index: u16 };
     pub const CreateFunctionData = struct{ returning: bool, name: []u8, body: Code };
 
     pub const Data = union(enum) {
         LookupVar: VarData,
         SetVar: VarData,
+        LookupAttribute: LookupAttributeData,
         CreateFunction: CreateFunctionData,
         CallFunction: CallFunctionData,
         Constant: *Object,
@@ -238,6 +240,11 @@ const BytecodeReader = struct {
                 NEGATIVE_INT_CONSTANT => blk: {
                     const data = try self.readString();
                     break :blk Op.Data{ .Constant = try objects.integer.newFromFunnyAsdaBytecodeNumberString(self.interp, data, true) };
+                },
+                LOOKUP_ATTRIBUTE => blk: {
+                    const typ = (try self.readType(null)).?;
+                    const i = try self.in.readIntLittle(u16);
+                    break :blk Op.Data{ .LookupAttribute = Op.LookupAttributeData{ .typ = typ, .index = i }};
                 },
                 else => {
                     self.errorByte.* = opbyte;
