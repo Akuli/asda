@@ -70,7 +70,7 @@ const Runner = struct {
                 },
                 bcreader.Op.Data.CreateFunction => |createdata| {
                     var the_fn: objects.function.Fn = undefined;
-                    if (createdata.typ.Function.returntype) |_| {
+                    if (createdata.returning) {
                         the_fn = objects.function.Fn{ .Returning = asdaFunctionFnReturning };
                     } else {
                         the_fn = objects.function.Fn{ .Void = asdaFunctionFnVoid };
@@ -86,7 +86,7 @@ const Runner = struct {
                         data.AsdaFunctionState.definition_scope.incref();
                         errdefer data.destroy(true, true);
 
-                        func = try objects.function.new(self.interp, createdata.name, createdata.typ, the_fn, data);
+                        func = try objects.function.new(self.interp, createdata.name, the_fn, data);
                     }
                     errdefer func.decref();
 

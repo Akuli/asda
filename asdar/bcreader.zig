@@ -49,7 +49,7 @@ const TYPE_VOID: u8 = 'v';
 pub const Op = struct {
     pub const VarData = struct{ level: u8, index: u16 };
     pub const CallFunctionData = struct{ returning: bool, nargs: u8 };
-    pub const CreateFunctionData = struct{ typ: *objtyp.Type, name: []u8, body: Code };
+    pub const CreateFunctionData = struct{ returning: bool, name: []u8, body: Code };
 
     pub const Data = union(enum) {
         LookupVar: VarData,
@@ -131,20 +131,20 @@ const BytecodeReader = struct {
                 return builtins.type_array[index];
             },
             CREATE_FUNCTION => {
-                const returntype = try self.readType(null);
+                const returning = ((try self.readType(null)) != null);
+
+                // ignore everything else, asdac needs that stuff but this interpreter doesn't
                 const nargs = try self.in.readIntLittle(u8);
-                const argtypes = try self.interp.import_arena_allocator.alloc(*objtyp.Type, nargs);
-                for (argtypes) |*arg| {
-                    arg.* = (try self.readType(null)).?;
+                var i: usize = 0;
+                while (i < nargs) : (i += 1) {
+                    const typ = try self.readType(null);
+                    std.debug.assert(typ != null);
                 }
 
-                const functype = try self.interp.import_arena_allocator.create(objtyp.Type);
-                if (returntype) |rt| {
-                    functype.* = objects.function.FunctionType.initComptimeReturning(argtypes, returntype.?);
-                } else {
-                    functype.* = objects.function.FunctionType.initComptimeVoid(argtypes);
+                if (returning) {
+                    return objects.function.returning_type;
                 }
-                return functype;
+                return objects.function.void_type;
             },
             TYPE_VOID => {
                 return null;
@@ -225,7 +225,11 @@ const BytecodeReader = struct {
                     const name = try self.readString();
                     const body = try self.readBody();
                     errdefer body.destroy();
-                    break :blk Op.Data{ .CreateFunction = Op.CreateFunctionData{ .typ = typ, .name = name, .body = body }};
+                    break :blk Op.Data{ .CreateFunction = Op.CreateFunctionData{
+                        .returning = (typ == objects.function.returning_type),
+                        .name = name,
+                        .body = body,
+                    }};
                 },
                 NON_NEGATIVE_INT_CONSTANT => blk: {
                     const data = try self.readString();

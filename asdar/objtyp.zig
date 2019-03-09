@@ -6,30 +6,22 @@ const Interp = @import("interp.zig").Interp;
 const objects = @import("objects/index.zig");
 const runner = @import("runner.zig");
 
-pub const BasicType = struct {
+pub const Type = struct {
     // optional to work around a bug, never actually null, use getMethods() to access this
     // https://github.com/ziglang/zig/issues/1914
     methods: ?[]*Object,
 
-    pub fn init(methods: []*Object) BasicType {
-        return BasicType{ .methods = methods };
+    pub fn init(methods: []*Object) Type {
+        return Type{ .methods = methods };
+    }
+
+    pub fn getMethods(self: *Type) []*Object{
+        return self.methods.?;
     }
 };
 
-pub const Type = union(enum) {
-    Basic: BasicType,
-    Function: objects.function.FunctionType,
-};
-
-pub fn getMethods(typ: *Type) []*Object{
-    return switch(typ.*) {
-        Type.Basic => |basictype| basictype.methods.?,
-        Type.Function => []*Object{ },
-    };
-}
-
-// TODO: const some stuff
-var object_type_value = Type{ .Basic = BasicType.init([]*Object { }) };
+// TODO: const some stuff?
+var object_type_value = Type.init([]*Object { });
 pub const object_type = &object_type_value;
 
 // used for arbitrary data outside this file, too

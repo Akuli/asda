@@ -7,7 +7,7 @@ const Object = objtyp.Object;
 use @cImport(@cInclude("gmp.h"));
 
 
-var type_value = objtyp.Type{ .Basic = objtyp.BasicType.init([]*Object { }) };
+var type_value = objtyp.Type.init([]*Object { });
 pub const typ = &type_value;
 
 pub const Data = struct {

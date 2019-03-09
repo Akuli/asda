@@ -77,7 +77,7 @@ pub const Data = struct {
     }
 };
 
-var type_value = objtyp.Type{ .Basic = objtyp.BasicType.init([]*Object { }) };
+var type_value = objtyp.Type.init([]*Object { });
 pub const typ = &type_value;
 
 pub fn createGlobal(interp: *Interp) !*Object {

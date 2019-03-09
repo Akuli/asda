@@ -29,7 +29,7 @@ fn refcountDebugObject(obj: *Object, actual_refcount: u32, expected_refcount: u3
             std.debug.warn("\"{}\"", utf8);
         } else |err| {}
     } else {
-        std.debug.warn("asda_type={*} {} ", obj.asda_type, @tagName(obj.asda_type.*));
+        std.debug.warn("asda_type={*} ", obj.asda_type);
     }
     std.debug.warn("\n");
 }

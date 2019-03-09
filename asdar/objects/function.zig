@@ -4,17 +4,11 @@ const objtyp = @import("../objtyp.zig");
 const Object = objtyp.Object;
 
 
-pub const FunctionType = struct {
-    argtypes: []const *objtyp.Type,
-    returntype: ?*objtyp.Type,
+var void_type_value = objtyp.Type.init([]*Object { });
+var returning_type_value = objtyp.Type.init([]*Object { });
+pub const void_type = &void_type_value;
+pub const returning_type = &returning_type_value;
 
-    pub fn initComptimeVoid(argtypes: []const *objtyp.Type) objtyp.Type {
-        return objtyp.Type{ .Function = FunctionType{ .argtypes = argtypes, .returntype = null } };
-    }
-    pub fn initComptimeReturning(argtypes: []const *objtyp.Type, returntype: *objtyp.Type) objtyp.Type {
-        return objtyp.Type{ .Function = FunctionType{ .argtypes = argtypes, .returntype = returntype } };
-    }
-};
 
 pub const Fn = union(enum) {
     Returning: fn(interp: *Interp, data: *objtyp.ObjectData, []const *Object) anyerror!*Object,
@@ -53,27 +47,29 @@ var no_data = objtyp.ObjectData{ .NoData = void{} };
 
 // passed_data should be e.g. statically allocated, and will NOT be destroyed
 // if it isn't, make it statically allocated or use init()
-pub fn newComptime(name: []const u8, typ: *objtyp.Type, zig_fn: Fn, passed_data: ?*objtyp.ObjectData) Object {
-    // TODO: figure out why this doesn't work
-    //switch(zig_fn) {
-    //    Fn.Returning => std.debug.assert(typ.Function.returntype != null),
-    //    Fn.Void => std.debug.assert(typ.Function.returntype == null),
-    //}
-
+pub fn newComptime(name: []const u8, zig_fn: Fn, passed_data: ?*objtyp.ObjectData) Object {
     const data = objtyp.ObjectData{ .FunctionData = Data.initComptime(name, zig_fn, passed_data orelse &no_data) };
+    const typ = switch(zig_fn) {
+        Fn.Returning => returning_type,
+        Fn.Void => returning_type,
+    };
     return Object.initComptime(typ, data);
 }
 
 // passed_data should be allocated with interp.object_allocator
-pub fn new(interp: *Interp, name: []const u8, typ: *objtyp.Type, zig_fn: Fn, passed_data: ?*objtyp.ObjectData) !*Object {
+pub fn new(interp: *Interp, name: []const u8, zig_fn: Fn, passed_data: ?*objtyp.ObjectData) !*Object {
     const passed_data_notnull = passed_data orelse blk: {
         const res = try interp.object_allocator.create(objtyp.ObjectData);
         res.* = no_data;
         break :blk res;
         // FIXME: should errdefer a dealloc nicely
     };
+    const typ = switch(zig_fn) {
+        Fn.Returning => returning_type,
+        Fn.Void => returning_type,
+    };
     const data = objtyp.ObjectData{ .FunctionData = Data.init(interp.object_allocator, name, zig_fn, passed_data_notnull) };
-    return Object.init(interp, typ, data);
+    return try Object.init(interp, typ, data);
 }
 
 test "function newComptime" {
