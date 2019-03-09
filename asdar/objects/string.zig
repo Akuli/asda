@@ -1,5 +1,4 @@
 const std = @import("std");
-const assert = std.debug.assert;
 const Interp = @import("../interp.zig").Interp;
 const objtyp = @import("../objtyp.zig");
 const Object = objtyp.Object;
@@ -59,7 +58,7 @@ pub fn newNoCopy(interp: *Interp, unicode: []u32) !*Object {
     return Object.init(interp, typ, Data.init(interp.object_allocator, unicode));
 }
 
-test "string newNoCopy" {
+test "newNoCopy" {
     var interp: Interp = undefined;
     interp.init();
     defer interp.deinit();
@@ -85,7 +84,7 @@ pub fn new(interp: *Interp, unicode: []const u32) !*Object {
     return newNoCopy(interp, dup);
 }
 
-test "string new" {
+test "new" {
     var interp: Interp = undefined;
     interp.init();
     defer interp.deinit();
@@ -137,7 +136,7 @@ pub fn toUtf8(allocator: *std.mem.Allocator, str: *Object) ![]u8 {
     return result.toOwnedSlice();
 }
 
-test "string newFromUtf8 toUnicode toUtf8" {
+test "newFromUtf8 toUnicode toUtf8" {
     var interp: Interp = undefined;
     interp.init();
     defer interp.deinit();
@@ -146,14 +145,14 @@ test "string newFromUtf8 toUnicode toUtf8" {
     defer string.decref();
 
     const arr = []u32{ 'P', 0xf6, 0xf6 };
-    assert(std.mem.eql(u32, toUnicode(string), arr));
+    std.debug.assert(std.mem.eql(u32, toUnicode(string), arr));
 
     const utf8 = try toUtf8(std.heap.c_allocator, string);
     defer std.heap.c_allocator.free(utf8);
-    assert(std.mem.eql(u8, utf8, "Pöö"));
+    std.debug.assert(std.mem.eql(u8, utf8, "Pöö"));
 }
 
-test "string empty" {
+test "empty" {
     var interp: Interp = undefined;
     interp.init();
     defer interp.deinit();
@@ -161,11 +160,11 @@ test "string empty" {
     const string = try newFromUtf8(&interp, "");
     defer string.decref();
 
-    assert(toUnicode(string).len == 0);
+    std.debug.assert(toUnicode(string).len == 0);
 
     const utf8 = try toUtf8(std.heap.c_allocator, string);
     defer std.heap.c_allocator.free(utf8);
-    assert(utf8.len == 0);
+    std.debug.assert(utf8.len == 0);
 }
 
 
@@ -196,7 +195,7 @@ pub fn join(interp: *Interp, strs: []const *Object) !*Object {
 }
 
 // TODO: test 0 and 1 string cases
-test "string join" {
+test "join" {
     var interp: Interp = undefined;
     interp.init();
     defer interp.deinit();
@@ -205,7 +204,7 @@ test "string join" {
     defer a.decref();
     const o = try newFromUtf8(&interp, "ö");
     defer o.decref();
-    const ao = join(&interp, []const *Object{ a, o });
+    const ao = try join(&interp, []const *Object{ a, o });
     defer ao.decref();
 
     const assert = std.debug.assert;

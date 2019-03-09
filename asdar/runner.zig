@@ -163,6 +163,29 @@ const Runner = struct {
                     self.stack.set(index, joined);
                     self.stack.shrink(index+1);
                 },
+                bcreader.Op.Data.PrefixMinus => {
+                    const ptr = &self.stack.toSlice()[self.stack.count() - 1];
+                    try objects.integer.negateInPlace(ptr);
+                },
+                // TODO: make this less copy/pasta, things that i tried didn't work
+                bcreader.Op.Data.Add => {
+                    const n = self.stack.count();
+                    try objects.integer.addInPlace(&self.stack.toSlice()[n-2], self.stack.toSlice()[n-1]);
+                    self.stack.toSlice()[n-1].decref();
+                    self.stack.shrink(n-1);
+                },
+                bcreader.Op.Data.Sub => {
+                    const n = self.stack.count();
+                    try objects.integer.subInPlace(&self.stack.toSlice()[n-2], self.stack.toSlice()[n-1]);
+                    self.stack.toSlice()[n-1].decref();
+                    self.stack.shrink(n-1);
+                },
+                bcreader.Op.Data.Mul => {
+                    const n = self.stack.count();
+                    try objects.integer.mulInPlace(&self.stack.toSlice()[n-2], self.stack.toSlice()[n-1]);
+                    self.stack.toSlice()[n-1].decref();
+                    self.stack.shrink(n-1);
+                },
                 bcreader.Op.Data.JumpIf => {},
             }
 

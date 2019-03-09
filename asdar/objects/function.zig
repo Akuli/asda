@@ -74,8 +74,7 @@ test "function newComptime" {
     const string = @import("string.zig");
 
     comptime {
-        var functype = FunctionType.initComptimeReturning([]const *objtyp.Type{ string.typ }, string.typ);
-        var func_obj_value = newComptime("blah", &functype, Fn{ .Returning = testFn }, null);
+        var func_obj_value = newComptime("blah", Fn{ .Returning = testFn }, null);
         const func_obj = &func_obj_value;
 
         assert(func_obj.refcount == 1);

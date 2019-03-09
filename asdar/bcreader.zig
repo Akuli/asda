@@ -60,11 +60,15 @@ pub const Op = struct {
         CallFunction: CallFunctionData,
         Constant: *Object,
         Negation: void,
+        Add: void,
+        Sub: void,
+        Mul: void,
         PopOne: void,
         JumpIf: u16,
         Return: bool,   // true to return a value, false for void return
         DidntReturnError: void,
         StrJoin: u16,   // TODO: should this be bigger??!
+        PrefixMinus: void,
 
         pub fn destroy(self: Op.Data) void {
             switch(self) {
@@ -208,6 +212,10 @@ const BytecodeReader = struct {
                         else => unreachable,
                     };
                 },
+                PREFIX_MINUS => Op.Data{ .PrefixMinus = void{} },
+                PLUS => Op.Data{ .Add = void{} },
+                MINUS => Op.Data{ .Sub = void{} },
+                TIMES => Op.Data{ .Mul = void{} },
                 NEGATION => Op.Data{ .Negation = void{} },      // TODO: is void{} best way?
                 POP_ONE => Op.Data{ .PopOne = void{} },
                 DIDNT_RETURN_ERROR => Op.Data{ .DidntReturnError = void{} },
@@ -237,11 +245,14 @@ const BytecodeReader = struct {
                 },
                 NON_NEGATIVE_INT_CONSTANT => blk: {
                     const data = try self.readString();
-                    break :blk Op.Data{ .Constant = try objects.integer.newFromFunnyAsdaBytecodeNumberString(self.interp, data, false) };
+                    const val = try objects.integer.newFromFunnyAsdaBytecodeNumberString(self.interp, data);
+                    break :blk Op.Data{ .Constant = val };
                 },
                 NEGATIVE_INT_CONSTANT => blk: {
                     const data = try self.readString();
-                    break :blk Op.Data{ .Constant = try objects.integer.newFromFunnyAsdaBytecodeNumberString(self.interp, data, true) };
+                    var val = try objects.integer.newFromFunnyAsdaBytecodeNumberString(self.interp, data);
+                    try objects.integer.negateInPlace(&val);
+                    break :blk Op.Data{ .Constant = val };
                 },
                 LOOKUP_ATTRIBUTE => blk: {
                     const typ = (try self.readType(null)).?;
