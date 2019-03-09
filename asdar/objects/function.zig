@@ -90,22 +90,25 @@ pub fn callVoid(interp: *Interp, func: *Object, args: []const *Object) !void {
     try func.data.FunctionData.zig_fn.Void(interp, func.data.FunctionData.passed_data, args);
 }
 
-fn partialFnVoid(interp: *Interp, data: *objtyp.ObjectData, args: []const *Object) anyerror!void {
-    const func = data.ObjectArrayList.at(0);
+
+fn preparePartialCall(interp: *Interp, data: *objtyp.ObjectData, args: []const *Object) ![]*Object {
     const all_args = try interp.object_allocator.alloc(*Object, data.ObjectArrayList.count() - 1 + args.len);
-    defer interp.object_allocator.free(all_args);
+    errdefer interp.object_allocator.free(all_args);
     std.mem.copy(*Object, all_args, data.ObjectArrayList.toSliceConst()[1..]);
     std.mem.copy(*Object, all_args[(data.ObjectArrayList.count() - 1)..], args);
-    try callVoid(interp, func, all_args);
+    return all_args;
+}
+
+fn partialFnVoid(interp: *Interp, data: *objtyp.ObjectData, args: []const *Object) anyerror!void {
+    const all_args = try preparePartialCall(interp, data, args);
+    defer interp.object_allocator.free(all_args);
+    try callVoid(interp, data.ObjectArrayList.at(0), all_args);
 }
 
 fn partialFnReturning(interp: *Interp, data: *objtyp.ObjectData, args: []const *Object) anyerror!*Object {
-    const func = data.ObjectArrayList.at(0);
-    const all_args = try interp.object_allocator.alloc(*Object, data.ObjectArrayList.count() - 1 + args.len);
+    const all_args = try preparePartialCall(interp, data, args);
     defer interp.object_allocator.free(all_args);
-    std.mem.copy(*Object, all_args, data.ObjectArrayList.toSliceConst()[1..]);
-    std.mem.copy(*Object, all_args[(data.ObjectArrayList.count() - 1)..], args);
-    return try callReturning(interp, func, all_args);
+    return try callReturning(interp, data.ObjectArrayList.at(0), all_args);
 }
 
 pub fn newPartial(interp: *Interp, func: *Object, extra_args: []const *Object) !*Object {
