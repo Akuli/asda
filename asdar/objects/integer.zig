@@ -58,7 +58,8 @@ fn newFromMpz(interp: *Interp, mpz: mpz_t) !*Object {
     return try Object.init(interp, typ, objtyp.ObjectData{ .IntegerData = Data{ .interp = interp, .mpz = val }});
 }
 
-pub fn copy(obj: *Object) !*Object {
+// integers are mutable, and therefore this is useful only for testing purposes
+fn copy(obj: *Object) !*Object {
     var mpz: mpz_t = undefined;
     mpz_init_set(&mpz[0], &obj.data.IntegerData.mpz.*[0]);
     errdefer mpz_clear(&mpz[0]);

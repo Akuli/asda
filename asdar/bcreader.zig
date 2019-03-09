@@ -63,6 +63,7 @@ pub const Op = struct {
         Add: void,
         Sub: void,
         Mul: void,
+        Equal: void,
         PopOne: void,
         JumpIf: u16,
         Return: bool,   // true to return a value, false for void return
@@ -212,11 +213,12 @@ const BytecodeReader = struct {
                         else => unreachable,
                     };
                 },
-                PREFIX_MINUS => Op.Data{ .PrefixMinus = void{} },
+                PREFIX_MINUS => Op.Data{ .PrefixMinus = void{} },      // TODO: is void{} best way?
                 PLUS => Op.Data{ .Add = void{} },
                 MINUS => Op.Data{ .Sub = void{} },
                 TIMES => Op.Data{ .Mul = void{} },
-                NEGATION => Op.Data{ .Negation = void{} },      // TODO: is void{} best way?
+                EQUAL => Op.Data{ .Equal = void{} },
+                NEGATION => Op.Data{ .Negation = void{} },
                 POP_ONE => Op.Data{ .PopOne = void{} },
                 DIDNT_RETURN_ERROR => Op.Data{ .DidntReturnError = void{} },
                 VOID_RETURN => Op.Data{ .Return = false },

@@ -186,6 +186,14 @@ const Runner = struct {
                     self.stack.toSlice()[n-1].decref();
                     self.stack.shrink(n-1);
                 },
+                bcreader.Op.Data.Equal => {
+                    const n = self.stack.count();
+                    const cmp = objects.integer.compare(self.stack.at(n-2), self.stack.at(n-1));
+                    self.stack.at(n-2).decref();
+                    self.stack.at(n-1).decref();
+                    self.stack.set(n-2, objects.boolean.fromZigBool(cmp == std.mem.Compare.Equal));
+                    self.stack.shrink(n-1);
+                },
                 bcreader.Op.Data.JumpIf => {},
             }
 
