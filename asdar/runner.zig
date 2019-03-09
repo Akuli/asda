@@ -154,6 +154,15 @@ const Runner = struct {
                     obj.decref();
                     self.stack.set(last, new);
                 },
+                bcreader.Op.Data.StrJoin => |n| {
+                    const index = self.stack.count() - n;
+                    const joined = try objects.string.join(self.interp, self.stack.toSliceConst()[index..]);
+                    for (self.stack.toSliceConst()[index..]) |obj| {
+                        obj.decref();
+                    }
+                    self.stack.set(index, joined);
+                    self.stack.shrink(index+1);
+                },
                 bcreader.Op.Data.JumpIf => {},
             }
 

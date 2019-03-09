@@ -3,6 +3,7 @@ const assert = std.debug.assert;
 const Interp = @import("../interp.zig").Interp;
 const objtyp = @import("../objtyp.zig");
 const Object = objtyp.Object;
+const objects = @import("index.zig");
 
 
 pub const Data = struct {
@@ -21,7 +22,18 @@ pub const Data = struct {
     }
 };
 
-var type_value = objtyp.Type.init([]objtyp.Attribute { });
+
+fn toStringFn(interp: *Interp, data: *objtyp.ObjectData, args: []const *Object) anyerror!*Object {
+    std.debug.assert(args.len == 1);
+    args[0].incref();
+    return args[0];
+}
+var tostring_value = objects.function.newComptime("to_string", objects.function.Fn{ .Returning = toStringFn }, null);
+
+var type_value = objtyp.Type.init([]objtyp.Attribute {
+    objtyp.Attribute{ .is_method = true, .value = undefined },    // TODO: uppercase()
+    objtyp.Attribute{ .is_method = true, .value = &tostring_value },
+});
 pub const typ = &type_value;
 
 // unlike with new(), the string is responsible for freeing the unicode
@@ -154,4 +166,52 @@ test "string empty" {
     const utf8 = try toUtf8(std.heap.c_allocator, string);
     defer std.heap.c_allocator.free(utf8);
     assert(utf8.len == 0);
+}
+
+
+pub fn join(interp: *Interp, strs: []const *Object) !*Object {
+    if (strs.len == 0) {
+        return try newFromUtf8(interp, "");
+    }
+    if (strs.len == 1) {
+        strs[0].incref();
+        return strs[0];
+    }
+
+    var len: usize = 0;
+    for (strs) |obj| {
+        len += toUnicode(obj).len;
+    }
+
+    const joined = try interp.object_allocator.alloc(u32, len);
+    errdefer interp.object_allocator.free(joined);
+
+    var i: usize = 0;
+    for (strs) |obj| {
+        std.mem.copy(u32, joined[i..], toUnicode(obj));
+        i += toUnicode(obj).len;
+    }
+
+    return newNoCopy(interp, joined);
+}
+
+// TODO: test 0 and 1 string cases
+test "string join" {
+    var interp: Interp = undefined;
+    interp.init();
+    defer interp.deinit();
+
+    const a = try newFromUtf8(&interp, "ä");
+    defer a.decref();
+    const o = try newFromUtf8(&interp, "ö");
+    defer o.decref();
+    const ao = join(&interp, []const *Object{ a, o });
+    defer ao.decref();
+
+    const assert = std.debug.assert;
+    assert(toUnicode(a).len == 1);
+    assert(toUnicode(o).len == 1);
+    assert(toUnicode(ao).len == 2);
+    assert(toUnicode(ao)[0] == toUnicode(a)[0]);
+    assert(toUnicode(ao)[1] == toUnicode(o)[0]);
 }

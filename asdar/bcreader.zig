@@ -64,6 +64,7 @@ pub const Op = struct {
         JumpIf: u16,
         Return: bool,   // true to return a value, false for void return
         DidntReturnError: void,
+        StrJoin: u16,   // TODO: should this be bigger??!
 
         pub fn destroy(self: Op.Data) void {
             switch(self) {
@@ -213,6 +214,7 @@ const BytecodeReader = struct {
                 VOID_RETURN => Op.Data{ .Return = false },
                 VALUE_RETURN => Op.Data{ .Return = true },
                 JUMP_IF => Op.Data{ .JumpIf = try self.in.readIntLittle(u16) },
+                STR_JOIN => Op.Data{ .StrJoin = try self.in.readIntLittle(u16) },
                 CALL_VOID_FUNCTION, CALL_RETURNING_FUNCTION => blk: {
                     const ret = (opbyte == CALL_RETURNING_FUNCTION);
                     const nargs = try self.in.readIntLittle(u8);

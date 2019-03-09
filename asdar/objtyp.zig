@@ -19,9 +19,10 @@ pub const Type = struct {
     }
 
     pub fn getAttribute(self: *Type, interp: *Interp, obj: *Object, index: u16) !*Object {
-        std.debug.warn("index = {}, len = {}\n", index, self.attributes.?.len);
-        std.debug.warn("looking up from type {*}\n", self);
-        objects.debugTypes();
+        //std.debug.warn("index = {}, len = {}\n", index, self.attributes.?.len);
+        //std.debug.warn("looking up from type {*}\n", self);
+        //objects.debugTypes();
+
         const attrib = self.attributes.?[index];
         if (attrib.is_method) {
             return try objects.function.newPartial(interp, attrib.value, []const *Object { obj });
