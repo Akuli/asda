@@ -151,11 +151,11 @@ test "newFromUtf8 toUnicode toUtf8" {
     defer string.decref();
 
     const arr = []u32{ 'P', 0xf6, 0xf6 };
-    std.debug.assert(std.mem.eql(u32, toUnicode(string), arr));
+    std.testing.expect(std.mem.eql(u32, toUnicode(string), arr));
 
     const utf8 = try toUtf8(std.heap.c_allocator, string);
     defer std.heap.c_allocator.free(utf8);
-    std.debug.assert(std.mem.eql(u8, utf8, "Pöö"));
+    std.testing.expect(std.mem.eql(u8, utf8, "Pöö"));
 }
 
 test "empty" {
@@ -166,11 +166,11 @@ test "empty" {
     const string = try newFromUtf8(&interp, "");
     defer string.decref();
 
-    std.debug.assert(toUnicode(string).len == 0);
+    std.testing.expect(toUnicode(string).len == 0);
 
     const utf8 = try toUtf8(std.heap.c_allocator, string);
     defer std.heap.c_allocator.free(utf8);
-    std.debug.assert(utf8.len == 0);
+    std.testing.expect(utf8.len == 0);
 }
 
 
@@ -213,10 +213,10 @@ test "join" {
     const ao = try join(&interp, []const *Object{ a, o });
     defer ao.decref();
 
-    const assert = std.debug.assert;
-    assert(toUnicode(a).len == 1);
-    assert(toUnicode(o).len == 1);
-    assert(toUnicode(ao).len == 2);
-    assert(toUnicode(ao)[0] == toUnicode(a)[0]);
-    assert(toUnicode(ao)[1] == toUnicode(o)[0]);
+    const expect = std.testing.expect;
+    expect(toUnicode(a).len == 1);
+    expect(toUnicode(o).len == 1);
+    expect(toUnicode(ao).len == 2);
+    expect(toUnicode(ao)[0] == toUnicode(a)[0]);
+    expect(toUnicode(ao)[1] == toUnicode(o)[0]);
 }

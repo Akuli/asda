@@ -90,7 +90,7 @@ test "creating integers" {
     mpz_init_set_si(&a_value[0], ('a'<<8)|'b');
     defer mpz_clear(&a_value[0]);
 
-    std.debug.assert(mpz_cmp(&a.data.IntegerData.mpz[0], &a_value[0]) == 0);
+    std.testing.expect(mpz_cmp(&a.data.IntegerData.mpz[0], &a_value[0]) == 0);
 }
 
 
@@ -174,7 +174,7 @@ test "negating and compare" {
     var interp: Interp = undefined;
     try interp.init();
     defer interp.deinit();
-    const assert = std.debug.assert;
+    const assert = std.testing.expect;
 
     var a = try newFromFunnyAsdaBytecodeNumberString(&interp, []u8{ 123 });
     defer a.decref();
@@ -202,7 +202,7 @@ test "adding" {
     var interp: Interp = undefined;
     try interp.init();
     defer interp.deinit();
-    const assert = std.debug.assert;
+    const assert = std.testing.expect;
 
     const twelve = try newFromFunnyAsdaBytecodeNumberString(&interp, []u8{ 12 });
     defer twelve.decref();

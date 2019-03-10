@@ -135,7 +135,6 @@ pub const Object = struct {
 };
 
 test "basic object creation" {
-    const assert = std.debug.assert;
     var interp: Interp = undefined;
     try interp.init();
     defer interp.deinit();
@@ -143,12 +142,12 @@ test "basic object creation" {
     const obj = try Object.init(&interp, object_type, null);
     defer obj.decref();
 
-    assert(obj.refcount == 1);
+    std.testing.expect(obj.refcount == 1);
     obj.incref();
-    assert(obj.refcount == 2);
+    std.testing.expect(obj.refcount == 2);
     obj.decref();
-    assert(obj.refcount == 1);
+    std.testing.expect(obj.refcount == 1);
 
-    assert(obj.asda_type == object_type);
-    //assert(obj.asda_type.getMethods().len == 0);
+    std.testing.expect(obj.asda_type == object_type);
+    //std.testing.expect(obj.asda_type.getMethods().len == 0);
 }

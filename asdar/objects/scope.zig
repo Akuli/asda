@@ -121,9 +121,9 @@ test "scope object creating and getForLevel" {
     const file_scope = try createSub(global_scope, 3);
     defer file_scope.decref();
 
-    std.debug.assert(global_scope.data.ScopeData.parent_scopes.len == 0);
-    std.debug.assert(file_scope.data.ScopeData.parent_scopes.len == 1);
-    std.debug.assert(file_scope.data.ScopeData.parent_scopes[0] == global_scope);
+    std.testing.expect(global_scope.data.ScopeData.parent_scopes.len == 0);
+    std.testing.expect(file_scope.data.ScopeData.parent_scopes.len == 1);
+    std.testing.expect(file_scope.data.ScopeData.parent_scopes[0] == global_scope);
 
     const a = getForLevel(global_scope, 0);
     defer a.decref();
@@ -131,7 +131,7 @@ test "scope object creating and getForLevel" {
     defer b.decref();
     const c = getForLevel(file_scope, 1);
     defer c.decref();
-    std.debug.assert(a == global_scope);
-    std.debug.assert(b == global_scope);
-    std.debug.assert(c == file_scope);
+    std.testing.expect(a == global_scope);
+    std.testing.expect(b == global_scope);
+    std.testing.expect(c == file_scope);
 }

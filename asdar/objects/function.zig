@@ -70,14 +70,12 @@ pub fn new(interp: *Interp, name: []const u8, zig_fn: Fn, passed_data: ?objtyp.O
 }
 
 test "function newComptime" {
-    const assert = std.debug.assert;
     const string = @import("string.zig");
 
     comptime {
         var func_obj_value = newComptime("blah", Fn{ .Returning = testFn }, null);
         const func_obj = &func_obj_value;
-
-        assert(func_obj.refcount == 1);
+        std.testing.expect(func_obj.refcount == 1);
     }
 }
 

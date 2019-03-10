@@ -31,11 +31,11 @@ test "fromZigBool" {
     const f = fromZigBool(false);
     defer f.decref();
 
-    std.debug.assert(t == TRUE);
-    std.debug.assert(f == FALSE);
+    std.testing.expect(t == TRUE);
+    std.testing.expect(f == FALSE);
 }
 
 test "toZigBool" {
-    std.debug.assert(toZigBool(TRUE));
-    std.debug.assert(!toZigBool(FALSE));
+    std.testing.expect(toZigBool(TRUE));
+    std.testing.expect(!toZigBool(FALSE));
 }
