@@ -163,6 +163,11 @@ const Runner = struct {
                     self.stack.set(index, joined);
                     self.stack.shrink(index+1);
                 },
+                bcreader.Op.Data.ImportModule => |path| {
+                    const mod = try self.interp.loadModule(path);
+                    errdefer mod.decref();
+                    try self.stack.append(mod);
+                },
                 bcreader.Op.Data.PrefixMinus => {
                     const ptr = &self.stack.toSlice()[self.stack.count() - 1];
                     try objects.integer.negateInPlace(ptr);
@@ -274,13 +279,8 @@ fn asdaFunctionFnVoid(interp: *Interp, data: *objtyp.ObjectData, args: []const *
 }
 
 
-pub fn runFile(interp: *Interp, code: bcreader.Code) !void {
-    const global_scope = try objects.scope.createGlobal(interp);
-    defer global_scope.decref();
-    const file_scope = try objects.scope.createSub(global_scope, code.nlocalvars);
-    defer file_scope.decref();
-
-    var runner = Runner.init(interp, code.ops, file_scope);
+pub fn runFile(interp: *Interp, code: bcreader.Code, scope: *Object) !void {
+    var runner = Runner.init(interp, code.ops, scope);
     defer runner.destroy();
 
     const result = try runner.run();

@@ -60,7 +60,7 @@ pub fn newNoCopy(interp: *Interp, unicode: []u32) !*Object {
 
 test "newNoCopy" {
     var interp: Interp = undefined;
-    interp.init();
+    try interp.init();
     defer interp.deinit();
 
     var string: *Object = undefined;
@@ -86,7 +86,7 @@ pub fn new(interp: *Interp, unicode: []const u32) !*Object {
 
 test "new" {
     var interp: Interp = undefined;
-    interp.init();
+    try interp.init();
     defer interp.deinit();
 
     const arr = []u32{ 'a', 'b', 'c' };
@@ -136,9 +136,15 @@ pub fn toUtf8(allocator: *std.mem.Allocator, str: *Object) ![]u8 {
     return result.toOwnedSlice();
 }
 
+pub fn debugPrint(str: *Object) void {
+    const utf8 = toUtf8(std.heap.c_allocator, str) catch unreachable;
+    defer std.heap.c_allocator.free(utf8);
+    std.debug.warn("\"{}\"\n", utf8);
+}
+
 test "newFromUtf8 toUnicode toUtf8" {
     var interp: Interp = undefined;
-    interp.init();
+    try interp.init();
     defer interp.deinit();
 
     const string = try newFromUtf8(&interp, "Pöö");
@@ -154,7 +160,7 @@ test "newFromUtf8 toUnicode toUtf8" {
 
 test "empty" {
     var interp: Interp = undefined;
-    interp.init();
+    try interp.init();
     defer interp.deinit();
 
     const string = try newFromUtf8(&interp, "");
@@ -197,7 +203,7 @@ pub fn join(interp: *Interp, strs: []const *Object) !*Object {
 // TODO: test 0 and 1 string cases
 test "join" {
     var interp: Interp = undefined;
-    interp.init();
+    try interp.init();
     defer interp.deinit();
 
     const a = try newFromUtf8(&interp, "ä");

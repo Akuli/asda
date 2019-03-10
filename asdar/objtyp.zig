@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const bcreader = @import("bcreader.zig");
+const import = @import("import.zig");
 const Interp = @import("interp.zig").Interp;
 const objects = @import("objects/index.zig");
 const runner = @import("runner.zig");
@@ -10,11 +11,12 @@ const runner = @import("runner.zig");
 pub const Attribute = struct { is_method: bool, value: *Object };
 
 pub const Type = struct {
-    // optional to work around a bug, never actually null, use getMethods() to access this
+    // null for modules that aren't loaded yet
+    // but optionalness would be needed anyway to work around a bug
     // https://github.com/ziglang/zig/issues/1914
     attributes: ?[]const Attribute,
 
-    pub fn init(attributes: []const Attribute) Type {
+    pub fn init(attributes: ?[]const Attribute) Type {
         return Type{ .attributes = attributes };
     }
 
@@ -43,6 +45,7 @@ pub const ObjectData = union(enum) {
     ScopeData: objects.scope.Data,
     AsdaFunctionState: runner.AsdaFunctionState,
     IntegerData: objects.integer.Data,
+    ModuleData: import.Data,
     ObjectArrayList: std.ArrayList(*Object),
     NoData,
 
@@ -56,6 +59,8 @@ pub const ObjectData = union(enum) {
             ObjectData.ScopeData => |val| val.destroy(decref_refs, free_nonrefs),
             ObjectData.StringData => |val| val.destroy(decref_refs, free_nonrefs),
             ObjectData.IntegerData => |val| val.destroy(decref_refs, free_nonrefs),
+            ObjectData.ModuleData => |val| val.destroy(decref_refs, free_nonrefs),
+
             ObjectData.ObjectArrayList => |arrlst| {
                 if (decref_refs) {
                     for (arrlst.toSliceConst()) |obj| {
@@ -133,7 +138,7 @@ pub const Object = struct {
 test "basic object creation" {
     const assert = std.debug.assert;
     var interp: Interp = undefined;
-    interp.init();
+    try interp.init();
     defer interp.deinit();
 
     const obj = try Object.init(&interp, object_type, null);

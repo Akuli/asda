@@ -80,7 +80,7 @@ pub fn newFromFunnyAsdaBytecodeNumberString(interp: *Interp, s: []const u8) !*Ob
 
 test "creating integers" {
     var interp: Interp = undefined;
-    interp.init();
+    try interp.init();
     defer interp.deinit();
 
     const a = try newFromFunnyAsdaBytecodeNumberString(&interp, "ab");
@@ -172,7 +172,7 @@ pub const mulInPlace = (MpzWrapper{ .f = MpzWrapper.FType{.Binary=mpz_mul} }).in
 
 test "negating and compare" {
     var interp: Interp = undefined;
-    interp.init();
+    try interp.init();
     defer interp.deinit();
     const assert = std.debug.assert;
 
@@ -200,7 +200,7 @@ test "negating and compare" {
 
 test "adding" {
     var interp: Interp = undefined;
-    interp.init();
+    try interp.init();
     defer interp.deinit();
     const assert = std.debug.assert;
 

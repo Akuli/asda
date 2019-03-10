@@ -21,7 +21,7 @@ const NEGATIVE_INT_CONSTANT: u8 = '2';
 const TRUE_CONSTANT: u8 = 'T';
 const FALSE_CONSTANT: u8 = 'F';
 const LOOKUP_ATTRIBUTE: u8 = '.';
-const IMPORT_MODULE: u8 = 'M';
+const IMPORT_MODULE: u8 = 'M';    // also used in types
 const CALL_VOID_FUNCTION: u8 = '(';
 const CALL_RETURNING_FUNCTION: u8 = ')';
 const STR_JOIN: u8 = 'j';
@@ -70,11 +70,12 @@ pub const Op = struct {
         DidntReturnError: void,
         StrJoin: u16,   // TODO: should this be bigger??!
         PrefixMinus: void,
+        ImportModule: []const u8,   // the path, allocated with import_arena_allocator
 
-        pub fn destroy(self: Op.Data) void {
+        pub fn destroy(self: Op.Data, decref_refs: bool, free_nonrefs: bool) void {
             switch(self) {
-                Op.Data.Constant => |obj| obj.decref(),
-                Op.Data.CreateFunction => |data| data.body.destroy(),
+                Op.Data.Constant => |obj| if (decref_refs) obj.decref(),
+                Op.Data.CreateFunction => |data| data.body.destroy(decref_refs, free_nonrefs),
                 else => {},
             }
         }
@@ -83,22 +84,22 @@ pub const Op = struct {
     lineno: u32,
     data: Data,
 
-    pub fn destroy(op: Op) void {
-        op.data.destroy();
+    pub fn destroy(op: Op, decref_refs: bool, free_nonrefs: bool) void {
+        op.data.destroy(decref_refs, free_nonrefs);
     }
 };
 
 pub const Code = struct {
-    ops: []Op,
+    ops: []Op,      // allocated with import_arena_allocator
     nlocalvars: u16,
 
-    pub fn destroy(self: *const Code) void {
+    pub fn destroy(self: Code, decref_refs: bool, free_nonrefs: bool) void {
         for (self.ops) |op| {
-            op.destroy();
+            op.destroy(decref_refs, free_nonrefs);
         }
     }
 
-    pub fn debugDump(self: *const Code) void {
+    pub fn debugDump(self: Code) void {
         for (self.ops) |op| {
             std.debug.warn("{}  ", op.lineno);
             switch(op.data) {
@@ -113,11 +114,18 @@ pub const Code = struct {
 const BytecodeReader = struct {
     interp: *Interp,
     in: *StreamType,
+    inpath_dirname: []const u8,
     lineno: u32,
     errorByte: *?u8,
 
-    fn init(interp: *Interp, in: *StreamType, errorByte: *?u8) BytecodeReader {
-        return BytecodeReader{ .interp = interp, .in = in, .lineno = 1, .errorByte = errorByte };
+    fn init(interp: *Interp, inpath: []const u8, in: *StreamType, errorByte: *?u8) BytecodeReader {
+        return BytecodeReader{
+            .interp = interp,
+            .inpath_dirname = std.os.path.dirname(inpath).?,
+            .in = in,
+            .lineno = 1,
+            .errorByte = errorByte,
+        };
     }
 
     fn readString(self: *BytecodeReader) ![]u8 {
@@ -127,6 +135,16 @@ const BytecodeReader = struct {
 
         try self.in.readNoEof(result);
         return result;
+    }
+
+    fn readPath(self: *BytecodeReader) ![]u8 {
+        const relative = try self.readString();
+        for (relative) |c, i| {
+            if (c == '/') {
+                relative[i] = std.os.path.sep;
+            }
+        }
+        return try std.os.path.resolve(self.interp.import_arena_allocator, []const []const u8 { self.inpath_dirname, relative });
     }
 
     // anyerror is needed because this calls itself, the compiler gets confused without anyerror
@@ -154,6 +172,12 @@ const BytecodeReader = struct {
                 }
                 return objects.function.void_type;
             },
+            IMPORT_MODULE => {
+                const obj = try self.interp.getModule(try self.readPath());
+                std.debug.assert(obj.refcount >= 2);    // the module hashmap holds a reference
+                obj.decref();
+                return obj.asda_type;
+            },
             TYPE_VOID => {
                 return null;
             },
@@ -169,12 +193,11 @@ const BytecodeReader = struct {
 
         var ops = std.ArrayList(Op).init(self.interp.import_arena_allocator);
         errdefer {
-            // TODO: delete this?
             var it = ops.iterator();
             while (it.next()) |op| {
-                op.destroy();
+                op.destroy(true, true);
             }
-            ops.deinit();
+            // no need to deinit the arraylist because it's allocated with import_arena_allocator
         }
 
         while (true) {
@@ -225,6 +248,7 @@ const BytecodeReader = struct {
                 VALUE_RETURN => Op.Data{ .Return = true },
                 JUMP_IF => Op.Data{ .JumpIf = try self.in.readIntLittle(u16) },
                 STR_JOIN => Op.Data{ .StrJoin = try self.in.readIntLittle(u16) },
+                IMPORT_MODULE => Op.Data{ .ImportModule = try self.readPath() },
                 CALL_VOID_FUNCTION, CALL_RETURNING_FUNCTION => blk: {
                     const ret = (opbyte == CALL_RETURNING_FUNCTION);
                     const nargs = try self.in.readIntLittle(u8);
@@ -266,7 +290,7 @@ const BytecodeReader = struct {
                     return error.BytecodeInvalidOpByte;
                 },
             };
-            errdefer opdata.destroy();
+            errdefer opdata.destroy(true, true);
 
             try ops.append(Op{ .lineno = self.lineno, .data = opdata });
         }
@@ -287,13 +311,13 @@ fn readAsdaBytes(stream: *StreamType) !bool {
     return std.mem.eql(u8, buf, "asda");
 }
 
-pub fn readByteCode(interp: *Interp, stream: *StreamType, errorByte: *?u8) !Code {
+pub fn readByteCode(interp: *Interp, inpath: []const u8, stream: *StreamType, errorByte: *?u8) !Code {
     if (!(try readAsdaBytes(stream))) {
         return error.BytecodeNotAnAsdaFile;
     }
 
-    const result = try BytecodeReader.init(interp, stream, errorByte).readBody();
-    errdefer result.destroy();
+    const result = try BytecodeReader.init(interp, inpath, stream, errorByte).readBody();
+    errdefer result.destroy(true, true);
 
     const byte = try stream.readByte();
     if (byte != IMPORT_SECTION) {

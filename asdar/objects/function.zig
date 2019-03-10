@@ -86,7 +86,12 @@ pub fn callReturning(interp: *Interp, func: *Object, args: []const *Object) !*Ob
 }
 
 pub fn callVoid(interp: *Interp, func: *Object, args: []const *Object) !void {
-    try func.data.FunctionData.zig_fn.Void(interp, func.data.FunctionData.passed_data, args);
+    const a = func.data;
+    const b = a.FunctionData;
+    const c = b.zig_fn;
+    const d = c.Void;
+    const e = b.passed_data;
+    try d(interp, e, args);
 }
 
 

@@ -17,7 +17,7 @@ fn printFn(interp: *Interp, data: *objtyp.ObjectData, args: []const *Object) any
 
 test "builtins printFn" {
     var interp: Interp = undefined;
-    interp.init();
+    try interp.init();
     defer interp.deinit();
 
     var no_data = objtyp.ObjectData{ .NoData = void{} };

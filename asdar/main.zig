@@ -16,35 +16,34 @@ fn mainInner(args: []const []u8) u8 {
     const program = args[0];
     const filename = args[1];
 
-    if (std.os.File.openRead(filename)) |f| {
-        defer f.close();
-
-        var interp: Interp = undefined;
-        interp.init();
-        defer interp.deinit();
-
-        const stream = &f.inStream().stream;    // no idea why the last .stream is needed, but this works :D
-        var errorByte: ?u8 = null;
-        if (bcreader.readByteCode(&interp, stream, &errorByte)) |code| {
-            defer code.destroy();
-
-            if (runner.runFile(&interp, code)) |_| {
-                // ok
-            } else |err| {
-                std.debug.warn("{}: running {} failed: {}\n", program, filename, misc.errorToString(err));
-            }
-        } else |err| {
-            std.debug.warn("{}: cannot read {}: {}", program, filename, misc.errorToString(err));
-            if (errorByte) |byte| {
-                std.debug.warn(" 0x{x}", byte);
-            }
-            std.debug.warn("\n");
-            return 1;
-        }
-    } else |err| {
+    const f = std.os.File.openRead(filename) catch |err| {
         std.debug.warn("{}: cannot open {}: {}\n", program, filename, misc.errorToString(err));
         return 1;
-    }
+    };
+    defer f.close();
+
+    var interp: Interp = undefined;
+    interp.init() catch |err| {
+        std.debug.warn("{}: initializing the interpreter failed: {}\n", program, misc.errorToString(err));
+        return 1;
+    };
+    defer interp.deinit();
+
+    const mod = interp.loadModule(filename) catch |err| {
+        std.debug.warn("{}: ", program);
+        if (interp.last_import_error.path) |pth| {
+            std.debug.warn("error while importing {}: ", pth);
+        } else {
+            std.debug.warn("error: ");
+        }
+        std.debug.warn("{}", misc.errorToString(err));
+        if (interp.last_import_error.errorByte) |byte| {
+            std.debug.warn(" 0x{x}", byte);
+        }
+        std.debug.warn("\n");
+        return 1;
+    };
+    mod.decref();
 
     return 0;
 }

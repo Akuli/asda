@@ -113,7 +113,7 @@ pub fn getLocalVars(scope: *Object) []?*Object {
 
 test "scope object creating and getForLevel" {
     var interp: Interp = undefined;
-    interp.init();
+    try interp.init();
     defer interp.deinit();
 
     const global_scope = try createGlobal(&interp);
