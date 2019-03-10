@@ -1,7 +1,6 @@
 const std = @import("std");
 const Interp = @import("interp.zig").Interp;
-const objtyp = @import("objtyp.zig");
-const Object = objtyp.Object;
+const Object = @import("objtyp.zig").Object;
 const objects = @import("objects/index.zig");
 
 

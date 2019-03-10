@@ -1,7 +1,6 @@
 // Object and Type
 
 const std = @import("std");
-const bcreader = @import("bcreader.zig");
 const import = @import("import.zig");
 const Interp = @import("interp.zig").Interp;
 const objects = @import("objects/index.zig");

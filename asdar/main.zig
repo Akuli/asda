@@ -1,8 +1,6 @@
 const std = @import("std");
-const bcreader = @import("bcreader.zig");
 const Interp = @import("interp.zig").Interp;
 const misc = @import("misc.zig");
-const runner = @import("runner.zig");
 
 
 // because std.os.exit() doesn't run defers, which would otherwise leak memory

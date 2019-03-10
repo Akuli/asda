@@ -1,6 +1,5 @@
 const std = @import("std");
 const bcreader = @import("bcreader.zig");
-const GC = @import("gc.zig").GC;
 const Interp = @import("interp.zig").Interp;
 const objtyp = @import("objtyp.zig");
 const Object = objtyp.Object;

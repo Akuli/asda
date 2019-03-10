@@ -1,5 +1,4 @@
 const std = @import("std");
-const assert = std.debug.assert;
 const objtyp = @import("../objtyp.zig");
 const Object = objtyp.Object;
 
@@ -32,11 +31,11 @@ test "fromZigBool" {
     const f = fromZigBool(false);
     defer f.decref();
 
-    assert(t == TRUE);
-    assert(f == FALSE);
+    std.debug.assert(t == TRUE);
+    std.debug.assert(f == FALSE);
 }
 
 test "toZigBool" {
-    assert(toZigBool(TRUE));
-    assert(!toZigBool(FALSE));
+    std.debug.assert(toZigBool(TRUE));
+    std.debug.assert(!toZigBool(FALSE));
 }

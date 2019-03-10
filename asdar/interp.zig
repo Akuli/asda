@@ -17,10 +17,9 @@ fn normcasePosixPath(path: []u8) void { }
 const normcasePath = if (builtin.os == builtin.Os.windows) normcaseWindowsPath else normcasePosixPath;
 
 test "normcaseWindowsPath" {
-    const assert = std.debug.assert;
-    const normalized = try normcaseWindowsPath(std.heap.c_allocator, "ABCXYZabcxyz/\\:.");
-    defer std.heap.c_allocator.free(normalized);
-    assert(std.mem.eql(u8, normalized, "abcxyzabcxyz/\\:."));   // zig handles forwardslash to backslash conversion
+    var path: [16]u8 = "ABCXYZabcxyz/\\:.";
+    normcaseWindowsPath(path[0..]);
+    std.testing.expectEqualSlices(u8, "abcxyzabcxyz\\\\:.", path);
 }
 
 

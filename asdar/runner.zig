@@ -3,7 +3,6 @@ const Interp = @import("interp.zig").Interp;
 const objtyp = @import("objtyp.zig");
 const Object = objtyp.Object;
 const bcreader = @import("bcreader.zig");
-const builtins = @import("builtins.zig");
 const objects = @import("objects/index.zig");
 
 
