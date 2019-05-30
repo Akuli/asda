@@ -109,7 +109,7 @@ pub fn newFromUtf8(interp: *Interp, utf8: []const u8) !*Object {
         i += 1;
     }
 
-    buf = interp.object_allocator.shrink(u32, buf, i);
+    buf = interp.object_allocator.shrink(buf, i);
     return newNoCopy(interp, buf);
 }
 

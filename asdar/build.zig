@@ -12,8 +12,8 @@ pub fn build(b: *Builder) void {
     const exe = b.addExecutable("asdar", "main.zig");
     exe.setBuildMode(mode);
 
-    exe.addIncludeDir(b.option([]const u8, "include-dir", "E.g. /usr/include/x86_64-linux-gnu").?);
-    exe.addLibPath(b.option([]const u8, "lib-path", "E.g. /usr/include/x86_64-linux-gnu").?);
+    //exe.addIncludeDir(b.option([]const u8, "include-dir", "E.g. /usr/include/x86_64-linux-gnu").?);
+    //exe.addLibPath(b.option([]const u8, "lib-path", "E.g. /usr/include/x86_64-linux-gnu").?);
 
     exe.linkSystemLibrary("c");
     exe.linkSystemLibrary("gmp");
