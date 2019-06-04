@@ -1,5 +1,5 @@
 let stuff = "old stuff"
-func change_stuff() -> void:
+let change_stuff = () -> void:
     stuff = "new stuff"
 
 print(stuff)
