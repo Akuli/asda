@@ -41,6 +41,8 @@ For = _astclass('For', ['init', 'cond', 'incr', 'body'])
 Import = _astclass('Import', ['source_path', 'varname'])
 PrefixOperator = _astclass('PrefixOperator', ['operator', 'expression'])
 BinaryOperator = _astclass('BinaryOperator', ['operator', 'lhs', 'rhs'])
+TernaryOperator = _astclass('TernaryOperator', ['operator', 'lhs', 'mid',
+                                                'rhs'])
 
 
 def _duplicate_check(iterable, what_are_they):
@@ -120,6 +122,7 @@ _PRECEDENCE_LIST = [
      ('-', OperatorKind.PREFIX | OperatorKind.BINARY)],
     [('==', OperatorKind.BINARY),
      ('!=', OperatorKind.BINARY)],
+    [('`', OperatorKind.TERNARY)],
 ]
 
 
@@ -386,39 +389,77 @@ class AsdaParser:
 
                 # now we have these variables: index, kind, token
 
-                assert kind & OperatorKind.TERNARY == 0, "not implemented"
-                location = self._token2location(token)
+                if kind & OperatorKind.TERNARY:
+                    assert kind == OperatorKind.TERNARY     # no other flags
 
-                if index-1 >= 0 and parts[index-1][0]:
-                    before = parts[index-1][1]
-                    assert before is not None
+                    if not (index-1 >= 0 and
+                            index+4 <= len(parts) and
+                            parts[index-1][0] and
+                            not parts[index][0] and
+                            parts[index+1][0] and
+                            not parts[index+2][0] and
+                            parts[index+2][1].value == token.value and
+                            parts[index+3][0]):
+                        raise common.CompileError(
+                            "should be: expression %sexpression%s expression"
+                            % (token.value, token.value),
+                            self._token2location(token))
+
+                    start_index = index-1
+                    end_index = index+4
+
+                    lhs = parts[index-1][1]
+                    assert token is parts[index][1]
+                    mid = parts[index+1][1]
+                    token2 = parts[index+2][1]
+                    rhs = parts[index+3][1]
+
+                    # taking just one of the operator tokens feels wrong,
+                    # because the other operator token isn't taken
+                    #
+                    # taking both and the mid expression between them feels
+                    # wrong, because why aren't lhs and rhs taken
+                    #
+                    # taking everything feels about right
+                    location = lhs.location + rhs.location
+
+                    result = TernaryOperator(
+                        location, token.value, lhs, mid, rhs)
+
                 else:
-                    before = None
+                    location = self._token2location(token)
 
-                if index+1 < len(parts) and parts[index+1][0]:
-                    after = parts[index+1][1]
-                    assert after is not None
-                else:
-                    after = None
+                    if index-1 >= 0 and parts[index-1][0]:
+                        before = parts[index-1][1]
+                        assert before is not None
+                    else:
+                        before = None
 
-                if before is None and after is not None:
-                    valid = bool(kind & OperatorKind.PREFIX)
-                    result = PrefixOperator(location, token.value, after)
-                elif before is not None and after is not None:
-                    valid = bool(kind & OperatorKind.BINARY)
-                    result = BinaryOperator(
-                        location, token.value, before, after)
-                else:
-                    valid = False
-                    # result is not needed
+                    if index+1 < len(parts) and parts[index+1][0]:
+                        after = parts[index+1][1]
+                        assert after is not None
+                    else:
+                        after = None
 
-                if not valid:
-                    raise common.CompileError(
-                        "'%s' cannot be used like this" % token.value,
-                        location)
+                    if before is None and after is not None:
+                        valid = bool(kind & OperatorKind.PREFIX)
+                        result = PrefixOperator(location, token.value, after)
+                    elif before is not None and after is not None:
+                        valid = bool(kind & OperatorKind.BINARY)
+                        result = BinaryOperator(
+                            location, token.value, before, after)
+                    else:
+                        valid = False
+                        # result is not needed
 
-                start_index = index if before is None else index-1
-                end_index = index + 1 if after is None else index + 2
+                    if not valid:
+                        raise common.CompileError(
+                            "'%s' cannot be used like this" % token.value,
+                            location)
+
+                    start_index = index if before is None else index-1
+                    end_index = index + 1 if after is None else index + 2
+
                 assert start_index >= 0
                 assert end_index <= len(parts)
                 parts[start_index:end_index] = [(True, result)]
@@ -464,15 +505,42 @@ class AsdaParser:
             assert isinstance(let, Let)
             return let._replace(export=True)
 
-        # TODO: more different kinds of statements
-        return self.parse_expression()
+        try:
+            result = self.parse_expression()
+        except common.CompileError as e:
+            # TODO: this is a broken hack, is there a better way?
+            if e.message == "should be an expression":
+                e.message = "should be a statement"
+            raise e
+
+        if self.tokens.eof() or self.tokens.peek().value != '=':
+            return result
+
+        if not isinstance(result, GetVar):
+            raise common.CompileError(
+                "cannot assign to this", result.location)
+
+        assign_location = self._token2location(self.tokens.next_token())  # '='
+        value = self.parse_expression()
+        return SetVar(assign_location, result.varname, value)
+
+    def consume_semicolon_token(self):
+        token = self.tokens.next_token()
+        if token.value != ';':
+            raise common.CompileError(
+                "expected ';'", self._token2location(token))
 
     def parse_statement(self):
-        if self.tokens.peek().value == 'if':
-            if_location = self._token2location(self.tokens.next_token())
+        if self.tokens.peek().value == 'while':
+            while_location = self._token2location(self.tokens.next_token())
             condition = self.parse_expression()
             body = self.parse_block(consume_newline=True)
-            ifs = [(condition, body)]
+            return While(while_location, condition, body)
+
+        if self.tokens.peek().value == 'if':
+            if_location = self._token2location(self.tokens.next_token())
+            ifs = [(self.parse_expression(),
+                    self.parse_block(consume_newline=True))]
 
             while ((not self.tokens.eof()) and
                    self.tokens.peek().value == 'elif'):
@@ -488,6 +556,16 @@ class AsdaParser:
 
             return If(if_location, ifs, else_body)
 
+        if self.tokens.peek().value == 'for':
+            for_location = self._token2location(self.tokens.next_token())
+            init = self.parse_1line_statement()
+            self.consume_semicolon_token()
+            cond = self.parse_expression()
+            self.consume_semicolon_token()
+            incr = self.parse_1line_statement()
+            body = self.parse_block(consume_newline=True)
+            return For(for_location, init, cond, incr, body)
+
         # TODO: more different kinds of statements
 
         result = self.parse_1line_statement()
@@ -502,8 +580,10 @@ class AsdaParser:
         with self.tokens.include_whitespace(True):
             indent = self.tokens.next_token()
             if indent.type != 'INDENT':
+                # there was no colon, tokenizer replaces 'colon indent' with
+                # just 'indent' to make parsing a bit simpler
                 raise common.CompileError(
-                    "expected an indent", self._token2location(indent))
+                    "expected ':'", self._token2location(indent))
 
             result = []
             while self.tokens.peek().type != 'DEDENT':

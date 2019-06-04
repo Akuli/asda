@@ -176,6 +176,12 @@ class _Chef:
             return LookupAttr(raw_expression.location, tybe,
                               obj, raw_expression.attrname)
 
+        if isinstance(raw_expression, raw_ast.TernaryOperator):
+            assert raw_expression.operator == '`'
+            raw_expression = raw_ast.FuncCall(
+                raw_expression.location, raw_expression.mid,
+                [raw_expression.lhs, raw_expression.rhs])
+
         if isinstance(raw_expression, raw_ast.FuncCall):
             call = self.cook_function_call(raw_expression)
             if call.function.type.returntype is None:
