@@ -28,8 +28,7 @@ let fizzbuzz = (Int n) -> Str:
         return "Fizz"
     if n `divisible` 5:
         return "Buzz"
-    #return n.to_string()
-    return "{n}"
+    return n.to_string()
 
 # loop starts at 5 because my stupid divisible func breaks otherwise
 for let n = 5; n != 50; n = n+1:

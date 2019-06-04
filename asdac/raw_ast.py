@@ -122,6 +122,7 @@ _PRECEDENCE_LIST = [
      ('-', OperatorKind.PREFIX | OperatorKind.BINARY)],
     [('==', OperatorKind.BINARY),
      ('!=', OperatorKind.BINARY)],
+    [('.', OperatorKind.BINARY)],
     [('`', OperatorKind.TERNARY)],
 ]
 
@@ -174,9 +175,16 @@ class AsdaParser:
                 expression = parser.parse_expression()
                 newline = parser.tokens.next_token()    # added by tokenizer
                 if newline.type != 'NEWLINE' or not parser.tokens.eof():
-                    raise common.CompileError(
-                        "you must put exactly one expression between { and }",
-                        part_location)
+                    # find the part that was not a part of the expression
+                    token_list = [newline]
+                    while not parser.tokens.eof():
+                        token_list.append(parser.tokens.next_token())
+
+                    assert token_list[-1].type == 'NEWLINE'
+                    bad_location = (
+                        self._token2location(token_list[0]) +
+                        self._token2location(token_list[-2]))
+                    raise common.CompileError("invalid syntax", bad_location)
 
                 parts.append(_to_string(expression))
 
@@ -340,6 +348,37 @@ class AsdaParser:
 
         return result
 
+    def operator_helper(self, expression):
+        if (isinstance(expression, TernaryOperator) and
+                expression.operator == '`'):
+            return FuncCall(expression.location, expression.mid,
+                            [expression.lhs, expression.rhs])
+
+        if (isinstance(expression, BinaryOperator) and
+                expression.operator == '.'):
+            # a.b first parses b as a variable lookup, and this fixes that
+            # we can also have a.b() which parses b() as a function call
+            # function calls can be nested, too
+            rhs = expression.rhs
+            calls = []      # innermost last
+            while isinstance(rhs, FuncCall):
+                calls.append(rhs)
+                rhs = rhs.function
+
+            if not isinstance(rhs, GetVar):
+                raise common.CompileError("invalid attribute", rhs.location)
+
+            # expression.location is the location of '.'
+            result = GetAttr(
+                expression.location + rhs.location,
+                expression.lhs, rhs.varname)
+            for call in reversed(calls):
+                result = FuncCall(call.location, result, call.args)
+
+            return result
+
+        return expression
+
     def parse_expression(self):
         parts = []      # (is it expression, operator token or expression node)
         while True:
@@ -460,6 +499,8 @@ class AsdaParser:
                     start_index = index if before is None else index-1
                     end_index = index + 1 if after is None else index + 2
 
+                result = self.operator_helper(result)
+
                 assert start_index >= 0
                 assert end_index <= len(parts)
                 parts[start_index:end_index] = [(True, result)]
@@ -499,11 +540,39 @@ class AsdaParser:
             export_token = self.tokens.next_token()
             if self.tokens.peek().value != 'let':
                 raise common.CompileError(
-                    "expected 'let'", self._token2location(self.tokens.peek()))
+                    "should be 'let'",
+                    self._token2location(self.tokens.peek()))
 
             let = self.parse_1line_statement()
             assert isinstance(let, Let)
             return let._replace(export=True)
+
+        if self.tokens.peek().value == 'import':
+            import_token = self.tokens.next_token()
+
+            string_token = self.tokens.next_token()
+            if string_token.type != 'STRING':
+                raise common.CompileError("should be a string")
+            import_path_parts = self._handle_string_literal(
+                string_token.value, self._token2location(string_token),
+                allow_curly_braces=False)
+            import_path_string = ''.join(
+                part.python_string for part in import_path_parts)
+
+            relative2 = self.compilation.source_path.parent
+            import_path = relative2 / import_path_string.replace('/', os.sep)
+            self.import_paths.append(import_path)
+
+            as_ = self.tokens.next_token()
+            if as_.value != 'as':
+                raise common.CompileError("should be 'as'")
+
+            varname_token = self.tokens.next_token()
+            if varname_token.type != 'ID':
+                raise common.CompileError("should be a variable name")
+
+            return Import(self._token2location(import_token), import_path,
+                          varname_token.value)
 
         try:
             result = self.parse_expression()
