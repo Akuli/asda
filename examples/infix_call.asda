@@ -1,4 +1,4 @@
-func lol(Str x, Str y) -> Str:
+let lol = (Str x, Str y) -> Str:
     print(x)
     print(y)
     return "lolled"
