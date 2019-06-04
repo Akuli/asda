@@ -16,16 +16,15 @@ pub const Fn = union(enum) {
 
 pub const Data = struct {
     allocator: ?*std.mem.Allocator,    // for allocator.destroy()ing passed_data,   TODO: replace with an interp pointer
-    name: []const u8,   // should be e.g. statically allocated, this won't handle freeing
     zig_fn: Fn,
     passed_data: *objtyp.ObjectData,   // must be pointer to avoid union that contains itself, which is why allocator is needed
 
-    fn initComptime(name: []const u8, zig_fn: Fn, passed_data: *objtyp.ObjectData) Data {
-        return Data{ .allocator = null, .name = name, .zig_fn = zig_fn, .passed_data = passed_data };
+    fn initComptime(zig_fn: Fn, passed_data: *objtyp.ObjectData) Data {
+        return Data{ .allocator = null, .zig_fn = zig_fn, .passed_data = passed_data };
     }
 
-    fn init(allocator: *std.mem.Allocator, name: []const u8, zig_fn: Fn, passed_data: *objtyp.ObjectData) Data {
-        return Data{ .allocator = allocator, .name = name, .zig_fn = zig_fn, .passed_data = passed_data };
+    fn init(allocator: *std.mem.Allocator, zig_fn: Fn, passed_data: *objtyp.ObjectData) Data {
+        return Data{ .allocator = allocator, .zig_fn = zig_fn, .passed_data = passed_data };
     }
 
     pub fn destroy(self: Data, decref_refs: bool, free_nonrefs: bool) void {
@@ -46,8 +45,8 @@ var no_data = objtyp.ObjectData{ .NoData = void{} };
 
 // passed_data should be e.g. statically allocated, and will NOT be destroyed
 // if it isn't, make it statically allocated or use init()
-pub fn newComptime(name: []const u8, zig_fn: Fn, passed_data: ?*objtyp.ObjectData) Object {
-    const data = objtyp.ObjectData{ .FunctionData = Data.initComptime(name, zig_fn, passed_data orelse &no_data) };
+pub fn newComptime(zig_fn: Fn, passed_data: ?*objtyp.ObjectData) Object {
+    const data = objtyp.ObjectData{ .FunctionData = Data.initComptime(zig_fn, passed_data orelse &no_data) };
     const typ = switch(zig_fn) {
         Fn.Returning => returning_type,
         Fn.Void => returning_type,
@@ -56,7 +55,7 @@ pub fn newComptime(name: []const u8, zig_fn: Fn, passed_data: ?*objtyp.ObjectDat
 }
 
 // passed_data should be allocated with interp.object_allocator
-pub fn new(interp: *Interp, name: []const u8, zig_fn: Fn, passed_data: ?objtyp.ObjectData) !*Object {
+pub fn new(interp: *Interp, zig_fn: Fn, passed_data: ?objtyp.ObjectData) !*Object {
     const data_ptr = try interp.object_allocator.create(objtyp.ObjectData);
     errdefer interp.object_allocator.destroy(data_ptr);
     data_ptr.* = passed_data orelse no_data;
@@ -65,7 +64,7 @@ pub fn new(interp: *Interp, name: []const u8, zig_fn: Fn, passed_data: ?objtyp.O
         Fn.Returning => returning_type,
         Fn.Void => returning_type,
     };
-    const data = objtyp.ObjectData{ .FunctionData = Data.init(interp.object_allocator, name, zig_fn, data_ptr) };
+    const data = objtyp.ObjectData{ .FunctionData = Data.init(interp.object_allocator, zig_fn, data_ptr) };
     return try Object.init(interp, typ, data);
 }
 
@@ -126,7 +125,7 @@ pub fn newPartial(interp: *Interp, func: *Object, extra_args: []const *Object) !
         try arrlst.append(arg);
     }
 
-    const res = try new(interp, "<partial>", zig_fn, objtyp.ObjectData{ .ObjectArrayList = arrlst });
+    const res = try new(interp, zig_fn, objtyp.ObjectData{ .ObjectArrayList = arrlst });
 
     for (arrlst.toSliceConst()) |obj| {
         obj.incref();

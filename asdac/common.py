@@ -223,6 +223,7 @@ class Location:
 
 class CompileError(Exception):
 
+    # TODO: make the location non-optional?
     def __init__(self, message, location=None):
         assert location is None or isinstance(location, Location)
         super().__init__(location, message)

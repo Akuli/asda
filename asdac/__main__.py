@@ -63,12 +63,13 @@ def source2bytecode(compilation: common.Compilation):
 
 class CompileManager:
 
-    def __init__(self, compiled_dir, messager):
-        # remains False forever if all compiled files are up to date
-        self.something_was_compiled = False
-
+    def __init__(self, compiled_dir, messager, always_recompile):
         self.compiled_dir = compiled_dir
         self.messager = messager
+        self.always_recompile = always_recompile
+
+        # remains False forever if all compiled files are up to date
+        self.something_was_compiled = False
 
         # {compilation.source_path: compilation}
         self.source_path_2_compilation = {}
@@ -130,28 +131,31 @@ class CompileManager:
 
         compilation = common.Compilation(source_path, self.compiled_dir,
                                          self.messager)
-        with compilation.messager.indented(
-                2, ('Checking if this needs to be compiled to "%s"...'
-                    % common.path_string(compilation.compiled_path))):
 
-            if self._compiled_is_up2date_with_source(compilation):
-                # there is a chance that nothing needs to be compiled
-                # but can't be sure yet
-                imports, exports = bytecoder.read_imports_and_exports(
-                    compilation)
-                self._compile_imports(compilation, imports)
-                import_compilations = [self.source_path_2_compilation[path]
-                                       for path in imports]
+        if not self.always_recompile:
+            with compilation.messager.indented(
+                    2, ('Checking if this needs to be compiled to "%s"...'
+                        % common.path_string(compilation.compiled_path))):
 
-                # now we can check
-                if self._compiled_is_up2date_with_imports(compilation,
-                                                          import_compilations):
-                    compilation.messager(1, "No need to recompile.")
-                    compilation.set_imports(import_compilations)
-                    compilation.set_exports(exports)
-                    compilation.set_done()
-                    self.source_path_2_compilation[source_path] = compilation
-                    return
+                if self._compiled_is_up2date_with_source(compilation):
+                    # there is a chance that nothing needs to be compiled
+                    # but can't be sure yet
+                    imports, exports = bytecoder.read_imports_and_exports(
+                        compilation)
+                    self._compile_imports(compilation, imports)
+                    import_compilations = [self.source_path_2_compilation[path]
+                                           for path in imports]
+
+                    # now we can check
+                    if self._compiled_is_up2date_with_imports(
+                            compilation, import_compilations):
+                        compilation.messager(1, "No need to recompile.")
+                        compilation.set_imports(import_compilations)
+                        compilation.set_exports(exports)
+                        compilation.set_done()
+                        self.source_path_2_compilation[source_path] = (
+                            compilation)
+                        return
 
         self.source_path_2_compilation[source_path] = compilation
 
@@ -263,7 +267,8 @@ def main():
     else:
         red_function = lambda string: string    # noqa
 
-    compile_manager = CompileManager(compiled_dir, messager)
+    compile_manager = CompileManager(compiled_dir, messager,
+                                     args.always_recompile)
     try:
         for path in args.infiles:
             compile_manager.compile(path)

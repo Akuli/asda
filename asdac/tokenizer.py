@@ -110,11 +110,11 @@ def _copy_token(sly_token, **kwargs):
     return result
 
 
-def _get_location(complation, token):
-    return common.Location(complation, token.index, len(token.value))
+def _get_location(compilation, token):
+    return common.Location(compilation, token.index, len(token.value))
 
 
-def _handle_indents_and_dedents(complation, tokens, initial_offset):
+def _handle_indents_and_dedents(compilation, tokens, initial_offset):
     # this code took a while to figure out... don't ask me to comment it more
     indent_levels = [0]
     new_line_starting = True
@@ -144,9 +144,10 @@ def _handle_indents_and_dedents(complation, tokens, initial_offset):
                 if indent_level not in indent_levels:
                     raise common.CompileError(
                         "the indentation is wrong",
-                        _get_location(complation, fake_token))
+                        _get_location(compilation, fake_token))
                 while indent_level != indent_levels[-1]:
                     yield _copy_token(fake_token, type='DEDENT')
+                    yield _copy_token(fake_token, type='NEWLINE')
                     del indent_levels[-1]
 
             if token.type != 'INDENT':
@@ -162,11 +163,13 @@ def _handle_indents_and_dedents(complation, tokens, initial_offset):
     while indent_levels != [0]:
         yield _copy_token(token, type='DEDENT', value='',
                           index=line_start_offset)
+        yield _copy_token(token, type='NEWLINE', value='',
+                          index=line_start_offset)
         del indent_levels[-1]
 
 
 # the only allowed sequence that contains colon or indent is: colon \n indent
-def _check_colons(complation, tokens):
+def _check_colons(compilation, tokens):
     staggered = more_itertools.stagger(tokens, offsets=(-2, -1, 0))
     for token1, token2, token3 in staggered:
         assert token3 is not None
@@ -178,14 +181,14 @@ def _check_colons(complation, tokens):
                     token2.type != 'NEWLINE'):
                 raise common.CompileError(
                     "indent without : and newline",
-                    _get_location(complation, token3))
+                    _get_location(compilation, token3))
 
         if token1 is not None and token1.type == ':':
             assert token2 is not None and token3 is not None
             if token2.type != 'NEWLINE' or token3.type != 'INDENT':
                 raise common.CompileError(
                     ": without newline and indent",
-                    _get_location(complation, token1))
+                    _get_location(compilation, token1))
 
         yield token3
 
@@ -202,10 +205,43 @@ def _remove_colons(tokens):
             yield token1
 
 
-def tokenize(complation, code, *, initial_offset=0):
+def _match_parens(compilation, tokens):
+    lparens = list('([{')
+    rparens = list(')]}')
+    lparen2rparen = dict(zip(lparens, rparens))
+    rparen2lparen = dict(zip(rparens, lparens))
+
+    stack = []
+    for token in tokens:
+        if token.value in lparens:
+            stack.append(token)
+
+        if token.value in rparens:
+            if not stack:
+                raise common.CompileError(
+                    "there is no matching '%s'" % rparen2lparen[token.value],
+                    _get_location(compilation, token))
+
+            matching_paren = stack.pop().value
+            if matching_paren != rparen2lparen[token.value]:
+                raise common.CompileError(
+                    "the matching paren is '%s', not '%s'" % (
+                        matching_paren, rparen2lparen[token.value]),
+                    _get_location(compilation, token))
+
+        yield token
+
+    if stack:
+        raise common.CompileError(
+            "there is no '%s'" % lparen2rparen[stack[-1].value],
+            _get_location(compilation, stack[-1]))
+
+
+def tokenize(compilation, code, *, initial_offset=0):
     assert initial_offset >= 0
-    tokens = _raw_tokenize(complation, code, initial_offset)
-    tokens = _handle_indents_and_dedents(complation, tokens, initial_offset)
-    tokens = _check_colons(complation, tokens)
+    tokens = _raw_tokenize(compilation, code, initial_offset)
+    tokens = _handle_indents_and_dedents(compilation, tokens, initial_offset)
+    tokens = _check_colons(compilation, tokens)
     tokens = _remove_colons(tokens)
+    tokens = _match_parens(compilation, tokens)
     return tokens

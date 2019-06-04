@@ -178,7 +178,6 @@ class _BytecodeWriter:
             assert isinstance(op.functype, objects.FunctionType)
             self.write_type(op.functype)    # includes CREATE_FUNCTION
             self.bytecode.add_byte(1 if op.yields else 0)
-            self.bytecode.write_string(op.name)
 
             self._create_subwriter().run(op.body_opcode, varlists)
             return

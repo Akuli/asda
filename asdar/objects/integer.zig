@@ -20,7 +20,7 @@ fn toStringFn(interp: *Interp, data: *objtyp.ObjectData, args: []const *Object) 
     const len = std.mem.len(u8, buf.ptr);
     return try objects.string.newFromUtf8(interp, buf[0..len]);
 }
-var tostring_value = objects.function.newComptime("to_string", objects.function.Fn{ .Returning = toStringFn }, null);
+var tostring_value = objects.function.newComptime(objects.function.Fn{ .Returning = toStringFn }, null);
 
 
 pub fn debugPrint(obj: *Object) void {

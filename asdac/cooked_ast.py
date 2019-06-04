@@ -17,8 +17,7 @@ LookupAttr = _astclass('LookupAttr', ['obj', 'attrname'])
 LookupGenericFunction = _astclass('LookupGenericFunction',
                                   ['funcname', 'types', 'level'])
 LookupModule = _astclass('LookupModule', [])
-CreateFunction = _astclass('CreateFunction',
-                           ['name', 'argnames', 'body', 'yields'])
+CreateFunction = _astclass('CreateFunction', ['argnames', 'body', 'yields'])
 CreateGenericFunction = _astclass('CreateGenericFunction',
                                   ['name', 'generic_obj', 'argnames', 'body',
                                    'yields'])
@@ -83,9 +82,10 @@ class _Chef:
 
         # keys are strings, values are types
         self.local_export_vars = collections.OrderedDict()
-        self.local_import_vars = {}
+        self.local_import_vars = collections.OrderedDict()
         self.local_vars = collections.ChainMap(
-            {}, self.local_export_vars, self.local_import_vars)
+            collections.OrderedDict(),
+            self.local_export_vars, self.local_import_vars)
         self.local_generic_funcs = {}
         self.local_types = {}
 
@@ -183,6 +183,9 @@ class _Chef:
                     "%s doesn't return a value" % call.function.type.name,
                     raw_expression.location)
             return call
+
+        if isinstance(raw_expression, raw_ast.FuncDefinition):
+            return self.cook_function_definition(raw_expression)
 
         if isinstance(raw_expression, raw_ast.GetVar):
             chef = self.get_chef_for_varname(
@@ -317,21 +320,20 @@ class _Chef:
                                                 value, raw.export)
 
     # TODO: allow functions to call themselves
+    # TODO: generics? old generic function code is commented out
     def cook_function_definition(self, raw):
-        self._check_name_not_exist(raw.funcname, 'variable', raw.location)
-
         # yes, this is weird, but needed because:
         # * creating the real subchef needs cooked returntype
         # * cooking the returntype needs a chef that knows the generic types
         temp_chef = _Chef(self)
-        if raw.generics is not None:
-            assert raw.generics
-            markers = []
-            for name, location in raw.generics:
-                self._check_name_not_exist(name, 'generic type', location)
-                marker = objects.GenericMarker(name)
-                temp_chef.local_types[name] = marker
-                markers.append(marker)
+#        if raw.generics is not None:
+#            assert raw.generics
+#            markers = []
+#            for name, location in raw.generics:
+#                self._check_name_not_exist(name, 'generic type', location)
+#                marker = objects.GenericMarker(name)
+#                temp_chef.local_types[name] = marker
+#                markers.append(marker)
 
         argnames = []
         argtypes = []
@@ -353,28 +355,27 @@ class _Chef:
                 "cannot yield in a function that doesn't return "
                 "Generator[something]", yield_location)
 
-        functype = objects.FunctionType(raw.funcname, argtypes, returntype)
+        functype = objects.FunctionType(argtypes, returntype)
         subchef = _Chef(self, True, yield_location is not None, returntype)
         subchef.local_types.update(temp_chef.local_types)
         subchef.local_vars.update(dict(zip(argnames, argtypes)))
         body = list(map(subchef.cook_statement, raw.body))
 
-        if raw.generics is None:
-            value = CreateFunction(raw.location, functype, raw.funcname,
-                                   argnames, body, yield_location is not None)
-            return self._create_local_var_or_export(
-                raw.location, raw.funcname, value, raw.export)
+        #if raw.generics is None:
+        if True:
+            return CreateFunction(raw.location, functype,
+                                  argnames, body, yield_location is not None)
 
-        if raw.export:
-            raise common.CompileError(
-                "sorry, generic functions can't be exported yet :(",
-                raw.location)
-
-        generic_obj = objects.Generic(markers, functype)
-        self.local_generic_funcs[raw.funcname] = generic_obj
-        return CreateGenericFunction(
-            raw.location, None, raw.funcname, generic_obj, argnames, body,
-            yield_location is not None)
+#        if raw.export:
+#            raise common.CompileError(
+#                "sorry, generic functions can't be exported yet :(",
+#                raw.location)
+#
+#        generic_obj = objects.Generic(markers, functype)
+#        self.local_generic_funcs[raw.funcname] = generic_obj
+#        return CreateGenericFunction(
+#            raw.location, None, raw.funcname, generic_obj, argnames, body,
+#            yield_location is not None)
 
     def cook_return(self, raw):
         if not self.can_return:
@@ -497,8 +498,6 @@ class _Chef:
             return self.cook_setvar(raw_statement)
         if isinstance(raw_statement, raw_ast.FuncCall):
             return self.cook_function_call(raw_statement)
-        if isinstance(raw_statement, raw_ast.FuncDefinition):
-            return self.cook_function_definition(raw_statement)
         if isinstance(raw_statement, raw_ast.Return):
             return self.cook_return(raw_statement)
         if isinstance(raw_statement, raw_ast.Yield):

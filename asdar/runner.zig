@@ -84,7 +84,7 @@ const Runner = struct {
                         data.AsdaFunctionState.definition_scope.incref();
                         errdefer data.destroy(true, true);
 
-                        func = try objects.function.new(self.interp, createdata.name, the_fn, data);
+                        func = try objects.function.new(self.interp, the_fn, data);
                     }
                     errdefer func.decref();
 

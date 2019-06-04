@@ -26,7 +26,7 @@ test "builtins printFn" {
     try printFn(&interp, &no_data, []const *Object{ s });
 }
 
-var print_value = objects.function.newComptime("print", objects.function.Fn{ .Void = printFn }, null);
+var print_value = objects.function.newComptime(objects.function.Fn{ .Void = printFn }, null);
 pub const print = &print_value;
 
 pub const object_array = []const *Object {

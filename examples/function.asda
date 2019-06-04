@@ -1,4 +1,4 @@
-func print_and_return(Str message) -> Str:
+let print_and_return = (Str message) -> Str:
     print(message)
     return message
     print("if you see this, something is broken")

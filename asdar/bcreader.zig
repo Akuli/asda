@@ -50,7 +50,7 @@ pub const Op = struct {
     pub const VarData = struct{ level: u8, index: u16 };
     pub const CallFunctionData = struct{ returning: bool, nargs: u8 };
     pub const LookupAttributeData = struct{ typ: *objtyp.Type, index: u16 };
-    pub const CreateFunctionData = struct{ returning: bool, name: []u8, body: Code };
+    pub const CreateFunctionData = struct{ returning: bool, body: Code };
 
     pub const Data = union(enum) {
         LookupVar: VarData,
@@ -260,12 +260,10 @@ const BytecodeReader = struct {
                         0 => false,
                         else => unreachable,    // TODO: yielding functions
                     };
-                    const name = try self.readString();
                     const body = try self.readBody();
                     errdefer body.destroy();
                     break :blk Op.Data{ .CreateFunction = Op.CreateFunctionData{
                         .returning = (typ == objects.function.returning_type),
-                        .name = name,
                         .body = body,
                     }};
                 },

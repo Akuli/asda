@@ -193,9 +193,8 @@ class _BytecodeReader:
                 self._unread(magic[0])
                 tybe = self.read_type()
                 yields = bool(self._read(1)[0])
-                name = self.read_string()
                 body = self.read_body()
-                args = (tybe, name, body, yields)
+                args = (tybe, body, yields)
             else:
                 assert False, magic
 

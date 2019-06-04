@@ -22,8 +22,7 @@ class Type:
         return self
 
     def add_method(self, name, argtypes, returntype):
-        self.attributes[name] = FunctionType(
-            self.name + '.' + name, argtypes, returntype)
+        self.attributes[name] = FunctionType(argtypes, returntype)
 
     def __repr__(self):
         return '<%s type %r>' % (__name__, self.name)
@@ -34,29 +33,26 @@ OBJECT = Type('Object', None)
 
 class FunctionType(Type):
 
-    def __init__(self, name_prefix, argtypes=(), returntype=None):
+    # returntype can be None for void return
+    def __init__(self, argtypes, returntype):
         self.argtypes = list(argtypes)
 
-        argtype_names = [argtype.name for argtype in self.argtypes]
-        super().__init__('%s(%s)' % (name_prefix, ', '.join(argtype_names)),
-                         OBJECT)
+        super().__init__(
+            'function (%s) -> %s' % (
+                ', '.join(argtype.name for argtype in self.argtypes),
+                'void' if returntype is None else returntype.name,
+            ), OBJECT)
         self.returntype = returntype
-        self.name_prefix = name_prefix
 
     def __eq__(self, other):
         if not isinstance(other, FunctionType):
             return NotImplemented
 
-        # name_prefix is ignored on purpose
         return (self.argtypes == other.argtypes and
                 self.returntype == other.returntype)
 
-    def undo_generics(self, type_dict, new_name_prefix=None):
-        if new_name_prefix is None:
-            new_name_prefix = self.name_prefix
-
+    def undo_generics(self, type_dict):
         return FunctionType(
-            new_name_prefix,
             [tybe.undo_generics(type_dict) for tybe in self.argtypes],
             (None if self.returntype is None else
              self.returntype.undo_generics(type_dict)))
@@ -73,7 +69,7 @@ BUILTIN_TYPES['Str'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 BUILTIN_TYPES['Int'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 
 BUILTIN_OBJECTS = collections.OrderedDict([
-    ('print', FunctionType('print', [BUILTIN_TYPES['Str']])),
+    ('print', FunctionType([BUILTIN_TYPES['Str']], None)),
     ('TRUE', BUILTIN_TYPES['Bool']),
     ('FALSE', BUILTIN_TYPES['Bool']),
 ])
@@ -90,7 +86,7 @@ class GeneratorType(Type):
             return NotImplemented
         return self.item_type == other.item_type
 
-    def undo_generics(self, type_dict, new_name_prefix=None):
+    def undo_generics(self, type_dict):
         return GeneratorType(self.item_type.undo_generics(type_dict))
 
 
@@ -136,31 +132,18 @@ class Generic:
             else:
                 type_maybe_s = '%d types' % len(self.type_markers)
 
-            if hasattr(self.real_type, 'name_prefix'):
-                name = '%s[%s]' % (
-                    self.real_type.name_prefix,
-                    ', '.join(marker.name for marker in self.type_markers))
-            else:
-                name = self.real_type.name
-
             raise common.CompileError(
                 "%s expected %s, but got %d" % (
-                    name, type_maybe_s, len(the_types)),
+                    self.real_type.name, type_maybe_s, len(the_types)),
                 error_location)
 
         type_dict = dict(zip(self.type_markers, the_types))
-        if isinstance(self.real_type, FunctionType):
-            new_name_prefix = '%s[%s]' % (
-                self.real_type.name_prefix,
-                ', '.join(tybe.name for tybe in the_types))
-            return self.real_type.undo_generics(type_dict, new_name_prefix)
-
         return self.real_type.undo_generics(type_dict)
 
 
 T = GenericMarker('T')
 BUILTIN_GENERIC_FUNCS = collections.OrderedDict([
-    ('next', Generic([T], FunctionType('next', [GeneratorType(T)], T))),
+    ('next', Generic([T], FunctionType([GeneratorType(T)], T))),
 ])
 BUILTIN_GENERIC_TYPES = collections.OrderedDict([
     ('Generator', Generic([T], GeneratorType(T))),

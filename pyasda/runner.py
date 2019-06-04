@@ -23,7 +23,7 @@ class RunResult(enum.Enum):
     DIDNT_RETURN = 4
 
 
-def _create_function_object(definition_scope, interpreter, tybe, name, code,
+def _create_function_object(definition_scope, interpreter, tybe, code,
                             yields):
     def python_func(*args):
         scope = _create_subscope(definition_scope, code.how_many_local_vars)
@@ -52,7 +52,7 @@ def _create_function_object(definition_scope, interpreter, tybe, name, code,
 
         return objects.Generator(tybe.returntype, get_next_item)
 
-    return objects.Function(tybe, name, python_func)
+    return objects.Function(tybe, python_func)
 
 
 class _Runner:

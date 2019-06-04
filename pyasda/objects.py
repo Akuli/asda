@@ -36,24 +36,22 @@ class FunctionType(Type):
 
 class Function(Object):
 
-    def __init__(self, tybe, name, python_func):
+    def __init__(self, tybe, python_func):
         super().__init__(tybe)
-        self.name = name
         self.python_func = python_func
 
     def method_bind(self, this):
         bound_type = FunctionType(self.type.argtypes[1:], self.type.returntype)
-        return Function(bound_type, self.name,
-                        functools.partial(self.python_func, this))
+        return Function(bound_type, functools.partial(self.python_func, this))
 
     def run(self, args):
         assert len(args) == len(self.type.argtypes)
         return self.python_func(*args)
 
 
-def add_method(tybe, name, python_func, argtypes, returntype):
+def add_method(tybe, python_func, argtypes, returntype):
     functype = FunctionType(itertools.chain([tybe], argtypes), returntype)
-    tybe._attributes.append((True, Function(functype, name, python_func)))
+    tybe._attributes.append((True, Function(functype, python_func)))
 
 
 types = collections.OrderedDict([
@@ -63,13 +61,17 @@ types = collections.OrderedDict([
     ('Object', OBJECT),
 ])
 
+# Str.uppercase
 add_method(
-    types['Str'], 'uppercase',
-    (lambda this: String(this.python_string.upper())), [], types['Str'])
-add_method(types['Str'], 'to_string', (lambda this: this), [], types['Str'])
-add_method(
-    types['Int'], 'to_string',
-    (lambda this: String(str(this.python_int))), [], types['Str'])
+    types['Str'], (lambda this: String(this.python_string.upper())),
+    [], types['Str'])
+
+# Str.to_string
+add_method(types['Str'], (lambda this: this), [], types['Str'])
+
+# Int.to_string
+add_method(types['Int'],
+           (lambda this: String(str(this.python_int))), [], types['Str'])
 
 
 class GenericType(Type):
@@ -159,11 +161,13 @@ FALSE = Object(types['Bool'])
 
 T = GenericType()
 BUILTINS = [
-    Function(FunctionType([types['Str']], None), 'print',
+    # print
+    Function(FunctionType([types['Str']], None),
              lambda arg: print(arg.python_string)),
     TRUE,
     FALSE,
-    Function(FunctionType([GeneratorType(T)], T), 'next',
+    # next
+    Function(FunctionType([GeneratorType(T)], T),
              lambda arg: arg.next()),
 ]
 del T

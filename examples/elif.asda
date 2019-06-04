@@ -1,5 +1,5 @@
 # no integers yet :(
-func weird_stuff(Bool a, Bool b, Bool c) -> void:
+let weird_stuff = (Bool a, Bool b, Bool c) -> void:
     if a:
         print("One")
     elif b:

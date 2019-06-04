@@ -27,7 +27,7 @@ fn toStringFn(interp: *Interp, data: *objtyp.ObjectData, args: []const *Object) 
     args[0].incref();
     return args[0];
 }
-var tostring_value = objects.function.newComptime("to_string", objects.function.Fn{ .Returning = toStringFn }, null);
+var tostring_value = objects.function.newComptime(objects.function.Fn{ .Returning = toStringFn }, null);
 
 var type_value = objtyp.Type.init([]objtyp.Attribute {
     objtyp.Attribute{ .is_method = true, .value = undefined },    // TODO: uppercase()

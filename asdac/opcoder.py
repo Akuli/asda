@@ -29,7 +29,7 @@ StrConstant = _op_class('StrConstant', ['python_string'])
 IntConstant = _op_class('IntConstant', ['python_int'])
 BoolConstant = _op_class('BoolConstant', ['python_bool'])
 CreateFunction = _op_class('CreateFunction', [
-    'name', 'functype', 'yields', 'body_opcode'])
+    'functype', 'yields', 'body_opcode'])
 LookupVar = _op_class('LookupVar', ['level', 'var'])
 LookupModule = _op_class('LookupModule', ['compiled_path'])
 # tuples have an index() method, avoid name clash with misspelling
@@ -191,7 +191,7 @@ class _OpCoder:
                 function_opcode.ops.append(DidntReturnError(None))
 
             self.output.ops.append(CreateFunction(
-                self._lineno(expression.location), expression.name,
+                self._lineno(expression.location),
                 expression.type, expression.yields, function_opcode))
 
         # the opcode is dynamically typed from here, so generic functions
