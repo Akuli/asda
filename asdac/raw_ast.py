@@ -118,6 +118,8 @@ _PRECEDENCE_LIST = [
     [('*', OperatorKind.BINARY)],
     [('+', OperatorKind.BINARY),
      ('-', OperatorKind.PREFIX | OperatorKind.BINARY)],
+    [('==', OperatorKind.BINARY),
+     ('!=', OperatorKind.BINARY)],
 ]
 
 
@@ -482,7 +484,7 @@ class AsdaParser:
                 self.tokens.next_token()    # 'else'
                 else_body = self.parse_block(consume_newline=True)
             else:
-                else_body = None
+                else_body = []
 
             return If(if_location, ifs, else_body)
 
