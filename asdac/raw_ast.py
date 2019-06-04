@@ -430,8 +430,6 @@ class AsdaParser:
         if self.tokens.peek().value == 'return':
             return_keyword = self.tokens.next_token()
             value = self.parse_expression()
-            if type(value) is tuple:
-                import traceback as t; t.print_stack()
             return Return(
                 self._token2location(return_keyword) + value.location, value)
 
@@ -468,7 +466,28 @@ class AsdaParser:
         return self.parse_expression()
 
     def parse_statement(self):
+        if self.tokens.peek().value == 'if':
+            if_location = self._token2location(self.tokens.next_token())
+            condition = self.parse_expression()
+            body = self.parse_block(consume_newline=True)
+            ifs = [(condition, body)]
+
+            while ((not self.tokens.eof()) and
+                   self.tokens.peek().value == 'elif'):
+                self.tokens.next_token()    # 'elif'
+                ifs.append((self.parse_expression(),
+                            self.parse_block(consume_newline=True)))
+
+            if (not self.tokens.eof()) and self.tokens.peek().value == 'else':
+                self.tokens.next_token()    # 'else'
+                else_body = self.parse_block(consume_newline=True)
+            else:
+                else_body = None
+
+            return If(if_location, ifs, else_body)
+
         # TODO: more different kinds of statements
+
         result = self.parse_1line_statement()
 
         newline = self.tokens.next_token()
@@ -477,7 +496,7 @@ class AsdaParser:
                 "expected a newline", self._token2location(newline))
         return result
 
-    def parse_block(self):
+    def parse_block(self, *, consume_newline=False):
         with self.tokens.include_whitespace(True):
             indent = self.tokens.next_token()
             if indent.type != 'INDENT':
@@ -490,6 +509,11 @@ class AsdaParser:
 
             dedent = self.tokens.next_token()
             assert dedent.type == 'DEDENT'
+
+            if consume_newline:
+                newline = self.tokens.next_token()
+                assert newline.type == 'NEWLINE', "tokenizer doesn't work"
+
             return result
 
     def parse_statements(self):
