@@ -1,5 +1,5 @@
 print("Export example is running")
 
 export let hello = "Hello World!"
-export func print_message(Str message) -> void:
+export let print_message = (Str message) -> void:
     print("This is the message: {message}")
