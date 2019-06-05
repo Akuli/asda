@@ -1,4 +1,2 @@
 more_itertools
 regex
-git+https://github.com/dabeaz/sly; python_version >= '3.6'
-git+https://github.com/Akuli/sly35; python_version < '3.6'

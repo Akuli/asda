@@ -81,6 +81,7 @@ class TokenIterator:
                    not self._include_whitespace_flag):
                 token = next(self._iterator)
         except StopIteration:
+            # TODO: the 'file' in this error message is wrong for "{print(}"
             raise common.CompileError("unexpected end of file", None)
 
         return token
@@ -141,10 +142,6 @@ class AsdaParser:
         self.tokens = TokenIterator(token_generator)
         self.import_paths = []
 
-    def _token2location(self, token):
-        return common.Location(
-            self.compilation, token.index, len(token.value))
-
     def _handle_string_literal(self, string, location, allow_curly_braces):
         assert len(string) >= 2 and string[0] == '"' and string[-1] == '"'
         content = string[1:-1]
@@ -181,10 +178,9 @@ class AsdaParser:
                         token_list.append(parser.tokens.next_token())
 
                     assert token_list[-1].type == 'NEWLINE'
-                    bad_location = (
-                        self._token2location(token_list[0]) +
-                        self._token2location(token_list[-2]))
-                    raise common.CompileError("invalid syntax", bad_location)
+                    raise common.CompileError(
+                        "invalid syntax",
+                        token_list[0].location + token_list[-2].location)
 
                 parts.append(_to_string(expression))
 
@@ -197,15 +193,13 @@ class AsdaParser:
         # TODO: generic types?
         name = self.tokens.next_token()
         if name.type != 'ID':
-            raise common.CompileError(
-                "invalid type", self._token2location(name))
-        return GetType(self._token2location(name), name.value)
+            raise common.CompileError("invalid type", name.location)
+        return GetType(name.location, name.value)
 
     def parse_commasep_in_parens(self, item_callback):
         lparen = self.tokens.next_token()
         if lparen.value != '(':
-            raise common.CompileError(
-                "should be '('", self._token2location(lparen))
+            raise common.CompileError("should be '('", lparen.location)
 
         with self.tokens.include_whitespace(False):
             result = []
@@ -216,15 +210,14 @@ class AsdaParser:
                     comma = self.tokens.next_token()
                     if comma.value != ',':
                         raise common.CompileError(
-                            "should be ',' or ')'",
-                            self._token2location(comma))
+                            "should be ',' or ')'", comma.location)
 
                 result.append(item_callback())
 
             rparen = self.tokens.next_token()
             if rparen.value != ')':
                 raise common.CompileError(
-                    "should be ',' or ')'", self._token2location(rparen))
+                    "should be ',' or ')'", rparen.location)
 
         return (lparen, result, rparen)
 
@@ -232,9 +225,8 @@ class AsdaParser:
         tybe = self.parse_type()
         name = self.tokens.next_token()
         if name.type != 'ID':
-            raise common.CompileError(
-                "invalid variable name", self._token2location(name))
-        location = tybe.location + self._token2location(name)
+            raise common.CompileError("invalid variable name", name.location)
+        location = tybe.location + name.location
         return (tybe, name.value, location)
 
     def expression_without_operators_coming_up(self):
@@ -286,11 +278,11 @@ class AsdaParser:
 
                 if self.tokens.peek().value == 'void':
                     returntype = None
-                    location = (self._token2location(lparen) +
-                                self._token2location(self.tokens.next_token()))
+                    location = (lparen.location +
+                                self.tokens.next_token().location)
                 else:
                     returntype = self.parse_type()
-                    location = self._token2location(lparen) + returntype.location
+                    location = lparen.location + returntype.location
 
                 body = self.parse_block()
                 return FuncDefinition(location, args, returntype, body)
@@ -304,34 +296,31 @@ class AsdaParser:
                     rparen = self.tokens.next_token()
 
                 if rparen.value != ')':
-                    raise common.CompileError(
-                        "should be ')'", self._token2location(rparen))
+                    raise common.CompileError("should be ')'", rparen.location)
 
                 return result
 
         if self.tokens.peek().type == 'INTEGER':
             token = self.tokens.next_token()
-            return Integer(self._token2location(token), int(token.value))
+            return Integer(token.location, int(token.value))
 
         if self.tokens.peek().type == 'STRING':
             token = self.tokens.next_token()
             parts = self._handle_string_literal(
-                token.value, self._token2location(token),
-                allow_curly_braces=True)
-            location = self._token2location(token)
+                token.value, token.location, allow_curly_braces=True)
 
             if len(parts) == 0:     # empty string
-                return String(location, '')
+                return String(token.location, '')
             if len(parts) == 1:
-                return parts[0]._replace(location=location)
-            return StrJoin(location, parts)
+                return parts[0]._replace(location=token.location)
+            return StrJoin(token.location, parts)
 
         if self.tokens.peek().type == 'ID':
             token = self.tokens.next_token()
-            return GetVar(self._token2location(token), token.value)
+            return GetVar(token.location, token.value)
 
         raise common.CompileError(
-            "invalid syntax", self._token2location(self.tokens.next_token()))
+            "invalid syntax", self.tokens.next_token().location)
 
     def parse_expression_without_operators(self):
         result = self.parse_expression_without_operators_or_calls()
@@ -342,9 +331,7 @@ class AsdaParser:
         while (not self.tokens.eof()) and self.tokens.peek().value == '(':
             lparen, args, rparen = self.parse_commasep_in_parens(
                 self.parse_expression)
-            result = FuncCall(
-                result.location + self._token2location(rparen),
-                result, args)
+            result = FuncCall(result.location + rparen.location, result, args)
 
         return result
 
@@ -396,8 +383,8 @@ class AsdaParser:
         if not parts:
             # next_token() may raise CompileError for end of file, that's fine
             not_expression = self.tokens.next_token()
-            raise common.CompileError("should be an expression",
-                                      self._token2location(not_expression))
+            raise common.CompileError(
+                "should be an expression", not_expression.location)
 
         # there must not be two expressions next to each other without an
         # operator between
@@ -440,9 +427,9 @@ class AsdaParser:
                             parts[index+2][1].value == token.value and
                             parts[index+3][0]):
                         raise common.CompileError(
-                            "should be: expression %sexpression%s expression"
-                            % (token.value, token.value),
-                            self._token2location(token))
+                            "should be: expression {0}expression{0} expression"
+                            .format(token.value),
+                            token.location)
 
                     start_index = index-1
                     end_index = index+4
@@ -466,8 +453,6 @@ class AsdaParser:
                         location, token.value, lhs, mid, rhs)
 
                 else:
-                    location = self._token2location(token)
-
                     if index-1 >= 0 and parts[index-1][0]:
                         before = parts[index-1][1]
                         assert before is not None
@@ -482,11 +467,12 @@ class AsdaParser:
 
                     if before is None and after is not None:
                         valid = bool(kind & OperatorKind.PREFIX)
-                        result = PrefixOperator(location, token.value, after)
+                        result = PrefixOperator(
+                            token.location, token.value, after)
                     elif before is not None and after is not None:
                         valid = bool(kind & OperatorKind.BINARY)
                         result = BinaryOperator(
-                            location, token.value, before, after)
+                            token.location, token.value, before, after)
                     else:
                         valid = False
                         # result is not needed
@@ -494,7 +480,7 @@ class AsdaParser:
                     if not valid:
                         raise common.CompileError(
                             "'%s' cannot be used like this" % token.value,
-                            location)
+                            token.location)
 
                     start_index = index if before is None else index-1
                     end_index = index + 1 if after is None else index + 2
@@ -514,8 +500,7 @@ class AsdaParser:
         if self.tokens.peek().value == 'return':
             return_keyword = self.tokens.next_token()
             value = self.parse_expression()
-            return Return(
-                self._token2location(return_keyword) + value.location, value)
+            return Return(return_keyword.location + value.location, value)
 
         if self.tokens.peek().value == 'let':
             let = self.tokens.next_token()
@@ -523,25 +508,21 @@ class AsdaParser:
             varname_token = self.tokens.next_token()
             if varname_token.type != 'ID':
                 raise common.CompileError(
-                    "invalid variable name",
-                    self._token2location(varname_token))
+                    "invalid variable name", varname_token.location)
 
             eq = self.tokens.next_token()
             if eq.value != '=':
-                raise common.CompileError(
-                    "should be '='", self._token2location(eq))
+                raise common.CompileError("should be '='", eq.location)
 
             value = self.parse_expression()
 
-            return Let(self._token2location(let), varname_token.value, value,
-                       export=False)
+            return Let(let.location, varname_token.value, value, export=False)
 
         if self.tokens.peek().value == 'export':
             export_token = self.tokens.next_token()
             if self.tokens.peek().value != 'let':
                 raise common.CompileError(
-                    "should be 'let'",
-                    self._token2location(self.tokens.peek()))
+                    "should be 'let'", self.tokens.peek().location)
 
             let = self.parse_1line_statement()
             assert isinstance(let, Let)
@@ -554,7 +535,7 @@ class AsdaParser:
             if string_token.type != 'STRING':
                 raise common.CompileError("should be a string")
             import_path_parts = self._handle_string_literal(
-                string_token.value, self._token2location(string_token),
+                string_token.value, string_token.location,
                 allow_curly_braces=False)
             import_path_string = ''.join(
                 part.python_string for part in import_path_parts)
@@ -571,7 +552,7 @@ class AsdaParser:
             if varname_token.type != 'ID':
                 raise common.CompileError("should be a variable name")
 
-            return Import(self._token2location(import_token), import_path,
+            return Import(import_token.location, import_path,
                           varname_token.value)
 
         try:
@@ -589,25 +570,24 @@ class AsdaParser:
             raise common.CompileError(
                 "cannot assign to this", result.location)
 
-        assign_location = self._token2location(self.tokens.next_token())  # '='
+        equal_sign = self.tokens.next_token()
         value = self.parse_expression()
-        return SetVar(assign_location, result.varname, value)
+        return SetVar(equal_sign.location, result.varname, value)
 
     def consume_semicolon_token(self):
         token = self.tokens.next_token()
         if token.value != ';':
-            raise common.CompileError(
-                "expected ';'", self._token2location(token))
+            raise common.CompileError("expected ';'", token.location)
 
     def parse_statement(self):
         if self.tokens.peek().value == 'while':
-            while_location = self._token2location(self.tokens.next_token())
+            while_location = self.tokens.next_token().location
             condition = self.parse_expression()
             body = self.parse_block(consume_newline=True)
             return While(while_location, condition, body)
 
         if self.tokens.peek().value == 'if':
-            if_location = self._token2location(self.tokens.next_token())
+            if_location = self.tokens.next_token().location
             ifs = [(self.parse_expression(),
                     self.parse_block(consume_newline=True))]
 
@@ -626,7 +606,7 @@ class AsdaParser:
             return If(if_location, ifs, else_body)
 
         if self.tokens.peek().value == 'for':
-            for_location = self._token2location(self.tokens.next_token())
+            for_location = self.tokens.next_token().location
             init = self.parse_1line_statement()
             self.consume_semicolon_token()
             cond = self.parse_expression()
@@ -641,8 +621,7 @@ class AsdaParser:
 
         newline = self.tokens.next_token()
         if newline.type != 'NEWLINE':
-            raise common.CompileError(
-                "expected a newline", self._token2location(newline))
+            raise common.CompileError("expected a newline", newline.location)
         return result
 
     def parse_block(self, *, consume_newline=False):
@@ -651,8 +630,7 @@ class AsdaParser:
             if indent.type != 'INDENT':
                 # there was no colon, tokenizer replaces 'colon indent' with
                 # just 'indent' to make parsing a bit simpler
-                raise common.CompileError(
-                    "expected ':'", self._token2location(indent))
+                raise common.CompileError("expected ':'", indent.location)
 
             result = []
             while self.tokens.peek().type != 'DEDENT':

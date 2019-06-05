@@ -3,6 +3,7 @@ import re
 
 from asdac import common
 
+# keys are valid regex syntax AND valid asda string content syntax, lol
 _BACKSLASHED = collections.OrderedDict([
     (r'\n', '\n'),
     (r'\t', '\t'),

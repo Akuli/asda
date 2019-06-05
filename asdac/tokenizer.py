@@ -1,80 +1,33 @@
-import copy
+import collections
 
 import more_itertools
 import regex
-import sly
 
 from . import common, string_parser
 
 
 _LETTER_REGEX = r'\p{Lu}|\p{Ll}|\p{Lo}'    # not available in stdlib re module
 
+_TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
+    ('OPERATOR', r'==|!=|->|[+\-*=`;:.,\[\]()]'),
+    ('INTEGER', r'[1-9][0-9]*|0'),
+    ('ID', r'(?:%s|_)(?:%s|[0-9_])*' % (_LETTER_REGEX, _LETTER_REGEX)),
+    ('STRING', '"' + string_parser.CONTENT_REGEX + '"'),
+    ('IGNORE_BLANK_LINE', r'(?<=\n|^) *(?:#.*)?\n'),
+    ('NEWLINE', r'\n'),
+    ('INDENT', r'(?<=\n|^) +'),      # DEDENT tokens are created "manually"
+    ('IGNORE_SPACES', r' '),
+    ('IGNORE_COMMENT', r'#.*'),
+    ('ERROR', '.'),
+])
 
-class AsdaLexer(sly.Lexer):
-    regex_module = regex
+# keep this up to date! this is what prevents these from being valid
+# variable names
+_KEYWORDS = {'let', 'if', 'elif', 'else', 'while', 'for', 'void', 'return',
+             'yield', 'import', 'export', 'as'}
 
-    literals = {'+', '-', '*', '=', '`', ';', ':', '.', ',',
-                '[', ']', '(', ')'}
-    tokens = {INTEGER, ID, STRING, NEWLINE, INDENT, DEDENT,   # noqa
-              IF, ELIF, ELSE, WHILE, FOR, FUNC,               # noqa
-              LET, VOID, RETURN, YIELD, IMPORT, EXPORT, AS,   # noqa
-              EQ, NE, ARROW}                                  # noqa
 
-    INTEGER = r'[1-9][0-9]*|0'
-    ID = r'(?:%s|_)(?:%s|[0-9_])*' % (_LETTER_REGEX, _LETTER_REGEX)
-    STRING = '"' + string_parser.CONTENT_REGEX + '"'
-    BLANK_LINE = r'(?<=\n|^) *(?:#.*)?\n'
-    NEWLINE = r'\n'
-    INDENT = r'(?<=\n|^) +'
-    IGNORE_SPACES = r' '
-    IGNORE_COMMENT = r'#.*'
-
-    ID['let'] = LET         # noqa
-    ID['if'] = IF           # noqa
-    ID['elif'] = ELIF       # noqa
-    ID['else'] = ELSE       # noqa
-    ID['while'] = WHILE     # noqa
-    ID['for'] = FOR         # noqa
-    ID['void'] = VOID       # noqa
-    ID['return'] = RETURN   # noqa
-    ID['func'] = FUNC       # noqa
-    ID['yield'] = YIELD     # noqa
-    ID['import'] = IMPORT   # noqa
-    ID['export'] = EXPORT   # noqa
-    ID['as'] = AS           # noqa
-
-    # because sly doesn't like multi-character literals
-    # if you try changing that here, then sly's parser won't like it
-    EQ = r'=='
-    NE = r'!='
-    ARROW = r'->'
-
-    def __init__(self, compilation):
-        super().__init__()
-        self.compilation = compilation
-
-    BLANK_LINE = lambda self, token: None       # noqa
-    IGNORE_SPACES = lambda self, token: None    # noqa
-    IGNORE_COMMENT = lambda self, token: None   # noqa
-
-    def error(self, token):
-        assert token.value
-        if token.value.startswith('"'):
-            # because error messages would be very confusing without this
-            try:
-                length = token.value.index('\n')
-            except IndexError:
-                length = len(token.value)
-            raise common.CompileError("invalid string", common.Location(
-                self.compilation, token.index, length))
-
-        location = common.Location(self.compilation, token.index, 1)
-        if token.value[0].isprintable():
-            raise common.CompileError(
-                # TODO: this is confusing if token.value[0] == "'"
-                "unexpected '%s'" % token.value[0], location)
-        raise common.CompileError(
-            "unexpected character U+%04X" % ord(token.value[0]), location)
+Token = collections.namedtuple('Token', ['type', 'value', 'location'])
 
 
 # tabs are disallowed because they aren't used for indentation and you can use
@@ -92,62 +45,71 @@ def _tab_check(compilation, code, initial_offset):
 def _raw_tokenize(compilation, code, initial_offset):
     _tab_check(compilation, code, initial_offset)
 
+    # remember this part of this code, because many other things rely on this
     if not code.endswith('\n'):
         code += '\n'
 
-    lexer = AsdaLexer(compilation)
-    for token in lexer.tokenize(code):
-        token.index += initial_offset
-        yield token
+    for match in regex.finditer(_TOKEN_REGEX, code):
+        token_type = match.lastgroup
+        location = common.Location(
+            compilation, match.start() + initial_offset,
+            match.end() - match.start())
+        value = match.group(0)
+
+        if token_type == 'ERROR':
+            # the value is 1 character
+            if value.isprintable():
+                raise common.CompileError(
+                    # TODO: this is confusing if token.value == "'"
+                    "unexpected '%s'" % value, location)
+            raise common.CompileError(
+                "unexpected character U+%04X" % ord(value), location)
+
+        if token_type.startswith('IGNORE_'):
+            continue
+
+        if value in _KEYWORDS:
+            assert token_type == 'ID'
+            token_type = 'KEYWORD'
+
+        yield Token(token_type, value, location)
 
 
-# creates a new sly token so that it doesn't rely "too much" on sly's
-# implementation details
-def _copy_token(sly_token, **kwargs):
-    result = copy.copy(sly_token)
-    for name, value in kwargs.items():
-        setattr(result, name, value)
-    return result
-
-
-def _get_location(compilation, token):
-    return common.Location(compilation, token.index, len(token.value))
-
-
-def _handle_indents_and_dedents(compilation, tokens, initial_offset):
+def _handle_indents_and_dedents(tokens):
     # this code took a while to figure out... don't ask me to comment it more
     indent_levels = [0]
     new_line_starting = True
-    line_start_offset = initial_offset
 
     for token in tokens:
         if token.type == 'NEWLINE':
             assert not new_line_starting, "_raw_tokenize() doesn't work"
             new_line_starting = True
-            line_start_offset = token.index + len(token.value)
             yield token
 
         elif new_line_starting:
             if token.type == 'INDENT':
                 indent_level = len(token.value)
-                fake_token = token
             else:
                 indent_level = 0
-                fake_token = _copy_token(
-                    token, index=line_start_offset, value='')
+
+            fake_token_location = common.Location(
+                token.location.compilation, token.location.offset, 0)
 
             if indent_level > indent_levels[-1]:
-                yield _copy_token(fake_token, type='INDENT')
-                indent_levels.append(len(fake_token.value))
+                assert token.type == 'INDENT'
+                yield token
+                indent_levels.append(indent_level)
 
             elif indent_level < indent_levels[-1]:
                 if indent_level not in indent_levels:
                     raise common.CompileError(
-                        "the indentation is wrong",
-                        _get_location(compilation, fake_token))
+                        "the indentation is wrong", token.location)
                 while indent_level != indent_levels[-1]:
-                    yield _copy_token(fake_token, type='DEDENT')
-                    yield _copy_token(fake_token, type='NEWLINE')
+                    # this is why you shouldn't check if the value of a token
+                    # is '\n', you should instead check if the type of the
+                    # token is 'NEWLINE'
+                    yield Token('DEDENT', '', fake_token_location)
+                    yield Token('NEWLINE', '', fake_token_location)
                     del indent_levels[-1]
 
             if token.type != 'INDENT':
@@ -158,18 +120,21 @@ def _handle_indents_and_dedents(compilation, tokens, initial_offset):
         else:
             yield token
 
-    # note: the previous loop left a 'token' variable around
-    # any sly token will do
+    # note: the previous loop left a token variable around, because the token
+    # sequence is never empty (it contains at least a trailing NEWLINE if
+    # nothing else)
+    fake_token_location = common.Location(
+        token.location.compilation,
+        token.location.offset + token.location.length, 0)
+
     while indent_levels != [0]:
-        yield _copy_token(token, type='DEDENT', value='',
-                          index=line_start_offset)
-        yield _copy_token(token, type='NEWLINE', value='',
-                          index=line_start_offset)
+        yield Token('DEDENT', '', fake_token_location)
+        yield Token('NEWLINE', '', fake_token_location)
         del indent_levels[-1]
 
 
 # the only allowed sequence that contains colon or indent is: colon \n indent
-def _check_colons(compilation, tokens):
+def _check_colons(tokens):
     staggered = more_itertools.stagger(tokens, offsets=(-2, -1, 0))
     for token1, token2, token3 in staggered:
         assert token3 is not None
@@ -177,18 +142,16 @@ def _check_colons(compilation, tokens):
         if token3.type == 'INDENT':
             if (token1 is None or
                     token2 is None or
-                    token1.type != ':' or
+                    token1.value != ':' or
                     token2.type != 'NEWLINE'):
                 raise common.CompileError(
-                    "indent without : and newline",
-                    _get_location(compilation, token3))
+                    "indent without : and newline", token3.location)
 
-        if token1 is not None and token1.type == ':':
+        if token1 is not None and token1.value == ':':
             assert token2 is not None and token3 is not None
             if token2.type != 'NEWLINE' or token3.type != 'INDENT':
                 raise common.CompileError(
-                    ": without newline and indent",
-                    _get_location(compilation, token1))
+                    ": without newline and indent", token1.location)
 
         yield token3
 
@@ -205,7 +168,7 @@ def _remove_colons(tokens):
             yield token1
 
 
-def _match_parens(compilation, tokens):
+def _match_parens(tokens):
     lparens = list('([{')
     rparens = list(')]}')
     lparen2rparen = dict(zip(lparens, rparens))
@@ -220,28 +183,28 @@ def _match_parens(compilation, tokens):
             if not stack:
                 raise common.CompileError(
                     "there is no matching '%s'" % rparen2lparen[token.value],
-                    _get_location(compilation, token))
+                    token.location)
 
             matching_paren = stack.pop().value
             if matching_paren != rparen2lparen[token.value]:
                 raise common.CompileError(
                     "the matching paren is '%s', not '%s'" % (
                         matching_paren, rparen2lparen[token.value]),
-                    _get_location(compilation, token))
+                    token.location)
 
         yield token
 
     if stack:
         raise common.CompileError(
             "there is no '%s'" % lparen2rparen[stack[-1].value],
-            _get_location(compilation, stack[-1]))
+            stack[-1].location)
 
 
 def tokenize(compilation, code, *, initial_offset=0):
     assert initial_offset >= 0
     tokens = _raw_tokenize(compilation, code, initial_offset)
-    tokens = _handle_indents_and_dedents(compilation, tokens, initial_offset)
-    tokens = _check_colons(compilation, tokens)
+    tokens = _handle_indents_and_dedents(tokens)
+    tokens = _check_colons(tokens)
     tokens = _remove_colons(tokens)
-    tokens = _match_parens(compilation, tokens)
+    tokens = _match_parens(tokens)
     return tokens
