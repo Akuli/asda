@@ -196,8 +196,7 @@ class _OpCoder:
 
         # the opcode is dynamically typed from here, so generic functions
         # are treated same as variables
-        elif isinstance(expression, (cooked_ast.LookupVar,
-                                     cooked_ast.LookupGenericFunction)):
+        elif isinstance(expression, cooked_ast.LookupVar):
             coder = self._get_coder_for_level(expression.level)
             if isinstance(expression, cooked_ast.LookupVar):
                 name = expression.varname
@@ -352,8 +351,8 @@ def create_opcode(compilation, cooked_statements, source_code):
     builtin_opcoder.local_vars.update({
         name: ArgMarker(index)
         for index, name in enumerate(itertools.chain(
-            objects.BUILTIN_OBJECTS.keys(),
-            objects.BUILTIN_GENERIC_FUNCS.keys()
+            objects.BUILTIN_VARS.keys(),
+            objects.BUILTIN_GENERIC_VARS.keys()
         ))
     })
 

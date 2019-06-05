@@ -68,7 +68,7 @@ BUILTIN_TYPES['Str'].add_method('uppercase', [], BUILTIN_TYPES['Str'])
 BUILTIN_TYPES['Str'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 BUILTIN_TYPES['Int'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 
-BUILTIN_OBJECTS = collections.OrderedDict([
+BUILTIN_VARS = collections.OrderedDict([
     ('print', FunctionType([BUILTIN_TYPES['Str']], None)),
     ('TRUE', BUILTIN_TYPES['Bool']),
     ('FALSE', BUILTIN_TYPES['Bool']),
@@ -116,7 +116,6 @@ class GenericMarker(Type):
 
 # note: generics are NOT objects
 #       generics are NOT types
-#       generics are NOT functions
 #       generics are something yet else :D
 class Generic:
 
@@ -142,10 +141,10 @@ class Generic:
 
 
 T = GenericMarker('T')
-BUILTIN_GENERIC_FUNCS = collections.OrderedDict([
-    ('next', Generic([T], FunctionType([GeneratorType(T)], T))),
-])
 BUILTIN_GENERIC_TYPES = collections.OrderedDict([
     ('Generator', Generic([T], GeneratorType(T))),
+])
+BUILTIN_GENERIC_VARS = collections.OrderedDict([
+    ('next', Generic([T], FunctionType([GeneratorType(T)], T))),
 ])
 del T

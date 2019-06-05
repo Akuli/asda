@@ -18,10 +18,9 @@ LookupGenericFunction = _astclass('LookupGenericFunction',
                                   ['funcname', 'types', 'level'])
 LookupModule = _astclass('LookupModule', [])
 CreateFunction = _astclass('CreateFunction', ['argnames', 'body', 'yields'])
-CreateGenericFunction = _astclass('CreateGenericFunction',
-                                  ['name', 'generic_obj', 'argnames', 'body',
-                                   'yields'])
 CreateLocalVar = _astclass('CreateLocalVar', ['varname', 'initial_value'])
+CreateGenericLocalVar = _astclass('CreateGenericLocalVar',
+                                  ['varname', 'generic_obj', 'initial_value'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
 VoidReturn = _astclass('VoidReturn', [])
 ValueReturn = _astclass('ValueReturn', ['value'])
@@ -51,6 +50,33 @@ def _find_yields(node):
         yield from _find_yields(list(node))
 
 
+# this is too
+def _replace_generic_markers_with_object(node, markers):
+    node = node._replace(type=node.type.undo_generics(
+        dict.fromkeys(markers, objects.OBJECT)))
+
+    for name, value in node._asdict().items():
+        if name in ['location', 'type']:
+            continue
+
+        if not (isinstance(value, tuple) and
+                hasattr(value, 'location') and
+                hasattr(value, 'type')):
+            # it is not a cooked ast namedtuple
+            continue
+
+        node = node._replace(**{
+            name: _replace_generic_markers_with_object(value, markers)
+        })
+
+    return node
+
+
+def _create_chainmap(fallback_chainmap):
+    return collections.ChainMap(
+        collections.OrderedDict(), *fallback_chainmap.maps)
+
+
 class _Chef:
 
     def __init__(self, parent_chef, is_function=False, yields=False,
@@ -76,39 +102,43 @@ class _Chef:
         if parent_chef is None:
             self.level = 0
             self.import_compilations = None
+
+            # these are ChainMaps to make any_chef.vars.maps[0] always work
+            # TODO: generic types everywhere
+            self.vars = collections.ChainMap(objects.BUILTIN_VARS)
+            self.generic_vars = collections.ChainMap(
+                objects.BUILTIN_GENERIC_VARS)
+            self.types = collections.ChainMap(objects.BUILTIN_TYPES)
         else:
             self.level = parent_chef.level + 1
-            self.import_compilations = parent_chef.import_compilations
+            self.import_compilations = parent_chef.import_compilations   # wut?
+
+            self.vars = _create_chainmap(parent_chef.vars)
+            self.generic_vars = _create_chainmap(parent_chef.generic_vars)
+            self.types = _create_chainmap(parent_chef.types)
 
         # keys are strings, values are types
+        # TODO: why are export and import vars "local"? what does it mean?
         self.local_export_vars = collections.OrderedDict()
         self.local_import_vars = collections.OrderedDict()
-        self.local_vars = collections.ChainMap(
-            collections.OrderedDict(),
-            self.local_export_vars, self.local_import_vars)
-        self.local_generic_funcs = {}
-        self.local_types = {}
 
     # there are multiple different kind of names:
-    #   * types (currently all types are built-in)
-    #   * variables (from several different scopes)
-    def _check_name_not_exist(self, name, what_is_it, location):
-        chef = self
-        while chef is not None:
-            if name in chef.local_vars:
-                raise common.CompileError(
-                    "there's already a '%s' variable" % name,
-                    location)
-            if name in chef.local_generic_funcs:
-                raise common.CompileError(
-                    "there's already a generic '%s' function" % name,
-                    location)
-            chef = chef.parent_chef
-
-        if name in objects.BUILTIN_TYPES:
+    #   * types
+    #   * generic types (TODO)
+    #   * variables
+    #   * generic variables
+    #
+    # all can come from any scope
+    def _check_name_not_exist(self, name, location):
+        if name in self.types:
             raise common.CompileError(
-                "'%s' is not a valid %s name because it's a type name"
-                % (name, what_is_it), location)
+                "there's already a '%s' type" % name, location)
+        if name in self.vars:
+            raise common.CompileError(
+                "there's already a '%s' variable" % name, location)
+        if name in self.generic_vars:
+            raise common.CompileError(
+                "there's already a generic '%s' variable" % name, location)
 
     def cook_function_call(self, raw_func_call: raw_ast.FuncCall):
         function = self.cook_expression(raw_func_call.function)
@@ -132,25 +162,21 @@ class _Chef:
                             function, args)
 
     # get_chef_for_blah()s are kinda copy/pasta but not tooo bad imo
-    def get_chef_for_varname(self, varname, error_location):
+    def get_chef_for_varname(self, varname, is_generic, error_location):
         chef = self
         while chef is not None:
-            if varname in chef.local_vars:
-                return chef
+            if is_generic:
+                if varname in chef.generic_vars.maps[0]:
+                    return chef
+            else:
+                if varname in chef.vars.maps[0]:
+                    return chef
             chef = chef.parent_chef
 
-        raise common.CompileError(
-            "variable not found: %s" % varname, error_location)
-
-    def get_chef_for_generic_func_name(self, generfuncname, error_location):
-        chef = self
-        while chef is not None:
-            if generfuncname in chef.local_generic_funcs:
-                return chef
-            chef = chef.parent_chef
-
-        raise common.CompileError(
-            "generic function not found: %s" % generfuncname, error_location)
+        message = "variable not found: " + varname
+        if is_generic:
+            message = "generic " + message
+        raise common.CompileError(message, error_location)
 
     def cook_expression(self, raw_expression):
         if isinstance(raw_expression, raw_ast.String):
@@ -189,21 +215,19 @@ class _Chef:
 
         if isinstance(raw_expression, raw_ast.GetVar):
             chef = self.get_chef_for_varname(
-                raw_expression.varname, raw_expression.location)
-            return LookupVar(
-                raw_expression.location,
-                chef.local_vars[raw_expression.varname],
-                raw_expression.varname, chef.level)
+                raw_expression.varname, (raw_expression.generics is not None),
+                raw_expression.location)
 
-        if isinstance(raw_expression, raw_ast.FromGeneric):   # generic func
-            chef = self.get_chef_for_generic_func_name(
-                raw_expression.name, raw_expression.location)
-            generfunc = chef.local_generic_funcs[raw_expression.name]
-            types = list(map(self.cook_type, raw_expression.types))
-            functype = generfunc.get_real_type(types, raw_expression.location)
-            return LookupGenericFunction(
-                raw_expression.location, functype, raw_expression.name,
-                types, chef.level)
+            if raw_expression.generics is None:
+                tybe = chef.vars[raw_expression.varname]
+            else:
+                tybe = chef.generic_vars[raw_expression.varname].get_real_type(
+                    list(map(self.cook_type, raw_expression.generics)),
+                    raw_expression.location)
+
+            return LookupVar(
+                raw_expression.location, tybe,
+                raw_expression.varname, chef.level)
 
         if isinstance(raw_expression, raw_ast.StrJoin):
             return StrJoin(
@@ -261,23 +285,22 @@ class _Chef:
 
     def cook_type(self, tybe):
         if isinstance(tybe, raw_ast.GetType):
-            if tybe.name in objects.BUILTIN_TYPES:
-                return objects.BUILTIN_TYPES[tybe.name]
-            if tybe.name in self.local_types:
-                return self.local_types[tybe.name]
+            if tybe.name in self.types:
+                return self.types[tybe.name]
             raise common.CompileError(
                 "unknown type '%s'" % tybe.name, tybe.location)
 
-        if isinstance(tybe, raw_ast.FromGeneric):   # generic type
-            if tybe.name not in objects.BUILTIN_GENERIC_TYPES:
-                raise common.CompileError(
-                    "unknown generic type '%s'" % tybe.name,
-                    tybe.location)
-
-            genertype = objects.BUILTIN_GENERIC_TYPES[tybe.name]
-            types = list(map(self.cook_type, tybe.types))
-            result = genertype.get_real_type(types, tybe.location)
-            return result
+        # TODO: support generic types again
+#        if isinstance(tybe, raw_ast.FromGeneric):   # generic type
+#            if tybe.name not in objects.BUILTIN_GENERIC_TYPES:
+#                raise common.CompileError(
+#                    "unknown generic type '%s'" % tybe.name,
+#                    tybe.location)
+#
+#            genertype = objects.BUILTIN_GENERIC_TYPES[tybe.name]
+#            types = list(map(self.cook_type, tybe.types))
+#            result = genertype.get_real_type(types, tybe.location)
+#            return result
 
         assert False, tybe   # pragma: no cover
 
@@ -287,8 +310,8 @@ class _Chef:
         chef = self
 
         while True:
-            if varname in chef.local_vars:
-                if cooked_value.type != chef.local_vars[varname]:
+            if varname in chef.vars.maps[0]:
+                if cooked_value.type != chef.vars.maps[0][varname]:
                     raise common.CompileError(
                         ("'%s' is of type %s, can't assign %s to it"
                          % (varname, chef.local_vars[varname].name,
@@ -297,6 +320,7 @@ class _Chef:
                 return SetVar(
                     raw.location, None,
                     varname, chef.level, cooked_value)
+
             if chef.parent_chef is None:
                 raise common.CompileError(
                     "variable not found: %s" % varname,
@@ -304,49 +328,71 @@ class _Chef:
 
             chef = chef.parent_chef
 
-    def _create_local_var_or_export(self, location, varname, value, exporting):
-        if exporting:
-            self._check_can_export(location)
-            self.local_export_vars[varname] = value.type
-            return SetVar(location, None, varname, self.level, value)
-
-        self.local_vars[varname] = value.type
-        return CreateLocalVar(location, None, varname, value)
-
     def cook_let(self, raw):
-        self._check_name_not_exist(raw.varname, 'variable', raw.location)
-        value = self.cook_expression(raw.value)
-        return self._create_local_var_or_export(raw.location, raw.varname,
-                                                value, raw.export)
+        self._check_name_not_exist(raw.varname, raw.location)
+        if raw.generics is None:
+            chef = self
+        else:
+            chef = _Chef(self)
+
+            # the level is used in later steps only, but before those steps,
+            # this file actually replaces all generics types with Object, so
+            # that this...
+            #
+            #   let do_nothing[T] = (T value) -> T:
+            #       return value
+            #
+            # ...produces the same cooked ast as this:
+            #
+            #   let do_nothing = (Object value) -> Object:
+            #       return value
+            #
+            # this needs 1 more chef in the top code than in the bottom code,
+            # but that must not be visible outside this file
+            chef.level -= 1
+
+            generic_markers = collections.OrderedDict(
+                (name, objects.GenericMarker(name))
+                for name, location in raw.generics
+            )
+            chef.types.update(generic_markers)
+
+        value = chef.cook_expression(raw.value)
+
+        if raw.generics is None:
+            if raw.export:
+                self._check_can_export(raw.location)
+                self.local_export_vars[raw.varname] = value.type
+                return SetVar(location, None, raw.varname, level, value)
+
+            self.vars[raw.varname] = value.type
+            return CreateLocalVar(location, None, raw.varname, value)
+
+        assert not raw.export, "sorry, cannot export generic variables yet :("
+
+        generic = objects.Generic(
+            list(generic_markers.values()), value.type)
+        self.generic_vars[raw.varname] = generic
+        # FIXME: replace all generic markers with Object in the value
+        return CreateLocalVar(
+            raw.location, None, raw.varname,
+            _replace_generic_markers_with_object(
+                value, list(generic_markers.values())))
 
     # TODO: allow functions to call themselves
-    # TODO: generics? old generic function code is commented out
     def cook_function_definition(self, raw):
-        # yes, this is weird, but needed because:
-        # * creating the real subchef needs cooked returntype
-        # * cooking the returntype needs a chef that knows the generic types
-        temp_chef = _Chef(self)
-#        if raw.generics is not None:
-#            assert raw.generics
-#            markers = []
-#            for name, location in raw.generics:
-#                self._check_name_not_exist(name, 'generic type', location)
-#                marker = objects.GenericMarker(name)
-#                temp_chef.local_types[name] = marker
-#                markers.append(marker)
-
         argnames = []
         argtypes = []
         for raw_argtype, argname, argnameloc in raw.args:
-            argtype = temp_chef.cook_type(raw_argtype)
-            temp_chef._check_name_not_exist(argname, 'variable', argnameloc)
+            argtype = self.cook_type(raw_argtype)
+            self._check_name_not_exist(argname, argnameloc)
             argnames.append(argname)
             argtypes.append(argtype)
 
         if raw.returntype is None:
             returntype = None
         else:
-            returntype = temp_chef.cook_type(raw.returntype)
+            returntype = self.cook_type(raw.returntype)
 
         yield_location = next(_find_yields(raw.body), None)
         if (yield_location is not None and
@@ -355,27 +401,13 @@ class _Chef:
                 "cannot yield in a function that doesn't return "
                 "Generator[something]", yield_location)
 
-        functype = objects.FunctionType(argtypes, returntype)
         subchef = _Chef(self, True, yield_location is not None, returntype)
-        subchef.local_types.update(temp_chef.local_types)
-        subchef.local_vars.update(dict(zip(argnames, argtypes)))
+        subchef.vars.update(dict(zip(argnames, argtypes)))
+        functype = objects.FunctionType(argtypes, returntype)
         body = list(map(subchef.cook_statement, raw.body))
 
-        #if raw.generics is None:
-        if True:
-            return CreateFunction(raw.location, functype,
-                                  argnames, body, yield_location is not None)
-
-#        if raw.export:
-#            raise common.CompileError(
-#                "sorry, generic functions can't be exported yet :(",
-#                raw.location)
-#
-#        generic_obj = objects.Generic(markers, functype)
-#        self.local_generic_funcs[raw.funcname] = generic_obj
-#        return CreateGenericFunction(
-#            raw.location, None, raw.funcname, generic_obj, argnames, body,
-#            yield_location is not None)
+        return CreateFunction(raw.location, functype,
+                              argnames, body, yield_location is not None)
 
     def cook_return(self, raw):
         if not self.can_return:
@@ -439,6 +471,8 @@ class _Chef:
     #               body3
     #           else:
     #               body4
+    #
+    # TODO: use functools.reduce
     def cook_if(self, raw):
         raw_cond, raw_if_body = raw.ifs[0]
         cond = self.cook_expression(raw_cond)
@@ -483,7 +517,7 @@ class _Chef:
                 "export cannot be used in a function", location)
 
     def cook_import(self, raw: raw_ast.Import):
-        self._check_name_not_exist(raw.varname, 'variable', raw.location)
+        self._check_name_not_exist(raw.varname, raw.location)
         module_type = objects.ModuleType(
             self.import_compilations[raw.source_path])
         self.local_import_vars[raw.varname] = module_type
@@ -522,8 +556,6 @@ class _Chef:
 
 def cook(compilation, raw_ast_statements, import_compilation_dict):
     builtin_chef = _Chef(None)
-    builtin_chef.local_vars.update(objects.BUILTIN_OBJECTS)
-    builtin_chef.local_generic_funcs.update(objects.BUILTIN_GENERIC_FUNCS)
 
     file_chef = _Chef(builtin_chef)
     file_chef.import_compilations = import_compilation_dict

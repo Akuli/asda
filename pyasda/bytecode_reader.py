@@ -206,7 +206,7 @@ class _BytecodeReader:
 def read_bytecode(compiled_path, file, module_getter):
     if file.read(4) != b'asda':
         raise RuntimeError(
-            "doesn't look like a compiled asda file: " + compiled_path)
+            "doesn't look like a compiled asda file: " + str(compiled_path))
 
     opcode = _BytecodeReader(compiled_path, file, module_getter).read_body()
 

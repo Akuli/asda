@@ -22,19 +22,18 @@ def _astclass(name, fields):
 Integer = _astclass('Integer', ['python_int'])
 String = _astclass('String', ['python_string'])
 StrJoin = _astclass('StrJoin', ['parts'])
-Let = _astclass('Let', ['varname', 'value', 'export'])
+# Let's generics is a list of (name, location) tuples, or None
+Let = _astclass('Let', ['varname', 'generics', 'value', 'export'])
 SetVar = _astclass('SetVar', ['varname', 'value'])
-GetVar = _astclass('GetVar', ['varname'])
+GetVar = _astclass('GetVar', ['varname', 'generics'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
 GetType = _astclass('GetType', ['name'])
-# FromGeneric represents looking up a generic function or generic type
-FromGeneric = _astclass('FromGeneric', ['name', 'types'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
 FuncDefinition = _astclass('FuncDefinition', ['args', 'returntype', 'body'])
 Return = _astclass('Return', ['value'])
 Yield = _astclass('Yield', ['value'])
 VoidStatement = _astclass('VoidStatement', [])
-# ifs is a list of (condition, body) pairs, where body is a list
+# If's ifs is a list of (condition, body) pairs, where body is a list
 If = _astclass('If', ['ifs', 'else_body'])
 While = _astclass('While', ['condition', 'body'])
 For = _astclass('For', ['init', 'cond', 'incr', 'body'])
@@ -196,28 +195,32 @@ class AsdaParser:
             raise common.CompileError("invalid type", name.location)
         return GetType(name.location, name.value)
 
-    def parse_commasep_in_parens(self, item_callback):
+    def parse_commasep_in_parens(self, item_callback, *, parens='()'):
+        lparen_string, rparen_string = parens
+
         lparen = self.tokens.next_token()
-        if lparen.value != '(':
-            raise common.CompileError("should be '('", lparen.location)
+        if lparen.value != lparen_string:
+            raise common.CompileError(
+                "should be '%s'" % lparen_string, lparen.location)
 
         with self.tokens.include_whitespace(False):
             result = []
 
             # doesn't need an eof check because tokenizer matches parentheses
-            while self.tokens.peek().value != ')':
+            while self.tokens.peek().value != rparen_string:
                 if result:
                     comma = self.tokens.next_token()
                     if comma.value != ',':
                         raise common.CompileError(
-                            "should be ',' or ')'", comma.location)
+                            "should be ',' or '%s'" % rparen_string,
+                            comma.location)
 
                 result.append(item_callback())
 
             rparen = self.tokens.next_token()
-            if rparen.value != ')':
+            if rparen.value != rparen_string:
                 raise common.CompileError(
-                    "should be ',' or ')'", rparen.location)
+                    "should be ',' or '%s'" % rparen_string, rparen.location)
 
         return (lparen, result, rparen)
 
@@ -273,6 +276,7 @@ class AsdaParser:
                 # it is a function
                 lparen, args, rparen = self.parse_commasep_in_parens(
                     self.parse_argument_definition)
+                _duplicate_check((arg[1:] for arg in args), 'argument')
                 arrow = self.tokens.next_token()
                 assert arrow.value == '->', arrow
 
@@ -317,7 +321,17 @@ class AsdaParser:
 
         if self.tokens.peek().type == 'ID':
             token = self.tokens.next_token()
-            return GetVar(token.location, token.value)
+
+            # it's easier to do this here than to do it later
+            if self.tokens.peek().value == '[':
+                lbracket, generics, rbracket = self.parse_commasep_in_parens(
+                    self.parse_type, parens='[]')
+                location = token.location + rbracket.location
+            else:
+                generics = None
+                location = token.location
+
+            return GetVar(location, token.value, generics)
 
         raise common.CompileError(
             "invalid syntax", self.tokens.next_token().location)
@@ -496,6 +510,13 @@ class AsdaParser:
         assert result_is_expression
         return result
 
+    def parse_generic_type_name(self):
+        id_token = self.tokens.next_token()
+        if id_token.type != 'ID':
+            raise common.CompileError(
+                "should be a name of a generic type", id_token.location)
+        return (id_token.value, id_token.location)
+
     def parse_1line_statement(self):
         if self.tokens.peek().value == 'return':
             return_keyword = self.tokens.next_token()
@@ -510,13 +531,21 @@ class AsdaParser:
                 raise common.CompileError(
                     "invalid variable name", varname_token.location)
 
+            if self.tokens.peek().value == '[':
+                lbracket, generics, rbracket = self.parse_commasep_in_parens(
+                    self.parse_generic_type_name, parens='[]')
+                _duplicate_check(generics, "generic type")
+            else:
+                generics = None
+
             eq = self.tokens.next_token()
             if eq.value != '=':
                 raise common.CompileError("should be '='", eq.location)
 
             value = self.parse_expression()
 
-            return Let(let.location, varname_token.value, value, export=False)
+            return Let(let.location, varname_token.value, generics, value,
+                       export=False)
 
         if self.tokens.peek().value == 'export':
             export_token = self.tokens.next_token()
