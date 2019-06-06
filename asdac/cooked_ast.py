@@ -380,7 +380,6 @@ class _Chef:
         generic = objects.Generic(
             list(generic_markers.values()), value.type)
         self.generic_vars[raw.varname] = generic
-        # FIXME: replace all generic markers with Object in the value
         return CreateLocalVar(
             raw.location, None, raw.varname,
             _replace_generic_markers_with_object(
