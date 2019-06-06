@@ -104,18 +104,20 @@ class _Chef:
             self.import_compilations = None
 
             # these are ChainMaps to make any_chef.vars.maps[0] always work
-            # TODO: generic types everywhere
             self.vars = collections.ChainMap(objects.BUILTIN_VARS)
+            self.types = collections.ChainMap(objects.BUILTIN_TYPES)
             self.generic_vars = collections.ChainMap(
                 objects.BUILTIN_GENERIC_VARS)
-            self.types = collections.ChainMap(objects.BUILTIN_TYPES)
+            self.generic_types = collections.ChainMap(
+                objects.BUILTIN_GENERIC_TYPES)
         else:
             self.level = parent_chef.level + 1
             self.import_compilations = parent_chef.import_compilations   # wut?
 
             self.vars = _create_chainmap(parent_chef.vars)
-            self.generic_vars = _create_chainmap(parent_chef.generic_vars)
             self.types = _create_chainmap(parent_chef.types)
+            self.generic_vars = _create_chainmap(parent_chef.generic_vars)
+            self.generic_types = _create_chainmap(parent_chef.generic_types)
 
         # keys are strings, values are types
         # TODO: why are export and import vars "local"? what does it mean?
@@ -285,8 +287,12 @@ class _Chef:
 
     def cook_type(self, tybe):
         if isinstance(tybe, raw_ast.GetType):
-            if tybe.name in self.types:
+            if tybe.generics is None and tybe.name in self.types:
                 return self.types[tybe.name]
+            elif tybe.generics is not None and tybe.name in self.generic_types:
+                return self.generic_types[tybe.name].get_real_type(
+                    list(map(self.cook_type, tybe.generics)),
+                    tybe.location)
             raise common.CompileError(
                 "unknown type '%s'" % tybe.name, tybe.location)
 
@@ -366,7 +372,7 @@ class _Chef:
                 return SetVar(location, None, raw.varname, level, value)
 
             self.vars[raw.varname] = value.type
-            return CreateLocalVar(location, None, raw.varname, value)
+            return CreateLocalVar(raw.location, None, raw.varname, value)
 
         assert not raw.export, "sorry, cannot export generic variables yet :("
 

@@ -1,4 +1,4 @@
-func do_stuff() -> Generator[Bool]:
+let do_stuff = () -> Generator[Bool]:
     while TRUE:
         yield TRUE
         yield FALSE
@@ -12,7 +12,7 @@ if next[Bool](g):
     print("should also get printed")
 
 
-func do_other_stuff() -> Generator[Str]:
+let do_other_stuff = () -> Generator[Str]:
     yield "One"
     yield "Two"
 

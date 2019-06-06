@@ -27,7 +27,8 @@ Let = _astclass('Let', ['varname', 'generics', 'value', 'export'])
 SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['varname', 'generics'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
-GetType = _astclass('GetType', ['name'])
+# GetType's generics is a list of other GetTypes, or None
+GetType = _astclass('GetType', ['name', 'generics'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
 FuncDefinition = _astclass('FuncDefinition', ['args', 'returntype', 'body'])
 Return = _astclass('Return', ['value'])
@@ -188,13 +189,6 @@ class AsdaParser:
 
         return parts
 
-    def parse_type(self):
-        # TODO: generic types?
-        name = self.tokens.next_token()
-        if name.type != 'ID':
-            raise common.CompileError("invalid type", name.location)
-        return GetType(name.location, name.value)
-
     def parse_commasep_in_parens(self, item_callback, *, parens='()'):
         lparen_string, rparen_string = parens
 
@@ -223,6 +217,21 @@ class AsdaParser:
                     "should be ',' or '%s'" % rparen_string, rparen.location)
 
         return (lparen, result, rparen)
+
+    def parse_type(self):
+        name = self.tokens.next_token()
+        if name.type != 'ID':
+            raise common.CompileError("invalid type", name.location)
+
+        if (not self.tokens.eof()) and self.tokens.peek().value == '[':
+            lbracket, generics, rbracket = self.parse_commasep_in_parens(
+                self.parse_type, parens='[]')
+            location = name.location + rbracket.location
+        else:
+            generics = None
+            location = name.location
+
+        return GetType(location, name.value, generics)
 
     def parse_argument_definition(self):
         tybe = self.parse_type()
@@ -520,8 +529,19 @@ class AsdaParser:
     def parse_1line_statement(self):
         if self.tokens.peek().value == 'return':
             return_keyword = self.tokens.next_token()
+            if self.tokens.eof() or self.tokens.peek().type == 'NEWLINE':
+                value = None
+                location = return_keyword.location
+            else:
+                value = self.parse_expression()
+                location = return_keyword.location + value.location
+
+            return Return(location, value)
+
+        if self.tokens.peek().value == 'yield':
+            yield_keyword = self.tokens.next_token()
             value = self.parse_expression()
-            return Return(return_keyword.location + value.location, value)
+            return Yield(yield_keyword.location + value.location, value)
 
         if self.tokens.peek().value == 'let':
             let = self.tokens.next_token()
