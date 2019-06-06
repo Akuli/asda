@@ -369,7 +369,8 @@ class _Chef:
             if raw.export:
                 self._check_can_export(raw.location)
                 self.local_export_vars[raw.varname] = value.type
-                return SetVar(location, None, raw.varname, level, value)
+                return SetVar(raw.location, None, raw.varname,
+                              self.level, value)
 
             self.vars[raw.varname] = value.type
             return CreateLocalVar(raw.location, None, raw.varname, value)

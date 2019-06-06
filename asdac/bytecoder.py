@@ -393,7 +393,7 @@ class _BytecodeReader:
             returntype = self.read_type()
             nargs = self.read_uint8()
             argtypes = [self.read_type() for junk in range(nargs)]
-            return objects.FunctionType(name_hint, argtypes, returntype)
+            return objects.FunctionType(argtypes, returntype)
 
         if byte == TYPE_GENERATOR:
             item_type = self.read_type()
