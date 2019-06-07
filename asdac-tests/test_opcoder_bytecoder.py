@@ -6,7 +6,7 @@ from asdac.opcoder import Return, DidntReturnError
 
 def test_too_many_arguments(compiler):
     args = list(map('Str s{}'.format, range(0xff + 1)))
-    code = 'func lol(%s) -> void:\n    print("boo")' % ', '.join(args)
+    code = 'let omfg = (%s) -> void:\n    print("boo")' % ', '.join(args)
 
     # the error message doesn't say clearly what actually went wrong because it
     # comes from generic uint writing code, but i think that's fine because who
@@ -18,28 +18,28 @@ def test_too_many_arguments(compiler):
         compiler.bytecode(code)
     assert error.value.message == (
         "this number does not fit in an unsigned 8-bit integer: %d" % (0xff+1))
-    assert error.value.location is None     # FIXME
+    assert error.value.location is None     # TODO: this sucks dick
 
     # 0xff arguments should work, because 0xff fits in an 8-bit uint
     compiler.bytecode(
-        'func lol(%s) -> void:\n    print("boo")' % ','.join(args[1:]))
+        'let omfg = (%s) -> void:\n    print("boo")' % ', '.join(args[1:]))
 
 
 def test_implicit_return(compiler):
     codes = [
-        'func lol() -> void:\n    print("Boo")',
-        'func lol() -> Generator[Str]:\n    yield "Boo"',
+        'let lol = () -> void:\n    print("Boo")',
+        'let lol = () -> Generator[Str]:\n    yield "Boo"',
     ]
 
     for code in codes:
-        create_func, setvar = compiler.opcode(code).ops
-        implicit_return = create_func.body_opcode.ops[-1]
+        [createfunc, setvar] = compiler.opcode(code).ops
+        implicit_return = createfunc.body_opcode.ops[-1]
         assert isinstance(implicit_return, Return)
         assert not implicit_return.returns_a_value
 
 
 def test_missing_return(compiler):
     create_func, setvar = compiler.opcode(
-        'func lol() -> Str:\n    print("Boo")').ops
+        'let lol = () -> Str:\n    print("Boo")').ops
     didnt_return_error = create_func.body_opcode.ops[-1]
     assert isinstance(didnt_return_error, DidntReturnError)

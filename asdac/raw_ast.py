@@ -59,7 +59,14 @@ def _to_string(parsed):
     return FuncCall(location, GetAttr(location, parsed, 'to_string'), [])
 
 
-class TokenIterator:
+# without this subclass, there's no good way to tell whether a CompileError is
+# really an end of file error or something from tokenizer.py, which caused
+# funny bugs
+class _EndOfFileError(common.CompileError):
+    pass
+
+
+class _TokenIterator:
 
     def __init__(self, iterable):
         self._iterator = iter(iterable)
@@ -67,7 +74,7 @@ class TokenIterator:
 
     def copy(self):
         self._iterator, copy = itertools.tee(self._iterator)
-        result = TokenIterator(copy)
+        result = _TokenIterator(copy)
         result._include_whitespace_flag = self._include_whitespace_flag
         return result
 
@@ -82,7 +89,7 @@ class TokenIterator:
                 token = next(self._iterator)
         except StopIteration:
             # TODO: the 'file' in this error message is wrong for "{print(}"
-            raise common.CompileError("unexpected end of file", None)
+            raise _EndOfFileError("unexpected end of file", None)
 
         return token
 
@@ -90,7 +97,7 @@ class TokenIterator:
         try:
             self.copy().next_token()
             return False
-        except common.CompileError:
+        except _EndOfFileError:
             return True
 
     @contextlib.contextmanager
@@ -139,7 +146,7 @@ class AsdaParser:
 
     def __init__(self, compilation, token_generator):
         self.compilation = compilation
-        self.tokens = TokenIterator(token_generator)
+        self.tokens = _TokenIterator(token_generator)
         self.import_paths = []
 
     def _handle_string_literal(self, string, location, allow_curly_braces):
@@ -189,7 +196,8 @@ class AsdaParser:
 
         return parts
 
-    def parse_commasep_in_parens(self, item_callback, *, parens='()'):
+    def parse_commasep_in_parens(self, item_callback, *,
+                                 parens='()', allow_empty=True):
         lparen_string, rparen_string = parens
 
         lparen = self.tokens.next_token()
@@ -216,6 +224,12 @@ class AsdaParser:
                 raise common.CompileError(
                     "should be ',' or '%s'" % rparen_string, rparen.location)
 
+        if (not allow_empty) and (not result):
+            raise common.CompileError(
+                "you must put something between '%s' and '%s'" % (
+                    lparen_string, rparen_string),
+                lparen.location + rparen.location)
+
         return (lparen, result, rparen)
 
     def parse_type(self):
@@ -225,7 +239,7 @@ class AsdaParser:
 
         if (not self.tokens.eof()) and self.tokens.peek().value == '[':
             lbracket, generics, rbracket = self.parse_commasep_in_parens(
-                self.parse_type, parens='[]')
+                self.parse_type, parens='[]', allow_empty=False)
             location = name.location + rbracket.location
         else:
             generics = None
@@ -334,7 +348,7 @@ class AsdaParser:
             # it's easier to do this here than to do it later
             if self.tokens.peek().value == '[':
                 lbracket, generics, rbracket = self.parse_commasep_in_parens(
-                    self.parse_type, parens='[]')
+                    self.parse_type, parens='[]', allow_empty=False)
                 location = token.location + rbracket.location
             else:
                 generics = None
@@ -389,7 +403,7 @@ class AsdaParser:
 
         return expression
 
-    def parse_expression(self):
+    def parse_expression(self, *, it_should_be='an expression'):
         parts = []      # (is it expression, operator token or expression node)
         while True:
             expression_coming = self.expression_without_operators_coming_up()
@@ -407,7 +421,7 @@ class AsdaParser:
             # next_token() may raise CompileError for end of file, that's fine
             not_expression = self.tokens.next_token()
             raise common.CompileError(
-                "should be an expression", not_expression.location)
+                "should be %s" % it_should_be, not_expression.location)
 
         # there must not be two expressions next to each other without an
         # operator between
@@ -526,7 +540,10 @@ class AsdaParser:
                 "should be a name of a generic type", id_token.location)
         return (id_token.value, id_token.location)
 
-    def parse_1line_statement(self):
+    def parse_1line_statement(self, *, it_should_be='a one-line statement'):
+        if self.tokens.peek().value == 'void':
+            return VoidStatement(self.tokens.next_token().location)
+
         if self.tokens.peek().value == 'return':
             return_keyword = self.tokens.next_token()
             if self.tokens.eof() or self.tokens.peek().type == 'NEWLINE':
@@ -553,7 +570,8 @@ class AsdaParser:
 
             if self.tokens.peek().value == '[':
                 lbracket, generics, rbracket = self.parse_commasep_in_parens(
-                    self.parse_generic_type_name, parens='[]')
+                    self.parse_generic_type_name, parens='[]',
+                    allow_empty=False)
                 _duplicate_check(generics, "generic type")
             else:
                 generics = None
@@ -604,20 +622,14 @@ class AsdaParser:
             return Import(import_token.location, import_path,
                           varname_token.value)
 
-        try:
-            result = self.parse_expression()
-        except common.CompileError as e:
-            # TODO: this is a broken hack, is there a better way?
-            if e.message == "should be an expression":
-                e.message = "should be a statement"
-            raise e
+        result = self.parse_expression(it_should_be=it_should_be)
 
         if self.tokens.eof() or self.tokens.peek().value != '=':
             return result
 
         if not isinstance(result, GetVar):
             raise common.CompileError(
-                "cannot assign to this", result.location)
+                "invalid assignment", self.tokens.peek().location)
 
         equal_sign = self.tokens.next_token()
         value = self.parse_expression()
@@ -664,9 +676,7 @@ class AsdaParser:
             body = self.parse_block(consume_newline=True)
             return For(for_location, init, cond, incr, body)
 
-        # TODO: more different kinds of statements
-
-        result = self.parse_1line_statement()
+        result = self.parse_1line_statement(it_should_be='a statement')
 
         newline = self.tokens.next_token()
         if newline.type != 'NEWLINE':
@@ -695,12 +705,7 @@ class AsdaParser:
             return result
 
     def parse_statements(self):
-        while True:
-            try:
-                self.tokens.peek()
-            except common.CompileError:     # end of file, compilation done
-                break
-
+        while not self.tokens.eof():
             yield self.parse_statement()
 
 

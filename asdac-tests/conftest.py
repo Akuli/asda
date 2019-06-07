@@ -65,7 +65,7 @@ def compiler():
         return bytecoder.create_bytecode(compilation, opcodee)
 
     def doesnt(func):
-        def doesnt_func(code, message, bad_code):
+        def doesnt_func(code, message, bad_code, *, rindex=True):
             if bad_code is None:
                 bad_code = code
 
@@ -73,7 +73,9 @@ def compiler():
                 func(code)
 
             assert error.value.message == message
-            assert error.value.location.offset == code.rindex(bad_code)
+            assert error.value.location.offset == (
+                code.rindex if rindex else code.index
+            )(bad_code)
             assert error.value.location.length == len(bad_code)
 
         return doesnt_func

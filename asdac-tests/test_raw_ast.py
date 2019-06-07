@@ -1,26 +1,21 @@
 import functools
 import itertools
+import pathlib
 
 from asdac import raw_ast
-from asdac.raw_ast import (For, FuncCall, FromGeneric, GetAttr,
+from asdac.raw_ast import (For, FuncCall, GetAttr,
                            GetType, GetVar, Let, SetVar, String)
-from asdac.common import Compilation, CompileError, Location
+from asdac.common import Compilation, CompileError, Location, Messager
 
 import pytest
 
 
-# lol
-class AnyCompilation(Compilation):
-    def __init__(self): pass
-
-    def __eq__(self, other): return isinstance(other, Compilation)
+class Any:
+    def __eq__(self, other):
+        return True
 
 
-location = functools.partial(Location, AnyCompilation())
-
-
-def test_not_an_expression_or_a_statement(compiler):
-    compiler.doesnt_raw_parse('print(])', "syntax error", ']')
+location = functools.partial(Location, Any())
 
 
 def test_dumb_statement(compiler):
@@ -49,12 +44,24 @@ def test_backtick_function_call(compiler, monkeypatch):
 def test_prefix_minus(compiler, monkeypatch):
     monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
     assert compiler.raw_parse('x == -1') == compiler.raw_parse('x == (-1)')
-    assert compiler.raw_parse('1 + -2 + 3 --4') == compiler.raw_parse(
-        '1 + (-2) + 3 - (-4)')
+    assert (compiler.raw_parse('1 - 2 + 3 - 4') ==
+            compiler.raw_parse('((1 - 2) + 3) - 4'))
+    assert (compiler.raw_parse('1 - 2 + 3 - 4') !=
+            compiler.raw_parse('(1 - 2) + (3 - 4)'))
+    assert (compiler.raw_parse('1 - 2 + 3 - 4') !=
+            compiler.raw_parse('1 - (2 + (3 - 4))'))
+    compiler.doesnt_raw_parse(
+        '--x', "'-' cannot be used like this", '-', rindex=False)
 
 
 def test_invalid_operator_stuff(compiler):
-    compiler.doesnt_raw_parse('let x = +1', "syntax error", '+')
+    compiler.doesnt_raw_parse('let x = +1',
+                              "'+' cannot be used like this", '+')
+
+
+# TODO
+@pytest.mark.xfail
+def test_confusing_operator_chaining_disallowed(compiler):
     for ops in itertools.product(['==', '!='], repeat=2):
         compiler.doesnt_raw_parse('x %s y %s z' % ops, "syntax error", ops[1])
 
@@ -79,8 +86,7 @@ def test_empty_braces_in_string(compiler):
 
 def test_statement_in_braces(compiler):
     compiler.doesnt_raw_parse(
-        'print("{let x = 1}")', "expected an expression, got a statement",
-        'let x = 1')
+        'print("{let x = 1}")', "should be an expression", 'let')
 
 
 # corner cases are handled in asdac.string_parser
@@ -98,86 +104,132 @@ def test_joined_strings(compiler):
 
 
 def test_generics(compiler):
-    assert compiler.raw_parse('magic_function[Str, Generator[Int]](x)') == [
-        FuncCall(
-            location(35, 3),
-            function=FromGeneric(
-                location(0, 35),
-                name='magic_function',
-                types=[
-                    GetType(location(15, 3), name='Str'),
-                    FromGeneric(
-                        location(20, 14),
-                        name='Generator',
-                        types=[
-                            GetType(location(30, 3),
-                                    name='Int'),
-                        ],
-                    ),
-                ],
-            ),
-            args=[GetVar(location(36, 1), varname='x')]
-        ),
-    ]
-
-    compiler.doesnt_raw_parse('lol[]', "syntax error", ']')
-
-
-def test_method_call(compiler):
-    assert compiler.raw_parse('"hello".uppercase()') == [
-        FuncCall(
-            location(17, 2),
-            function=GetAttr(
-                location(7, 1),
-                obj=String(location(0, 7),
-                           python_string='hello'),
-                attrname='uppercase',
-            ),
-            args=[],
-        )
-    ]
-
-
-def test_for(compiler):
-    assert compiler.raw_parse('for let x = a; b; x = c:\n    print(x)') == [
-        For(
-            location(0, 3),
-            init=Let(
-                location(4, 9),
-                varname='x',
-                value=GetVar(location(12, 1), varname='a'),
-                export=False,
-            ),
-            cond=GetVar(location(15, 1), varname='b'),
-            incr=SetVar(
-                location(18, 5),
-                varname='x',
-                value=GetVar(location(22, 1), varname='c'),
-            ),
-            body=[
-                FuncCall(
-                    location(34, 3),
-                    function=GetVar(location(29, 5),
-                                    varname='print'),
-                    args=[GetVar(location(35, 1),
-                                 varname='x')],
+    [fc] = compiler.raw_parse('magic_function[Str, Generator[Int]](x)')
+    assert fc == FuncCall(
+        location=Location(Any(), 0, 38),
+        function=GetVar(
+            location=Location(Any(), 0, 35),
+            varname='magic_function',
+            generics=[
+                GetType(
+                    location=Location(Any(), 15, 3),
+                    name='Str',
+                    generics=None,
+                ),
+                GetType(
+                    location=Location(Any(), 20, 14),
+                    name='Generator',
+                    generics=[
+                        GetType(
+                            location=Location(Any(), 30, 3),
+                            name='Int',
+                            generics=None,
+                        ),
+                    ],
                 ),
             ],
         ),
-    ]
+        args=[
+            GetVar(
+                location=Location(Any(), 36, 1),
+                varname='x',
+                generics=None,
+            ),
+        ],
+    )
 
 
-def test_no_multiline_statement(compiler):
-    compiler.doesnt_raw_parse('for while true:\n    print("hi")',
-                              "syntax error", 'while')
+def test_generics_empty_error(compiler):
+    compiler.doesnt_raw_parse(
+        'lol[]', "you must put something between '[' and ']'", '[]')
+    compiler.doesnt_raw_parse(
+        'let x[] = 1', "you must put something between '[' and ']'", '[]')
+    compiler.doesnt_raw_parse(
+        '(lol[] x) -> void:\n a',
+        "you must put something between '[' and ']'", '[]')
+
+
+def test_method_call(compiler):
+    [fc] = compiler.raw_parse('"hello".uppercase()')
+    assert fc == FuncCall(
+        location=Location(Any(), 8, 11),
+        function=GetAttr(
+            location=Location(Any(), 7, 10),
+            obj=String(
+                location=Location(Any(), 0, 7),
+                python_string='hello',
+            ),
+            attrname='uppercase',
+        ),
+        args=[],
+    )
+
+
+def test_for(compiler):
+    [four] = compiler.raw_parse('for let x = a; b; x = c:\n    print(x)')
+    assert four == For(
+        location=Location(Any(), 0, 3),
+        init=Let(
+            location=Location(Any(), 4, 3),
+            varname='x',
+            generics=None,
+            value=GetVar(
+                location=Location(Any(), 12, 1),
+                varname='a',
+                generics=None,
+            ),
+            export=False,
+        ),
+        cond=GetVar(
+            location=Location(Any(), 15, 1),
+            varname='b',
+            generics=None,
+        ),
+        incr=SetVar(
+            location=Location(Any(), 20, 1),
+            varname='x',
+            value=GetVar(
+                location=Location(Any(), 22, 1),
+                varname='c',
+                generics=None,
+            ),
+        ),
+        body=[
+            FuncCall(
+                location=Location(Any(), 29, 8),
+                function=GetVar(
+                    location=Location(Any(), 29, 5),
+                    varname='print',
+                    generics=None,
+                ),
+                args=[
+                    GetVar(
+                        location=Location(Any(), 35, 1),
+                        varname='x',
+                        generics=None,
+                    ),
+                ],
+            ),
+        ],
+    )
+
+
+def test_should_be_a(compiler):
+    # no expression or statement begins with a comma
+    compiler.doesnt_raw_parse('let x = ,',
+                              "should be an expression", ',')
+    compiler.doesnt_raw_parse('for let x = 1; x != 10; ,:',
+                              "should be a one-line statement", ',')
+    compiler.doesnt_raw_parse(',',
+                              "should be a statement", ',')
 
 
 def test_assign_to_non_variable(compiler):
-    compiler.doesnt_raw_parse('print("lol") = x', "syntax error", '=')
+    compiler.doesnt_raw_parse('print("lol") = x', "invalid assignment", '=')
 
 
 def test_repeated(compiler):
-    compiler.doesnt_raw_parse('func lol[T, T]() -> void:\n    void',
+    compiler.doesnt_raw_parse('let lol[T, T] = () -> void:\n    void',
                               "repeated generic type name: T", 'T')
-    compiler.doesnt_raw_parse('func lol(Str x, Bool x) -> void:\n    void',
-                              "repeated argument name: x", 'x')
+    compiler.doesnt_raw_parse('let lol = (Str x, Bool x) -> void:\n    void',
+                              "repeated argument name: x", 'Bool x')

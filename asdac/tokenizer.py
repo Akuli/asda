@@ -57,6 +57,9 @@ def _raw_tokenize(compilation, code, initial_offset):
         value = match.group(0)
 
         if token_type == 'ERROR':
+            if value == '"':
+                raise common.CompileError(
+                    "invalid string", location)
             # the value is 1 character
             if value.isprintable():
                 raise common.CompileError(
@@ -80,7 +83,10 @@ def _handle_indents_and_dedents(tokens):
     indent_levels = [0]
     new_line_starting = True
 
+    token = None    # used below
+
     for token in tokens:
+        assert token is not None
         if token.type == 'NEWLINE':
             assert not new_line_starting, "_raw_tokenize() doesn't work"
             new_line_starting = True
@@ -120,9 +126,12 @@ def _handle_indents_and_dedents(tokens):
         else:
             yield token
 
-    # note: the previous loop left a token variable around, because the token
-    # sequence is never empty (it contains at least a trailing NEWLINE if
-    # nothing else)
+    # if the previous loop didn't leave a token variable around, it can't have
+    # done anything
+    if token is None:
+        assert indent_levels == [0]
+        return
+
     fake_token_location = common.Location(
         token.location.compilation,
         token.location.offset + token.location.length, 0)

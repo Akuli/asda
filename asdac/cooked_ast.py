@@ -150,11 +150,15 @@ class _Chef:
 
         args = [self.cook_expression(arg) for arg in raw_func_call.args]
         if [arg.type for arg in args] != function.type.argtypes:
-            if args:
-                message_end = "arguments of types: " + ', '.join(
+            if len(args) >= 2:
+                message_end = "arguments of types (%s)" % ', '.join(
                     arg.type.name for arg in args)
-            else:
+            elif len(args) == 1:
+                message_end = "an argument of type %s" % args[0].type.name
+            elif not args:
                 message_end = "no arguments"
+            else:
+                raise RuntimeError("wuut")
             raise common.CompileError(
                 "cannot call %s with %s" % (function.type.name, message_end),
                 raw_func_call.location)

@@ -1,62 +1,62 @@
 import functools
+import pathlib
+
+from asdac import common
+from asdac.tokenizer import Token
 
 
-def tokens_equal(a, b, *, consider_index=True):
-    if consider_index:
-        return (a.type, a.value, a.index) == (b.type, b.value, b.index)
-    return (a.type, a.value) == (b.type, b.value)
+class Any:
+    def __eq__(self, other):
+        return True
 
 
-# for checking == stuff with sly tokens
-class Token:
-
-    def __init__(self, *args):
-        self.type, self.value, self.index = args
-
-    __eq__ = tokens_equal
+location = functools.partial(common.Location, Any())
 
 
-def test_automatic_trailing_newline(compiler):
+def test_automatic_trailing_newline(compiler, monkeypatch):
+    monkeypatch.setattr(common.Location, '__eq__', (lambda *shit: True))
     tokens1 = compiler.tokenize('let x = y')
     tokens2 = compiler.tokenize('let x = y\n')
-    assert len(tokens1) == len(tokens2)
-    assert all(map(tokens_equal, tokens1, tokens2))
+    assert tokens1 == tokens2
 
 
 def test_keyword_in_id(compiler):
-    assert compiler.tokenize('func funcy ffunc func') == [
-        Token('FUNC', 'func', 0),
-        Token('ID', 'funcy', 5),
-        Token('ID', 'ffunc', 11),
-        Token('FUNC', 'func', 17),
-        Token('NEWLINE', '\n', 21),
+    assert compiler.tokenize('let lett llet let') == [
+        Token('KEYWORD', 'let', Any()),
+        Token('ID', 'lett', Any()),
+        Token('ID', 'llet', Any()),
+        Token('KEYWORD', 'let', Any()),
+        Token('NEWLINE', Any(), Any()),
     ]
 
 
 def test_indent(compiler):
     assert compiler.tokenize('if x:\n  y') == [
-        Token('IF', 'if', 0),
-        Token('ID', 'x', 3),
-        Token('INDENT', '  ', 6),
-        Token('ID', 'y', 8),
-        Token('NEWLINE', '\n', 9),
-        Token('DEDENT', '', 10),
+        Token('KEYWORD', 'if', Any()),
+        Token('ID', 'x', Any()),
+        Token('INDENT', '  ', Any()),
+        Token('ID', 'y', Any()),
+        Token('NEWLINE', Any(), Any()),
+        Token('DEDENT', '', Any()),
+        Token('NEWLINE', Any(), Any()),
     ]
 
     compiler.doesnt_tokenize('if x:\n     y\n z',
                              "the indentation is wrong", ' ')
 
     assert compiler.tokenize('a:\n  b\nx:\n    y') == [
-        Token('ID', 'a', 0),
-        Token('INDENT', '  ', 3),
-        Token('ID', 'b', 5),
-        Token('NEWLINE', '\n', 6),
-        Token('DEDENT', '', 7),
-        Token('ID', 'x', 7),
-        Token('INDENT', '    ', 10),
-        Token('ID', 'y', 14),
-        Token('NEWLINE', '\n', 15),
-        Token('DEDENT', '', 16),
+        Token('ID', 'a', Any()),
+        Token('INDENT', '  ', Any()),
+        Token('ID', 'b', Any()),
+        Token('NEWLINE', Any(), Any()),
+        Token('DEDENT', '', Any()),
+        Token('NEWLINE', Any(), Any()),
+        Token('ID', 'x', Any()),
+        Token('INDENT', '    ', Any()),
+        Token('ID', 'y', Any()),
+        Token('NEWLINE', Any(), Any()),
+        Token('DEDENT', '', Any()),
+        Token('NEWLINE', Any(), Any()),
     ]
 
     compiler.doesnt_tokenize('x\n y', "indent without : and newline", ' ')
@@ -87,13 +87,13 @@ def test_strings(compiler):
     assert string2.value == r'"a \"lol\" b"'
     assert string3.value == r'"\\ back \\ slashes \\"'
 
-    compiler.doesnt_tokenize(r'print("hello world\")', "invalid string",
-                             r'"hello world\")')
-    compiler.doesnt_tokenize('"{hello"', "invalid string", None)
-    compiler.doesnt_tokenize('"{{hello}"', "invalid string", None)
-    compiler.doesnt_tokenize('"hello}"', "invalid string", None)
-    compiler.doesnt_tokenize('"{hello}}"', "invalid string", None)
-    compiler.doesnt_tokenize(r'"\a"', "invalid string", None)
+    compiler.doesnt_tokenize(r'print("hello world\")', "invalid string", '"',
+                             rindex=False)
+    compiler.doesnt_tokenize('"{hello"', "invalid string", '"', rindex=False)
+    compiler.doesnt_tokenize('"{{hello}"', "invalid string", '"', rindex=False)
+    compiler.doesnt_tokenize('"hello}"', "invalid string", '"', rindex=False)
+    compiler.doesnt_tokenize('"{hello}}"', "invalid string", '"', rindex=False)
+    compiler.doesnt_tokenize(r'"\a"', "invalid string", '"', rindex=False)
 
 
 def test_unknown_character(compiler):
@@ -101,9 +101,6 @@ def test_unknown_character(compiler):
 
 
 def test_whitespace_ignoring(monkeypatch, compiler):
-    Token = type(compiler.tokenize('a')[0])
-    monkeypatch.setattr(Token, '__eq__', functools.partialmethod(
-        tokens_equal, consider_index=False))
-
+    monkeypatch.setattr(common.Location, '__eq__', (lambda *shit: True))
     assert (compiler.tokenize('func lol ( Generator [ Str ] asd ) : \n    boo')
             == compiler.tokenize('func lol(Generator[Str]asd):\n    boo'))

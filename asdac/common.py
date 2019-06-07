@@ -140,7 +140,9 @@ class Location:
 
     def __init__(self, compilation, offset, length):
         # these make debugging a lot easier, don't delete these
-        assert isinstance(compilation, Compilation)
+        # but tests do magic
+        if 'pytest' not in sys.modules:
+            assert isinstance(compilation, Compilation)
         assert offset >= 0
         assert length >= 0
 

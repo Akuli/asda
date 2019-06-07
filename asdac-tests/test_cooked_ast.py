@@ -2,17 +2,21 @@ from asdac import cooked_ast, objects
 from asdac.common import Location
 
 
+class Any:
+    def __eq__(self, other):
+        return True
+
+
 def test_reusing_names(compiler):
     compiler.doesnt_cooked_parse(
-        'let x = "a"\nfunc lol(Str x) -> void:\n    print("Boo")',
-        "there's already a 'x' variable", 'x')
+        'let x = "a"\nlet lol = (Str x) -> void:\n    void',
+        "there's already a 'x' variable", 'Str x')
     compiler.doesnt_cooked_parse(
         'let next = "lol"',
-        "there's already a generic 'next' function", 'let next = "lol"')
+        "there's already a generic 'next' variable", 'let')
     compiler.doesnt_cooked_parse(
         'let Str = "lol"',
-        "'Str' is not a valid variable name because it's a type name",
-        'let Str = "lol"')
+        "there's already a 'Str' type", 'let')
 
 
 def test_function_calling_errors(compiler):
@@ -20,41 +24,49 @@ def test_function_calling_errors(compiler):
         'let x = "lol"\nx("boo")', "expected a function, got Str", 'x')
     compiler.doesnt_cooked_parse(
         'print("a", "b")',
-        "cannot call print(Str) with arguments of types: Str, Str",
-        '("a", "b")')
+        "cannot call function (Str) -> void with arguments of types (Str, Str)\
+",
+        'print("a", "b")')
     compiler.doesnt_cooked_parse(
-        'print()', "cannot call print(Str) with no arguments", '()')
+        'print(123)',
+        "cannot call function (Str) -> void with an argument of type Int",
+        'print(123)')
+    compiler.doesnt_cooked_parse(
+        'print()',
+        "cannot call function (Str) -> void with no arguments", 'print()')
 
 
 def test_nested_generic_types(compiler):
     [createlocalvar] = compiler.cooked_parse(
-        'func lol() -> Generator[Generator[Str]]:\n    print("Lol")')
+        'let lol = () -> Generator[Generator[Str]]:\n    print("Lol")')
     assert createlocalvar.varname == 'lol'
     assert createlocalvar.initial_value.type == objects.FunctionType(
-        'whatever',
-        returntype=objects.GeneratorType(objects.GeneratorType(
+        [],
+        objects.GeneratorType(objects.GeneratorType(
             objects.BUILTIN_TYPES['Str'])))
 
 
-def test_generic_func_not_found(compiler):
+def test_generic_var_not_found(compiler):
     compiler.doesnt_cooked_parse(
-        'lol[Str]("hey")', "generic function not found: lol", 'lol[Str]')
+        'print(lol[Str])', "generic variable not found: lol", 'lol[Str]')
 
 
 def test_missing_attribute(compiler):
     compiler.doesnt_cooked_parse(
-        'let x = "hello".boobs', "Str objects have no 'boobs' attribute", '.')
+        'let x = "hello".boobs', "Str objects have no 'boobs' attribute",
+        '.boobs')
 
 
 def test_void_function_wrong_call(compiler):
     compiler.doesnt_cooked_parse(
-        'let x = print("boo")', "print(Str) doesn't return a value", '("boo")')
+        'let x = print("boo")',
+        "function (Str) -> void doesn't return a value", 'print("boo")')
 
 
 def test_unknown_types(compiler):
-    compiler.doesnt_cooked_parse('func lol(Wat x) -> void:\n    blah()',
+    compiler.doesnt_cooked_parse('let lol = (Wat x) -> void:\n    blah()',
                                  "unknown type 'Wat'", 'Wat')
-    compiler.doesnt_cooked_parse('func lol(Wut[Str] x) -> void:\n    blah()',
+    compiler.doesnt_cooked_parse('let lol = (Wut[Str] x) -> void:\n    blah()',
                                  "unknown generic type 'Wut'", 'Wut[Str]')
 
 
