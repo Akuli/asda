@@ -290,14 +290,19 @@ class _Chef:
 
     def cook_type(self, tybe):
         if isinstance(tybe, raw_ast.GetType):
-            if tybe.generics is None and tybe.name in self.types:
-                return self.types[tybe.name]
-            elif tybe.generics is not None and tybe.name in self.generic_types:
-                return self.generic_types[tybe.name].get_real_type(
-                    list(map(self.cook_type, tybe.generics)),
-                    tybe.location)
+            if tybe.generics is None:
+                if tybe.name in self.types:
+                    return self.types[tybe.name]
+                it_is = "type"
+            else:
+                if tybe.name in self.generic_types:
+                    return self.generic_types[tybe.name].get_real_type(
+                        list(map(self.cook_type, tybe.generics)),
+                        tybe.location)
+                it_is = "generic type"
+
             raise common.CompileError(
-                "unknown type '%s'" % tybe.name, tybe.location)
+                "unknown %s '%s'" % (it_is, tybe.name), tybe.location)
 
         # TODO: support generic types again
 #        if isinstance(tybe, raw_ast.FromGeneric):   # generic type
@@ -323,7 +328,7 @@ class _Chef:
                 if cooked_value.type != chef.vars.maps[0][varname]:
                     raise common.CompileError(
                         ("'%s' is of type %s, can't assign %s to it"
-                         % (varname, chef.local_vars[varname].name,
+                         % (varname, chef.vars[varname].name,
                             cooked_value.type.name)),
                         raw.location)
                 return SetVar(

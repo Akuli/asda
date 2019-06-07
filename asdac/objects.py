@@ -1,7 +1,7 @@
 """Objects and other related things.
 
-Even though types and generic functions are not objects in asda, they are
-here as well.
+Even though types, generic types and generic variables are not objects in asda,
+they are here as well.
 """
 
 import collections
@@ -132,8 +132,10 @@ class Generic:
                 type_maybe_s = '%d types' % len(self.type_markers)
 
             raise common.CompileError(
-                "%s expected %s, but got %d" % (
-                    self.real_type.name, type_maybe_s, len(the_types)),
+                "expected %s, [%s], but got %d" % (
+                    type_maybe_s,
+                    ', '.join(tm.name for tm in self.type_markers),
+                    len(the_types)),
                 error_location)
 
         type_dict = dict(zip(self.type_markers, the_types))

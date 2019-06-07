@@ -1,3 +1,5 @@
+import pytest
+
 from asdac import cooked_ast, objects
 from asdac.common import Location
 
@@ -73,55 +75,57 @@ def test_unknown_types(compiler):
 def test_assign_errors(compiler):
     compiler.doesnt_cooked_parse(
         'print = "lol"',
-        "'print' is of type print(Str), can't assign Str to it",
-        'print = "lol"')
+        "'print' is of type function (Str) -> void, can't assign Str to it",
+        '=')
     compiler.doesnt_cooked_parse(
-        'lol = "woot"', "variable not found: lol", 'lol = "woot"')
+        'lol = "woot"', "variable not found: lol", '=')
 
     # next is a generic function, not a variable, that's why variable not found
     # TODO: should the error message be more descriptive?
     compiler.doesnt_cooked_parse(
-        'next = "woot"', "variable not found: next", 'next = "woot"')
+        'next = "woot"', "variable not found: next", '=')
 
 
 def test_return_errors(compiler):
     # a runtime error is created if a non-void function doesn't return
     for suffix in [' "lol"', '']:
         compiler.doesnt_cooked_parse('return' + suffix,
-                                     "return outside function", 'return')
+                                     "return outside function",
+                                     'return' + suffix)
 
-    compiler.doesnt_cooked_parse('func lol() -> void:\n    return "blah"',
+    compiler.doesnt_cooked_parse('let lol = () -> void:\n    return "blah"',
                                  "cannot return a value from a void function",
                                  '"blah"')
-    compiler.doesnt_cooked_parse('func lol() -> Str:\n    return',
+    compiler.doesnt_cooked_parse('let lol = () -> Str:\n    return',
                                  "missing return value", 'return')
-    compiler.doesnt_cooked_parse('func lol() -> Str:\n    return print',
-                                 "should return Str, not print(Str)", 'print')
+    compiler.doesnt_cooked_parse(
+        'let lol = () -> Str:\n    return print',
+        "should return Str, not function (Str) -> void", 'print')
 
 
 def test_yield_errors(compiler):
     compiler.doesnt_cooked_parse(
-        'yield "lol"', "yield outside function", 'yield')
+        'yield "lol"', "yield outside function", 'yield "lol"')
     compiler.doesnt_cooked_parse(
-        'func lol() -> Generator[Str]:\n    yield print',
-        "should yield Str, not print(Str)", 'print')
+        'let lol = () -> Generator[Str]:\n    yield print',
+        "should yield Str, not function (Str) -> void", 'print')
 
     for returntype in ['void', 'Str']:
         compiler.doesnt_cooked_parse(
-            'func lol() -> %s:\n    yield "hi"' % returntype,
+            'let lol = () -> %s:\n    yield "hi"' % returntype,
             ("cannot yield in a function that doesn't return "
-             "Generator[something]"), 'yield')
+             "Generator[something]"), 'yield "hi"')
 
     compiler.doesnt_cooked_parse(
-        'func lol() -> Generator[Str]:\n    yield "lol"\n    return "Boo"',
-        "cannot return a value from a function that yields", 'return')
+        'let lol = () -> Generator[Str]:\n    yield "lol"\n    return "Boo"',
+        "cannot return a value from a function that yields", 'return "Boo"')
 
 
 def test_operator_errors(compiler):
     # the '/' doesn't even tokenize
     compiler.doesnt_cooked_parse('let x = 1 / 2', "unexpected '/'", '/')
     compiler.doesnt_cooked_parse(
-        'let x = -"blah"', "expected -Int, got -Str", '-"blah"')
+        'let x = -"blah"', "expected -Int, got -Str", '-')
     compiler.doesnt_cooked_parse(
         'let x = 1 - "blah"', "expected Int - Int, got Int - Str", '"blah"')
     compiler.doesnt_cooked_parse(
@@ -133,7 +137,7 @@ def test_assign_asd_to_asd(compiler):
         'let asd = asd', "variable not found: asd", 'asd')
     compiler.doesnt_cooked_parse(
         'let asd = "hey"\nlet asd = asd',
-        "there's already a 'asd' variable", 'let asd = asd')
+        "there's already a 'asd' variable", 'let')
 
     # this one is fine, 'asd = asd' simply does nothing
     assert len(compiler.cooked_parse('let asd = "key"\nasd = asd')) == 2
@@ -141,27 +145,36 @@ def test_assign_asd_to_asd(compiler):
 
 def test_yield_finding_bugs(compiler):
     compiler.doesnt_cooked_parse(
-        'func lol() -> void:\n  for yield x; y; z():\n    xyz()',
+        'let lol = () -> void:\n  for yield x; y; z():\n    xyz()',
         "cannot yield in a function that doesn't return Generator[something]",
-        'yield')
+        'yield x')
 
     # the yield is in a nested function, should work!
     compiler.cooked_parse('''
-func f() -> void:
-    func g() -> Generator[Str]:
+let f = () -> void:
+    let g = () -> Generator[Str]:
         yield "Lol"
 ''')
+
+    # allowing this would create a lot of funny corner cases
+    compiler.doesnt_cooked_parse('''
+let g = () -> Generator[Str]:
+    let f = () -> void:
+        yield "Lol"
+''',
+    "cannot yield in a function that doesn't return Generator[something]",
+    'yield "Lol"')
 
 
 # not all Generator[Str] functions yield, it's also allowed to return
 # a generator
 def test_different_generator_creating_functions(compiler):
     create_lol, create_lol2 = compiler.cooked_parse('''
-func lol() -> Generator[Str]:
+let lol = () -> Generator[Str]:
     yield "Hi"
     yield "There"
 
-func lol2() -> Generator[Str]:
+let lol2 = () -> Generator[Str]:
     return lol()
 ''')
 
@@ -215,15 +228,17 @@ def test_exporting(compiler):
     assert isinstance(y_create, cooked_ast.SetVar)
 
 
-def test_exporting_generic_func(compiler):
-    compiler.doesnt_cooked_parse(
-        'export func lol[T]() -> void:\n    void',
-        "sorry, generic functions can't be exported yet :(", 'func')
+def test_exporting_generic_var(compiler):
+    with pytest.raises(AssertionError) as error_info:
+        compiler.cooked_parse('export let lol[T] = "heh"')
+
+    assert str(error_info.value).startswith("sorry, cannot export generic var")
 
 
 def test_import_export_funny_places(compiler):
     compiler.cooked_parse(
-        'func lol() -> void:\n    import "lel.asda" as lel')
+        'let lol= () -> void:\n    import "lel.asda" as lel')
     compiler.doesnt_cooked_parse(
-        'func lol() -> void:\n    export let wut = "woot"',
-        "export cannot be used in a function", 'let wut = "woot"')
+        'let lol = () -> void:\n    export let wut = "woot"',
+        # TODO: is it possible to make this point at 'export'?
+        "export cannot be used in a function", 'let')
