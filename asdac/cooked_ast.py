@@ -120,9 +120,8 @@ class _Chef:
             self.generic_types = _create_chainmap(parent_chef.generic_types)
 
         # keys are strings, values are types
-        # TODO: why are export and import vars "local"? what does it mean?
+        # TODO: why are export vars "local"? what does it mean?
         self.local_export_vars = collections.OrderedDict()
-        self.local_import_vars = collections.OrderedDict()
 
     # there are multiple different kind of names:
     #   * types
@@ -526,7 +525,7 @@ class _Chef:
         self._check_name_not_exist(raw.varname, raw.location)
         module_type = objects.ModuleType(
             self.import_compilations[raw.source_path])
-        self.local_import_vars[raw.varname] = module_type
+        self.vars[raw.varname] = module_type
         module = LookupModule(raw.location, module_type)
         return CreateLocalVar(raw.location, None, raw.varname, module)
 
