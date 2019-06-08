@@ -102,5 +102,18 @@ def test_unknown_character(compiler):
 
 def test_whitespace_ignoring(monkeypatch, compiler):
     monkeypatch.setattr(common.Location, '__eq__', (lambda *shit: True))
-    assert (compiler.tokenize('func lol ( Generator [ Str ] asd ) : \n    boo')
-            == compiler.tokenize('func lol(Generator[Str]asd):\n    boo'))
+    assert compiler.tokenize('''
+let lol = (
+     Generator
+    [
+   Str
+  ]
+ wat
+) -> asd :
+    print (
+        "yay"
+            )
+''') == compiler.tokenize('''
+let lol = (Generator[Str]wat)->asd:
+    print("yay")
+''')

@@ -1,4 +1,5 @@
 import collections
+import contextlib
 
 import more_itertools
 import regex
@@ -78,6 +79,80 @@ def _raw_tokenize(compilation, code, initial_offset):
         yield Token(token_type, value, location)
 
 
+def _match_parens(tokens):
+    lparens = list('([{')
+    rparens = list(')]}')
+    lparen2rparen = dict(zip(lparens, rparens))
+    rparen2lparen = dict(zip(rparens, lparens))
+
+    stack = []
+    for token in tokens:
+        if token.value in lparens:
+            stack.append(token)
+
+        if token.value in rparens:
+            if not stack:
+                raise common.CompileError(
+                    "there is no matching '%s'" % rparen2lparen[token.value],
+                    token.location)
+
+            matching_paren = stack.pop().value
+            if matching_paren != rparen2lparen[token.value]:
+                raise common.CompileError(
+                    "the matching paren is '%s', not '%s'" % (
+                        matching_paren, rparen2lparen[token.value]),
+                    token.location)
+
+        yield token
+
+    if stack:
+        raise common.CompileError(
+            "there is no '%s'" % lparen2rparen[stack[-1].value],
+            stack[-1].location)
+
+
+# This function needs to run before hiad (aka _handle_indents_and_dedents)
+# because hiad shouldn't see any of the whitespace between parens, but on the
+# other hand, this needs to stop ignoring whitespace whenever there is a block.
+# Nothing before hiad knows fully when blocks begin and end, so hiad must tell
+# iuw (aka _ignore_unwanted_whitespace) about it somehow. It does that by
+# .send()ing it strings.
+def _ignore_unwanted_whitespace(tokens):
+    ignore_stack = [False]
+
+    for token in tokens:
+        if token.value in {'(', '[', '{'}:
+            ignore_stack.append(True)
+        elif token.value in {')', ']', '}'}:
+            # the temporary variable is needed, because disabling asserts
+            # disables them completely ... i hope u understood this
+            popped = ignore_stack.pop()
+            assert popped
+
+        if not (ignore_stack[-1] and token.type in {'NEWLINE', 'INDENT'}):
+            while True:
+                sent2me = yield token
+                if sent2me == 'beginning of block':
+                    ignore_stack.append(False)
+                elif sent2me == 'end of block':
+                    popped = ignore_stack.pop()
+                    assert not popped
+                elif sent2me is None:
+                    # token was received, hiad used next() instead of send()
+                    # yes, next(generator) is same as generator.send(None)
+                    break
+                else:
+                    raise RuntimeError("wat")     # pragma: no cover
+
+    assert ignore_stack
+
+    # it is possible that hiad doesn't send enough 'end of block' messages,
+    # because it only knows about some dedents after it has went through all
+    # the tokens, i.e. ran iuw to the end
+    for boolean in ignore_stack[1:]:
+        assert not boolean
+
+
 def _handle_indents_and_dedents(tokens):
     # this code took a while to figure out... don't ask me to comment it more
     indent_levels = [0]
@@ -105,6 +180,7 @@ def _handle_indents_and_dedents(tokens):
                 assert token.type == 'INDENT'
                 yield token
                 indent_levels.append(indent_level)
+                tokens.send('beginning of block')
 
             elif indent_level < indent_levels[-1]:
                 if indent_level not in indent_levels:
@@ -117,6 +193,7 @@ def _handle_indents_and_dedents(tokens):
                     yield Token('DEDENT', '', fake_token_location)
                     yield Token('NEWLINE', '', fake_token_location)
                     del indent_levels[-1]
+                    tokens.send('end of block')
 
             if token.type != 'INDENT':
                 yield token
@@ -140,6 +217,8 @@ def _handle_indents_and_dedents(tokens):
         yield Token('DEDENT', '', fake_token_location)
         yield Token('NEWLINE', '', fake_token_location)
         del indent_levels[-1]
+        # it's not possible to send 'end of block' message anymore, because iuw
+        # has already ran to end
 
 
 # the only allowed sequence that contains colon or indent is: colon \n indent
@@ -177,43 +256,13 @@ def _remove_colons(tokens):
             yield token1
 
 
-def _match_parens(tokens):
-    lparens = list('([{')
-    rparens = list(')]}')
-    lparen2rparen = dict(zip(lparens, rparens))
-    rparen2lparen = dict(zip(rparens, lparens))
-
-    stack = []
-    for token in tokens:
-        if token.value in lparens:
-            stack.append(token)
-
-        if token.value in rparens:
-            if not stack:
-                raise common.CompileError(
-                    "there is no matching '%s'" % rparen2lparen[token.value],
-                    token.location)
-
-            matching_paren = stack.pop().value
-            if matching_paren != rparen2lparen[token.value]:
-                raise common.CompileError(
-                    "the matching paren is '%s', not '%s'" % (
-                        matching_paren, rparen2lparen[token.value]),
-                    token.location)
-
-        yield token
-
-    if stack:
-        raise common.CompileError(
-            "there is no '%s'" % lparen2rparen[stack[-1].value],
-            stack[-1].location)
-
-
 def tokenize(compilation, code, *, initial_offset=0):
     assert initial_offset >= 0
     tokens = _raw_tokenize(compilation, code, initial_offset)
-    tokens = _handle_indents_and_dedents(tokens)
+    tokens = _match_parens(tokens)
+    # these are on the same line because they "depend" on each other a lot
+    # i.e. you can't easily add another step between them
+    tokens = _handle_indents_and_dedents(_ignore_unwanted_whitespace(tokens))
     tokens = _check_colons(tokens)
     tokens = _remove_colons(tokens)
-    tokens = _match_parens(tokens)
     return tokens

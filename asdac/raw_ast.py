@@ -59,56 +59,33 @@ def _to_string(parsed):
     return FuncCall(location, GetAttr(location, parsed, 'to_string'), [])
 
 
-# without this subclass, there's no good way to tell whether a CompileError is
-# really an end of file error or something from tokenizer.py, which caused
-# funny bugs
-class _EndOfFileError(common.CompileError):
-    pass
-
-
 class _TokenIterator:
 
     def __init__(self, iterable):
         self._iterator = iter(iterable)
-        self._include_whitespace_flag = True
 
     def copy(self):
         self._iterator, copy = itertools.tee(self._iterator)
-        result = _TokenIterator(copy)
-        result._include_whitespace_flag = self._include_whitespace_flag
-        return result
+        return _TokenIterator(copy)
 
     def peek(self):
         return self.copy().next_token()
 
     def next_token(self):
         try:
-            token = next(self._iterator)
-            while (token.type in {'NEWLINE', 'INDENT', 'DEDENT'} and
-                   not self._include_whitespace_flag):
-                token = next(self._iterator)
+            return next(self._iterator)
         except StopIteration:
             # TODO: the 'file' in this error message is wrong for "{print(}"
-            raise _EndOfFileError("unexpected end of file", None)
-
-        return token
+            raise common.CompileError("unexpected end of file", None)
 
     def eof(self):
+        # old bug: don't use .next_token() or .peek() and catch CompileError,
+        # because that also catches errors from tokenizer
         try:
-            self.copy().next_token()
+            next(self.copy()._iterator)
             return False
-        except _EndOfFileError:
+        except StopIteration:
             return True
-
-    @contextlib.contextmanager
-    def include_whitespace(self, boolean):
-        old_value = self._include_whitespace_flag
-        self._include_whitespace_flag = boolean
-        try:
-            yield
-        finally:
-            assert self._include_whitespace_flag is boolean
-            self._include_whitespace_flag = old_value
 
 
 # the values can be used as bit flags, e.g. PREFIX | BINARY
@@ -142,7 +119,7 @@ def _find_adjacent_items(the_list, key):
     return None
 
 
-class AsdaParser:
+class _AsdaParser:
 
     def __init__(self, compilation, token_generator):
         self.compilation = compilation
@@ -170,7 +147,7 @@ class AsdaParser:
                     part_location.compilation, value,
                     initial_offset=part_location.offset)
 
-                parser = AsdaParser(self.compilation, tokens)
+                parser = _AsdaParser(self.compilation, tokens)
                 if parser.tokens.eof():
                     raise common.CompileError(
                         "you must put some code between { and }",
@@ -205,24 +182,23 @@ class AsdaParser:
             raise common.CompileError(
                 "should be '%s'" % lparen_string, lparen.location)
 
-        with self.tokens.include_whitespace(False):
-            result = []
+        result = []
 
-            # doesn't need an eof check because tokenizer matches parentheses
-            while self.tokens.peek().value != rparen_string:
-                if result:
-                    comma = self.tokens.next_token()
-                    if comma.value != ',':
-                        raise common.CompileError(
-                            "should be ',' or '%s'" % rparen_string,
-                            comma.location)
+        # doesn't need an eof check because tokenizer matches parentheses
+        while self.tokens.peek().value != rparen_string:
+            if result:
+                comma = self.tokens.next_token()
+                if comma.value != ',':
+                    raise common.CompileError(
+                        "should be ',' or '%s'" % rparen_string,
+                        comma.location)
 
-                result.append(item_callback())
+            result.append(item_callback())
 
-            rparen = self.tokens.next_token()
-            if rparen.value != rparen_string:
-                raise common.CompileError(
-                    "should be ',' or '%s'" % rparen_string, rparen.location)
+        rparen = self.tokens.next_token()
+        if rparen.value != rparen_string:
+            raise common.CompileError(
+                "should be ',' or '%s'" % rparen_string, rparen.location)
 
         if (not allow_empty) and (not result):
             raise common.CompileError(
@@ -315,12 +291,11 @@ class AsdaParser:
                 return FuncDefinition(location, args, returntype, body)
 
             else:
+                # parentheses are being used for precedence here
                 lparen = self.tokens.next_token()
                 assert lparen.value == '('
-
-                with self.tokens.include_whitespace(False):
-                    result = self.parse_expression()
-                    rparen = self.tokens.next_token()
+                result = self.parse_expression()
+                rparen = self.tokens.next_token()
 
                 if rparen.value != ')':
                     raise common.CompileError("should be ')'", rparen.location)
@@ -684,25 +659,24 @@ class AsdaParser:
         return result
 
     def parse_block(self, *, consume_newline=False):
-        with self.tokens.include_whitespace(True):
-            indent = self.tokens.next_token()
-            if indent.type != 'INDENT':
-                # there was no colon, tokenizer replaces 'colon indent' with
-                # just 'indent' to make parsing a bit simpler
-                raise common.CompileError("expected ':'", indent.location)
+        indent = self.tokens.next_token()
+        if indent.type != 'INDENT':
+            # there was no colon, tokenizer replaces 'colon indent' with
+            # just 'indent' to make parsing a bit simpler
+            raise common.CompileError("expected ':'", indent.location)
 
-            result = []
-            while self.tokens.peek().type != 'DEDENT':
-                result.append(self.parse_statement())
+        result = []
+        while self.tokens.peek().type != 'DEDENT':
+            result.append(self.parse_statement())
 
-            dedent = self.tokens.next_token()
-            assert dedent.type == 'DEDENT'
+        dedent = self.tokens.next_token()
+        assert dedent.type == 'DEDENT'
 
-            if consume_newline:
-                newline = self.tokens.next_token()
-                assert newline.type == 'NEWLINE', "tokenizer doesn't work"
+        if consume_newline:
+            newline = self.tokens.next_token()
+            assert newline.type == 'NEWLINE', "tokenizer doesn't work"
 
-            return result
+        return result
 
     def parse_statements(self):
         while not self.tokens.eof():
@@ -710,6 +684,6 @@ class AsdaParser:
 
 
 def parse(compilation, code):
-    parser = AsdaParser(compilation, tokenizer.tokenize(compilation, code))
+    parser = _AsdaParser(compilation, tokenizer.tokenize(compilation, code))
     statements = list(parser.parse_statements())    # must not be lazy iterator
     return (statements, parser.import_paths)
