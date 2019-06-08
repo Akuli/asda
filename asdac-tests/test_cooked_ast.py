@@ -242,3 +242,21 @@ def test_import_export_funny_places(compiler):
         'let lol = () -> void:\n    export let wut = "woot"',
         # TODO: is it possible to make this point at 'export'?
         "export cannot be used in a function", 'let')
+
+
+def test_generic_marker_replacing_back(compiler):
+    wat = compiler.cooked_parse('''
+let x[T] = 1
+let y[T] = 2
+let z[T] = 3
+
+let f[T] = (T t, Int n) -> Int:
+    if n == 1:
+        return x[T]
+    elif n == 2:
+        return y[T]
+    else:
+        return z[T]
+''')
+    print(wat)
+    assert 0

@@ -224,6 +224,8 @@ def _handle_indents_and_dedents(tokens):
 # the only allowed sequence that contains colon or indent is: colon \n indent
 def _check_colons(tokens):
     staggered = more_itertools.stagger(tokens, offsets=(-2, -1, 0))
+    token1 = token2 = token3 = None
+
     for token1, token2, token3 in staggered:
         assert token3 is not None
 
@@ -242,6 +244,10 @@ def _check_colons(tokens):
                     ": without newline and indent", token1.location)
 
         yield token3
+
+    # corner case: file may end with ':'
+    if token2 is not None and token2.value == ':':
+        raise common.CompileError("unexpected end of file", token3.location)
 
 
 # to make rest of the code simpler, 'colon \n indent' sequences are

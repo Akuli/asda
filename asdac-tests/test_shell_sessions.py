@@ -26,6 +26,7 @@ def shell_session_environment(tmp_path):
 
 
 def create_test_func(path):
+    @pytest.mark.slow
     def test_func(shell_session_environment, monkeypatch, capsys):
         with path.open('r', encoding='utf-8') as file:
             session = file.read().replace(r'<\uFEFF>', '\uFEFF')

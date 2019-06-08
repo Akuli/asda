@@ -4,6 +4,7 @@ from asdac.common import CompileError
 from asdac.opcoder import Return, DidntReturnError
 
 
+@pytest.mark.slow
 def test_too_many_arguments(compiler):
     args = list(map('Str s{}'.format, range(0xff + 1)))
     code = 'let omfg = (%s) -> void:\n    print("boo")' % ', '.join(args)

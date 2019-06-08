@@ -3,7 +3,7 @@ import itertools
 import pathlib
 
 from asdac import raw_ast
-from asdac.raw_ast import (For, FuncCall, GetAttr,
+from asdac.raw_ast import (For, FuncCall, GetAttr, Integer, If,
                            GetType, GetVar, Let, SetVar, String)
 from asdac.common import Compilation, CompileError, Location, Messager
 
@@ -11,6 +11,8 @@ import pytest
 
 
 class Any:
+    def __repr__(self):
+        return 'Any()'
     def __eq__(self, other):
         return True
 
@@ -40,8 +42,11 @@ def test_backtick_function_call(compiler, monkeypatch):
     assert parse('x `(f` y `g)` z') == parse('y(f, g)(x, z)')
     assert parse('x `f` y `g` z') != parse('x `(f` y `g)` z')
 
+    compiler.doesnt_raw_parse(
+        'x ` y', "should be: expression `expression` expression", '`')
 
-def test_prefix_minus(compiler, monkeypatch):
+
+def test_precedence(compiler, monkeypatch):
     monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
     assert compiler.raw_parse('x == -1') == compiler.raw_parse('x == (-1)')
     assert (compiler.raw_parse('1 - 2 + 3 - 4') ==
@@ -55,6 +60,7 @@ def test_prefix_minus(compiler, monkeypatch):
 
 
 def test_invalid_operator_stuff(compiler):
+    compiler.raw_parse('let x = -1')
     compiler.doesnt_raw_parse('let x = +1',
                               "'+' cannot be used like this", '+')
 
@@ -72,7 +78,7 @@ def test_empty_string(compiler):
     assert string.python_string == ''
 
 
-def test_empty_braces_in_string(compiler):
+def test_braces_errors(compiler):
     text = "you must put some code between { and }"
 
     compiler.doesnt_raw_parse('print("{ }")', text, ' ')
@@ -82,6 +88,11 @@ def test_empty_braces_in_string(compiler):
         compiler.raw_parse('print("{}")')
     assert error.value.message == text
     assert error.value.location == location(len('print("{'), 0)
+
+    compiler.doesnt_raw_parse('import "{x}" as y',
+                              "cannot use {...} strings here", 'x')
+
+    compiler.doesnt_raw_parse('"{123 if blah}"', "invalid syntax", 'if blah')
 
 
 def test_statement_in_braces(compiler):
@@ -150,18 +161,22 @@ def test_generics_empty_error(compiler):
 
 
 def test_method_call(compiler):
-    [fc] = compiler.raw_parse('"hello".uppercase()')
+    [fc] = compiler.raw_parse('"hello".uppercase(1)(2)')
     assert fc == FuncCall(
-        location=Location(Any(), 8, 11),
-        function=GetAttr(
-            location=Location(Any(), 7, 10),
-            obj=String(
-                location=Location(Any(), 0, 7),
-                python_string='hello',
+        location=Any(),
+        function=FuncCall(
+            location=Any(),
+            function=GetAttr(
+                location=Any(),
+                obj=String(
+                    location=Any(),
+                    python_string='hello',
+                ),
+                attrname='uppercase',
             ),
-            attrname='uppercase',
+            args=[Integer(location=Any(), python_int=1)],
         ),
-        args=[],
+        args=[Integer(location=Any(), python_int=2)],
     )
 
 
@@ -233,3 +248,73 @@ def test_repeated(compiler):
                               "repeated generic type name: T", 'T')
     compiler.doesnt_raw_parse('let lol = (Str x, Bool x) -> void:\n    void',
                               "repeated argument name: x", 'Bool x')
+
+
+def test_invalid_this_or_that(compiler):
+    compiler.doesnt_raw_parse('let f = ("hey" x) -> void:\n blah',
+                              "invalid type", '"hey"')
+    compiler.doesnt_raw_parse('let f = (Str "hey") -> void:\n blah',
+                              "invalid variable name", '"hey"')
+
+
+def test_wrong_token_errors(compiler):
+    compiler.doesnt_raw_parse('print("a";)', "should be ',' or ')'", ';')
+    compiler.doesnt_raw_parse('let x = (1;)', "should be ')'", ';')
+    compiler.doesnt_raw_parse('print(x."wat")', "invalid attribute", '"wat"')
+
+
+def test_adjacent_expression_parts(compiler):
+    compiler.doesnt_raw_parse('print(a b)', "invalid syntax", 'a b')
+
+
+def test_let_errors(compiler):
+    compiler.doesnt_raw_parse('let "wat" = "wut"',
+                              "invalid variable name", '"wat"')
+    compiler.doesnt_raw_parse('let wat + "wut"',
+                              "should be '='", '+')
+    compiler.doesnt_raw_parse('export if', "should be 'let'", 'if')
+
+
+def test_import_errors(compiler):
+    compiler.doesnt_raw_parse('import x as y', "should be a string", 'x')
+    compiler.doesnt_raw_parse('import "x" if y', "should be 'as'", 'if')
+    compiler.doesnt_raw_parse('import "x" as if', "should be a variable name",
+                              'if')
+
+
+def test_for_semicolon_error(compiler):
+    compiler.doesnt_raw_parse('for let x = 1 if', "should be ';'", 'if')
+
+
+def test_1line_statement_newline_thingy(compiler):
+    compiler.doesnt_raw_parse('print("hi") if', "should be a newline", 'if')
+
+
+def test_if_elif_else(compiler):
+    for elifs in [[], ['a'], ['a', 'b']]:
+        for got_else in [True, False]:
+            code = (
+                'if x:\n    xx\n'
+                + ''.join('elif %s:\n    %s%s\n' % (e, e, e) for e in elifs)
+                + int(got_else) * 'else:\n    wat'
+            )
+
+            ifs = [(GetVar(Any(), 'x', None), [GetVar(Any(), 'xx', None)])]
+            for e in elifs:
+                ifs.append(
+                    (GetVar(Any(), e, None), [GetVar(Any(), e+e, None)]))
+
+            if got_else:
+                els = [GetVar(Any(), 'wat', None)]
+            else:
+                els = []
+
+            assert compiler.raw_parse(code) == [If(
+                location=Any(),
+                ifs=ifs,
+                else_body=els
+            )]
+
+
+def test_missing_colon(compiler):
+    compiler.doesnt_raw_parse('if a import', "should be ':'", 'import')

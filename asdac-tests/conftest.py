@@ -8,6 +8,24 @@ from asdac import (common, tokenizer, string_parser, raw_ast, cooked_ast,
                    opcoder, bytecoder)
 
 
+# the following url is on 2 lines because pep8 line length
+#
+# https://docs.pytest.org/en/latest/example/simple.html#control-skipping-of-tes
+# ts-according-to-command-line-option
+def pytest_addoption(parser):
+    parser.addoption(
+        "--skipslow", action="store_true", default=False, help="run slow tests"
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption('--skipslow'):
+        marker = pytest.mark.skip(reason='--skipslow was used')
+        for item in items:
+            if 'slow' in item.keywords:
+                item.add_marker(marker)
+
+
 @pytest.fixture
 def compiler():
     compilation = None

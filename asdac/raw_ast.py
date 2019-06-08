@@ -75,7 +75,12 @@ class _TokenIterator:
         try:
             return next(self._iterator)
         except StopIteration:
-            # TODO: the 'file' in this error message is wrong for "{print(}"
+            # i think this code is currently impossible to reach, but that may
+            # change in the future without noticing it when writing the
+            # changing code
+            #
+            # TODO: the 'file' in this error message is wrong for an error that
+            #       comes from the {...} part of a string literal
             raise common.CompileError("unexpected end of file", None)
 
     def eof(self):
@@ -178,13 +183,12 @@ class _AsdaParser:
         lparen_string, rparen_string = parens
 
         lparen = self.tokens.next_token()
-        if lparen.value != lparen_string:
-            raise common.CompileError(
-                "should be '%s'" % lparen_string, lparen.location)
+        assert lparen.value == lparen_string    # should be checked by caller
 
         result = []
 
         # doesn't need an eof check because tokenizer matches parentheses
+        # an eof error wouldn't matter anyway
         while self.tokens.peek().value != rparen_string:
             if result:
                 comma = self.tokens.next_token()
@@ -196,9 +200,7 @@ class _AsdaParser:
             result.append(item_callback())
 
         rparen = self.tokens.next_token()
-        if rparen.value != rparen_string:
-            raise common.CompileError(
-                "should be ',' or '%s'" % rparen_string, rparen.location)
+        assert rparen.value == rparen_string
 
         if (not allow_empty) and (not result):
             raise common.CompileError(
@@ -575,7 +577,8 @@ class _AsdaParser:
 
             string_token = self.tokens.next_token()
             if string_token.type != 'STRING':
-                raise common.CompileError("should be a string")
+                raise common.CompileError(
+                    "should be a string", string_token.location)
             import_path_parts = self._handle_string_literal(
                 string_token.value, string_token.location,
                 allow_curly_braces=False)
@@ -588,11 +591,12 @@ class _AsdaParser:
 
             as_ = self.tokens.next_token()
             if as_.value != 'as':
-                raise common.CompileError("should be 'as'")
+                raise common.CompileError("should be 'as'", as_.location)
 
             varname_token = self.tokens.next_token()
             if varname_token.type != 'ID':
-                raise common.CompileError("should be a variable name")
+                raise common.CompileError(
+                    "should be a variable name", varname_token.location)
 
             return Import(import_token.location, import_path,
                           varname_token.value)
@@ -613,7 +617,7 @@ class _AsdaParser:
     def consume_semicolon_token(self):
         token = self.tokens.next_token()
         if token.value != ';':
-            raise common.CompileError("expected ';'", token.location)
+            raise common.CompileError("should be ';'", token.location)
 
     def parse_statement(self):
         if self.tokens.peek().value == 'while':
@@ -655,7 +659,7 @@ class _AsdaParser:
 
         newline = self.tokens.next_token()
         if newline.type != 'NEWLINE':
-            raise common.CompileError("expected a newline", newline.location)
+            raise common.CompileError("should be a newline", newline.location)
         return result
 
     def parse_block(self, *, consume_newline=False):
@@ -663,7 +667,7 @@ class _AsdaParser:
         if indent.type != 'INDENT':
             # there was no colon, tokenizer replaces 'colon indent' with
             # just 'indent' to make parsing a bit simpler
-            raise common.CompileError("expected ':'", indent.location)
+            raise common.CompileError("should be ':'", indent.location)
 
         result = []
         while self.tokens.peek().type != 'DEDENT':
