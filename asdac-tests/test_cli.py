@@ -11,6 +11,7 @@ import colorama
 import pytest
 
 import asdac.__main__
+from asdac import common
 
 
 @pytest.fixture
@@ -112,3 +113,23 @@ def test_invalid_arg_errors(monkeypatch, capsys, tmp_path):
     lol.touch()
     assert run(str(lol)).endswith(
         ": refusing to compile '%s' because it is in 'asda-compiled'\n" % lol)
+
+
+def test_report_compile_error_corner_cases(monkeypatch):
+    monkeypatch.setattr(sys, 'stderr', FakeTtyStringIO())
+
+    asdac.__main__.report_compile_error(
+        common.CompileError("omg", None), red)
+    assert sys.stderr.getvalue() == 'error: omg\n'
+
+    sys.stderr.truncate(0)
+    sys.stderr.seek(0)
+
+    asdac.__main__.report_compile_error(
+        common.CompileError("omg2", common.Location(
+            common.Compilation(
+                pathlib.Path('does.not.exist'), pathlib.Path('does.not.exist'),
+                common.Messager(0)),
+            offset=1, length=2,
+        )), red)
+    assert sys.stderr.getvalue() == 'error in does.not.exist:1,1...1,3: omg2\n'
