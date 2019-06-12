@@ -59,6 +59,7 @@ def _replace_generic_markers_with_object(node, markers):
         if name in ['location', 'type']:
             continue
 
+        # FIXME: what if the value is a list
         if not (isinstance(value, tuple) and
                 hasattr(value, 'location') and
                 hasattr(value, 'type')):
