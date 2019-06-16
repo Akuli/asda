@@ -337,7 +337,7 @@ class _AsdaParser:
                 location = token.location
 
             if token.type == 'MODULEFUL_ID':
-                module, name = token.value.split('::')
+                module, name = token.value.split(':')
                 try:
                     module_path = self.import_paths[module]
                 except KeyError as e:

@@ -1,4 +1,4 @@
 Export example is running
 Subdir file is running
-exporter::hello is: Hello World!
+exporter:hello is "Hello World!"
 This is the message: Hi

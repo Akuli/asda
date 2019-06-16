@@ -3,5 +3,5 @@ import "export.asda" as exporter
 import "export.asda" as exporter2
 import "subdir/export.asda" as exporter3
 
-print("exporter::hello is: {exporter::hello}")
-exporter::print_message("Hi")
+print("exporter:hello is \"{exporter:hello}\"")
+exporter:print_message("Hi")

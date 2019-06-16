@@ -59,7 +59,8 @@ def test_indent(compiler):
     ]
 
     compiler.doesnt_tokenize('x\n y', "indent without : and newline", ' ')
-    compiler.doesnt_tokenize('x:y', ": without newline and indent", ':')
+    compiler.doesnt_tokenize('x: y', ": without newline and indent", ':')
+    assert compiler.tokenize('x:y')[0].type == 'MODULEFUL_ID'
     compiler.doesnt_tokenize('if a:\n', "unexpected end of file", '\n')
 
 

@@ -12,7 +12,7 @@ _ID_REGEX = r'(?:%s|_)(?:%s|[0-9_])*' % (_LETTER_REGEX, _LETTER_REGEX)
 _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
     ('OPERATOR', r'==|!=|->|[+\-*=`;:.,\[\]()]'),
     ('INTEGER', r'[1-9][0-9]*|0'),
-    ('MODULEFUL_ID', r'%s::%s' % (_ID_REGEX, _ID_REGEX)),
+    ('MODULEFUL_ID', r'%s:%s' % (_ID_REGEX, _ID_REGEX)),
     ('ID', _ID_REGEX),
     ('STRING', '"' + string_parser.CONTENT_REGEX + '"'),
     ('IGNORE_BLANK_LINE', r'(?<=\n|^) *(?:#.*)?\n'),
@@ -223,6 +223,9 @@ def _handle_indents_and_dedents(tokens):
 
 
 # the only allowed sequence that contains colon or indent is: colon \n indent
+#
+# x:y looks up the exported thing 'y' from a module 'x', but x:y as a whole is
+# a MODULEFUL_ID token, there is no colon token involved in that
 def _check_colons(tokens):
     staggered = more_itertools.stagger(tokens, offsets=(-2, -1, 0))
     token1 = token2 = token3 = None
