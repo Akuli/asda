@@ -1,3 +1,8 @@
+import os
+import pathlib
+import subprocess
+import sys
+
 import pytest
 
 from asdac import cooked_ast, objects
@@ -157,13 +162,14 @@ let f = () -> void:
 ''')
 
     # allowing this would create a lot of funny corner cases
-    compiler.doesnt_cooked_parse('''
+    compiler.doesnt_cooked_parse(
+        '''
 let g = () -> Generator[Str]:
     let f = () -> void:
         yield "Lol"
 ''',
-    "cannot yield in a function that doesn't return Generator[something]",
-    'yield "Lol"')
+        "cannot yield in a function that doesn't return Generator[something]",
+        'yield "Lol"')
 
 
 # not all Generator[Str] functions yield, it's also allowed to return
@@ -236,9 +242,24 @@ def test_exporting_generic_var(compiler):
 
 
 def test_import_export_funny_places(compiler):
-    compiler.cooked_parse(
-        'let lol= () -> void:\n    import "lel.asda" as lel')
+    compiler.doesnt_cooked_parse(
+        'let lol= () -> void:\n    import "lel.asda" as lel',
+        "cannot import here, only at beginning of file", 'import')
     compiler.doesnt_cooked_parse(
         'let lol = () -> void:\n    export let wut = "woot"',
         # TODO: is it possible to make this point at 'export'?
         "export cannot be used in a function", 'let')
+
+
+def test_module_name_same_as_var_name(compiler, tmp_path, monkeypatch):
+    env = dict(os.environ)
+    env.setdefault('PYTHONPATH', '')
+    if env['PYTHONPATH']:
+        env['PYTHONPATH'] += os.pathsep
+    env['PYTHONPATH'] += str(pathlib.Path(__file__).absolute().parent.parent)
+
+    os.chdir(str(tmp_path))
+    pathlib.Path('emptiness.asda').touch()
+    subprocess.check_call(
+        [sys.executable, '-m', 'asdac', 'emptiness.asda'], env=env)
+    compiler.cooked_parse('import "emptiness.asda" as lol\nlet lol = 1')

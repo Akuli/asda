@@ -1,29 +1,15 @@
 const std = @import("std");
+const bcreader = @import("bcreader.zig");
 const builtin = @import("builtin");
 const GC = @import("gc.zig").GC;
-const import = @import("import.zig");
+const misc = @import("misc.zig");
 const objtyp = @import("objtyp.zig");
 const Object = objtyp.Object;
 const objects = @import("objects/index.zig");
+const runner = @import("runner.zig");
 
 
-fn normcaseWindowsPath(path: []u8) void {
-    for (path) |c, i| {
-        // TODO: also lowercase non-ascii characters
-        path[i] = if ('A' <= c and c <= 'Z') c+('a'-'A') else if (c == '/') '\\' else c;
-    }
-}
-fn normcasePosixPath(path: []u8) void { }
-const normcasePath = if (builtin.os == builtin.Os.windows) normcaseWindowsPath else normcasePosixPath;
-
-test "normcaseWindowsPath" {
-    var path: [16]u8 = "ABCXYZabcxyz/\\:.";
-    normcaseWindowsPath(path[0..]);
-    std.testing.expectEqualSlices(u8, "abcxyzabcxyz\\\\:.", path);
-}
-
-
-const ImportErrorInfo = struct {
+pub const ImportErrorInfo = struct {
     errorByte: ?u8,
     path: ?[]const u8,
 };
@@ -41,31 +27,26 @@ pub const Interp = struct {
 
     import_arena: std.heap.ArenaAllocator,
     pub gc: GC,
-    pub modules: std.AutoHashMap([]const u8, *Object),
+    pub modules: std.AutoHashMap([]const u8, []?*Object),   // use misc.normcasePath for all the keys
     pub global_scope: *Object,
 
-    // TODO: replace with real exceptions
-    pub last_import_error: ImportErrorInfo,
-
     pub fn init(self: *Interp) !void {
-        self.last_import_error = ImportErrorInfo{ .errorByte = null, .path = null };
         self.object_allocator = std.heap.c_allocator;
         self.import_arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
         self.import_arena_allocator = &self.import_arena.allocator;
         self.gc = GC.init(self);
         self.global_scope = try objects.scope.createGlobal(self);
-        self.modules = std.AutoHashMap([]const u8, *Object).init(self.import_arena_allocator);
+        self.modules = std.AutoHashMap([]const u8, []?*Object).init(self.import_arena_allocator);
     }
 
     pub fn deinit(self: *Interp) void {
         while (self.modules.iterator().next()) |kv| {        // TODO: optimize this
-            if (kv.value.asda_type.attributes) |attrs| {
-                for (attrs) |attr| {
-                    std.debug.assert(!attr.is_method);
-                    attr.value.decref();
+            for (kv.value) |objopt| {
+                if (objopt) |obj| {
+                    obj.decref();
                 }
             }
-            kv.value.decref();
+            self.object_allocator.free(kv.value);
             _ = self.modules.remove(kv.key);
         }
         self.modules.deinit();
@@ -75,60 +56,49 @@ pub const Interp = struct {
         self.import_arena.deinit();
     }
 
-    // on success:
-    //   * self.last_import_error.errorByte is set to null
-    //   * self.last_import_error.path is left to the cleaned-up path, non-null
-    fn getModuleInternal(self: *Interp, raw_path: []const u8) !*Object {
-        self.last_import_error.errorByte = null;
-        self.last_import_error.path = null;
-
+    pub fn import(self: *Interp, raw_path: []const u8, errorinfo: *ImportErrorInfo) !void {
         const tmp_path = try std.os.path.resolve(self.object_allocator, []const []const u8 {raw_path});
         defer self.object_allocator.free(tmp_path);
-        normcasePath(tmp_path);
+        misc.normcasePath(tmp_path);
 
-        var module: *Object = undefined;
-        if (self.modules.get(tmp_path)) |kv| {
-            self.last_import_error.path = kv.key;
-            module = kv.value;
-        } else {
-            const path = try std.mem.dupe(self.import_arena_allocator, u8, tmp_path);
-            self.last_import_error.path = path;
-
-            const typ = try self.import_arena_allocator.create(objtyp.Type);
-            typ.* = objtyp.Type.init(null);
-
-            module = try Object.init(self, typ, null);
-            errdefer module.decref();
-
-            const already_there = try self.modules.put(path, module);
-            std.debug.assert(already_there == null);
+        // avoid using import_arena_allocator (would leak memory)
+        if (self.modules.get(tmp_path)) |_| {
+            return;
         }
 
-        module.incref();
-        return module;
+        const nice_path = try std.mem.dupe(self.import_arena_allocator, u8, tmp_path);
+        try self.importFromNicePath(nice_path, errorinfo);
     }
 
-    pub fn getModule(self: *Interp, raw_path: []const u8) !*Object {
-        const res = try self.getModuleInternal(raw_path);
-        self.last_import_error.errorByte = null;
-        self.last_import_error.path = null;
-        return res;
-    }
-
-    // some kind of cycle going on, doesn't compile without anyerror
-    pub fn loadModule(self: *Interp, raw_path: []const u8) anyerror!*Object {
-        const mod = try self.getModuleInternal(raw_path);
-        errdefer mod.decref();
-        if (mod.asda_type.attributes != null) {
-            // loaded already
-            return mod;
+    fn importFromNicePath(self: *Interp, nice_path: []const u8, errorinfo: *ImportErrorInfo) anyerror!void {
+        errorinfo.path = nice_path;
+        if (self.modules.get(nice_path)) |_| {
+            return;
         }
 
-        try import.loadModule(self, self.last_import_error.path.?, mod);
+        const f = try std.os.File.openRead(nice_path);
+        defer f.close();
+        const stream = &f.inStream().stream;
+        var reader = bcreader.BytecodeReader.init(self, nice_path, stream, &errorinfo.errorByte);
 
-        self.last_import_error.errorByte = null;
-        self.last_import_error.path = null;
-        return mod;
+        try reader.readAsdaBytes();
+        for (try reader.readImports()) |imp| {
+            try self.importFromNicePath(imp, errorinfo);
+            errorinfo.path = nice_path;
+        }
+
+        const code = try reader.readBody();
+        defer code.destroy(true, true);
+
+        const scope = try objects.scope.createSub(self.global_scope, code.nlocalvars);
+        defer scope.decref();   // TODO: check that functions hold reference to their globals when needed
+
+        try runner.runFile(self, code, scope);
+
+        // not all local vars are exported, but this works anyway because the exported vars are first
+        const exported_vars_and_stuff = objects.scope.getLocalVarsOwned(scope);
+        const already_there = try self.modules.put(nice_path, exported_vars_and_stuff);
+        std.debug.assert(already_there == null);
     }
 };
 

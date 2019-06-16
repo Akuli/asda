@@ -23,7 +23,9 @@ def compiler(tmp_path, monkeypatch, capsys):
         monkeypatch.chdir(tmp_path)
         for other_file in examples_dir.iterdir():
             if other_file.suffix == '.asda':
-                shutil.copy(str(other_file), '.')
+                shutil.copy(str(other_file), other_file.name)
+            elif other_file.is_dir() and other_file.name != 'examples':
+                shutil.copytree(str(other_file), other_file.name)
 
         monkeypatch.setattr(sys, 'argv', ['asdac', str(filename)])
         asdac.__main__.main()

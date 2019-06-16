@@ -18,7 +18,7 @@ TRUE_CONSTANT = b'T'            # only used in bytecode files
 FALSE_CONSTANT = b'F'           # only used in bytecode files
 CONSTANT = b'C'                 # not used at all in bytecode files
 LOOKUP_ATTRIBUTE = b'.'
-IMPORT_MODULE = b'M'    # also used in types
+LOOKUP_FROM_MODULE = b'm'
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
 STR_JOIN = b'j'
@@ -30,7 +30,7 @@ YIELD = b'Y'
 NEGATION = b'!'
 JUMP_IF = b'J'
 END_OF_BODY = b'E'      # only used in bytecode files
-IMPORT_SECTION = b'i'   # only used in bytecode files
+IMPORT_SECTION = b'i'   # only used in bytecode files, for both import sections
 
 PLUS = b'+'
 MINUS = b'-'
@@ -52,12 +52,11 @@ Op = collections.namedtuple('Op', ['lineno', 'kind', 'args'])
 
 class _BytecodeReader:
 
-    def __init__(self, compiled_path, file, module_getter):
+    def __init__(self, compiled_path, file):
         self.compiled_path = compiled_path
         self.file = file
         self._push_buffer = bytearray()
         self._lineno = 1
-        self.get_module = module_getter
 
     # errors on unexpected eof
     def _read(self, size):
@@ -126,9 +125,6 @@ class _BytecodeReader:
         if magic == TYPE_GENERATOR:
             return objects.GeneratorType(self.read_type())
 
-        if magic == IMPORT_MODULE:
-            return self.get_module(self.read_path()).type
-
         assert False, magic
 
     def read_path(self):
@@ -142,7 +138,7 @@ class _BytecodeReader:
         if self.read_magic() != IMPORT_SECTION:
             raise RuntimeError("oh no!")
 
-        how_many = self.read_uint32()
+        how_many = self.read_uint16()
         result = []
         for lel in range(how_many):
             result.append(self.read_path())
@@ -187,8 +183,8 @@ class _BytecodeReader:
                 args = (self.read_uint8(), self.read_uint16())
             elif magic == LOOKUP_ATTRIBUTE:
                 args = (self.read_type(), self.read_uint16())
-            elif magic == IMPORT_MODULE:
-                args = (self.read_path(),)
+            elif magic == LOOKUP_FROM_MODULE:
+                args = (self.read_path(), self.read_uint16())
             elif magic == CREATE_FUNCTION:
                 self._unread(magic[0])
                 tybe = self.read_type()
@@ -203,13 +199,15 @@ class _BytecodeReader:
         return Code(how_many_local_vars, opcode)
 
 
-def read_bytecode(compiled_path, file, module_getter):
+def read_bytecode(compiled_path, file):
     if file.read(4) != b'asda':
         raise RuntimeError(
             "doesn't look like a compiled asda file: " + str(compiled_path))
 
-    opcode = _BytecodeReader(compiled_path, file, module_getter).read_body()
+    reader = _BytecodeReader(compiled_path, file)
+    imports = reader.read_imports()
+    opcode = reader.read_body()
 
     if file.read(1) != IMPORT_SECTION:
         raise ValueError("the bytecode file ends unexpectedly")
-    return opcode
+    return (imports, opcode)

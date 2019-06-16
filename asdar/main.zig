@@ -1,5 +1,6 @@
 const std = @import("std");
 const Interp = @import("interp.zig").Interp;
+const ImportErrorInfo = @import("interp.zig").ImportErrorInfo;
 const misc = @import("misc.zig");
 
 
@@ -27,21 +28,21 @@ fn mainInner(args: []const []const u8) u8 {
     };
     defer interp.deinit();
 
-    const mod = interp.loadModule(filename) catch |err| {
+    var import_error = ImportErrorInfo{ .errorByte = null, .path = null };
+    interp.import(filename, &import_error) catch |err| {
         std.debug.warn("{}: ", program);
-        if (interp.last_import_error.path) |pth| {
+        if (import_error.path) |pth| {
             std.debug.warn("error while importing {}: ", pth);
         } else {
             std.debug.warn("error: ");
         }
         std.debug.warn("{}", misc.errorToString(err));
-        if (interp.last_import_error.errorByte) |byte| {
-            std.debug.warn(" 0x{x}", byte);
+        if (import_error.errorByte) |byte| {
+            std.debug.warn(": 0x{x}", byte);
         }
         std.debug.warn("\n");
         return 1;
     };
-    mod.decref();
 
     return 0;
 }

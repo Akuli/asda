@@ -1,5 +1,4 @@
 import functools
-import pathlib
 
 from asdac import common
 from asdac.tokenizer import Token

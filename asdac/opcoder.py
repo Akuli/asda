@@ -31,8 +31,8 @@ BoolConstant = _op_class('BoolConstant', ['python_bool'])
 CreateFunction = _op_class('CreateFunction', [
     'functype', 'yields', 'body_opcode'])
 LookupVar = _op_class('LookupVar', ['level', 'var'])
-LookupModule = _op_class('LookupModule', ['compiled_path'])
 # tuples have an index() method, avoid name clash with misspelling
+LookupFromModule = _op_class('LookupFromModule', ['compiled_path', 'indeks'])
 LookupAttribute = _op_class('LookupAttribute', ['type', 'indeks'])
 SetVar = _op_class('SetVar', ['level', 'var'])
 CallFunction = _op_class('CallFunction', ['nargs', 'returns_a_value'])
@@ -194,8 +194,6 @@ class _OpCoder:
                 self._lineno(expression.location),
                 expression.type, expression.yields, function_opcode))
 
-        # the opcode is dynamically typed from here, so generic functions
-        # are treated same as variables
         elif isinstance(expression, cooked_ast.LookupVar):
             coder = self._get_coder_for_level(expression.level)
             if isinstance(expression, cooked_ast.LookupVar):
@@ -206,17 +204,19 @@ class _OpCoder:
                 self._lineno(expression.location), expression.level,
                 coder.local_vars[name]))
 
+        elif isinstance(expression, cooked_ast.LookupFromModule):
+            exported_names = list(expression.compilation.exports.keys())
+            self.output.ops.append(LookupFromModule(
+                self._lineno(expression.location),
+                expression.compilation.compiled_path,
+                exported_names.index(expression.name)))
+
         elif isinstance(expression, cooked_ast.LookupAttr):
             self.do_expression(expression.obj)
             attribute_names = list(expression.obj.type.attributes.keys())
             index = attribute_names.index(expression.attrname)
             self.output.ops.append(LookupAttribute(
                 self._lineno(expression.location), expression.obj.type, index))
-
-        elif isinstance(expression, cooked_ast.LookupModule):
-            self.output.ops.append(LookupModule(
-                self._lineno(expression.location),
-                expression.type.compilation.compiled_path))
 
         elif isinstance(expression, cooked_ast.PrefixMinus):
             self.do_expression(expression.prefixed)

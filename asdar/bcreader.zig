@@ -3,6 +3,7 @@
 const std = @import("std");
 const builtins = @import("builtins.zig");
 const Interp = @import("interp.zig").Interp;
+const misc = @import("misc.zig");
 const objtyp = @import("objtyp.zig");
 const Object = objtyp.Object;
 const objects = @import("objects/index.zig");
@@ -21,7 +22,7 @@ const NEGATIVE_INT_CONSTANT: u8 = '2';
 const TRUE_CONSTANT: u8 = 'T';
 const FALSE_CONSTANT: u8 = 'F';
 const LOOKUP_ATTRIBUTE: u8 = '.';
-const IMPORT_MODULE: u8 = 'M';    // also used in types
+const LOOKUP_FROM_MODULE: u8 = 'm';
 const CALL_VOID_FUNCTION: u8 = '(';
 const CALL_RETURNING_FUNCTION: u8 = ')';
 const STR_JOIN: u8 = 'j';
@@ -51,11 +52,13 @@ pub const Op = struct {
     pub const CallFunctionData = struct{ returning: bool, nargs: u8 };
     pub const LookupAttributeData = struct{ typ: *objtyp.Type, index: u16 };
     pub const CreateFunctionData = struct{ returning: bool, body: Code };
+    pub const LookupFromModuleData = struct{ array: []?*Object, index: u16 };
 
     pub const Data = union(enum) {
         LookupVar: VarData,
         SetVar: VarData,
         LookupAttribute: LookupAttributeData,
+        LookupFromModule: LookupFromModuleData,
         CreateFunction: CreateFunctionData,
         CallFunction: CallFunctionData,
         Constant: *Object,
@@ -70,7 +73,6 @@ pub const Op = struct {
         DidntReturnError: void,
         StrJoin: u16,   // TODO: should this be bigger??!
         PrefixMinus: void,
-        ImportModule: []const u8,   // the path, allocated with import_arena_allocator
 
         pub fn destroy(self: Op.Data, decref_refs: bool, free_nonrefs: bool) void {
             switch(self) {
@@ -111,14 +113,14 @@ pub const Code = struct {
     }
 };
 
-const BytecodeReader = struct {
+pub const BytecodeReader = struct {
     interp: *Interp,
     in: *StreamType,
     inpath_dirname: []const u8,
     lineno: u32,
     errorByte: *?u8,
 
-    fn init(interp: *Interp, inpath: []const u8, in: *StreamType, errorByte: *?u8) BytecodeReader {
+    pub fn init(interp: *Interp, inpath: []const u8, in: *StreamType, errorByte: *?u8) BytecodeReader {
         return BytecodeReader{
             .interp = interp,
             .inpath_dirname = std.os.path.dirname(inpath).?,
@@ -137,14 +139,19 @@ const BytecodeReader = struct {
         return result;
     }
 
-    fn readPath(self: *BytecodeReader) ![]u8 {
+    fn readPath(self: *BytecodeReader, normcase: bool) ![]u8 {
         const relative = try self.readString();
         for (relative) |c, i| {
             if (c == '/') {
                 relative[i] = std.os.path.sep;
             }
         }
-        return try std.os.path.resolve(self.interp.import_arena_allocator, []const []const u8 { self.inpath_dirname, relative });
+
+        const result = try std.os.path.resolve(self.interp.import_arena_allocator, []const []const u8 { self.inpath_dirname, relative });
+        if (normcase) {
+            misc.normcasePath(result);
+        }
+        return result;
     }
 
     // anyerror is needed because this calls itself, the compiler gets confused without anyerror
@@ -159,24 +166,18 @@ const BytecodeReader = struct {
             CREATE_FUNCTION => {
                 const returning = ((try self.readType(null)) != null);
 
-                // ignore everything else, asdac needs that stuff but this interpreter doesn't
                 const nargs = try self.in.readIntLittle(u8);
                 var i: usize = 0;
                 while (i < nargs) : (i += 1) {
                     const typ = try self.readType(null);
                     std.debug.assert(typ != null);
+                    // the type isn't needed for anything, at least not yet
                 }
 
                 if (returning) {
                     return objects.function.returning_type;
                 }
                 return objects.function.void_type;
-            },
-            IMPORT_MODULE => {
-                const obj = try self.interp.getModule(try self.readPath());
-                std.debug.assert(obj.refcount >= 2);    // the module hashmap holds a reference
-                obj.decref();
-                return obj.asda_type;
             },
             TYPE_VOID => {
                 return null;
@@ -186,6 +187,29 @@ const BytecodeReader = struct {
                 return error.BytecodeInvalidTypeByte;
             },
         }
+    }
+
+    pub fn readAsdaBytes(self: *BytecodeReader) !void {
+        var buf = []u8{ 0, 0, 0, 0 };
+        if( (4 != try self.in.read(buf[0..])) or !std.mem.eql(u8, buf, "asda") ) {
+            return error.BytecodeNotAnAsdaFile;
+        }
+    }
+
+    // allocates with import_arena_allocator (no need to free results)
+    pub fn readImports(self: *BytecodeReader) ![][]u8 {
+        const byte = try self.in.readByte();
+        if (byte != IMPORT_SECTION) {
+            self.errorByte.* = byte;
+            return error.BytecodeBeginsUnexpectedly;
+        }
+
+        const npaths = try self.in.readIntLittle(u16);
+        const paths = try self.interp.import_arena_allocator.alloc([]u8, npaths);
+        for (paths) |*ptr| {
+            ptr.* = try self.readPath(true);
+        }
+        return paths;
     }
 
     fn readBody(self: *BytecodeReader) anyerror!Code {
@@ -248,7 +272,6 @@ const BytecodeReader = struct {
                 VALUE_RETURN => Op.Data{ .Return = true },
                 JUMP_IF => Op.Data{ .JumpIf = try self.in.readIntLittle(u16) },
                 STR_JOIN => Op.Data{ .StrJoin = try self.in.readIntLittle(u16) },
-                IMPORT_MODULE => Op.Data{ .ImportModule = try self.readPath() },
                 CALL_VOID_FUNCTION, CALL_RETURNING_FUNCTION => blk: {
                     const ret = (opbyte == CALL_RETURNING_FUNCTION);
                     const nargs = try self.in.readIntLittle(u8);
@@ -283,6 +306,14 @@ const BytecodeReader = struct {
                     const i = try self.in.readIntLittle(u16);
                     break :blk Op.Data{ .LookupAttribute = Op.LookupAttributeData{ .typ = typ, .index = i }};
                 },
+                LOOKUP_FROM_MODULE => blk: {
+                    const path = try self.readPath(true);
+                    const i = try self.in.readIntLittle(u16);
+
+                    // the compiler lowercases the path, so it is already a valid key for modules
+                    const arr = self.interp.modules.get(path).?.value;
+                    break :blk Op.Data{ .LookupFromModule = Op.LookupFromModuleData{ .array = arr, .index = i }};
+                },
                 else => {
                     self.errorByte.* = opbyte;
                     return error.BytecodeInvalidOpByte;
@@ -298,30 +329,17 @@ const BytecodeReader = struct {
             .ops = ops.toOwnedSlice(),
         };
     }
+
+    pub fn readCodePart(self: *BytecodeReader) !Code {
+        const code = self.readBody();
+        errdefer code.destroy(true, true);
+
+        const byte = try self.in.readByte();    // TODO: handle eof?
+        if (byte != IMPORT_SECTION) {
+            self.errorByte.* = byte;
+            return error.BytecodeEndsUnexpectedly;
+        }
+
+        return code;
+    }
 };
-
-// returns whether the stream looks like an asda file
-fn readAsdaBytes(stream: *StreamType) !bool {
-    var buf = []u8{ 0, 0, 0, 0 };
-    if (4 != try stream.read(buf[0..])) {
-        return false;
-    }
-    return std.mem.eql(u8, buf, "asda");
-}
-
-pub fn readByteCode(interp: *Interp, inpath: []const u8, stream: *StreamType, errorByte: *?u8) !Code {
-    if (!(try readAsdaBytes(stream))) {
-        return error.BytecodeNotAnAsdaFile;
-    }
-
-    const result = try BytecodeReader.init(interp, inpath, stream, errorByte).readBody();
-    errdefer result.destroy(true, true);
-
-    const byte = try stream.readByte();
-    if (byte != IMPORT_SECTION) {
-        errorByte.* = byte;
-        return error.BytecodeEndsUnexpectedly;
-    }
-
-    return result;
-}

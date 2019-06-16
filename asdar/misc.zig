@@ -1,3 +1,7 @@
+const builtin = @import("builtin");
+const std = @import("std");
+
+
 pub fn errorToString(err: anyerror) []const u8 {
     return switch(err) {
         // std.os.PosixOpenError (somewhat copy/pasted from what strerror(3) returns on my system):
@@ -26,10 +30,30 @@ pub fn errorToString(err: anyerror) []const u8 {
         // errors that bcreader.zig uses
         error.BytecodeNotAnAsdaFile => "This does not look like an asda bytecode file",
         error.BytecodeRepeatedLineno => "Repeated line number information in bytecode",
+        error.BytecodeBeginsUnexpectedly => "The bytecode file begins unexpectedly",
         error.BytecodeEndsUnexpectedly => "The bytecode file ends unexpectedly",
         error.BytecodeInvalidTypeByte => "The bytecode contains an invalid type byte",
         error.BytecodeInvalidOpByte => "The bytecode contains an invalid op byte",
 
         else => @errorName(err),
     };
+}
+
+
+fn normcaseWindowsPath(path: []u8) void {
+    for (path) |c, i| {
+        // TODO: also lowercase non-ascii characters
+        path[i] =
+            if ('A' <= c and c <= 'Z') c+('a'-'A')
+            else if (c == '/') '\\'
+            else c;
+    }
+}
+fn normcasePosixPath(path: []u8) void { }
+pub const normcasePath = if (builtin.os == builtin.Os.windows) normcaseWindowsPath else normcasePosixPath;
+
+test "normcaseWindowsPath" {
+    var path: [16]u8 = "ABCXYZabcxyz/\\:.";
+    normcaseWindowsPath(path[0..]);
+    std.testing.expectEqualSlices(u8, "abcxyzabcxyz\\\\:.", path);
 }

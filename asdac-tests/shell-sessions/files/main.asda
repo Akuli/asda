@@ -1,2 +1,2 @@
 import "lib.asda" as lib
-print(lib.message)
+print(lib::message)

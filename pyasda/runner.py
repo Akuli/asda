@@ -103,6 +103,10 @@ class _Runner:
 
                 self.stack.append(var_scope.local_vars[index])
 
+            elif opcode == bytecode_reader.LOOKUP_FROM_MODULE:
+                path, indeks = args
+                self.stack.append(self.interpreter.modules[path][indeks])
+
             elif opcode == bytecode_reader.SET_VAR:
                 level, index = args
                 if level == len(self.scope.parent_scopes):
@@ -160,10 +164,6 @@ class _Runner:
             elif opcode == bytecode_reader.PREFIX_MINUS:
                 self.stack[-1] = self.stack[-1].prefix_minus()
 
-            elif opcode == bytecode_reader.IMPORT_MODULE:
-                [path] = args
-                self.stack.append(self.interpreter.import_path(path))
-
             elif opcode in {bytecode_reader.PLUS, bytecode_reader.MINUS,
                             bytecode_reader.TIMES,  # bytecode_reader.DIVIDE,
                             bytecode_reader.EQUAL}:
@@ -193,35 +193,28 @@ class _Runner:
 class Interpreter:
 
     def __init__(self):
-        self.modules = {}
+        self.modules = {}   # keys are paths, values are lists of exported objs
         self.global_scope = _Scope(objects.BUILTINS, [])
 
-    # creates a module object, but doesn't run the module's code
-    def get_module(self, path):
+    # runs the module's code if that hasn't been done yet
+    def import_path(self, path):
         # this uses os.path.abspath because it replaces 'a/../b' with 'b'
         path = pathlib.Path(os.path.abspath(str(path)))
 
         if path in self.modules:
             return self.modules[path]
 
-        module = objects.Object(objects.ModuleType(path))
-        self.modules[path] = module
-        return module
-
-    # runs the module's code if that hasn't been done yet
-    def import_path(self, path):
-        module = self.get_module(path)
-        if module.type.loaded:
-            return module
-
-        path = module.type.compiled_path   # no '..' parts, see get_module()
         with path.open('rb') as file:
-            opcode = bytecode_reader.read_bytecode(path, file, self.get_module)
+            imports, opcode = bytecode_reader.read_bytecode(path, file)
+
+        for imported_path in imports:
+            self.import_path(imported_path)
 
         file_scope = _create_subscope(self.global_scope,
                                       opcode.how_many_local_vars)
         result = _Runner(opcode, file_scope, self).run()
         assert result == (RunResult.DIDNT_RETURN, None), result
 
-        module.type.load(file_scope.local_vars)
-        return module
+        # TODO: not all vars should be exported? figure out why this works
+        self.modules[path] = file_scope.local_vars
+        return self.modules[path]

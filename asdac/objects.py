@@ -90,21 +90,6 @@ class GeneratorType(Type):
         return GeneratorType(self.item_type.undo_generics(type_dict))
 
 
-class ModuleType(Type):
-
-    def __init__(self, compilation: common.Compilation):
-        super().__init__(
-            '<module from "%s">' % compilation.source_path, OBJECT)
-        self.compilation = compilation
-        for name, tybe in compilation.exports.items():
-            self.attributes[name] = tybe
-
-    def __eq__(self, other):
-        if not isinstance(other, ModuleType):
-            return NotImplemented
-        return self.source_path == other.source_path
-
-
 class GenericMarker(Type):
 
     def __init__(self, name):

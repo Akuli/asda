@@ -2,7 +2,6 @@ import collections
 import functools
 import io
 import os
-import pathlib
 
 from . import common, objects, opcoder
 
@@ -18,7 +17,7 @@ NEGATIVE_INT_CONSTANT = b'2'
 TRUE_CONSTANT = b'T'
 FALSE_CONSTANT = b'F'
 LOOKUP_ATTRIBUTE = b'.'
-IMPORT_MODULE = b'M'       # also used when bytecoding a type
+LOOKUP_FROM_MODULE = b'm'
 CALL_VOID_FUNCTION = b'('
 CALL_RETURNING_FUNCTION = b')'
 STR_JOIN = b'j'
@@ -118,7 +117,10 @@ class _BytecodeWriter:
     def write_path(self, path):
         relative2 = self.compilation.compiled_path.parent
         relative_path = common.relpath(path, relative2)
-        self.bytecode.write_string(str(relative_path).replace(os.sep, '/'))
+        # os.path.normcase replaces / with \ on windows, but we actually want /
+        # for this to make the compiled bytecodes cross-platform
+        self.bytecode.write_string(
+            os.path.normcase(str(relative_path)).replace(os.sep, '/'))
 
     def write_type(self, tybe):
         if tybe in objects.BUILTIN_TYPES.values():
@@ -137,10 +139,6 @@ class _BytecodeWriter:
         elif isinstance(tybe, objects.GeneratorType):
             self.bytecode.add_byte(TYPE_GENERATOR)
             self.write_type(tybe.item_type)
-
-        elif isinstance(tybe, objects.ModuleType):
-            self.bytecode.add_byte(IMPORT_MODULE)
-            self.write_path(tybe.compilation.compiled_path)
 
         elif tybe is None:
             self.bytecode.add_byte(TYPE_VOID)
@@ -230,9 +228,10 @@ class _BytecodeWriter:
             # already handled in run()
             return
 
-        if isinstance(op, opcoder.LookupModule):
-            self.bytecode.add_byte(IMPORT_MODULE)
+        if isinstance(op, opcoder.LookupFromModule):
+            self.bytecode.add_byte(LOOKUP_FROM_MODULE)
             self.write_path(op.compiled_path)
+            self.bytecode.add_uint16(op.indeks)
             return
 
         simple_things = [
@@ -276,7 +275,7 @@ class _BytecodeWriter:
     # this can be used to write either one of the two import sections
     def write_import_section(self, paths):
         self.bytecode.add_byte(IMPORT_SECTION)
-        self.bytecode.add_uint32(len(paths))
+        self.bytecode.add_uint16(len(paths))
         for path in paths:
             self.write_path(path)
 
@@ -300,11 +299,12 @@ class _BytecodeWriter:
 
 # structure of a bytecode file:
 #   1.  the bytes b'asda'
-#   2.  the actual bytecode
-#   3.  list of imports, source file paths, for the compiler
-#   4.  list of exports, names and types, for the compiler
-#   5.  number of bytes in parts 1, 2 and 3, as an uint32
-#       the compiler uses this to efficiently read exports and imports
+#   2.  first import section: compiled file paths for the interpreter
+#   3.  opcode
+#   4.  list of imports, source file paths, for the compiler
+#   5.  list of exports, names and types, for the compiler
+#   6.  number of bytes before part 4, as an uint32.
+#       The compiler uses this to efficiently read imports and exports.
 #
 # all paths are relative to the bytecode file's directory and have '/' as
 # the separator
@@ -313,14 +313,16 @@ def create_bytecode(compilation, opcode):
     output.byte_array.extend(b'asda')
 
     writer = _BytecodeWriter(output, compilation)
+    writer.write_import_section(
+        [impcomp.compiled_path for impcomp in compilation.imports])
 
     # the built-in varlist is None because all builtins are implemented
     # as ArgMarkers, so they don't need a varlist
     writer.run(opcode, [None])
 
     writer.write_end_import_export_sections(
-        [import_compilation.source_path
-         for import_compilation in compilation.imports], compilation.exports)
+        [impcomp.source_path for impcomp in compilation.imports],
+        compilation.exports)
     return output.byte_array
 
 
@@ -338,7 +340,6 @@ class RecompileFixableError(Exception):
         return '%s (%r)' % (self.message, self.compilation)
 
 
-# can't read anything, but can read the exports section
 class _BytecodeReader:
 
     def __init__(self, compilation, file):
@@ -363,6 +364,7 @@ class _BytecodeReader:
         return result
 
     read_uint8 = functools.partialmethod(_read_uint, 8)
+    read_uint16 = functools.partialmethod(_read_uint, 16)
     read_uint32 = functools.partialmethod(_read_uint, 32)
 
     def read_string(self):
@@ -421,7 +423,7 @@ class _BytecodeReader:
                 "the file doesn't seem to have a valid second import section")
 
         result = []
-        how_many = self.read_uint32()
+        how_many = self.read_uint16()
         for junk in range(how_many):
             result.append(self.read_path())
         return result

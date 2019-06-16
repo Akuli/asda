@@ -1,7 +1,4 @@
-Before import
 Export example is running
-After import
-After second import
-
-exporter.hello is: Hello World!
+Subdir file is running
+exporter::hello is: Hello World!
 This is the message: Hi

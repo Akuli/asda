@@ -87,30 +87,6 @@ class GeneratorType(Type):
         self.itemtype = itemtype
 
 
-# not all ModuleTypes are usable, only loaded ones are
-#
-# this is because modules are loaded when they are first imported, not when the
-# bytecode file containing the module is loaded, that allows doing more magic
-class ModuleType(Type):
-
-    def __init__(self, compiled_path):
-        super().__init__(OBJECT)
-        self._attributes = None
-        self.compiled_path = compiled_path
-
-    # this is not really needed, it's just for debuggability
-    def get_attribute(self, *args, **kwargs):
-        assert self.loaded
-        return super().get_attribute(*args, **kwargs)
-
-    def load(self, exported_objects):
-        self._attributes = [(False, objekt) for objekt in exported_objects]
-
-    @property
-    def loaded(self):
-        return (self._attributes is not None)
-
-
 class String(Object):
 
     def __init__(self, python_string):

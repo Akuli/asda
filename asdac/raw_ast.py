@@ -25,7 +25,7 @@ StrJoin = _astclass('StrJoin', ['parts'])
 # Let's generics is a list of (name, location) tuples, or None
 Let = _astclass('Let', ['varname', 'generics', 'value', 'export'])
 SetVar = _astclass('SetVar', ['varname', 'value'])
-GetVar = _astclass('GetVar', ['varname', 'generics'])
+GetVar = _astclass('GetVar', ['module_path', 'varname', 'generics'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
 # GetType's generics is a list of other GetTypes, or None
 GetType = _astclass('GetType', ['name', 'generics'])
@@ -38,7 +38,6 @@ VoidStatement = _astclass('VoidStatement', [])
 If = _astclass('If', ['ifs', 'else_body'])
 While = _astclass('While', ['condition', 'body'])
 For = _astclass('For', ['init', 'cond', 'incr', 'body'])
-Import = _astclass('Import', ['source_path', 'varname'])
 PrefixOperator = _astclass('PrefixOperator', ['operator', 'expression'])
 BinaryOperator = _astclass('BinaryOperator', ['operator', 'lhs', 'rhs'])
 TernaryOperator = _astclass('TernaryOperator', ['operator', 'lhs', 'mid',
@@ -126,10 +125,13 @@ def _find_adjacent_items(the_list, key):
 
 class _AsdaParser:
 
-    def __init__(self, compilation, token_generator):
+    def __init__(self, compilation, token_generator, import_paths):
+        # order matters, because modules may have import time side-effects (ew)
+        assert isinstance(import_paths, collections.OrderedDict)
+
         self.compilation = compilation
         self.tokens = _TokenIterator(token_generator)
-        self.import_paths = []
+        self.import_paths = import_paths
 
     def _handle_string_literal(self, string, location, allow_curly_braces):
         assert len(string) >= 2 and string[0] == '"' and string[-1] == '"'
@@ -152,7 +154,9 @@ class _AsdaParser:
                     part_location.compilation, value,
                     initial_offset=part_location.offset)
 
-                parser = _AsdaParser(self.compilation, tokens)
+                parser = _AsdaParser(
+                    self.compilation, tokens, self.import_paths)
+
                 if parser.tokens.eof():
                     raise common.CompileError(
                         "you must put some code between { and }",
@@ -239,7 +243,8 @@ class _AsdaParser:
             # expressions
             return True
 
-        if self.tokens.peek().type in {'INTEGER', 'STRING', 'ID'}:
+        if self.tokens.peek().type in {'INTEGER', 'STRING', 'ID',
+                                       'MODULEFUL_ID'}:
             return True
 
         return False
@@ -319,7 +324,7 @@ class _AsdaParser:
                 return parts[0]._replace(location=token.location)
             return StrJoin(token.location, parts)
 
-        if self.tokens.peek().type == 'ID':
+        if self.tokens.peek().type in {'ID', 'MODULEFUL_ID'}:
             token = self.tokens.next_token()
 
             # it's easier to do this here than to do it later
@@ -331,7 +336,18 @@ class _AsdaParser:
                 generics = None
                 location = token.location
 
-            return GetVar(location, token.value, generics)
+            if token.type == 'MODULEFUL_ID':
+                module, name = token.value.split('::')
+                try:
+                    module_path = self.import_paths[module]
+                except KeyError as e:
+                    raise common.CompileError(
+                        "nothing has been imported as %s" % module) from e
+            else:
+                module_path = None
+                name = token.value
+
+            return GetVar(location, module_path, name, generics)
 
         raise common.CompileError(
             "invalid syntax", self.tokens.next_token().location)
@@ -366,7 +382,7 @@ class _AsdaParser:
                 calls.append(rhs)
                 rhs = rhs.function
 
-            if not isinstance(rhs, GetVar):
+            if (not isinstance(rhs, GetVar)) or rhs.module_path is not None:
                 raise common.CompileError("invalid attribute", rhs.location)
 
             # expression.location is the location of '.'
@@ -573,6 +589,26 @@ class _AsdaParser:
             return let._replace(export=True)
 
         if self.tokens.peek().value == 'import':
+            raise common.CompileError(
+                "cannot import here, only at beginning of file",
+                self.tokens.peek().location)
+
+        result = self.parse_expression(it_should_be=it_should_be)
+
+        if self.tokens.eof() or self.tokens.peek().value != '=':
+            return result
+
+        if not isinstance(result, GetVar):
+            raise common.CompileError(
+                "invalid assignment", self.tokens.peek().location)
+        assert result.module_path is None, "can't assign to other modules yet"
+
+        equal_sign = self.tokens.next_token()
+        value = self.parse_expression()
+        return SetVar(equal_sign.location, result.varname, value)
+
+    def parse_imports(self):
+        while (not self.tokens.eof()) and self.tokens.peek().value == 'import':
             import_token = self.tokens.next_token()
 
             string_token = self.tokens.next_token()
@@ -587,7 +623,6 @@ class _AsdaParser:
 
             relative2 = self.compilation.source_path.parent
             import_path = relative2 / import_path_string.replace('/', os.sep)
-            self.import_paths.append(import_path)
 
             as_ = self.tokens.next_token()
             if as_.value != 'as':
@@ -596,23 +631,20 @@ class _AsdaParser:
             varname_token = self.tokens.next_token()
             if varname_token.type != 'ID':
                 raise common.CompileError(
-                    "should be a variable name", varname_token.location)
+                    "should be a valid module identifier name",
+                    varname_token.location)
 
-            return Import(import_token.location, import_path,
-                          varname_token.value)
+            if varname_token.value in self.import_paths:
+                raise common.CompileError(
+                    "there are multiple imports like 'import something as %s'"
+                    % varname_token.value,
+                    varname_token.location)
 
-        result = self.parse_expression(it_should_be=it_should_be)
+            newline = self.tokens.next_token()
+            if newline.type != 'NEWLINE':
+                raise common.CompileError("should be a newline character")
 
-        if self.tokens.eof() or self.tokens.peek().value != '=':
-            return result
-
-        if not isinstance(result, GetVar):
-            raise common.CompileError(
-                "invalid assignment", self.tokens.peek().location)
-
-        equal_sign = self.tokens.next_token()
-        value = self.parse_expression()
-        return SetVar(equal_sign.location, result.varname, value)
+            self.import_paths[varname_token.value] = import_path
 
     def consume_semicolon_token(self):
         token = self.tokens.next_token()
@@ -688,6 +720,8 @@ class _AsdaParser:
 
 
 def parse(compilation, code):
-    parser = _AsdaParser(compilation, tokenizer.tokenize(compilation, code))
+    parser = _AsdaParser(compilation, tokenizer.tokenize(compilation, code),
+                         collections.OrderedDict())
+    parser.parse_imports()
     statements = list(parser.parse_statements())    # must not be lazy iterator
-    return (statements, parser.import_paths)
+    return (statements, list(parser.import_paths.values()))

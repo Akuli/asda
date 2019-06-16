@@ -1,12 +1,7 @@
-print("Before import")
+# this doesn't actually run export.asda twice
 import "export.asda" as exporter
-print("After import")
-
-# the module is cached, this doesn't actually run export.asda again:
 import "export.asda" as exporter2
-print("After second import")
+import "subdir/export.asda" as exporter3
 
-print("")
-
-print("exporter.hello is: {exporter.hello}")
-exporter.print_message("Hi")
+print("exporter::hello is: {exporter::hello}")
+exporter::print_message("Hi")

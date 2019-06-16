@@ -1,11 +1,10 @@
 import functools
 import itertools
-import pathlib
 
 from asdac import raw_ast
 from asdac.raw_ast import (For, FuncCall, GetAttr, Integer, If,
                            GetType, GetVar, Let, SetVar, String)
-from asdac.common import Compilation, CompileError, Location, Messager
+from asdac.common import CompileError, Location
 
 import pytest
 
@@ -13,6 +12,7 @@ import pytest
 class Any:
     def __repr__(self):
         return 'Any()'
+
     def __eq__(self, other):
         return True
 
@@ -120,6 +120,7 @@ def test_generics(compiler):
         location=Location(Any(), 0, 38),
         function=GetVar(
             location=Location(Any(), 0, 35),
+            module_path=None,
             varname='magic_function',
             generics=[
                 GetType(
@@ -142,6 +143,7 @@ def test_generics(compiler):
         ),
         args=[
             GetVar(
+                module_path=None,
                 location=Location(Any(), 36, 1),
                 varname='x',
                 generics=None,
@@ -189,6 +191,7 @@ def test_for(compiler):
             varname='x',
             generics=None,
             value=GetVar(
+                module_path=None,
                 location=Location(Any(), 12, 1),
                 varname='a',
                 generics=None,
@@ -196,6 +199,7 @@ def test_for(compiler):
             export=False,
         ),
         cond=GetVar(
+            module_path=None,
             location=Location(Any(), 15, 1),
             varname='b',
             generics=None,
@@ -204,6 +208,7 @@ def test_for(compiler):
             location=Location(Any(), 20, 1),
             varname='x',
             value=GetVar(
+                module_path=None,
                 location=Location(Any(), 22, 1),
                 varname='c',
                 generics=None,
@@ -213,12 +218,14 @@ def test_for(compiler):
             FuncCall(
                 location=Location(Any(), 29, 8),
                 function=GetVar(
+                    module_path=None,
                     location=Location(Any(), 29, 5),
                     varname='print',
                     generics=None,
                 ),
                 args=[
                     GetVar(
+                        module_path=None,
                         location=Location(Any(), 35, 1),
                         varname='x',
                         generics=None,
@@ -278,8 +285,8 @@ def test_let_errors(compiler):
 def test_import_errors(compiler):
     compiler.doesnt_raw_parse('import x as y', "should be a string", 'x')
     compiler.doesnt_raw_parse('import "x" if y', "should be 'as'", 'if')
-    compiler.doesnt_raw_parse('import "x" as if', "should be a variable name",
-                              'if')
+    compiler.doesnt_raw_parse('import "x" as if',
+                              "should be a valid module identifier name", 'if')
 
 
 def test_for_semicolon_error(compiler):
@@ -299,13 +306,15 @@ def test_if_elif_else(compiler):
                 + int(got_else) * 'else:\n    wat'
             )
 
-            ifs = [(GetVar(Any(), 'x', None), [GetVar(Any(), 'xx', None)])]
+            ifs = [(GetVar(Any(), None, 'x', None),
+                    [GetVar(Any(), None, 'xx', None)])]
             for e in elifs:
                 ifs.append(
-                    (GetVar(Any(), e, None), [GetVar(Any(), e+e, None)]))
+                    (GetVar(Any(), None, e, None),
+                     [GetVar(Any(), None, e+e, None)]))
 
             if got_else:
-                els = [GetVar(Any(), 'wat', None)]
+                els = [GetVar(Any(), None, 'wat', None)]
             else:
                 els = []
 

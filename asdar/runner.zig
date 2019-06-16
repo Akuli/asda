@@ -103,8 +103,12 @@ const Runner = struct {
                         try objects.function.callVoid(self.interp, func, args);
                     }
 
-                    // nothing went wrong, have to decref all the things
-                    // otherwise they are left in the stack and destroy() decrefs
+                    // this must be here because args may be freed after shrink
+                    for (args) |arg| {
+                        arg.decref();
+                    }
+                    func.decref();
+
                     if (calldata.returning) {
                         // n: number of things in the stack initially
                         // -calldata.nargs: arguments popped from stack
@@ -115,11 +119,6 @@ const Runner = struct {
                         // same as above but with no return value pushed
                         self.stack.shrink(n - calldata.nargs - 1);
                     }
-
-                    for (args) |arg| {
-                        arg.decref();
-                    }
-                    func.decref();
                 },
                 bcreader.Op.Data.Constant => |obj| {
                     try self.stack.append(obj);
@@ -153,6 +152,14 @@ const Runner = struct {
                     obj.decref();
                     self.stack.set(last, new);
                 },
+                bcreader.Op.Data.LookupFromModule => |lookup| {
+                    const obj = lookup.array[lookup.index];
+                    if (obj == null) {
+                        std.debug.panic("value of exported variable wasn't set");
+                    }
+                    try self.stack.append(obj.?);
+                    obj.?.incref();
+                },
                 bcreader.Op.Data.StrJoin => |n| {
                     const index = self.stack.count() - n;
                     const joined = try objects.string.join(self.interp, self.stack.toSliceConst()[index..]);
@@ -161,11 +168,6 @@ const Runner = struct {
                     }
                     self.stack.set(index, joined);
                     self.stack.shrink(index+1);
-                },
-                bcreader.Op.Data.ImportModule => |path| {
-                    const mod = try self.interp.loadModule(path);
-                    errdefer mod.decref();
-                    try self.stack.append(mod);
                 },
                 bcreader.Op.Data.PrefixMinus => {
                     const ptr = &self.stack.toSlice()[self.stack.count() - 1];

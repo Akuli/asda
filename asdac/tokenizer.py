@@ -1,5 +1,4 @@
 import collections
-import contextlib
 
 import more_itertools
 import regex
@@ -8,11 +7,13 @@ from . import common, string_parser
 
 
 _LETTER_REGEX = r'\p{Lu}|\p{Ll}|\p{Lo}'    # not available in stdlib re module
+_ID_REGEX = r'(?:%s|_)(?:%s|[0-9_])*' % (_LETTER_REGEX, _LETTER_REGEX)
 
 _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
     ('OPERATOR', r'==|!=|->|[+\-*=`;:.,\[\]()]'),
     ('INTEGER', r'[1-9][0-9]*|0'),
-    ('ID', r'(?:%s|_)(?:%s|[0-9_])*' % (_LETTER_REGEX, _LETTER_REGEX)),
+    ('MODULEFUL_ID', r'%s::%s' % (_ID_REGEX, _ID_REGEX)),
+    ('ID', _ID_REGEX),
     ('STRING', '"' + string_parser.CONTENT_REGEX + '"'),
     ('IGNORE_BLANK_LINE', r'(?<=\n|^) *(?:#.*)?\n'),
     ('NEWLINE', r'\n'),

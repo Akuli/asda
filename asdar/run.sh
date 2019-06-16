@@ -1,12 +1,13 @@
 #!/bin/bash
-set -e
+set -ex
 
 # usage:
 #   ./run.sh                    runs all examples
 #   ./run.sh examples/hello     runs examples/hello.asda
 
-#echo "running zig build..."
-#zig build
+( cd .. && python3 -m asdac --always-recompile examples/*.asda )
+rm -rf zig-cache
+zig build run -Dfile=../asda-compiled/examples/hello.asdac
 
 ok=0
 fail=0
@@ -14,13 +15,8 @@ fail=0
 run()
 {
     local name=$1
-    echo ""
-    echo "*** $name ***"
-    echo ""
-
-    ( cd .. && python3 -m asdac "$name.asda" )
     set +e
-    if zig-cache/asdar "../asda-compiled/$name.asdac"; then
+    if valgrind zig-cache/o/*/asdar "../asda-compiled/$name.asdac"; then
         ((ok++))
     else
         ((fail++))
@@ -41,6 +37,7 @@ else
     done
 fi
 
+set +x
 echo ""
 echo "==================="
 echo "ran $((ok+fail)) files: $ok ok, $fail failed"

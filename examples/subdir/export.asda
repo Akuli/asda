@@ -1,0 +1,3 @@
+# this file is named export.asda, but it doesn't conflict with the other
+# export.asda (in parent directory)
+print("Subdir file is running")

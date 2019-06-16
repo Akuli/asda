@@ -32,7 +32,9 @@ def source2bytecode(compilation: common.Compilation):
     compilation.messager(3, "Parsing...")
     raw, imports = raw_ast.parse(compilation, source)
     import_compilation_dict = yield imports
-    compilation.set_imports(list(import_compilation_dict.values()))
+    assert import_compilation_dict.keys() == set(imports)
+    compilation.set_imports([
+        import_compilation_dict[path] for path in imports])
 
     # TODO: better message for cooking?
     compilation.messager(3, "Processing the parsed AST...")
@@ -163,8 +165,10 @@ class CompileManager:
         depends_on = next(generator)
         self._compile_imports(compilation, depends_on)
 
-        generator.send({path: self.source_path_2_compilation[path]
-                        for path in depends_on})
+        generator.send({
+            path: self.source_path_2_compilation[path]
+            for path in depends_on
+        })
         self.something_was_compiled = True
 
 

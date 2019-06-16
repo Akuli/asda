@@ -18,6 +18,7 @@ pub const Data = struct {
     interp: *Interp,
     local_vars: []?*Object,
     parent_scopes: []*Object,    // micro-optimization, see getForLevel
+    owns_local_vars: bool,
 
     fn initGlobal(interp: *Interp) !Data {
         const locals = try std.mem.dupe(interp.object_allocator, ?*Object, builtins.object_array[0..]);
@@ -32,6 +33,7 @@ pub const Data = struct {
             .interp = interp,
             .local_vars = locals,
             .parent_scopes = scopes,
+            .owns_local_vars = true,
         };
     }
 
@@ -56,14 +58,17 @@ pub const Data = struct {
             .interp = parentdata.interp,
             .local_vars = locals,
             .parent_scopes = parents,
+            .owns_local_vars = true,
         };
     }
 
     pub fn destroy(self: Data, decref_refs: bool, free_nonrefs: bool) void {
         if (decref_refs) {
-            for (self.local_vars) |obj| {
-                if (obj != null) {
-                    obj.?.decref();
+            if (self.owns_local_vars) {
+                for (self.local_vars) |obj| {
+                    if (obj != null) {
+                        obj.?.decref();
+                    }
                 }
             }
             for (self.parent_scopes) |obj| {
@@ -71,7 +76,9 @@ pub const Data = struct {
             }
         }
         if (free_nonrefs) {
-            self.interp.object_allocator.free(self.local_vars);
+            if (self.owns_local_vars) {
+                self.interp.object_allocator.free(self.local_vars);
+            }
             self.interp.object_allocator.free(self.parent_scopes);
         }
     }
@@ -107,6 +114,13 @@ pub fn getForLevel(scope: *Object, level: u16) *Object {
 }
 
 pub fn getLocalVars(scope: *Object) []?*Object {
+    return scope.data.ScopeData.local_vars;
+}
+
+// to destroy the return value, decref items and free the array with the object allocator
+pub fn getLocalVarsOwned(scope: *Object) []?*Object {
+    std.debug.assert(scope.data.ScopeData.owns_local_vars);
+    scope.data.ScopeData.owns_local_vars = false;
     return scope.data.ScopeData.local_vars;
 }
 

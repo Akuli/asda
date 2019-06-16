@@ -13,6 +13,7 @@ StrJoin = _astclass('StrJoin', ['parts'])  # there are always >=2 parts
 IntConstant = _astclass('IntConstant', ['python_int'])
 SetVar = _astclass('SetVar', ['varname', 'level', 'value'])
 LookupVar = _astclass('LookupVar', ['varname', 'level'])
+LookupFromModule = _astclass('LookupFromModule', ['compilation', 'name'])
 LookupAttr = _astclass('LookupAttr', ['obj', 'attrname'])
 LookupGenericFunction = _astclass('LookupGenericFunction',
                                   ['funcname', 'types', 'level'])
@@ -103,6 +104,7 @@ class _Chef:
         if parent_chef is None:
             self.level = 0
             self.import_compilations = None
+            self.import_name_mapping = None
 
             # these are ChainMaps to make any_chef.vars.maps[0] always work
             self.vars = collections.ChainMap(objects.BUILTIN_VARS)
@@ -113,7 +115,15 @@ class _Chef:
                 objects.BUILTIN_GENERIC_TYPES)
         else:
             self.level = parent_chef.level + 1
-            self.import_compilations = parent_chef.import_compilations   # wut?
+
+            # keys are paths, values are Compilation objects
+            self.import_compilations = parent_chef.import_compilations
+
+            # keys are names from import statements, values are paths
+            if parent_chef.import_name_mapping is None:
+                self.import_name_mapping = {}
+            else:
+                self.import_name_mapping = parent_chef.import_name_mapping
 
             self.vars = _create_chainmap(parent_chef.vars)
             self.types = _create_chainmap(parent_chef.types)
@@ -167,7 +177,6 @@ class _Chef:
         return CallFunction(raw_func_call.location, function.type.returntype,
                             function, args)
 
-    # get_chef_for_blah()s are kinda copy/pasta but not tooo bad imo
     def get_chef_for_varname(self, varname, is_generic, error_location):
         chef = self
         while chef is not None:
@@ -220,20 +229,39 @@ class _Chef:
             return self.cook_function_definition(raw_expression)
 
         if isinstance(raw_expression, raw_ast.GetVar):
-            chef = self.get_chef_for_varname(
-                raw_expression.varname, (raw_expression.generics is not None),
-                raw_expression.location)
-
-            if raw_expression.generics is None:
-                tybe = chef.vars[raw_expression.varname]
-            else:
-                tybe = chef.generic_vars[raw_expression.varname].get_real_type(
-                    list(map(self.cook_type, raw_expression.generics)),
+            if raw_expression.module_path is None:
+                chef = self.get_chef_for_varname(
+                    raw_expression.varname,
+                    (raw_expression.generics is not None),
                     raw_expression.location)
 
-            return LookupVar(
+                if raw_expression.generics is None:
+                    tybe = chef.vars[raw_expression.varname]
+                else:
+                    name = raw_expression.varname   # pep8 line length
+                    tybe = chef.generic_vars[name].get_real_type(
+                        list(map(self.cook_type, raw_expression.generics)),
+                        raw_expression.location)
+
+                return LookupVar(
+                    raw_expression.location, tybe,
+                    raw_expression.varname, chef.level)
+
+            assert raw_expression.generics is None, (
+                "sorry, import and generics don't work together yet")
+            compilation = self.import_compilations[raw_expression.module_path]
+
+            try:
+                tybe = compilation.exports[raw_expression.varname]
+            except KeyError:
+                raise common.CompileError(
+                    "\"%s\" doesn't export anything called '%s'",
+                    common.path_string(raw_expression.module_path),
+                    raw_expression.varname)
+
+            return LookupFromModule(
                 raw_expression.location, tybe,
-                raw_expression.varname, chef.level)
+                compilation, raw_expression.varname)
 
         if isinstance(raw_expression, raw_ast.StrJoin):
             return StrJoin(
@@ -531,14 +559,6 @@ class _Chef:
             raise common.CompileError(
                 "export cannot be used in a function", location)
 
-    def cook_import(self, raw: raw_ast.Import):
-        self._check_name_not_exist(raw.varname, raw.location)
-        module_type = objects.ModuleType(
-            self.import_compilations[raw.source_path])
-        self.vars[raw.varname] = module_type
-        module = LookupModule(raw.location, module_type)
-        return CreateLocalVar(raw.location, None, raw.varname, module)
-
     # note that this returns None for a void statement, cook_body() handles it
     def cook_statement(self, raw_statement):
         if isinstance(raw_statement, raw_ast.Let):
@@ -559,8 +579,6 @@ class _Chef:
             return self.cook_while(raw_statement)
         if isinstance(raw_statement, raw_ast.For):
             return self.cook_for(raw_statement)
-        if isinstance(raw_statement, raw_ast.Import):
-            return self.cook_import(raw_statement)
 
         assert False, raw_statement     # pragma: no cover
 
