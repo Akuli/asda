@@ -331,7 +331,7 @@ pub const BytecodeReader = struct {
     }
 
     pub fn readCodePart(self: *BytecodeReader) !Code {
-        const code = self.readBody();
+        const code = try self.readBody();
         errdefer code.destroy(true, true);
 
         const byte = try self.in.readByte();    // TODO: handle eof?

@@ -87,7 +87,7 @@ pub const Interp = struct {
             errorinfo.path = nice_path;
         }
 
-        const code = try reader.readBody();
+        const code = try reader.readCodePart();
         defer code.destroy(true, true);
 
         const scope = try objects.scope.createSub(self.global_scope, code.nlocalvars);
