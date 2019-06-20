@@ -43,6 +43,15 @@ struct Object *stringobj_new(struct Interp *interp, const uint32_t *val, size_t 
 	return stringobj_new_nocpy(interp, valcp, len);
 }
 
+struct Object *stringobj_newfromutf8(struct Interp *interp, const char *utf, size_t utflen)
+{
+	uint32_t *uni;
+	size_t unilen;
+	if (!utf8_decode(interp, utf, utflen, &uni, &unilen))
+		return NULL;
+	return stringobj_new_nocpy(interp, uni, unilen);
+}
+
 
 // TODO: add methods
 static const struct Type stringobj_type_value = { .attribs = NULL, .nattribs = 0 };

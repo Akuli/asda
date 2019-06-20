@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "path.h"
+#include "objects/string.h"
 
 #define IMPORT_SECTION 'i'
 #define SET_LINENO 'L'
@@ -199,6 +200,20 @@ static bool read_body(struct BcReader *bcr, struct Bc *bc)
 			goto error;
 
 		switch(ob) {
+
+		case STR_CONSTANT:
+		{
+			char *str;
+			uint32_t len;
+			if (!read_string(bcr, &str, &len))
+				goto error;
+
+			struct Object *obj = stringobj_newfromutf8(bcr->interp, str, len);
+			free(str);
+			printf("here have obj %p\n", (void*)obj);
+			break;
+		}
+
 		default:
 			sprintf(bcr->interp->errstr, "unknown op byte: %#x", (int)ob);
 			if (is_printable_ascii(ob))
