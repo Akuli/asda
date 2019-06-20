@@ -7,3 +7,5 @@ env/
 
 zig-cache
 asdar/asda
+asdarc/asdar
+asdarc/obj/
