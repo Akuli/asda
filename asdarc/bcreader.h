@@ -1,0 +1,39 @@
+// bc reader
+
+#ifndef BCREADER_H
+#define BCREADER_H
+
+#include <stdint.h>
+#include <stdio.h>
+#include "bc.h"
+#include "interp.h"
+#include "objtyp.h"
+
+
+struct BcReader {
+	struct Interp *interp;
+	FILE *in;
+	const char *indirname;
+	uint32_t lineno;
+};
+
+// never fails
+struct BcReader bcreader_new(struct Interp *interp, FILE *in, const char *indirname);
+
+// on failure, these functions:
+//   - return false
+//   - write a string to errstr
+//   - possibly set errno
+
+bool bcreader_readasdabytes(struct BcReader *bcr);
+
+// puts a mallocced array of mallocced strings to paths
+// sets paths to NULL and npaths to 0 on error
+bool bcreader_readimports(struct BcReader *bcr, char ***paths, uint16_t *npaths);
+void bcreader_freeimports(char **paths, uint16_t npaths);
+
+// if this succeeds (returns true), the res should be bc_destroy()ed
+bool bcreader_readcodepart(struct BcReader *bcr, struct Bc *res);
+
+
+#endif   // BCREADER_H
