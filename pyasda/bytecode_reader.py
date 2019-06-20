@@ -57,6 +57,7 @@ class _BytecodeReader:
         self.file = file
         self._push_buffer = bytearray()
         self._lineno = 1
+        self._imports = None
 
     # errors on unexpected eof
     def _read(self, size):
@@ -143,6 +144,7 @@ class _BytecodeReader:
         for lel in range(how_many):
             result.append(self.read_path())
 
+        self._imports = result
         return result
 
     def read_body(self):
@@ -184,7 +186,7 @@ class _BytecodeReader:
             elif magic == LOOKUP_ATTRIBUTE:
                 args = (self.read_type(), self.read_uint16())
             elif magic == LOOKUP_FROM_MODULE:
-                args = (self.read_path(), self.read_uint16())
+                args = (self._imports[self.read_uint16()], self.read_uint16())
             elif magic == CREATE_FUNCTION:
                 self._unread(magic[0])
                 tybe = self.read_type()
