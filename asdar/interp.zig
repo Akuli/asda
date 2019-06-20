@@ -14,6 +14,23 @@ pub const ImportErrorInfo = struct {
     path: ?[]const u8,
 };
 
+pub const Module = struct {
+    code: bcreader.Code,
+
+    // currently this contains all local variables, but it works because the exports are first
+    export_vars: []?*Object,
+
+    fn destroy(self: Module, interp: *const Interp) void {
+        for (self.export_vars) |objopt| {
+            if (objopt) |obj| {
+                obj.decref();
+            }
+        }
+        interp.object_allocator.free(self.export_vars);
+        self.code.destroy(true, true);
+    }
+};
+
 pub const Interp = struct {
     // should be used for most allocations that can be initiated by the code being ran
     // e.g. when the user wants to create new objects
@@ -27,7 +44,7 @@ pub const Interp = struct {
 
     import_arena: std.heap.ArenaAllocator,
     pub gc: GC,
-    pub modules: std.AutoHashMap([]const u8, []?*Object),   // use misc.normcasePath for all the keys
+    pub modules: std.AutoHashMap([]const u8, Module),   // use misc.normcasePath for all the keys
     pub global_scope: *Object,
 
     pub fn init(self: *Interp) !void {
@@ -36,17 +53,12 @@ pub const Interp = struct {
         self.import_arena_allocator = &self.import_arena.allocator;
         self.gc = GC.init(self);
         self.global_scope = try objects.scope.createGlobal(self);
-        self.modules = std.AutoHashMap([]const u8, []?*Object).init(self.import_arena_allocator);
+        self.modules = std.AutoHashMap([]const u8, Module).init(self.import_arena_allocator);
     }
 
     pub fn deinit(self: *Interp) void {
         while (self.modules.iterator().next()) |kv| {        // TODO: optimize this
-            for (kv.value) |objopt| {
-                if (objopt) |obj| {
-                    obj.decref();
-                }
-            }
-            self.object_allocator.free(kv.value);
+            kv.value.destroy(self);
             _ = self.modules.remove(kv.key);
         }
         self.modules.deinit();
@@ -88,7 +100,7 @@ pub const Interp = struct {
         }
 
         const code = try reader.readCodePart();
-        defer code.destroy(true, true);
+        errdefer code.destroy(true, true);
 
         const scope = try objects.scope.createSub(self.global_scope, code.nlocalvars);
         defer scope.decref();   // TODO: check that functions hold reference to their globals when needed
@@ -97,7 +109,10 @@ pub const Interp = struct {
 
         // not all local vars are exported, but this works anyway because the exported vars are first
         const exported_vars_and_stuff = objects.scope.getLocalVarsOwned(scope);
-        const already_there = try self.modules.put(nice_path, exported_vars_and_stuff);
+        const already_there = try self.modules.put(nice_path, Module{
+            .code = code,
+            .export_vars = exported_vars_and_stuff,
+        });
         std.debug.assert(already_there == null);
     }
 };

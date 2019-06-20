@@ -119,6 +119,7 @@ pub const BytecodeReader = struct {
     inpath_dirname: []const u8,
     lineno: u32,
     errorByte: *?u8,
+    import_paths: ?[][]u8,
 
     pub fn init(interp: *Interp, inpath: []const u8, in: *StreamType, errorByte: *?u8) BytecodeReader {
         return BytecodeReader{
@@ -127,6 +128,7 @@ pub const BytecodeReader = struct {
             .in = in,
             .lineno = 1,
             .errorByte = errorByte,
+            .import_paths = null,
         };
     }
 
@@ -207,8 +209,10 @@ pub const BytecodeReader = struct {
         const npaths = try self.in.readIntLittle(u16);
         const paths = try self.interp.import_arena_allocator.alloc([]u8, npaths);
         for (paths) |*ptr| {
+            // normcased to make the paths valid keys for interp.modules
             ptr.* = try self.readPath(true);
         }
+        self.import_paths = paths;
         return paths;
     }
 
@@ -307,12 +311,11 @@ pub const BytecodeReader = struct {
                     break :blk Op.Data{ .LookupAttribute = Op.LookupAttributeData{ .typ = typ, .index = i }};
                 },
                 LOOKUP_FROM_MODULE => blk: {
-                    const path = try self.readPath(true);
+                    const path = self.import_paths.?[try self.in.readIntLittle(u16)];
                     const i = try self.in.readIntLittle(u16);
 
-                    // the compiler lowercases the path, so it is already a valid key for modules
-                    const arr = self.interp.modules.get(path).?.value;
-                    break :blk Op.Data{ .LookupFromModule = Op.LookupFromModuleData{ .array = arr, .index = i }};
+                    const mod = self.interp.modules.get(path).?.value;
+                    break :blk Op.Data{ .LookupFromModule = Op.LookupFromModuleData{ .array = mod.export_vars, .index = i }};
                 },
                 else => {
                     self.errorByte.* = opbyte;

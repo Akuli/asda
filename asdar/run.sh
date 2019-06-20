@@ -16,7 +16,7 @@ run()
 {
     local name=$1
     set +e
-    if valgrind zig-cache/o/*/asdar "../asda-compiled/$name.asdac"; then
+    if zig-cache/o/*/asdar "../asda-compiled/$name.asdac"; then
         ((ok++))
     else
         ((fail++))

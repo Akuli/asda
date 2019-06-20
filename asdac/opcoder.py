@@ -32,7 +32,7 @@ CreateFunction = _op_class('CreateFunction', [
     'functype', 'yields', 'body_opcode'])
 LookupVar = _op_class('LookupVar', ['level', 'var'])
 # tuples have an index() method, avoid name clash with misspelling
-LookupFromModule = _op_class('LookupFromModule', ['compiled_path', 'indeks'])
+LookupFromModule = _op_class('LookupFromModule', ['compilation', 'indeks'])
 LookupAttribute = _op_class('LookupAttribute', ['type', 'indeks'])
 SetVar = _op_class('SetVar', ['level', 'var'])
 CallFunction = _op_class('CallFunction', ['nargs', 'returns_a_value'])
@@ -208,7 +208,7 @@ class _OpCoder:
             exported_names = list(expression.compilation.exports.keys())
             self.output.ops.append(LookupFromModule(
                 self._lineno(expression.location),
-                expression.compilation.compiled_path,
+                expression.compilation,
                 exported_names.index(expression.name)))
 
         elif isinstance(expression, cooked_ast.LookupAttr):

@@ -233,7 +233,7 @@ pub const AsdaFunctionState = struct {
     definition_scope: *Object,
 
     pub fn destroy(self: AsdaFunctionState, decref_refs: bool, free_nonrefs: bool) void {
-        // doesn't destroy the code because that's allocated with interp.import_allocator
+        // doesn't destroy the code because that's a part of a module's code
         if (decref_refs) {
             self.definition_scope.decref();
         }

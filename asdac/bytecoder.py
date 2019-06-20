@@ -230,7 +230,8 @@ class _BytecodeWriter:
 
         if isinstance(op, opcoder.LookupFromModule):
             self.bytecode.add_byte(LOOKUP_FROM_MODULE)
-            self.write_path(op.compiled_path)
+            self.bytecode.add_uint16(
+                self.compilation.imports.index(op.compilation))
             self.bytecode.add_uint16(op.indeks)
             return
 

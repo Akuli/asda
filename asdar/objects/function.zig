@@ -49,7 +49,7 @@ pub fn newComptime(zig_fn: Fn, passed_data: ?*objtyp.ObjectData) Object {
     const data = objtyp.ObjectData{ .FunctionData = Data.initComptime(zig_fn, passed_data orelse &no_data) };
     const typ = switch(zig_fn) {
         Fn.Returning => returning_type,
-        Fn.Void => returning_type,
+        Fn.Void => void_type,
     };
     return Object.initComptime(typ, data);
 }
