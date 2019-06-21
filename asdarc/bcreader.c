@@ -1,6 +1,7 @@
 #include "bcreader.h"
 #include <stdlib.h>
 #include <string.h>
+#include "bc.h"
 #include "path.h"
 #include "objects/string.h"
 
@@ -35,8 +36,8 @@ static bool read_bytes(struct BcReader *bcr, unsigned char *buf, size_t n)
 
 	if (feof(bcr->in))
 		strcpy(bcr->interp->errstr, "unexpected end of file");
-	else
-		strcpy(bcr->interp->errstr, "reading failed");
+	else   // TODO: include file name in error msg
+		interp_errstr_printf_errno(bcr->interp, "reading failed");
 	return false;
 }
 
@@ -50,15 +51,16 @@ static bool read_uint ## N (struct BcReader *bcr, uint ## N ## _t *res) \
 		return false; \
 	\
 	*res = 0; \
-	for (int i = 0; i < N/8; i++) { \
+	for (int i = 0; i < N/8; i++) \
 		*res = (uint ## N ## _t)(*res | ((uint ## N ## _t)buf[i] << (8*i))); \
-	} \
 	return true; \
 }
 
 CREATE_UINT_READER(8)
 CREATE_UINT_READER(16)
 CREATE_UINT_READER(32)
+
+#undef CREATE_UINT_READER
 
 
 static bool read_string(struct BcReader *bcr, char **str, uint32_t *len)
@@ -69,7 +71,7 @@ static bool read_string(struct BcReader *bcr, char **str, uint32_t *len)
 	// len+1 so that adding 0 byte will be easy if needed, and empty string is not a special case
 	if (!( *str = malloc((*len)+1) )) {
 		*len = 0;
-		sprintf(bcr->interp->errstr, "not enough memory for a string of %lu characters", (unsigned long)len);
+		interp_errstr_nomem(bcr->interp);
 		return false;
 	}
 	if (!read_bytes(bcr, (unsigned char*) *str, *len)) {
@@ -132,7 +134,7 @@ bool bcreader_readimports(struct BcReader *bcr, char ***paths, uint16_t *npaths)
 	if (!read_bytes(bcr, &b, 1))
 		goto error;
 	if (b != IMPORT_SECTION) {
-		sprintf(bcr->interp->errstr, "expected import section, got %#x", (int)b);
+		interp_errstr_printf(bcr->interp, "expected import section, got %#x", (int)b);
 		goto error;
 	}
 	if (!read_uint16(bcr, npaths))
@@ -144,7 +146,7 @@ bool bcreader_readimports(struct BcReader *bcr, char ***paths, uint16_t *npaths)
 
 	*paths = malloc(sizeof(char*) * *npaths);
 	if (!*paths) {
-		strcpy(bcr->interp->errstr, "not enough memory");
+		interp_errstr_nomem(bcr->interp);
 		goto error;
 	}
 
@@ -176,7 +178,7 @@ void bcreader_freeimports(char **paths, uint16_t npaths)
 }
 
 
-static bool read_opbyte(struct BcReader *bcr, struct Bc *bc, unsigned char *ob)
+static bool read_opbyte(struct BcReader *bcr, unsigned char *ob)
 {
 	if (!read_bytes(bcr, ob, 1)) return false;
 	if (*ob == SET_LINENO) {
@@ -209,7 +211,6 @@ static bool read_callfunc(struct BcReader *bcr, struct BcOp *res, enum BcOpKind 
 
 static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res)
 {
-
 	switch(opbyte) {
 	case STR_CONSTANT:
 	{
@@ -218,7 +219,7 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res
 		if (!read_string(bcr, &str, &len))
 			return false;
 
-		struct Object *obj = stringobj_newfromutf8(bcr->interp, str, len);
+		struct Object *obj = stringobj_new_utf8(bcr->interp, str, len);
 		free(str);
 		if(!obj)
 			return false;
@@ -245,45 +246,66 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res
 	}
 }
 
+// this is for a temporary linked list of BcOps
+struct Link {
+	struct BcOp op;
+	struct Link *prev;
+};
+
 static bool read_body(struct BcReader *bcr, struct Bc *bc)
 {
-	uint16_t nlocals;
-	if (!read_uint16(bcr, &nlocals))
+	if (!read_uint16(bcr, &bc->nlocalvars))
 		return false;
 
-	struct BcOp *first = NULL;
-	struct BcOp *last = NULL;
+	struct Link *last = NULL;
+	bc->nops = 0;
 
 	while(true) {
 		unsigned char ob;
-		if (!read_opbyte(bcr, bc, &ob))
+		if (!read_opbyte(bcr, &ob))
 			goto error;
 		if (ob == END_OF_BODY)
 			break;
 
 		struct BcOp val;
 		val.lineno = bcr->lineno;
-		val.next = NULL;
 		// val.kind and val.data must be set in read_op()
 
 		if (!read_op(bcr, ob, &val))
 			goto error;
 
-		if (!( last = bcop_append(bcr->interp, last) )) {
+		struct Link *lnk = malloc(sizeof *lnk);
+		if (!lnk) {
 			bcop_destroy(&val);
+			interp_errstr_nomem(bcr->interp);
 			goto error;
 		}
-		*last = val;
-		if (!first)
-			first = last;
+
+		lnk->op = val;
+		lnk->prev = last;
+		last = lnk;
+		bc->nops++;
 	}
 
-	bc->firstop = first;
-	bc->nlocalvars = nlocals;
+	if(!( bc->ops = malloc(sizeof(struct BcOp) * bc->nops) )) {
+		interp_errstr_nomem(bcr->interp);
+		goto error;
+	}
+
+	size_t i = bc->nops;
+	for (struct Link *lnk = last, *prev; lnk; lnk = prev) {
+		prev = lnk->prev;
+		bc->ops[--i] = lnk->op;
+		free(lnk);
+	}
 	return true;
 
 error:
-	bcop_destroylist(first);
+	for (struct Link *lnk = last, *prev; lnk; lnk = prev) {
+		prev = lnk->prev;
+		bcop_destroy(&lnk->op);
+		free(lnk);
+	}
 	return false;
 }
 

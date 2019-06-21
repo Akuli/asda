@@ -5,13 +5,30 @@
 #include "bc.h"
 #include "bcreader.h"
 #include "path.h"
+#include "runner.h"
+#include "objects/scope.h"
 
-const char *misc_argv0;
+static bool run(struct Interp *interp, struct Bc code)
+{
+	struct Object *scope = scopeobj_newsub(interp, interp->builtinscope, code.nlocalvars);
+	if(!scope)
+		return false;
+
+	struct Runner rnr;
+	runner_init(&rnr, interp, scope);
+	runner_free(&rnr);
+
+	OBJECT_DECREF(scope);
+	return true;
+}
 
 
 int main(int argc, char **argv)
 {
-	misc_argv0 = argv[0];
+	char **imports = NULL;
+	uint16_t nimports = 0;
+	char *dir = NULL;
+	FILE *f = NULL;
 
 	if (argc != 2) {
 		fprintf(stderr, "Usage: %s bytecodefile\n", argv[0]);
@@ -19,54 +36,51 @@ int main(int argc, char **argv)
 	}
 
 	struct Interp interp;
-	if (!interp_init(&interp, argv[0])) {
-		fprintf(stderr, "%s: not enough memory to initialize the interpreter", argv[0]);
-		return 1;
+	if (!interp_init(&interp, argv[0]))
+		goto error;
+
+	if (!( dir = path_toabsolute(argv[1]) )) {
+		interp_errstr_printf_errno(&interp,
+			"finding absolute path of \"%s\" failed", argv[1]);
+		goto error;
 	}
+	dir[path_findlastslash(dir)] = 0;
 
-	char *dir = path_toabsolute(argv[1]);
-	if (!dir) {
-		fprintf(stderr, "%s: finding absolute path of \"%s\" failed (errno %d: %s)\n",
-			argv[0], argv[1], errno, strerror(errno));
-		interp_destroy(&interp);
-		return 1;
-	}
-
-	size_t i = path_findlastslash(dir);
-	dir[i] = 0;
-
-	FILE *f = fopen(argv[1], "rb");
-	if (!f) {
+	if (!( f = fopen(argv[1], "rb") )) {
 		interp_errstr_printf_errno(&interp, "cannot open %s", argv[1]);
-		goto errstr_error;
+		goto error;
 	}
 
-	char **imports = NULL;
-	uint16_t nimports = 0;
 	struct BcReader bcr = bcreader_new(&interp, f, dir);
 	struct Bc code;
 
 	if (!bcreader_readasdabytes(&bcr))
-		goto bytecode_error;
+		goto error;
 	if (!bcreader_readimports(&bcr, &imports, &nimports))
-		goto bytecode_error;
+		goto error;
 	if (!bcreader_readcodepart(&bcr, &code))
-		goto bytecode_error;
-	bcop_destroylist(code.firstop);
-
+		goto error;
 	fclose(f);
+	f = NULL;
+
+	bool ok = run(&interp, code);
+	bc_destroy(&code);
+	if (!ok)
+		goto error;
+
 	free(dir);
 	bcreader_freeimports(imports, nimports);
+	interp_destroy(&interp);
 
 	return 0;
 
-bytecode_error:
+error:
 	if (imports)
 		bcreader_freeimports(imports, nimports);
-	fclose(f);
+	if(f)
+		fclose(f);
 	// "fall through"
 
-errstr_error:
 	fprintf(stderr, "%s: error: %s\n", argv[0], interp.errstr);
 	interp_destroy(&interp);
 	free(dir);

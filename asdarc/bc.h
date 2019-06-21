@@ -18,7 +18,8 @@ enum BcOpKind {
 
 struct BcOp;
 struct Bc {
-	struct BcOp *firstop;   // NULL if no ops
+	struct BcOp *ops;
+	size_t nops;
 	uint16_t nlocalvars;
 };
 
@@ -38,19 +39,13 @@ struct BcOp {
 	enum BcOpKind kind;
 	BcData data;
 	uint32_t lineno;
-	struct BcOp *next;   // NULL for end of linked list
 };
 
-// 'last' should be the last bcop (initially NULL)
-// returns the new last bcop or NULL on error
-// you need to set all fields of the return value yourself
-struct BcOp *bcop_append(struct Interp *interp, struct BcOp *last);
-
-// destroys op, doesn't free it, does nothing with op->next
+// destroys op, doesn't free it
 void bcop_destroy(const struct BcOp *op);
 
-// destroys and frees op, its ->next, its ->next->next etc
-void bcop_destroylist(struct BcOp *op);
+// doesn't free bc itself, but frees all contents nicely
+void bc_destroy(const struct Bc *bc);
 
 
 #endif   // BC_H

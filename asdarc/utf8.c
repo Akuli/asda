@@ -51,7 +51,7 @@ bool utf8_encode(
 
 	unsigned char *ptr = malloc(utf8len_val+1);
 	if (!ptr) {
-		sprintf(interp->errstr, "not enough memory");
+		interp_errstr_nomem(interp);
 		return false;
 	}
 
@@ -155,7 +155,7 @@ bool utf8_decode(
 	// each utf8 byte is at most 1 unicode code point
 	// this is realloc'd later to the correct size, feels better than many reallocs
 	if (!(result = malloc((utf8len+1)*sizeof(uint32_t)))) {
-		sprintf(interp->errstr, "not enough memory");
+		interp_errstr_nomem(interp);
 		return false;
 	}
 

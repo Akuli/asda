@@ -1,7 +1,8 @@
+#include "string.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
-#include "string.h"
+#include <string.h>
 #include "../utf8.h"
 
 
@@ -10,7 +11,7 @@ struct StringData {
 	size_t len;
 };
 
-static void stringobj_data_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
+static void stringdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 {
 	struct StringData *data = vpdata;
 	if (freenonrefs) {
@@ -25,26 +26,29 @@ struct Object *stringobj_new_nocpy(struct Interp *interp, uint32_t *val, size_t 
 	struct StringData *strdat=malloc(sizeof(*strdat));
 	if(!strdat) {
 		free(val);
+		interp_errstr_nomem(interp);
 		return NULL;
 	}
 	strdat->val = val;
 	strdat->len = len;
 
-	return object_new(interp, stringobj_type, (struct ObjData){
+	return object_new(interp, &stringobj_type, (struct ObjData){
 		.val = strdat,
-		.destroy = stringobj_data_destroy,
+		.destroy = stringdata_destroy,
 	});
 }
 
 struct Object *stringobj_new(struct Interp *interp, const uint32_t *val, size_t len)
 {
 	uint32_t *valcp = malloc(sizeof(uint32_t)*len);
-	if (!valcp)
+	if (!valcp) {
+		interp_errstr_nomem(interp);
 		return NULL;
+	}
 	return stringobj_new_nocpy(interp, valcp, len);
 }
 
-struct Object *stringobj_newfromutf8(struct Interp *interp, const char *utf, size_t utflen)
+struct Object *stringobj_new_utf8(struct Interp *interp, const char *utf, size_t utflen)
 {
 	uint32_t *uni;
 	size_t unilen;
@@ -55,5 +59,4 @@ struct Object *stringobj_newfromutf8(struct Interp *interp, const char *utf, siz
 
 
 // TODO: add methods
-static const struct Type stringobj_type_value = { .attribs = NULL, .nattribs = 0 };
-const struct Type *const stringobj_type = &stringobj_type_value;
+const struct Type stringobj_type = { .attribs = NULL, .nattribs = 0 };

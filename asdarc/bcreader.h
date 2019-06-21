@@ -18,12 +18,8 @@ struct BcReader {
 };
 
 // never fails
+// TODO: decide when indirname can be freed and change all codes accordingly
 struct BcReader bcreader_new(struct Interp *interp, FILE *in, const char *indirname);
-
-// on failure, these functions:
-//   - return false
-//   - write a string to errstr
-//   - possibly set errno
 
 bool bcreader_readasdabytes(struct BcReader *bcr);
 

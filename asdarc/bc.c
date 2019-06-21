@@ -22,27 +22,9 @@ void bcop_destroy(const struct BcOp *op)
 	}
 }
 
-void bcop_destroylist(struct BcOp *op)
+void bc_destroy(const struct Bc *bc)
 {
-	struct BcOp *next;
-	for (; op; op = next) {
-		next = op->next; 	  // may be NULL
-		bcop_destroy(op);
-		free(op);
-	}
-}
-
-
-struct BcOp *bcop_append(struct Interp *interp, struct BcOp *last)
-{
-	struct BcOp *ptr = malloc(sizeof(*ptr));
-	if (!ptr) {
-		strcpy(interp->errstr, "not enough memory");
-		return NULL;
-	}
-
-	if (!last)
-		return ptr;
-	last->next = ptr;
-	return ptr;
+	for (struct BcOp *ptr = bc->ops; ptr < bc->ops + bc->nops; ptr++)
+		bcop_destroy(ptr);
+	free(bc->ops);
 }
