@@ -4,6 +4,9 @@
 #include "path.h"
 #include "objects/string.h"
 
+#define END_OF_BODY 'E'
+#define SET_VAR 'V'
+#define GET_VAR 'v'
 #define IMPORT_SECTION 'i'
 #define SET_LINENO 'L'
 #define STR_CONSTANT '"'
@@ -51,6 +54,7 @@ static bool read_uint ## N (struct BcReader *bcr, uint ## N ## _t *res) \
 	return true; \
 }
 
+CREATE_UINT_READER(8)
 CREATE_UINT_READER(16)
 CREATE_UINT_READER(32)
 
@@ -186,6 +190,51 @@ static bool read_opbyte(struct BcReader *bcr, struct Bc *bc, unsigned char *ob)
 	return true;
 }
 
+static bool read_vardata(struct BcReader *bcr, struct BcOp *res, enum BcOpKind kind)
+{
+	struct BcVarData vd;
+	if (!read_uint8(bcr, &vd.level)) return false;
+	if (!read_uint16(bcr, &vd.index)) return false;
+
+	res->data.var = vd;
+	res->kind = kind;
+	return true;
+}
+
+static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res)
+{
+
+	switch(opbyte) {
+	case STR_CONSTANT:
+	{
+		char *str;
+		uint32_t len;
+		if (!read_string(bcr, &str, &len))
+			return false;
+
+		struct Object *obj = stringobj_newfromutf8(bcr->interp, str, len);
+		free(str);
+		if(!obj)
+			return false;
+
+		res->kind = BC_CONSTANT;
+		res->data.obj = obj;
+		return true;
+	}
+
+	case SET_VAR:
+		return read_vardata(bcr, res, BC_SETVAR);
+	case GET_VAR:
+		return read_vardata(bcr, res, BC_GETVAR);
+
+	default:
+		sprintf(bcr->interp->errstr, "unknown op byte: %#x", (int)opbyte);
+		if (is_printable_ascii(opbyte))
+			sprintf(bcr->interp->errstr + strlen(bcr->interp->errstr), " '%c'", opbyte);
+		return false;
+	}
+}
+
 static bool read_body(struct BcReader *bcr, struct Bc *bc)
 {
 	uint16_t nlocals;
@@ -193,37 +242,38 @@ static bool read_body(struct BcReader *bcr, struct Bc *bc)
 		return false;
 
 	struct BcOp *first = NULL;
+	struct BcOp *last = NULL;
 
 	while(true) {
 		unsigned char ob;
 		if (!read_opbyte(bcr, bc, &ob))
 			goto error;
-
-		switch(ob) {
-
-		case STR_CONSTANT:
-		{
-			char *str;
-			uint32_t len;
-			if (!read_string(bcr, &str, &len))
-				goto error;
-
-			struct Object *obj = stringobj_newfromutf8(bcr->interp, str, len);
-			free(str);
-			printf("here have obj %p\n", (void*)obj);
+		if (ob == END_OF_BODY)
 			break;
-		}
 
-		default:
-			sprintf(bcr->interp->errstr, "unknown op byte: %#x", (int)ob);
-			if (is_printable_ascii(ob))
-				sprintf(bcr->interp->errstr + strlen(bcr->interp->errstr), " '%c'", ob);
+		struct BcOp val;
+		val.lineno = bcr->lineno;
+		val.next = NULL;
+		// val.kind and val.data must be set in read_op()
+
+		if (!read_op(bcr, ob, &val))
+			goto error;
+
+		if (!( last = bcop_append(bcr->interp, last) )) {
+			bcop_destroy(&val);
 			goto error;
 		}
+		*last = val;
+		if (!first)
+			first = last;
 	}
 
+	bc->firstop = first;
+	bc->nlocalvars = nlocals;
+	return true;
+
 error:
-	bc_destroyops(first);
+	bcop_destroylist(first);
 	return false;
 }
 

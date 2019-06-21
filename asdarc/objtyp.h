@@ -40,7 +40,7 @@ static void gc_onrefcount0(struct Interp *i, struct Object *o) {}
 #define OBJECT_DECREF(obj) do{  \
 	if (--(obj)->refcount == 0) { \
 		/* this should never happen for statically allocated objects */ \
-		gc_onrefcount0((obj)); \
+		gc_onrefcount0((obj)->interp, (obj)); \
 		object_destroy((obj), true, true); \
 	} \
 } while(0)

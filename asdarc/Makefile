@@ -1,4 +1,4 @@
-CFLAGS += -std=c99 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wconversion -Werror=incompatible-pointer-types
+CFLAGS += -std=c99 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wconversion -Werror=incompatible-pointer-types -Werror=implicit-function-declaration
 CFLAGS += -g
 
 SRC := $(filter-out main.c, $(wildcard *.c objects/*.c))

@@ -2,22 +2,45 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include "objtyp.h"
 
-static void destroy_op(struct BcOp op)
+void bcop_destroy(const struct BcOp *op)
 {
-	switch(op.kind) {
+	switch(op->kind) {
+	case BC_CONSTANT:
+		OBJECT_DECREF(op->data.obj);
+		break;
+	case BC_SETVAR:
+	case BC_GETVAR:
+		break;
 	default:
-		fprintf(stderr, "op.kind = %c\n", (char)op.kind);
+		fprintf(stderr, "op.kind = %d\n", op->kind);
 		assert(0);
 	}
 }
 
-void bc_destroyops(struct BcOp *op)
+void bcop_destroylist(struct BcOp *op)
 {
 	struct BcOp *next;
 	for (; op; op = next) {
 		next = op->next; 	  // may be NULL
-		destroy_op(*op);
+		bcop_destroy(op);
 		free(op);
 	}
+}
+
+
+struct BcOp *bcop_append(struct Interp *interp, struct BcOp *last)
+{
+	struct BcOp *ptr = malloc(sizeof(*ptr));
+	if (!ptr) {
+		strcpy(interp->errstr, "not enough memory");
+		return NULL;
+	}
+
+	if (!last)
+		return ptr;
+	last->next = ptr;
+	return ptr;
 }
