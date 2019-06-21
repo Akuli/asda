@@ -10,6 +10,8 @@
 #define IMPORT_SECTION 'i'
 #define SET_LINENO 'L'
 #define STR_CONSTANT '"'
+#define CALL_VOID_FUNCTION '('
+#define CALL_RETURNING_FUNCTION ')'
 
 // from the tables in ascii(7), we see that '!' is first printable ascii char and '~' is last
 #define is_printable_ascii(c) ('!' <= (c) && (c) <= '~')
@@ -108,15 +110,13 @@ static bool read_path(struct BcReader *bcr, char **path)
 }
 
 
-#define ASDABYTES "asda"
-
 bool bcreader_readasdabytes(struct BcReader *bcr)
 {
-	unsigned char buf[sizeof(ASDABYTES)-1];
+	unsigned char buf[sizeof("asda")-1];
 	if (!read_bytes(bcr, buf, sizeof buf))
 		return false;
 
-	if (memcmp(buf, ASDABYTES, sizeof(buf)) == 0)
+	if (memcmp(buf, "asda", sizeof(buf)) == 0)
 		return true;
 	strcpy(bcr->interp->errstr, "the file doesn't seem to be a compiled asda file");
 	return false;
@@ -226,6 +226,17 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res
 		return read_vardata(bcr, res, BC_SETVAR);
 	case GET_VAR:
 		return read_vardata(bcr, res, BC_GETVAR);
+	case CALL_VOID_FUNCTION:
+	case CALL_RETURNING_FUNCTION:
+	{
+		struct BcCallFuncData cfd;
+		cfd.returning = (opbyte==CALL_RETURNING_FUNCTION);
+		if (!read_uint8(bcr, &cfd.nargs))
+			return false;
+		res->data.callfunc = cfd;
+		res->kind = BC_CALLFUNC;
+		return true;
+	}
 
 	default:
 		sprintf(bcr->interp->errstr, "unknown op byte: %#x", (int)opbyte);

@@ -12,6 +12,7 @@ enum BcOpKind {
 	BC_CONSTANT,
 	BC_SETVAR,
 	BC_GETVAR,
+	BC_CALLFUNC,
 };
 
 struct BcOp;

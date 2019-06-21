@@ -52,7 +52,7 @@ int main(int argc, char **argv)
 		goto bytecode_error;
 	if (!bcreader_readcodepart(&bcr, &code))
 		goto bytecode_error;
-	bcop_destroy(code.firstop);
+	bcop_destroylist(code.firstop);
 
 	fclose(f);
 	free(dir);

@@ -13,6 +13,7 @@ void bcop_destroy(const struct BcOp *op)
 		break;
 	case BC_SETVAR:
 	case BC_GETVAR:
+	case BC_CALLFUNC:
 		break;
 	default:
 		fprintf(stderr, "op.kind = %d\n", op->kind);
