@@ -201,6 +201,12 @@ static bool read_vardata(struct BcReader *bcr, struct BcOp *res, enum BcOpKind k
 	return true;
 }
 
+static bool read_callfunc(struct BcReader *bcr, struct BcOp *res, enum BcOpKind kind)
+{
+	res->kind = kind;
+	return read_uint8(bcr, &res->data.callfunc_nargs);
+}
+
 static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res)
 {
 
@@ -227,16 +233,9 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res
 	case GET_VAR:
 		return read_vardata(bcr, res, BC_GETVAR);
 	case CALL_VOID_FUNCTION:
+		return read_callfunc(bcr, res, BC_CALLVOIDFUNC);
 	case CALL_RETURNING_FUNCTION:
-	{
-		struct BcCallFuncData cfd;
-		cfd.returning = (opbyte==CALL_RETURNING_FUNCTION);
-		if (!read_uint8(bcr, &cfd.nargs))
-			return false;
-		res->data.callfunc = cfd;
-		res->kind = BC_CALLFUNC;
-		return true;
-	}
+		return read_callfunc(bcr, res, BC_CALLRETFUNC);
 
 	default:
 		sprintf(bcr->interp->errstr, "unknown op byte: %#x", (int)opbyte);
