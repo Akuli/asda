@@ -33,7 +33,6 @@ static void scopedata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 		free(vpdata);
 }
 
-
 struct Object *scopeobj_newsub(struct Interp *interp, struct Object *parent, uint16_t nlocals)
 {
 	struct ScopeData *ptr = malloc(sizeof(*ptr));
@@ -63,6 +62,29 @@ struct Object *scopeobj_newglobal(struct Interp *interp)
 {
 	// TODO: add variables
 	return scopeobj_newsub(interp, NULL, 0);
+}
+
+struct Object *scopeobj_getforlevel(struct Object *scope, size_t level)
+{
+#define PARENT(s) ( ((struct ScopeData*) (s)->data.val)->parent )
+
+	// FIXME: this looks like it's inefficient lol
+	size_t mylevel = 0;
+	for (struct Object *par = PARENT(scope); par; par = PARENT(par))
+		mylevel++;
+
+	assert(level <= mylevel);
+	for ( ; level < mylevel; level++)
+		scope = PARENT(scope);
+
+	return scope;
+
+#undef PARENT
+}
+
+struct Object **scopeobj_getlocalvarptr(struct Object *scope, size_t i)
+{
+	return & ((struct ScopeData*) scope->data.val)->locals[i];
 }
 
 

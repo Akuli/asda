@@ -17,7 +17,7 @@ struct Interp {
 // returns false and sets an error to interp->errstr on no mem
 bool interp_init(struct Interp *interp, const char *argv0);
 
-// never fails
+// never fails, always leaves errstr untouched
 void interp_destroy(struct Interp *interp);
 
 // you can print arbitrarily long strings with these, uses snprintf internally

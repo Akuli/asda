@@ -57,6 +57,12 @@ struct Object *stringobj_new_utf8(struct Interp *interp, const char *utf, size_t
 	return stringobj_new_nocpy(interp, uni, unilen);
 }
 
+bool stringobj_toutf8(struct Object *obj, char **val, size_t *len)
+{
+	struct StringData *strdat = obj->data.val;
+	return utf8_encode(obj->interp, strdat->val, strdat->len, val, len);
+}
+
 
 // TODO: add methods
 const struct Type stringobj_type = { .attribs = NULL, .nattribs = 0 };

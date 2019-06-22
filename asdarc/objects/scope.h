@@ -14,6 +14,11 @@ implement a handy way to refcount, so that's used here.
 struct Object *scopeobj_newglobal(struct Interp *interp);
 struct Object *scopeobj_newsub(struct Interp *interp, struct Object *parent, uint16_t nlocals);
 
+// does NOT return a new reference
+struct Object *scopeobj_getforlevel(struct Object *scope, size_t level);
+
+struct Object **scopeobj_getlocalvarptr(struct Object *scope, size_t i);
+
 extern const struct Type scopeobj_type;
 
 #endif   // OBJECTS_SCOPE_H

@@ -16,10 +16,11 @@ static bool run(struct Interp *interp, struct Bc code)
 
 	struct Runner rnr;
 	runner_init(&rnr, interp, scope);
+	bool ok = runner_run(&rnr, code);
 	runner_free(&rnr);
-
 	OBJECT_DECREF(scope);
-	return true;
+
+	return ok;
 }
 
 
@@ -37,7 +38,7 @@ int main(int argc, char **argv)
 
 	struct Interp interp;
 	if (!interp_init(&interp, argv[0]))
-		goto error;
+		goto error_dont_destroy_interp;
 
 	if (!( dir = path_toabsolute(argv[1]) )) {
 		interp_errstr_printf_errno(&interp,
@@ -79,10 +80,11 @@ error:
 		bcreader_freeimports(imports, nimports);
 	if(f)
 		fclose(f);
+	interp_destroy(&interp);     // leaves errstr untouched
 	// "fall through"
 
+error_dont_destroy_interp:
 	fprintf(stderr, "%s: error: %s\n", argv[0], interp.errstr);
-	interp_destroy(&interp);
 	free(dir);
 	return 1;
 }

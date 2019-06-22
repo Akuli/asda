@@ -45,7 +45,7 @@ static void gc_onrefcount0(struct Interp *i, struct Object *o) {}
 	} \
 } while(0)
 
-/* returns an object with no data and refcount 1
+/* returns an object with refcount 1
 
 On no mem, destroys od and returns NULL. This means that you can do this:
 

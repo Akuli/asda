@@ -155,8 +155,6 @@ bool bcreader_readimports(struct BcReader *bcr, char ***paths, uint16_t *npaths)
 			goto error;
 	}
 
-	printf("npaths = %d\n", (int)(*npaths));
-
 	return true;
 
 error:

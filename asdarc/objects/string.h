@@ -16,6 +16,9 @@ struct Object *stringobj_new_nocpy(struct Interp *interp, uint32_t *val, size_t 
 
 struct Object *stringobj_new_utf8(struct Interp *interp, const char *utf, size_t utflen);
 
+// behaves like utf8_encode
+bool stringobj_toutf8(struct Object *obj, char **val, size_t *len);
+
 const struct Type stringobj_type;
 
 #endif   // OBJECTS_STRING_H
