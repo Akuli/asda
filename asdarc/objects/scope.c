@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../builtins.h"
 #include "../objtyp.h"
 
 
@@ -61,7 +62,13 @@ struct Object *scopeobj_newsub(struct Interp *interp, struct Object *parent, uin
 struct Object *scopeobj_newglobal(struct Interp *interp)
 {
 	// TODO: add variables
-	return scopeobj_newsub(interp, NULL, 0);
+	struct Object *res = scopeobj_newsub(interp, NULL, (uint16_t)nbuiltins);
+	if(!res)
+		return NULL;
+
+	struct ScopeData *sd = res->data.val;
+	memcpy(sd->locals, builtins, nbuiltins*sizeof(builtins[0]));
+	return res;
 }
 
 struct Object *scopeobj_getforlevel(struct Object *scope, size_t level)

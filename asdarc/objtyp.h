@@ -31,6 +31,13 @@ struct Object {
 	struct ObjData data;
 };
 
+#define OBJECT_COMPILETIMECREATE(TYPE, DATAVAL) { \
+	.type = (TYPE), \
+	.refcount = 1, \
+	.interp = NULL, \
+	.data = { .val = (DATAVAL), .destroy = NULL }, \
+}
+
 
 // TODO: implement this
 static void gc_onrefcount0(struct Interp *i, struct Object *o) {}

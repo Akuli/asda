@@ -8,6 +8,9 @@ const struct Type *const object_type = &object_type_value;
 
 void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs)
 {
+	// if this fails, a compile-time created object is being decreffed too much
+	assert(obj->interp);
+
 	if (obj->data.destroy)
 		obj->data.destroy(obj->data.val, decrefrefs, freenonrefs);
 	if (freenonrefs)
@@ -16,6 +19,7 @@ void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs)
 
 struct Object *object_new(struct Interp *interp, const struct Type *type, struct ObjData od)
 {
+	assert(interp);
 	struct Object *obj = malloc(sizeof(*obj));
 	if (!obj) {
 		if (od.destroy)
@@ -27,5 +31,6 @@ struct Object *object_new(struct Interp *interp, const struct Type *type, struct
 	obj->refcount = 1;
 	obj->interp = interp;
 	obj->data = od;
+
 	return obj;
 }
