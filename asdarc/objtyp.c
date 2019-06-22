@@ -8,7 +8,11 @@ const struct Type *const object_type = &object_type_value;
 
 void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs)
 {
-	// if this fails, a compile-time created object is being decreffed too much
+	/*
+	if this fails, a compile-time created object is being decreffed too
+	much (or not increffed enough, or ->interp of a runtime-created object
+	has been set to NULL which should never happen)
+	*/
 	assert(obj->interp);
 
 	if (obj->data.destroy)

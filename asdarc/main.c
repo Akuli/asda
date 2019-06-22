@@ -15,11 +15,11 @@ static bool run(struct Interp *interp, struct Bc code)
 		return false;
 
 	struct Runner rnr;
-	runner_init(&rnr, interp, scope);
-	bool ok = runner_run(&rnr, code);
-	runner_free(&rnr);
+	runner_init(&rnr, interp, scope);  // increfs scope as needed
 	OBJECT_DECREF(scope);
 
+	bool ok = runner_run(&rnr, code);
+	runner_free(&rnr);
 	return ok;
 }
 

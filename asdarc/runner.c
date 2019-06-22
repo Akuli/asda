@@ -19,16 +19,18 @@ void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope
 {
 	rnr->interp = interp;
 	rnr->scope = scope;
+	OBJECT_INCREF(scope);
 	rnr->stack = NULL;
 	rnr->stacklen = 0;
 	rnr->stacksz = 0;
 }
 
-void runner_free(struct Runner *rnr)
+void runner_free(const struct Runner *rnr)
 {
 	for (struct Object **ptr = rnr->stack; ptr < rnr->stack + rnr->stacklen; ptr++)
 		OBJECT_DECREF(*ptr);
 	free(rnr->stack);
+	OBJECT_DECREF(rnr->scope);
 }
 
 static bool grow_stack(struct Runner *rnr, size_t minsz)

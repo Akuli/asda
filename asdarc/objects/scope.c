@@ -68,6 +68,8 @@ struct Object *scopeobj_newglobal(struct Interp *interp)
 
 	struct ScopeData *sd = res->data.val;
 	memcpy(sd->locals, builtins, nbuiltins*sizeof(builtins[0]));
+	for (size_t i = 0; i < nbuiltins; i++)
+		OBJECT_INCREF(sd->locals[i]);
 	return res;
 }
 

@@ -17,7 +17,7 @@ struct Runner {
 
 // never fails
 void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope);
-void runner_free(struct Runner *rnr);
+void runner_free(const struct Runner *rnr);
 
 bool runner_run(struct Runner *rnr, struct Bc bc);
 
