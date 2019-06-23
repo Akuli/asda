@@ -36,7 +36,7 @@ like this:
         $ git clone https://github.com/Akuli/include-what-you-use
         $ mkdir build
         $ cd build
-        $ cmake ../include-what-you-use
+        $ cmake ../include-what-you-use -DCMAKE_PREFIX_PATH=/usr/lib/llvm-8
 
     IWYU's instructions pass some options to `cmake` in the last step. I
     have no idea what they do, and I don't use them because the command
@@ -44,18 +44,9 @@ like this:
 
     **If you get a CMake error**, look for `llvm-something` in the error
     message. If the `something` part is NOT `8`, then the build is using
-    the wrong LLVM version and you need to remove that. For example, I
-    got error messages that said `llvm-4.0`, so I ran these commands:
-
-        $ sudo apt remove llvm-4.0
-        $ cd ..
-        $ rm -r build
-        $ mkdir build
-        $ cd build
-
-    and then I ran the cmake command again. (Currently this is not
-    mentioned in IWYU's instructions. See [this issue that I
-    created](https://github.com/include-what-you-use/include-what-you-use/issues/691).)
+    the wrong LLVM version, and you need to make sure that the `-D` part
+    of the `cmake` command ends with 8. The same command is in IWYU's
+    README with 7 instead of 8.
 
 3. Compile the IWYU
 
