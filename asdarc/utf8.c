@@ -1,6 +1,5 @@
 #include "utf8.h"
 #include <assert.h>
-#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>

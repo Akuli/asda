@@ -3,10 +3,9 @@
 #ifndef OBJTYP_H
 #define OBJTYP_H
 
-#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include "interp.h"
+#include "interp.h"   // IWYU pragma: keep
 
 // destroy function can be NULL
 struct ObjData {

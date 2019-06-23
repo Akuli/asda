@@ -1,4 +1,8 @@
 #include "func.h"
+#include <assert.h>
+#include <stdbool.h>
+#include "../interp.h"
+#include "../objtyp.h"
 
 
 const struct Type funcobj_type_ret = {

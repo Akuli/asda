@@ -1,6 +1,9 @@
 #ifndef OBJECTS_FUNC_H
 #define OBJECTS_FUNC_H
 
+#include <stdbool.h>
+#include <stddef.h>
+#include "../interp.h"
 #include "../objtyp.h"
 
 extern const struct Type funcobj_type_ret;

@@ -6,7 +6,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "interp.h"
 
 enum BcOpKind {
 	BC_CONSTANT,

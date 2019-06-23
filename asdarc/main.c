@@ -1,9 +1,11 @@
-#include <errno.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include "bc.h"
 #include "bcreader.h"
+#include "interp.h"
+#include "objtyp.h"
 #include "path.h"
 #include "runner.h"
 #include "objects/scope.h"

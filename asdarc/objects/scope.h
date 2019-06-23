@@ -8,8 +8,10 @@ implement a handy way to refcount, so that's used here.
 #ifndef OBJECTS_SCOPE_H
 #define OBJECTS_SCOPE_H
 
+#include <stddef.h>
 #include <stdint.h>
 #include "../interp.h"
+#include "../objtyp.h"
 
 struct Object *scopeobj_newglobal(struct Interp *interp);
 struct Object *scopeobj_newsub(struct Interp *interp, struct Object *parent, uint16_t nlocals);

@@ -1,12 +1,12 @@
 #include "runner.h"
+#include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include "bc.h"
 #include "interp.h"
 #include "objects/func.h"
 #include "objects/scope.h"
-#include "objects/string.h"
 
 
 // toggle these to choose whether running each op is printed:

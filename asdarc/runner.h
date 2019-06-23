@@ -1,8 +1,11 @@
 #ifndef RUNNER_H
 #define RUNNER_H
 
+#include <stdbool.h>
+#include <stddef.h>
 #include "bc.h"
 #include "interp.h"
+#include "objtyp.h"
 
 enum RunResult {
 	DIDNT_RETURN,

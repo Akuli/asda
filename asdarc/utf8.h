@@ -6,9 +6,6 @@
 #include <stdint.h>
 #include "interp.h"
 
-// utf8.c must NOT put arbitrary length data here
-#define UTF8_ERRSTR_SIZE 200
-
 // convert a Unicode string to a UTF-8 string
 // after calling this, *utf8 is mallocced to utf8len+1 bytes, and last byte is 0
 // there may be 0s in the first len bytes

@@ -2,7 +2,6 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include "objtyp.h"
 
 void bcop_destroy(const struct BcOp *op)

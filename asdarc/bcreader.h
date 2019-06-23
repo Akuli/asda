@@ -3,11 +3,11 @@
 #ifndef BCREADER_H
 #define BCREADER_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include "bc.h"
 #include "interp.h"
-#include "objtyp.h"
 
 
 struct BcReader {

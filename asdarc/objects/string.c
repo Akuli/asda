@@ -2,8 +2,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
-#include <string.h>
 #include "../utf8.h"
+#include "../interp.h"
+#include "../objtyp.h"
 
 
 struct StringData {

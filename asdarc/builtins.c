@@ -1,7 +1,9 @@
 #include "builtins.h"
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "interp.h"
 #include "objtyp.h"
 #include "objects/func.h"
 #include "objects/string.h"

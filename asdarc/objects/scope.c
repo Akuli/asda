@@ -1,8 +1,11 @@
 #include "scope.h"
+#include <assert.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include "../builtins.h"
+#include "../interp.h"
 #include "../objtyp.h"
 
 

@@ -1,5 +1,8 @@
 #include "objtyp.h"
+#include <assert.h>
+#include <stdbool.h>
 #include <stdlib.h>
+#include "interp.h"
 
 
 static const struct Type object_type_value = { .attribs = NULL, .nattribs = 0 };

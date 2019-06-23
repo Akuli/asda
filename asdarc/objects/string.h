@@ -1,6 +1,7 @@
 #ifndef OBJECTS_STRING_H
 #define OBJECTS_STRING_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "../interp.h"
