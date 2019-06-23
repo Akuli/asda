@@ -5,7 +5,9 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include "interp.h"   // IWYU pragma: keep
+#include "gc.h"
+
+struct Interp;
 
 // destroy function can be NULL
 struct ObjData {
@@ -26,6 +28,7 @@ struct Type {
 struct Object {
 	const struct Type *type;
 	unsigned int refcount;       // TODO: atomic?
+	unsigned int gcflag;         // gc.c uses this for an implementation-detaily thing
 	struct Interp *interp;       // NULL for statically allocated objects
 	struct ObjData data;
 };
@@ -37,9 +40,6 @@ struct Object {
 	.data = { .val = (DATAVAL), .destroy = NULL }, \
 }
 
-
-// TODO: implement this
-static void gc_onrefcount0(struct Interp *i, struct Object *o) {}
 
 // decref evaluates the arg multiple times
 #define OBJECT_INCREF(obj) (obj)->refcount++

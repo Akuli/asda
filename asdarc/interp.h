@@ -5,10 +5,12 @@
 #include <errno.h>   // IWYU pragma: keep
 #include <stdbool.h>
 #include "objtyp.h"   // IWYU pragma: keep
+#include "gc.h"
 
 struct Interp {
 	const char *argv0;
 	struct Object *builtinscope;
+	struct Gc gc;
 
 	// DON'T PUT ARBITRARILY LONG STRINGS HERE
 	// TODO: add exceptions to asda

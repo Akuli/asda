@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include "gc.h"
 #include "interp.h"
 
 
@@ -28,9 +29,7 @@ struct Object *object_new(struct Interp *interp, const struct Type *type, struct
 	assert(interp);
 	struct Object *obj = malloc(sizeof(*obj));
 	if (!obj) {
-		if (od.destroy)
-			od.destroy(od.val, true, true);
-		return NULL;
+		goto error;
 	}
 
 	obj->type = type;
@@ -38,5 +37,14 @@ struct Object *object_new(struct Interp *interp, const struct Type *type, struct
 	obj->interp = interp;
 	obj->data = od;
 
+	if(!gc_addobject(interp, obj))
+		goto error;
+
 	return obj;
+
+error:
+	free(obj);
+	if (od.destroy)
+		od.destroy(od.val, true, true);
+	return NULL;
 }
