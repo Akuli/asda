@@ -14,10 +14,9 @@ void bcop_destroy(const struct BcOp *op)
 	case BC_GETVAR:
 	case BC_CALLVOIDFUNC:
 	case BC_CALLRETFUNC:
+	case BC_BOOLNEG:
+	case BC_JUMPIF:
 		break;
-	default:
-		fprintf(stderr, "op.kind = %d\n", op->kind);
-		assert(0);
 	}
 }
 

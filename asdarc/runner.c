@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include "bc.h"
 #include "interp.h"
+#include "objects/bool.h"
 #include "objects/func.h"
 #include "objects/scope.h"
 
@@ -140,22 +141,40 @@ bool runner_run(struct Runner *rnr, struct Bc bc)
 			break;
 		}
 
+		case BC_BOOLNEG:
+		{
+			struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
+			struct Object *old = *ptr;
+			*ptr = boolobj_c2asda(!boolobj_asda2c(old));
+			OBJECT_DECREF(old);
+			break;
+		}
+		case BC_JUMPIF:
+		{
+			struct Object *ocond = rnr->stack[--rnr->stacklen];
+			bool bcond = boolobj_asda2c(ocond);
+			OBJECT_DECREF(ocond);
+			if(bcond) {
+				i = bc.ops[i].data.jump_idx;
+				goto skip_iplusplus;
+			}
+			break;
+		}
+
 		case BC_CALLRETFUNC:
 			if(!call_function(rnr, true, bc.ops[i].data.callfunc_nargs))
 				return false;
 			break;
 		case BC_CALLVOIDFUNC:
-		{
 			if(!call_function(rnr, false, bc.ops[i].data.callfunc_nargs))
 				return false;
 			break;
+
 		}
 
-		default:
-			fprintf(stderr, "unknown op kind %d\n", bc.ops[i].kind);
-			assert(0);
-		}
 		i++;
+skip_iplusplus:
+		(void)0;   // this does nothing, it's needed because c syntax is awesome
 	}
 	assert(i == bc.nops);
 

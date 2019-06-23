@@ -17,9 +17,14 @@ struct Object *stringobj_new_nocpy(struct Interp *interp, uint32_t *val, size_t 
 
 struct Object *stringobj_new_utf8(struct Interp *interp, const char *utf, size_t utflen);
 
-// behaves like utf8_encode
+/*
+behaves like utf8_encode
+
+note: you need to change this to take an interp as argument if if you add
+strings that have interp==NULL (i.e. strings created at compile time)
+*/
 bool stringobj_toutf8(struct Object *obj, char **val, size_t *len);
 
-const struct Type stringobj_type;
+extern const struct Type stringobj_type;
 
 #endif   // OBJECTS_STRING_H

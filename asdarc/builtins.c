@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include "interp.h"
 #include "objtyp.h"
+#include "objects/bool.h"
 #include "objects/func.h"
 #include "objects/string.h"
 
@@ -29,5 +30,5 @@ static bool print_impl(struct Interp *interp, struct Object **args, size_t nargs
 static struct FuncObjData printdata = FUNCOBJDATA_COMPILETIMECREATE_NORET(print_impl);
 static struct Object print = OBJECT_COMPILETIMECREATE(&funcobj_type_noret, &printdata);
 
-struct Object* const builtins[] = { &print };
+struct Object* const builtins[] = { &print, &boolobj_true, &boolobj_false };
 const size_t nbuiltins = sizeof(builtins)/sizeof(builtins[0]);

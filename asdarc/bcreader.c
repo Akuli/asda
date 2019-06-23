@@ -4,16 +4,21 @@
 #include <string.h>
 #include "bc.h"
 #include "path.h"
+#include "objects/bool.h"
 #include "objects/string.h"
 
-#define END_OF_BODY 'E'
+#define IMPORT_SECTION 'i'
 #define SET_VAR 'V'
 #define GET_VAR 'v'
-#define IMPORT_SECTION 'i'
 #define SET_LINENO 'L'
 #define STR_CONSTANT '"'
+#define TRUE_CONSTANT 'T'
+#define FALSE_CONSTANT 'F'
 #define CALL_VOID_FUNCTION '('
 #define CALL_RETURNING_FUNCTION ')'
+#define BOOLNEG '!'
+#define JUMPIF 'J'
+#define END_OF_BODY 'E'
 
 // from the tables in ascii(7), we see that '!' is first printable ascii char and '~' is last
 #define is_printable_ascii(c) ('!' <= (c) && (c) <= '~')
@@ -228,6 +233,12 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res
 		return true;
 	}
 
+	case TRUE_CONSTANT:
+	case FALSE_CONSTANT:
+		res->kind = BC_CONSTANT;
+		res->data.obj = boolobj_c2asda(opbyte == TRUE_CONSTANT);
+		return true;
+
 	case SET_VAR:
 		return read_vardata(bcr, res, BC_SETVAR);
 	case GET_VAR:
@@ -236,6 +247,12 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res
 		return read_callfunc(bcr, res, BC_CALLVOIDFUNC);
 	case CALL_RETURNING_FUNCTION:
 		return read_callfunc(bcr, res, BC_CALLRETFUNC);
+	case BOOLNEG:
+		res->kind = BC_BOOLNEG;
+		return true;
+	case JUMPIF:
+		res->kind = BC_JUMPIF;
+		return read_uint16(bcr, &res->data.jump_idx);
 
 	default:
 		sprintf(bcr->interp->errstr, "unknown op byte: %#x", (int)opbyte);

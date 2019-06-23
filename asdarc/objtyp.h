@@ -74,7 +74,7 @@ struct Object *object_new(struct Interp *interp, const struct Type *type, struct
 // use decref instead of calling this yourself
 void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs);
 
-extern const struct Type *const object_type;
+extern const struct Type object_type;
 
 // TODO: type_getattribute()
 
