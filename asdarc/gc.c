@@ -68,8 +68,7 @@ void gc_onrefcount0(struct Interp *interp, struct Object *obj)
 
 static void refcount_debug_object(struct Object *obj, unsigned int is, unsigned int shouldB)
 {
-	printf("%p: refcount=%u (should be %u)", (void*)obj, is, shouldB);
-	printf("\n    ");
+	printf("%p: refcount=%u (should be %u)\n    ", (void*)obj, is, shouldB);
 	if (obj->type == &stringobj_type){
 		char *str;
 		size_t len;
@@ -92,8 +91,8 @@ static void refcount_debug(struct Gc gc)
 {
 	struct Object **ptr;
 	struct Object **end = gc.objects + gc.objectslen;
-	// figure out what the refcounts should be by destroying so that only refcounts change
 
+	// figure out what the refcounts should be by destroying so that only refcounts change
 	for (ptr = gc.objects; ptr < end; ptr++) {
 		(*ptr)->gcflag = (*ptr)->refcount;
 		(*ptr)->refcount = UINT_MAX;

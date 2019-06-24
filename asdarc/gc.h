@@ -3,6 +3,7 @@
 
 // I don't fully understand why compiling fails without this
 #include "objtyp.h"    // IWYU pragma: keep
+
 struct Interp;
 struct Object;
 
