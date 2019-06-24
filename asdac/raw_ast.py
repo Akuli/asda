@@ -10,7 +10,6 @@ import operator
 import os
 
 import more_itertools
-import sly
 
 from . import common, string_parser, tokenizer
 
