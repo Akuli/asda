@@ -12,13 +12,12 @@ static void refcount_debug_object(struct Object *obj, unsigned int is, unsigned 
 {
 	printf("%p: refcount=%u (should be %u)\n    ", (void*)obj, is, shouldB);
 	if (obj->type == &stringobj_type){
-		char *str;
+		const char *str;
 		size_t len;
 		if (stringobj_toutf8(obj, &str, &len)) {
 			putchar('"');
 			fwrite(str, 1, len, stdout);
 			putchar('"');
-			free(str);
 		}
 		else
 			printf("(cannot print string)");

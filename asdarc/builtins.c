@@ -15,14 +15,13 @@ static bool print_impl(struct Interp *interp, struct Object **args, size_t nargs
 	assert(nargs == 1);
 	assert(args[0]->type == &stringobj_type);
 
-	char *str;
+	const char *str;
 	size_t len;
 	if(!stringobj_toutf8(args[0], &str, &len))
 		return false;
 
-	for (char *p = str; p < str+len; p++)
+	for (const char *p = str; p < str+len; p++)
 		putchar(*p);
-	free(str);
 	putchar('\n');
 	return true;
 }

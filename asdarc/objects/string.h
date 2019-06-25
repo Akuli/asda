@@ -19,11 +19,12 @@ struct Object *stringobj_new_utf8(struct Interp *interp, const char *utf, size_t
 
 /*
 behaves like utf8_encode
+DON'T FREE the val
 
 note: you need to change this to take an interp as argument if if you add
 strings that have interp==NULL (i.e. strings created at compile time)
 */
-bool stringobj_toutf8(struct Object *obj, char **val, size_t *len);
+bool stringobj_toutf8(struct Object *obj, const char **val, size_t *len);
 
 extern const struct Type stringobj_type;
 
