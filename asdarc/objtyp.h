@@ -31,9 +31,15 @@ struct Object {
 	unsigned int gcflag;         // gc.c uses this for an implementation-detaily thing
 	struct Interp *interp;       // NULL for statically allocated objects
 	struct ObjData data;
+
+	// runtime created objects go into a doubly linked list
+	// it is doubly linked to make removing objects from the list O(1)
+	struct Object *prev;
+	struct Object *next;
 };
 
 #define OBJECT_COMPILETIMECREATE(TYPE, DATAVAL) { \
+	/* fields not defined here get set to 0 or NULL by default */ \
 	.type = (TYPE), \
 	.refcount = 1, \
 	.interp = NULL, \
@@ -46,7 +52,6 @@ struct Object {
 #define OBJECT_DECREF(obj) do{  \
 	if (--(obj)->refcount == 0) { \
 		/* this should never happen for statically allocated objects */ \
-		gc_onrefcount0((obj)->interp, (obj)); \
 		object_destroy((obj), true, true); \
 	} \
 } while(0)

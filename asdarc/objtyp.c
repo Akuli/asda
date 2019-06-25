@@ -20,8 +20,20 @@ void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs)
 
 	if (obj->data.destroy)
 		obj->data.destroy(obj->data.val, decrefrefs, freenonrefs);
-	if (freenonrefs)
+
+	if (freenonrefs) {
+		if (obj->prev) {
+			assert(obj != obj->interp->objliststart);
+			obj->prev->next = obj->next;   // may be NULL
+		} else {
+			assert(obj == obj->interp->objliststart);
+			obj->interp->objliststart = obj->next;   // may be NULL
+		}
+		if(obj->next)
+			obj->next->prev = obj->prev;   // may be NULL
+
 		free(obj);
+	}
 }
 
 struct Object *object_new(struct Interp *interp, const struct Type *type, struct ObjData od)
@@ -29,7 +41,9 @@ struct Object *object_new(struct Interp *interp, const struct Type *type, struct
 	assert(interp);
 	struct Object *obj = malloc(sizeof(*obj));
 	if (!obj) {
-		goto error;
+		if (od.destroy)
+			od.destroy(od.val, true, true);
+		return NULL;
 	}
 
 	obj->type = type;
@@ -37,14 +51,11 @@ struct Object *object_new(struct Interp *interp, const struct Type *type, struct
 	obj->interp = interp;
 	obj->data = od;
 
-	if(!gc_addobject(interp, obj))
-		goto error;
+	obj->prev = NULL;
+	obj->next = obj->interp->objliststart;
+	obj->interp->objliststart = obj;
+	if(obj->next)
+		obj->next->prev = obj;
 
 	return obj;
-
-error:
-	free(obj);
-	if (od.destroy)
-		od.destroy(od.val, true, true);
-	return NULL;
 }

@@ -1,6 +1,6 @@
 #include "interp.h"
 #include <assert.h>
-#include <errno.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -12,7 +12,7 @@ bool interp_init(struct Interp *interp, const char *argv0)
 {
 	interp->argv0 = argv0;
 	interp->errstr[0] = 0;
-	gc_init(&interp->gc);
+	interp->objliststart = NULL;
 
 	if (!( interp->builtinscope = scopeobj_newglobal(interp) ))
 		return false;
@@ -22,7 +22,12 @@ bool interp_init(struct Interp *interp, const char *argv0)
 void interp_destroy(struct Interp *interp)
 {
 	OBJECT_DECREF(interp->builtinscope);
-	gc_quit(interp->gc);
+
+	struct Object *next;
+	for (struct Object *obj = interp->objliststart; obj; obj = next){
+		next = obj->next;
+		free(obj);
+	}
 }
 
 void interp_errstr_printf_errno(struct Interp *interp, const char *fmt, ...)

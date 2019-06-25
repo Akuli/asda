@@ -4,13 +4,15 @@
 // errno is used in the macros, iwyu doesn't know that
 #include <errno.h>   // IWYU pragma: keep
 #include <stdbool.h>
-#include "objtyp.h"   // IWYU pragma: keep
-#include "gc.h"
+#include "objtyp.h"
 
 struct Interp {
 	const char *argv0;
 	struct Object *builtinscope;
-	struct Gc gc;
+
+	// the only object created at runtime that has ->prev == NULL
+	// all (not yet destroyed) runtime created objects can be found from here with ->next
+	struct Object *objliststart;
 
 	// DON'T PUT ARBITRARILY LONG STRINGS HERE
 	// TODO: add exceptions to asda
