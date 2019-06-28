@@ -147,9 +147,9 @@ class _Runner:
                     assert 0 <= opcode_index <= self.opcodes_len
                     self.opcodes.seek(opcode_index)
 
-            elif opcode == bytecode_reader.LOOKUP_ATTRIBUTE:
+            elif opcode == bytecode_reader.LOOKUP_METHOD:
                 [tybe, index] = args
-                self.stack[-1] = tybe.get_attribute(self.stack[-1], index)
+                self.stack[-1] = tybe.get_method(self.stack[-1], index)
 
             elif opcode == bytecode_reader.DIDNT_RETURN_ERROR:
                 raise ValueError("a non-void function didn't return")

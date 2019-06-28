@@ -9,19 +9,14 @@ const runner = @import("runner.zig");
 pub const Attribute = struct { is_method: bool, value: *Object };
 
 pub const Type = struct {
-    attributes: []const Attribute,
+    methods: []const *Object,
 
-    pub fn init(attributes: []const Attribute) Type {
-        return Type{ .attributes = attributes };
+    pub fn init(methods: []const *Object) Type {
+        return Type{ .methods = methods };
     }
 
     pub fn getAttribute(self: *Type, interp: *Interp, obj: *Object, index: u16) !*Object {
-        const attrib = self.attributes[index];
-        if (attrib.is_method) {
-            return try objects.function.newPartial(interp, attrib.value, []const *Object { obj });
-        }
-        attrib.value.incref();
-        return attrib.value;
+        return try objects.function.newPartial(interp, self.methods[index], []const *Object { obj });
     }
 };
 

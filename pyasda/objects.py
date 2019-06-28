@@ -6,15 +6,11 @@ import itertools
 class Type:
 
     def __init__(self, base):
-        self._attributes = []   # (is_method, value) pairs
+        self._methods = []
         self.base_type = base   # None for OBJECT
 
-    def get_attribute(self, objekt, indeks):
-        is_method, value = self._attributes[indeks]
-        if is_method:
-            # value is a Function
-            return value.method_bind(objekt)
-        return value
+    def get_method(self, objekt, indeks):
+        return self._methods[indeks].method_bind(objekt)
 
 
 OBJECT = Type(None)     # the asda base class of all asda objects
@@ -51,7 +47,7 @@ class Function(Object):
 
 def add_method(tybe, python_func, argtypes, returntype):
     functype = FunctionType(itertools.chain([tybe], argtypes), returntype)
-    tybe._attributes.append((True, Function(functype, python_func)))
+    tybe._methods.append(Function(functype, python_func))
 
 
 types = collections.OrderedDict([

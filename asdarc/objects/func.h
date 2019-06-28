@@ -21,10 +21,17 @@ struct FuncObjData {
 		funcobj_cfunc_ret ret;
 		funcobj_cfunc_noret noret;
 	} cfunc;
+
+	// these are added to the beginning of the arg list when calling the function
+	struct Object **partial;
+	size_t npartial;
 };
 
-#define FUNCOBJDATA_COMPILETIMECREATE_RET(f) { .cfunc = {.ret=(f)} }
-#define FUNCOBJDATA_COMPILETIMECREATE_NORET(f) { .cfunc = {.noret=(f)} }
+#define FUNCOBJDATA_COMPILETIMECREATE_RET(  f) { .cfunc = {.ret  =(f)}, .npartial = 0, .partial = NULL }
+#define FUNCOBJDATA_COMPILETIMECREATE_NORET(f) { .cfunc = {.noret=(f)}, .npartial = 0, .partial = NULL }
+
+// i don't know whether this works because i thought i would need it but i didn't need it after all
+struct Object *funcobj_new_partial(struct Interp *interp, struct Object *f, struct Object **args, size_t nargs);
 
 
 bool           funcobj_call_noret(struct Interp *interp, struct Object *f, struct Object **args, size_t nargs);

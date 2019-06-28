@@ -6,7 +6,7 @@
 #include "interp.h"
 
 
-const struct Type object_type = { .attribs = NULL, .nattribs = 0 };
+const struct Type object_type = { .methods = NULL, .nmethods = 0 };
 
 
 void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs)

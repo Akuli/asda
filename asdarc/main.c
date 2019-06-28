@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -8,6 +9,7 @@
 #include "objtyp.h"
 #include "path.h"
 #include "runner.h"
+#include "objects/int.h"
 #include "objects/scope.h"
 
 static bool run(struct Interp *interp, struct Bc code)

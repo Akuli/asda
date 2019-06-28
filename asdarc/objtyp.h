@@ -15,14 +15,9 @@ struct ObjData {
 	void (*destroy)(void *val, bool decrefrefs, bool freenonrefs);
 };
 
-struct TypeAttribute {
-	bool ismethod;
-	struct Object *value;
-};
-
 struct Type {
-	const struct TypeAttribute *attribs;
-	size_t nattribs;
+	struct Object **methods;
+	size_t nmethods;
 };
 
 struct Object {
@@ -80,8 +75,6 @@ struct Object *object_new(struct Interp *interp, const struct Type *type, struct
 void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs);
 
 extern const struct Type object_type;
-
-// TODO: type_getattribute()
 
 
 #endif   // OBJTYP_H

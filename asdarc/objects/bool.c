@@ -1,7 +1,7 @@
 #include "bool.h"
 #include <assert.h>
 
-const struct Type boolobj_type = { .attribs = NULL, .nattribs = 0 };
+const struct Type boolobj_type = { .methods = NULL, .nmethods = 0 };
 struct Object boolobj_true = OBJECT_COMPILETIMECREATE(&boolobj_type, NULL);
 struct Object boolobj_false = OBJECT_COMPILETIMECREATE(&boolobj_type, NULL);
 

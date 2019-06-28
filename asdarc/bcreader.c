@@ -1,11 +1,14 @@
 #include "bcreader.h"
+#include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include "bc.h"
+#include "builtin.h"
 #include "path.h"
 #include "objects/bool.h"
 #include "objects/string.h"
+#include "objects/int.h"
 
 #define IMPORT_SECTION 'i'
 #define SET_VAR 'V'
@@ -18,7 +21,12 @@
 #define CALL_RETURNING_FUNCTION ')'
 #define BOOLNEG '!'
 #define JUMPIF 'J'
+#define GET_METHOD '.'   // currently all attributes are methods
+#define NON_NEGATIVE_INT_CONSTANT '1'
+#define NEGATIVE_INT_CONSTANT '2'
 #define END_OF_BODY 'E'
+
+#define TYPEBYTE_BUILTIN 'b'
 
 // from the tables in ascii(7), we see that '!' is first printable ascii char and '~' is last
 #define is_printable_ascii(c) ('!' <= (c) && (c) <= '~')
@@ -182,6 +190,20 @@ void bcreader_freeimports(char **paths, uint16_t npaths)
 }
 
 
+static void append_byte_2_errstr(struct Interp *interp, unsigned char byte)
+{
+	char *ptr = interp->errstr + strlen(interp->errstr);
+	char *max = interp->errstr + sizeof(interp->errstr);
+	if(max-ptr < 2)   // need at least 1 byte to write stuff to, 1 byte for \0, otherwise would be useless
+		return;
+
+	if(is_printable_ascii(byte))
+		snprintf(ptr, (size_t)(max-ptr), ": %#x '%c'", (int)byte, byte);
+	else
+		snprintf(ptr, (size_t)(max-ptr), ": %#x", (int)byte);
+}
+
+
 static bool read_opbyte(struct BcReader *bcr, unsigned char *ob)
 {
 	if (!read_bytes(bcr, ob, 1)) return false;
@@ -189,11 +211,36 @@ static bool read_opbyte(struct BcReader *bcr, unsigned char *ob)
 		if (!read_uint32(bcr, &bcr->lineno)) return false;
 		if (!read_bytes(bcr, ob, 1)) return false;
 		if (*ob == SET_LINENO) {
-			sprintf(bcr->interp->errstr, "repeated lineno byte '%c'", SET_LINENO);
+			interp_errstr_printf(bcr->interp, "repeated lineno byte");
+			append_byte_2_errstr(bcr->interp, SET_LINENO);
 			return false;
 		}
 	}
 	return true;
+}
+
+const struct Type *read_type(struct BcReader *bcr)
+{
+	// TODO: many types missing here
+	unsigned char byte;
+	if(!read_bytes(bcr, &byte, 1))
+		return NULL;
+
+	switch(byte) {
+	case TYPEBYTE_BUILTIN:
+	{
+		uint8_t i;
+		if (!read_uint8(bcr, &i))
+			return NULL;
+		assert(i < builtin_ntypes);
+		return builtin_types[i];
+	}
+
+	default:
+		interp_errstr_printf(bcr->interp, "unknown type byte");
+		append_byte_2_errstr(bcr->interp, byte);
+		return NULL;
+	}
 }
 
 static bool read_vardata(struct BcReader *bcr, struct BcOp *res, enum BcOpKind kind)
@@ -213,25 +260,46 @@ static bool read_callfunc(struct BcReader *bcr, struct BcOp *res, enum BcOpKind 
 	return read_uint8(bcr, &res->data.callfunc_nargs);
 }
 
+static bool read_string_constant(struct BcReader *bcr, struct Object **objptr)
+{
+	char *str;
+	uint32_t len;
+	if (!read_string(bcr, &str, &len))
+		return false;
+
+	*objptr = stringobj_new_utf8(bcr->interp, str, len);
+	free(str);
+	return !!*objptr;
+}
+
+static bool read_int_constant(struct BcReader *bcr, struct Object **objptr, bool negate)
+{
+	uint32_t len;
+	if(!read_uint32(bcr, &len))
+		return false;
+
+	unsigned char *buf = malloc(len);
+	if(!buf) {
+		interp_errstr_nomem(bcr->interp);
+		return false;
+	}
+
+	if(!read_bytes(bcr, buf, len)) {
+		free(buf);
+		return false;
+	}
+
+	*objptr = intobj_new_bebytes(bcr->interp, buf, len, negate);
+	free(buf);
+	return !!*objptr;
+}
+
 static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res)
 {
 	switch(opbyte) {
 	case STR_CONSTANT:
-	{
-		char *str;
-		uint32_t len;
-		if (!read_string(bcr, &str, &len))
-			return false;
-
-		struct Object *obj = stringobj_new_utf8(bcr->interp, str, len);
-		free(str);
-		if(!obj)
-			return false;
-
 		res->kind = BC_CONSTANT;
-		res->data.obj = obj;
-		return true;
-	}
+		return read_string_constant(bcr, &res->data.obj);
 
 	case TRUE_CONSTANT:
 	case FALSE_CONSTANT:
@@ -253,11 +321,22 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res
 	case JUMPIF:
 		res->kind = BC_JUMPIF;
 		return read_uint16(bcr, &res->data.jump_idx);
+	case NON_NEGATIVE_INT_CONSTANT:
+	case NEGATIVE_INT_CONSTANT:
+		res->kind = BC_CONSTANT;
+		return read_int_constant(bcr, &res->data.obj, opbyte==NEGATIVE_INT_CONSTANT);
+	case GET_METHOD:
+		res->kind = BC_GETMETHOD;
+		if (!( res->data.lookupmethod.type = read_type(bcr) ))
+			return false;
+		if (!read_uint16(bcr, &res->data.lookupmethod.index))
+			return false;
+		assert(res->data.lookupmethod.index < res->data.lookupmethod.type->nmethods);
+		return true;
 
 	default:
-		sprintf(bcr->interp->errstr, "unknown op byte: %#x", (int)opbyte);
-		if (is_printable_ascii(opbyte))
-			sprintf(bcr->interp->errstr + strlen(bcr->interp->errstr), " '%c'", opbyte);
+		interp_errstr_printf(bcr->interp, "unknown op byte");
+		append_byte_2_errstr(bcr->interp, opbyte);
 		return false;
 	}
 }

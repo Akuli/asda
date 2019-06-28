@@ -81,4 +81,4 @@ bool stringobj_toutf8(struct Object *obj, const char **val, size_t *len)
 
 
 // TODO: add methods
-const struct Type stringobj_type = { .attribs = NULL, .nattribs = 0 };
+const struct Type stringobj_type = { .methods = NULL, .nmethods = 0 };

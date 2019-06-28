@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../builtins.h"
+#include "../builtin.h"
 #include "../interp.h"
 #include "../objtyp.h"
 
@@ -64,14 +64,13 @@ struct Object *scopeobj_newsub(struct Interp *interp, struct Object *parent, uin
 
 struct Object *scopeobj_newglobal(struct Interp *interp)
 {
-	// TODO: add variables
-	struct Object *res = scopeobj_newsub(interp, NULL, (uint16_t)nbuiltins);
+	struct Object *res = scopeobj_newsub(interp, NULL, (uint16_t)builtin_nobjects);
 	if(!res)
 		return NULL;
 
 	struct ScopeData *sd = res->data.val;
-	memcpy(sd->locals, builtins, nbuiltins*sizeof(builtins[0]));
-	for (size_t i = 0; i < nbuiltins; i++)
+	memcpy(sd->locals, builtin_objects, builtin_nobjects*sizeof(builtin_objects[0]));
+	for (size_t i = 0; i < builtin_nobjects; i++)
 		OBJECT_INCREF(sd->locals[i]);
 	return res;
 }
@@ -100,4 +99,4 @@ struct Object **scopeobj_getlocalvarptr(struct Object *scope, size_t i)
 }
 
 
-const struct Type scopeobj_type = { .attribs = NULL, .nattribs = 0 };
+const struct Type scopeobj_type = { .methods = NULL, .nmethods = 0 };

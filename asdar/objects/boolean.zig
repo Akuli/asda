@@ -3,7 +3,7 @@ const objtyp = @import("../objtyp.zig");
 const Object = objtyp.Object;
 
 
-var type_value = objtyp.Type.init([]objtyp.Attribute { });
+var type_value = objtyp.Type.init([]*objtyp.Object { });
 pub const typ = &type_value;
 
 var true_value = Object.initComptime(typ, null);

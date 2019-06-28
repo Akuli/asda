@@ -21,7 +21,7 @@ const NON_NEGATIVE_INT_CONSTANT: u8 = '1';
 const NEGATIVE_INT_CONSTANT: u8 = '2';
 const TRUE_CONSTANT: u8 = 'T';
 const FALSE_CONSTANT: u8 = 'F';
-const LOOKUP_ATTRIBUTE: u8 = '.';
+const LOOKUP_METHOD: u8 = '.';
 const LOOKUP_FROM_MODULE: u8 = 'm';
 const CALL_VOID_FUNCTION: u8 = '(';
 const CALL_RETURNING_FUNCTION: u8 = ')';
@@ -50,14 +50,14 @@ const TYPE_VOID: u8 = 'v';
 pub const Op = struct {
     pub const VarData = struct{ level: u8, index: u16 };
     pub const CallFunctionData = struct{ returning: bool, nargs: u8 };
-    pub const LookupAttributeData = struct{ typ: *objtyp.Type, index: u16 };
+    pub const LookupMethodData = struct{ typ: *objtyp.Type, index: u16 };
     pub const CreateFunctionData = struct{ returning: bool, body: Code };
     pub const LookupFromModuleData = struct{ array: []?*Object, index: u16 };
 
     pub const Data = union(enum) {
         LookupVar: VarData,
         SetVar: VarData,
-        LookupAttribute: LookupAttributeData,
+        LookupMethod: LookupMethodData,
         LookupFromModule: LookupFromModuleData,
         CreateFunction: CreateFunctionData,
         CallFunction: CallFunctionData,
@@ -305,10 +305,10 @@ pub const BytecodeReader = struct {
                     try objects.integer.negateInPlace(&val);
                     break :blk Op.Data{ .Constant = val };
                 },
-                LOOKUP_ATTRIBUTE => blk: {
+                LOOKUP_METHOD => blk: {
                     const typ = (try self.readType(null)).?;
                     const i = try self.in.readIntLittle(u16);
-                    break :blk Op.Data{ .LookupAttribute = Op.LookupAttributeData{ .typ = typ, .index = i }};
+                    break :blk Op.Data{ .LookupMethod = Op.LookupMethodData{ .typ = typ, .index = i }};
                 },
                 LOOKUP_FROM_MODULE => blk: {
                     const path = self.import_paths.?[try self.in.readIntLittle(u16)];

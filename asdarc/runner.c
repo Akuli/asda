@@ -143,6 +143,7 @@ bool runner_run(struct Runner *rnr, struct Bc bc)
 
 		case BC_BOOLNEG:
 		{
+			DEBUG_PRINTF("boolneg\n");
 			struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
 			struct Object *old = *ptr;
 			*ptr = boolobj_c2asda(!boolobj_asda2c(old));
@@ -151,10 +152,12 @@ bool runner_run(struct Runner *rnr, struct Bc bc)
 		}
 		case BC_JUMPIF:
 		{
+			DEBUG_PRINTF("jumpif\n");
 			struct Object *ocond = rnr->stack[--rnr->stacklen];
 			bool bcond = boolobj_asda2c(ocond);
 			OBJECT_DECREF(ocond);
 			if(bcond) {
+				DEBUG_PRINTF("  jumping...\n");
 				i = bc.ops[i].data.jump_idx;
 				goto skip_iplusplus;
 			}
@@ -170,7 +173,20 @@ bool runner_run(struct Runner *rnr, struct Bc bc)
 				return false;
 			break;
 
+		case BC_GETMETHOD:
+		{
+			DEBUG_PRINTF("getmethod\n");
+			struct BcLookupMethodData data = bc.ops[i].data.lookupmethod;
+			struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
+			struct Object *parti = funcobj_new_partial(rnr->interp, data.type->methods[data.index], ptr, 1);
+			if(!parti)
+				return false;
+			OBJECT_DECREF(*ptr);
+			*ptr = parti;
+			break;
 		}
+
+		}   // end of switch
 
 		i++;
 skip_iplusplus:

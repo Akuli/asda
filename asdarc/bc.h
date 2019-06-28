@@ -11,6 +11,7 @@ enum BcOpKind {
 	BC_CONSTANT,
 	BC_SETVAR,
 	BC_GETVAR,
+	BC_GETMETHOD,
 	BC_CALLVOIDFUNC,
 	BC_CALLRETFUNC,
 	BC_BOOLNEG,
@@ -25,14 +26,14 @@ struct Bc {
 };
 
 struct BcVarData { uint8_t level; uint16_t index; };
-struct BcLookupAttribData { struct Type *type; uint16_t index; };
+struct BcLookupMethodData { const struct Type *type; uint16_t index; };
 struct BcCreateFuncData { bool returning; struct Bc body; };
 
 typedef union {
 	struct BcVarData var;
 	uint8_t callfunc_nargs;
 	uint16_t jump_idx;
-	struct BcLookupAttribData lookupattrib;
+	struct BcLookupMethodData lookupmethod;
 	struct BcCreateFuncData createfunc;
 	struct Object *obj;
 } BcData;

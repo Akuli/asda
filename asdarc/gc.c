@@ -5,7 +5,6 @@
 #include <string.h>
 #include <stdio.h>
 #include "interp.h"
-#include "builtins.h"
 #include "objects/string.h"
 
 static void refcount_debug_object(struct Object *obj, unsigned int is, unsigned int shouldB)

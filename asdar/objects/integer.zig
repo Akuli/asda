@@ -33,9 +33,7 @@ pub fn debugPrint(obj: *Object) void {
 }
 
 
-var type_value = objtyp.Type.init([]objtyp.Attribute {
-    objtyp.Attribute{ .is_method = true, .value = &tostring_value },
-});
+var type_value = objtyp.Type.init([]*objtyp.Object { &tostring_value });
 pub const typ = &type_value;
 
 pub const Data = struct {

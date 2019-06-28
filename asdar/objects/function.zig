@@ -4,8 +4,8 @@ const objtyp = @import("../objtyp.zig");
 const Object = objtyp.Object;
 
 
-var void_type_value = objtyp.Type.init([]objtyp.Attribute { });
-var returning_type_value = objtyp.Type.init([]objtyp.Attribute { });
+var void_type_value = objtyp.Type.init([]*objtyp.Object { });
+var returning_type_value = objtyp.Type.init([]*objtyp.Object { });
 pub const void_type = &void_type_value;
 pub const returning_type = &returning_type_value;
 

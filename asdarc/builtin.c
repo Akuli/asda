@@ -1,4 +1,4 @@
-#include "builtins.h"
+#include "builtin.h"
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -7,6 +7,7 @@
 #include "objtyp.h"
 #include "objects/bool.h"
 #include "objects/func.h"
+#include "objects/int.h"
 #include "objects/string.h"
 
 
@@ -29,5 +30,9 @@ static bool print_impl(struct Interp *interp, struct Object **args, size_t nargs
 static struct FuncObjData printdata = FUNCOBJDATA_COMPILETIMECREATE_NORET(print_impl);
 static struct Object print = OBJECT_COMPILETIMECREATE(&funcobj_type_noret, &printdata);
 
-struct Object* const builtins[] = { &print, &boolobj_true, &boolobj_false };
-const size_t nbuiltins = sizeof(builtins)/sizeof(builtins[0]);
+struct Object* const builtin_objects[] = { &print, &boolobj_true, &boolobj_false };
+const size_t builtin_nobjects = sizeof(builtin_objects)/sizeof(builtin_objects[0]);
+
+
+const struct Type* const builtin_types[] = { &stringobj_type, &intobj_type, &boolobj_type, &object_type };
+const size_t builtin_ntypes = sizeof(builtin_types)/sizeof(builtin_types[0]);

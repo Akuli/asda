@@ -31,6 +31,6 @@ void interp_errstr_printf_errno(struct Interp *interp, const char *fmt, ...);
 	errno = 0; \
 	interp_errstr_printf_errno(__VA_ARGS__); \
 }while(false)
-#define interp_errstr_nomem(interp) interp_errstr_printf((interp), "not enough memory");
+#define interp_errstr_nomem(interp) interp_errstr_printf((interp), "not enough memory")
 
 #endif   // INTERP_H

@@ -12,6 +12,7 @@ void bcop_destroy(const struct BcOp *op)
 		break;
 	case BC_SETVAR:
 	case BC_GETVAR:
+	case BC_GETMETHOD:
 	case BC_CALLVOIDFUNC:
 	case BC_CALLRETFUNC:
 	case BC_BOOLNEG:

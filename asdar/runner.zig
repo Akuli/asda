@@ -145,10 +145,10 @@ const Runner = struct {
                 bcreader.Op.Data.DidntReturnError => {
                     std.debug.panic("a non-void function didn't return");
                 },
-                bcreader.Op.Data.LookupAttribute => |lookup| {
+                bcreader.Op.Data.LookupMethod => |lookup| {
                     const last = self.stack.count() - 1;
                     const obj = self.stack.at(last);
-                    const new = try lookup.typ.getAttribute(self.interp, obj, lookup.index);
+                    const new = try lookup.typ.getMethod(self.interp, obj, lookup.index);
                     obj.decref();
                     self.stack.set(last, new);
                 },

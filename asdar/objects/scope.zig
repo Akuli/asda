@@ -84,7 +84,7 @@ pub const Data = struct {
     }
 };
 
-var type_value = objtyp.Type.init([]objtyp.Attribute { });
+var type_value = objtyp.Type.init([]*objtyp.Object { });
 pub const typ = &type_value;
 
 pub fn createGlobal(interp: *Interp) !*Object {
