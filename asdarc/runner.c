@@ -26,6 +26,7 @@ void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope
 	rnr->stack = NULL;
 	rnr->stacklen = 0;
 	rnr->stacksz = 0;
+	rnr->opidx = 0;
 }
 
 void runner_free(const struct Runner *rnr)
@@ -131,135 +132,143 @@ static bool integer_binary_operation(struct Runner *rnr, enum BcOpKind bok)
 	return ok;
 }
 
+// this function is long, but it feels ok because it divides nicely into max 10-ish line chunks
+static bool run_one_op(struct Runner *rnr, const struct BcOp *op)
+{
+	switch(op->kind) {
+	case BC_CONSTANT:
+		DEBUG_PRINTF("constant\n");
+		if(!push2stack(rnr, op->data.obj))
+			return false;
+		break;
+
+	case BC_SETVAR:
+	{
+		DEBUG_PRINTF("setvar level=%d index=%d\n",
+			(int)op->data.var.level, (int)op->data.var.index);
+		assert(rnr->stacklen >= 1);
+		struct Object **ptr = get_var_pointer(rnr, op);
+		if(*ptr)
+			OBJECT_DECREF(*ptr);
+
+		*ptr = rnr->stack[--rnr->stacklen];
+		assert(*ptr);
+		break;
+	}
+
+	case BC_GETVAR:
+	{
+		DEBUG_PRINTF("getvar level=%d index=%d\n",
+			(int)op->data.var.level, (int)op->data.var.index);
+		struct Object **ptr = get_var_pointer(rnr, op);
+		if(!*ptr) {
+			interp_errstr_printf(rnr->interp, "value of a variable hasn't been set");
+			return false;
+		}
+
+		if(!push2stack(rnr, *ptr))
+			return false;
+		break;
+	}
+
+	case BC_BOOLNEG:
+	{
+		DEBUG_PRINTF("boolneg\n");
+		assert(rnr->stacklen >= 1);
+		struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
+		struct Object *old = *ptr;
+		*ptr = boolobj_c2asda(!boolobj_asda2c(old));
+		OBJECT_DECREF(old);
+		break;
+	}
+
+	case BC_JUMPIF:
+	{
+		DEBUG_PRINTF("jumpif\n");
+		assert(rnr->stacklen >= 1);
+		struct Object *ocond = rnr->stack[--rnr->stacklen];
+		bool bcond = boolobj_asda2c(ocond);
+		OBJECT_DECREF(ocond);
+
+		if(bcond) {
+			DEBUG_PRINTF("  jumping...\n");
+			rnr->opidx = op->data.jump_idx;
+			return true;   // skip rnr->opidx++
+		}
+		break;
+	}
+
+	case BC_CALLRETFUNC:
+		if(!call_function(rnr, true, op->data.callfunc_nargs))
+			return false;
+		break;
+	case BC_CALLVOIDFUNC:
+		if(!call_function(rnr, false, op->data.callfunc_nargs))
+			return false;
+		break;
+
+	case BC_GETMETHOD:
+	{
+		DEBUG_PRINTF("getmethod\n");
+		assert(rnr->stacklen >= 1);
+		struct BcLookupMethodData data = op->data.lookupmethod;
+		struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
+		struct Object *parti = funcobj_new_partial(rnr->interp, data.type->methods[data.index], ptr, 1);
+		if(!parti)
+			return false;
+
+		OBJECT_DECREF(*ptr);
+		*ptr = parti;
+		break;
+	}
+
+	case BC_STRJOIN:
+	{
+		DEBUG_PRINTF("string join of %zu strings\n", (size_t)op->data.strjoin_nstrs);
+		assert(rnr->stacklen >= op->data.strjoin_nstrs);
+		struct Object **ptr = rnr->stack + rnr->stacklen - op->data.strjoin_nstrs;
+		struct Object *res = stringobj_join(rnr->interp, ptr, op->data.strjoin_nstrs);
+		if(!res)
+			return false;
+
+		for (; ptr < rnr->stack + rnr->stacklen; ptr++)
+			OBJECT_DECREF(*ptr);
+
+		rnr->stacklen -= op->data.strjoin_nstrs;
+		rnr->stack[rnr->stacklen++] = res;
+		break;
+	}
+
+	case BC_INT_ADD:
+	case BC_INT_SUB:
+	case BC_INT_MUL:
+		if(!integer_binary_operation(rnr, op->kind))
+			return false;
+		break;
+
+	case BC_INT_NEG:
+	{
+		struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
+		struct Object *obj = intobj_neg(rnr->interp, *ptr);
+		if(!obj)
+			return false;
+		OBJECT_DECREF(*ptr);
+		*ptr = obj;
+		break;
+	}
+
+	}   // end of switch
+
+	rnr->opidx++;
+	return true;
+}
+
 bool runner_run(struct Runner *rnr, struct Bc bc)
 {
-	size_t i = 0;
-	while (i < bc.nops) {
-		switch(bc.ops[i].kind) {
-		case BC_CONSTANT:
-			DEBUG_PRINTF("constant\n");
-			if(!push2stack(rnr, bc.ops[i].data.obj))
-				return false;
-			break;
-
-		case BC_SETVAR:
-		{
-			DEBUG_PRINTF("setvar level=%d index=%d\n",
-				(int)bc.ops[i].data.var.level, (int)bc.ops[i].data.var.index);
-			assert(rnr->stacklen >= 1);
-			struct Object **ptr = get_var_pointer(rnr, &bc.ops[i]);
-			if(*ptr)
-				OBJECT_DECREF(*ptr);
-			*ptr = rnr->stack[--rnr->stacklen];
-			assert(*ptr);
-			break;
-		}
-
-		case BC_GETVAR:
-		{
-			DEBUG_PRINTF("getvar level=%d index=%d\n",
-				(int)bc.ops[i].data.var.level, (int)bc.ops[i].data.var.index);
-			struct Object **ptr = get_var_pointer(rnr, &bc.ops[i]);
-			if(!*ptr) {
-				interp_errstr_printf(rnr->interp, "value of a variable hasn't been set");
-				return false;
-			}
-
-			if(!push2stack(rnr, *ptr))
-				return false;
-			break;
-		}
-
-		case BC_BOOLNEG:
-		{
-			DEBUG_PRINTF("boolneg\n");
-			assert(rnr->stacklen >= 1);
-			struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
-			struct Object *old = *ptr;
-			*ptr = boolobj_c2asda(!boolobj_asda2c(old));
-			OBJECT_DECREF(old);
-			break;
-		}
-		case BC_JUMPIF:
-		{
-			DEBUG_PRINTF("jumpif\n");
-			assert(rnr->stacklen >= 1);
-			struct Object *ocond = rnr->stack[--rnr->stacklen];
-			bool bcond = boolobj_asda2c(ocond);
-			OBJECT_DECREF(ocond);
-			if(bcond) {
-				DEBUG_PRINTF("  jumping...\n");
-				i = bc.ops[i].data.jump_idx;
-				goto skip_iplusplus;
-			}
-			break;
-		}
-
-		case BC_CALLRETFUNC:
-			if(!call_function(rnr, true, bc.ops[i].data.callfunc_nargs))
-				return false;
-			break;
-		case BC_CALLVOIDFUNC:
-			if(!call_function(rnr, false, bc.ops[i].data.callfunc_nargs))
-				return false;
-			break;
-
-		case BC_GETMETHOD:
-		{
-			DEBUG_PRINTF("getmethod\n");
-			assert(rnr->stacklen >= 1);
-			struct BcLookupMethodData data = bc.ops[i].data.lookupmethod;
-			struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
-			struct Object *parti = funcobj_new_partial(rnr->interp, data.type->methods[data.index], ptr, 1);
-			if(!parti)
-				return false;
-			OBJECT_DECREF(*ptr);
-			*ptr = parti;
-			break;
-		}
-
-		case BC_STRJOIN:
-		{
-			DEBUG_PRINTF("string join of %zu strings\n", (size_t)bc.ops[i].data.strjoin_nstrs);
-			assert(rnr->stacklen >= bc.ops[i].data.strjoin_nstrs);
-			struct Object **ptr = rnr->stack + rnr->stacklen - bc.ops[i].data.strjoin_nstrs;
-			struct Object *res = stringobj_join(rnr->interp, ptr, bc.ops[i].data.strjoin_nstrs);
-			if(!res)
-				return false;
-
-			for (; ptr < rnr->stack + rnr->stacklen; ptr++)
-				OBJECT_DECREF(*ptr);
-
-			rnr->stacklen -= bc.ops[i].data.strjoin_nstrs;
-			rnr->stack[rnr->stacklen++] = res;
-			break;
-		}
-
-		case BC_INT_ADD:
-		case BC_INT_SUB:
-		case BC_INT_MUL:
-			if(!integer_binary_operation(rnr, bc.ops[i].kind))
-				return false;
-			break;
-
-		case BC_INT_NEG:
-		{
-			struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
-			struct Object *obj = intobj_neg(rnr->interp, *ptr);
-			if(!obj)
-				return false;
-			OBJECT_DECREF(*ptr);
-			*ptr = obj;
-			break;
-		}
-
-		}   // end of switch
-
-		i++;
-skip_iplusplus:
-		(void)0;   // this does nothing, it's needed because c syntax is awesome
+	while (rnr->opidx < bc.nops) {
+		if(!run_one_op(rnr, &bc.ops[rnr->opidx]))
+			return false;
 	}
-	assert(i == bc.nops);
-
+	assert(rnr->opidx == bc.nops);
 	return true;
 }

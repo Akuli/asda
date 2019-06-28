@@ -11,11 +11,13 @@ enum RunResult {
 	DIDNT_RETURN,
 };
 
+// think of the content of this struct as an implementation detail
 struct Runner {
 	struct Interp *interp;
 	struct Object *scope;
 	struct Object **stack;
 	size_t stacklen, stacksz;
+	size_t opidx;
 };
 
 // never fails
