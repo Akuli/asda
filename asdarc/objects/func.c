@@ -75,8 +75,10 @@ static void funcdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 		for (struct Object **ptr = data->partial; ptr < data->partial+data->npartial; ptr++)
 			OBJECT_DECREF(*ptr);
 	}
-	if (freenonrefs)
+	if (freenonrefs) {
 		free(data->partial);
+		free(data);
+	}
 }
 
 struct Object *funcobj_new_partial(struct Interp *interp, struct Object *f, struct Object **args, size_t nargs)
