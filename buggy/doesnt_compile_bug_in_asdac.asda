@@ -1,0 +1,2 @@
+import "lel.asda" as lellie
+print(lellie:a.to_string())

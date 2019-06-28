@@ -141,3 +141,8 @@ $ python3 -m pytest --cov=asdac --cov=pyasda && python3 -m coverage html
 ```
 
 Then open `htmlcov/index.html` in your favorite browser to view the results.
+
+The `buggy` folder contains asda codes that don't work like they should
+work. Try compiling and running them to see the difference.
+
+There are also READMEs in some subdirectories. Read them too.
