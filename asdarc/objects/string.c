@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include "func.h"
 #include "../utf8.h"
 #include "../interp.h"
 #include "../objtyp.h"
@@ -120,5 +121,18 @@ empty:
 }
 
 
-// TODO: add methods
-const struct Type stringobj_type = { .methods = NULL, .nmethods = 0 };
+static struct Object *tostring_impl(struct Interp *interp, struct Object **args, size_t nargs)
+{
+	assert(nargs == 1);
+	assert(args[0]->type == &stringobj_type);
+	OBJECT_INCREF(args[0]);
+	return args[0];
+}
+
+static struct FuncObjData tostringdata = FUNCOBJDATA_COMPILETIMECREATE_RET(tostring_impl);
+static struct Object tostring = OBJECT_COMPILETIMECREATE(&funcobj_type_ret, &tostringdata);
+
+// TODO: first string method should be uppercase
+static struct Object *methods[] = { &tostring, &tostring };
+
+const struct Type stringobj_type = { .methods = methods, .nmethods = sizeof(methods)/sizeof(methods[0]) };
