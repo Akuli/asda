@@ -7,7 +7,9 @@
 #include "interp.h"
 #include "objects/bool.h"
 #include "objects/func.h"
+#include "objects/int.h"
 #include "objects/scope.h"
+#include "objects/string.h"
 
 
 // toggle these to choose whether running each op is printed:
@@ -77,6 +79,7 @@ static struct Object **get_var_pointer(struct Runner *rnr, const struct BcOp *op
 static bool call_function(struct Runner *rnr, bool ret, size_t nargs)
 {
 	DEBUG_PRINTF("callfunc ret=%s nargs=%zu\n", ret?"true":"false", nargs);
+	assert(rnr->stacklen >= nargs + 1);
 	rnr->stacklen -= nargs;
 	struct Object **argptr = rnr->stack + rnr->stacklen;
 	struct Object *func = rnr->stack[--rnr->stacklen];
@@ -103,6 +106,31 @@ static bool call_function(struct Runner *rnr, bool ret, size_t nargs)
 	return true;
 }
 
+static bool integer_binary_operation(struct Runner *rnr, enum BcOpKind bok)
+{
+	DEBUG_PRINTF("integer binary op\n");
+	assert(rnr->stacklen >= 2);
+	struct Object *x = rnr->stack[--rnr->stacklen];
+	struct Object *y = rnr->stack[--rnr->stacklen];
+	struct Object *res;
+
+	switch(bok) {
+		case BC_INT_ADD: res = intobj_add(rnr->interp, x, y); break;
+		case BC_INT_SUB: res = intobj_sub(rnr->interp, x, y); break;
+		case BC_INT_MUL: res = intobj_mul(rnr->interp, x, y); break;
+		default: assert(0);
+	}
+	OBJECT_DECREF(x);
+	OBJECT_DECREF(y);
+
+	if(!res)
+		return false;
+
+	bool ok = push2stack(rnr, res);
+	OBJECT_DECREF(res);
+	return ok;
+}
+
 bool runner_run(struct Runner *rnr, struct Bc bc)
 {
 	size_t i = 0;
@@ -118,6 +146,7 @@ bool runner_run(struct Runner *rnr, struct Bc bc)
 		{
 			DEBUG_PRINTF("setvar level=%d index=%d\n",
 				(int)bc.ops[i].data.var.level, (int)bc.ops[i].data.var.index);
+			assert(rnr->stacklen >= 1);
 			struct Object **ptr = get_var_pointer(rnr, &bc.ops[i]);
 			if(*ptr)
 				OBJECT_DECREF(*ptr);
@@ -144,6 +173,7 @@ bool runner_run(struct Runner *rnr, struct Bc bc)
 		case BC_BOOLNEG:
 		{
 			DEBUG_PRINTF("boolneg\n");
+			assert(rnr->stacklen >= 1);
 			struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
 			struct Object *old = *ptr;
 			*ptr = boolobj_c2asda(!boolobj_asda2c(old));
@@ -153,6 +183,7 @@ bool runner_run(struct Runner *rnr, struct Bc bc)
 		case BC_JUMPIF:
 		{
 			DEBUG_PRINTF("jumpif\n");
+			assert(rnr->stacklen >= 1);
 			struct Object *ocond = rnr->stack[--rnr->stacklen];
 			bool bcond = boolobj_asda2c(ocond);
 			OBJECT_DECREF(ocond);
@@ -176,6 +207,7 @@ bool runner_run(struct Runner *rnr, struct Bc bc)
 		case BC_GETMETHOD:
 		{
 			DEBUG_PRINTF("getmethod\n");
+			assert(rnr->stacklen >= 1);
 			struct BcLookupMethodData data = bc.ops[i].data.lookupmethod;
 			struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
 			struct Object *parti = funcobj_new_partial(rnr->interp, data.type->methods[data.index], ptr, 1);
@@ -184,6 +216,41 @@ bool runner_run(struct Runner *rnr, struct Bc bc)
 			OBJECT_DECREF(*ptr);
 			*ptr = parti;
 			break;
+		}
+
+		case BC_STRJOIN:
+		{
+			DEBUG_PRINTF("string join of %zu strings\n", (size_t)bc.ops[i].data.strjoin_nstrs);
+			assert(rnr->stacklen >= bc.ops[i].data.strjoin_nstrs);
+			struct Object **ptr = rnr->stack + rnr->stacklen - bc.ops[i].data.strjoin_nstrs;
+			struct Object *res = stringobj_join(rnr->interp, ptr, bc.ops[i].data.strjoin_nstrs);
+			if(!res)
+				return false;
+
+			for (; ptr < rnr->stack + rnr->stacklen; ptr++)
+				OBJECT_DECREF(*ptr);
+
+			rnr->stacklen -= bc.ops[i].data.strjoin_nstrs;
+			rnr->stack[rnr->stacklen++] = res;
+			break;
+		}
+
+		case BC_INT_ADD:
+		case BC_INT_SUB:
+		case BC_INT_MUL:
+			if(!integer_binary_operation(rnr, bc.ops[i].kind))
+				return false;
+			break;
+
+		case BC_INT_NEG:
+		{
+			struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
+			struct Object *obj = intobj_neg(rnr->interp, *ptr);
+			if(!obj)
+				return false;
+			OBJECT_DECREF(*ptr);
+			*ptr = obj;
+			return true;
 		}
 
 		}   // end of switch

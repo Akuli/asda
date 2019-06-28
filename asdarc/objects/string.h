@@ -26,6 +26,9 @@ strings that have interp==NULL (i.e. strings created at compile time)
 */
 bool stringobj_toutf8(struct Object *obj, const char **val, size_t *len);
 
+// joins all da strings
+struct Object *stringobj_join(struct Interp *interp, struct Object *const *strs, size_t nstrs);
+
 extern const struct Type stringobj_type;
 
 #endif   // OBJECTS_STRING_H

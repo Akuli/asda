@@ -17,6 +17,11 @@ void bcop_destroy(const struct BcOp *op)
 	case BC_CALLRETFUNC:
 	case BC_BOOLNEG:
 	case BC_JUMPIF:
+	case BC_STRJOIN:
+	case BC_INT_ADD:
+	case BC_INT_SUB:
+	case BC_INT_NEG:
+	case BC_INT_MUL:
 		break;
 	}
 }

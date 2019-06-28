@@ -21,9 +21,14 @@
 #define CALL_RETURNING_FUNCTION ')'
 #define BOOLNEG '!'
 #define JUMPIF 'J'
+#define STRING_JOIN 'j'
 #define GET_METHOD '.'   // currently all attributes are methods
 #define NON_NEGATIVE_INT_CONSTANT '1'
 #define NEGATIVE_INT_CONSTANT '2'
+#define INT_ADD '+'
+#define INT_SUB '-'
+#define INT_NEG '_'
+#define INT_MUL '*'
 #define END_OF_BODY 'E'
 
 #define TYPEBYTE_BUILTIN 'b'
@@ -333,6 +338,15 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res
 			return false;
 		assert(res->data.lookupmethod.index < res->data.lookupmethod.type->nmethods);
 		return true;
+
+	case STRING_JOIN:
+		res->kind = BC_STRJOIN;
+		return read_uint16(bcr, &res->data.strjoin_nstrs);
+
+	case INT_ADD: res->kind = BC_INT_ADD; return true;
+	case INT_SUB: res->kind = BC_INT_SUB; return true;
+	case INT_NEG: res->kind = BC_INT_NEG; return true;
+	case INT_MUL: res->kind = BC_INT_MUL; return true;
 
 	default:
 		interp_errstr_printf(bcr->interp, "unknown op byte");

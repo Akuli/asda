@@ -16,6 +16,11 @@ enum BcOpKind {
 	BC_CALLRETFUNC,
 	BC_BOOLNEG,
 	BC_JUMPIF,
+	BC_STRJOIN,
+	BC_INT_ADD,   // x+y
+	BC_INT_SUB,   // x-y
+	BC_INT_NEG,   // -x
+	BC_INT_MUL,   // x*y
 };
 
 struct BcOp;
@@ -33,6 +38,7 @@ typedef union {
 	struct BcVarData var;
 	uint8_t callfunc_nargs;
 	uint16_t jump_idx;
+	uint16_t strjoin_nstrs;
 	struct BcLookupMethodData lookupmethod;
 	struct BcCreateFuncData createfunc;
 	struct Object *obj;

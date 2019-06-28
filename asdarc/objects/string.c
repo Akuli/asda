@@ -1,7 +1,9 @@
 #include "string.h"
+#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 #include "../utf8.h"
 #include "../interp.h"
 #include "../objtyp.h"
@@ -48,10 +50,12 @@ struct Object *stringobj_new_nocpy(struct Interp *interp, uint32_t *val, size_t 
 struct Object *stringobj_new(struct Interp *interp, const uint32_t *val, size_t len)
 {
 	uint32_t *valcp = malloc(sizeof(uint32_t)*len);
-	if (!valcp) {
+	if (len && !valcp) {   // malloc(0) is special
 		interp_errstr_nomem(interp);
 		return NULL;
 	}
+
+	memcpy(valcp, val, sizeof(uint32_t)*len);
 	return stringobj_new_nocpy(interp, valcp, len);
 }
 
@@ -77,6 +81,42 @@ bool stringobj_toutf8(struct Object *obj, const char **val, size_t *len)
 	*val = strdat->utf8cache;
 	*len = strdat->utf8cachelen;
 	return true;
+}
+
+struct Object *stringobj_join(struct Interp *interp, struct Object *const *strs, size_t nstrs)
+{
+	if(nstrs == 0)
+		goto empty;
+	if(nstrs == 1) {
+		OBJECT_INCREF(strs[0]);
+		return strs[0];
+	}
+
+	size_t lensum = 0;
+	for (struct Object *const *ptr = strs; ptr < strs+nstrs; ptr++)
+		lensum += ((struct StringData *) (*ptr)->data.val)->len;
+
+	if(!lensum)
+		goto empty;  // malloc(0) is special
+
+	uint32_t *buf = malloc(sizeof(uint32_t)*lensum);
+	if(!buf) {
+		interp_errstr_nomem(interp);
+		return NULL;
+	}
+
+	uint32_t *p = buf;
+	for (struct Object *const *ptr = strs; ptr < strs+nstrs; ptr++) {
+		struct StringData *strdat = (*ptr)->data.val;
+		memcpy(p, strdat->val, sizeof(uint32_t)*strdat->len);
+		p += strdat->len;
+	}
+	assert(p == buf + lensum);
+
+	return stringobj_new_nocpy(interp, buf, lensum);
+
+empty:
+	return stringobj_new(interp, NULL, 0);
 }
 
 

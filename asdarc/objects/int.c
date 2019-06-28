@@ -23,7 +23,8 @@ static void intdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 }
 
 
-struct Object *intobj_new_mpzt(struct Interp *interp, mpz_t mpz)
+// will clear the mpz_t (immediately on error, otherise when returned object is destroyed)
+static struct Object *new_from_mpzt(struct Interp *interp, mpz_t mpz)
 {
 	struct IntData *data = malloc(sizeof *data);
 	if(!data) {
@@ -50,10 +51,37 @@ struct Object *intobj_new_bebytes(struct Interp *interp, const unsigned char *se
 	mpz_import(mpz, len, BIG_ENDIAN, 1, 0, 0, seq);
 	if(negate)
 		mpz_neg(mpz, mpz);
-	return intobj_new_mpzt(interp, mpz);
+	return new_from_mpzt(interp, mpz);
 }
 
 #undef BIG_ENDIAN
+
+
+static struct Object *binary_operation(
+	struct Interp *interp, struct Object *x, struct Object *y,
+	void (*func)(mpz_t, const mpz_t, const mpz_t))
+{
+	assert(x->type == &intobj_type);
+	assert(y->type == &intobj_type);
+
+	mpz_t res;
+	mpz_init(res);
+	func(res, ((struct IntData*)x->data.val)->mpz, ((struct IntData*)y->data.val)->mpz);
+	return new_from_mpzt(interp, res);
+}
+
+struct Object *intobj_add(struct Interp *interp, struct Object *x, struct Object *y) { return binary_operation(interp, x, y, mpz_add); }
+struct Object *intobj_sub(struct Interp *interp, struct Object *x, struct Object *y) { return binary_operation(interp, x, y, mpz_sub); }
+struct Object *intobj_mul(struct Interp *interp, struct Object *x, struct Object *y) { return binary_operation(interp, x, y, mpz_mul); }
+
+struct Object *intobj_neg(struct Interp *interp, struct Object *x)
+{
+	assert(x->type == &intobj_type);
+	mpz_t res;
+	mpz_init(res);
+	mpz_neg(res, ((struct IntData*)x->data.val)->mpz);
+	return new_from_mpzt(interp, res);
+}
 
 
 static struct Object *tostring_impl(struct Interp *interp, struct Object **args, size_t nargs)
