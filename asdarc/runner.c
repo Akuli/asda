@@ -250,7 +250,7 @@ bool runner_run(struct Runner *rnr, struct Bc bc)
 				return false;
 			OBJECT_DECREF(*ptr);
 			*ptr = obj;
-			return true;
+			break;
 		}
 
 		}   // end of switch
