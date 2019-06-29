@@ -51,7 +51,7 @@ static struct Object *asda_function_cfunc_ret(struct Interp *interp, struct ObjD
 	case RUNNER_VALUERETURN:
 		return rnr.retval;
 	default:
-		assert(0);    // bug in asda compiler or something not implemented in this interpreter
+		assert(0);
 	}
 }
 
@@ -65,7 +65,7 @@ static bool asda_function_cfunc_noret(struct Interp *interp, struct ObjData data
 	case RUNNER_VOIDRETURN:
 		return true;
 	default:
-		assert(0);    // bug in asda compiler or something not implemented in this interpreter
+		assert(0);
 	}
 }
 
