@@ -34,7 +34,7 @@ union call_result {
 };
 
 static union call_result
-call_partial_func(struct Interp *interp, struct ObjData data, struct Object **args, size_t nargs, bool ret)
+call_partial_func(struct Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs, bool ret)
 {
 	const struct PartialFuncData *pfd = data.val;
 
@@ -70,12 +70,12 @@ call_partial_func(struct Interp *interp, struct ObjData data, struct Object **ar
 	return res;
 }
 
-struct Object *partialfunc_cfunc_ret(struct Interp *interp, struct ObjData data, struct Object **args, size_t nargs)
+struct Object *partialfunc_cfunc_ret(struct Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs)
 {
 	return call_partial_func(interp, data, args, nargs, true).ret;
 }
 
-bool partialfunc_cfunc_noret(struct Interp *interp, struct ObjData data, struct Object **args, size_t nargs)
+bool partialfunc_cfunc_noret(struct Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs)
 {
 	return call_partial_func(interp, data, args, nargs, false).noret;
 }

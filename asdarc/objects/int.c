@@ -81,7 +81,8 @@ struct Object *intobj_neg(struct Interp *interp, struct Object *x)
 }
 
 
-static struct Object *tostring_impl(struct Interp *interp, struct ObjData data, struct Object **args, size_t nargs)
+static struct Object *tostring_impl(struct Interp *interp, struct ObjData data,
+	struct Object *const *args, size_t nargs)
 {
 	assert(nargs == 1);
 	assert(args[0]->type == &intobj_type);

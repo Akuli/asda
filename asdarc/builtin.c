@@ -10,7 +10,7 @@
 #include "objects/string.h"
 
 
-static bool print_impl(struct Interp *interp, struct ObjData data, struct Object **args, size_t nargs)
+static bool print_impl(struct Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs)
 {
 	assert(nargs == 1);
 	assert(args[0]->type == &stringobj_type);

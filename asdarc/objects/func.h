@@ -10,8 +10,8 @@ extern const struct Type funcobj_type_ret;
 extern const struct Type funcobj_type_noret;
 
 // TODO: add const to args
-typedef struct Object* (*funcobj_cfunc_ret  )(struct Interp *interp, struct ObjData data, struct Object **args, size_t nargs);
-typedef bool           (*funcobj_cfunc_noret)(struct Interp *interp, struct ObjData data, struct Object **args, size_t nargs);
+typedef struct Object* (*funcobj_cfunc_ret  )(struct Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs);
+typedef bool           (*funcobj_cfunc_noret)(struct Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs);
 
 // it is an implementation detail that this is here, don't rely on it
 // currently it is needed for FUNCOBJDATA_COMPILETIMECREATE macros

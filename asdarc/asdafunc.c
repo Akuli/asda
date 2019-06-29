@@ -22,7 +22,9 @@ static void destroy_asdafunc_data(void *vpdata, bool decrefrefs, bool freenonref
 		free(vpdata);
 }
 
-static enum RunnerResult run(struct Interp *interp, const struct AsdaFunctionData *afd, struct Runner *rnr, struct Object **args, size_t nargs)
+static enum RunnerResult run(
+	struct Interp *interp, const struct AsdaFunctionData *afd, struct Runner *rnr,
+	struct Object *const*args, size_t nargs)
 {
 	struct Object *sco = scopeobj_newsub(interp, afd->defscope, afd->code.nlocalvars);
 	if(!sco)
@@ -41,7 +43,8 @@ static enum RunnerResult run(struct Interp *interp, const struct AsdaFunctionDat
 	return res;
 }
 
-static struct Object *asda_function_cfunc_ret(struct Interp *interp, struct ObjData data, struct Object **args, size_t nargs)
+static struct Object *asda_function_cfunc_ret(struct Interp *interp, struct ObjData data,
+	struct Object *const *args, size_t nargs)
 {
 	struct Runner rnr;
 	switch (run(interp, data.val, &rnr, args, nargs)) {
@@ -55,7 +58,8 @@ static struct Object *asda_function_cfunc_ret(struct Interp *interp, struct ObjD
 	}
 }
 
-static bool asda_function_cfunc_noret(struct Interp *interp, struct ObjData data, struct Object **args, size_t nargs)
+static bool asda_function_cfunc_noret(struct Interp *interp, struct ObjData data,
+	struct Object *const *args, size_t nargs)
 {
 	struct Runner rnr;
 	switch (run(interp, data.val, &rnr, args, nargs)) {
