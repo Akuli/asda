@@ -46,7 +46,7 @@ static bool grow_stack(struct Runner *rnr, size_t minsz)
 
 	size_t newsz;
 
-	// I haven't changing the hard-coded constants to optimize
+	// I haven't tried changing the hard-coded constants to optimize
 	if (rnr->stacksz == 0)
 		newsz = 3;
 	else
@@ -55,10 +55,12 @@ static bool grow_stack(struct Runner *rnr, size_t minsz)
 	if (newsz < minsz)
 		newsz = minsz;
 
-	if (!( rnr->stack = realloc(rnr->stack, sizeof(struct Object*) * newsz) )) {
+	struct Object **ptr = realloc(rnr->stack, sizeof(struct Object*) * newsz);
+	if(!ptr) {
 		interp_errstr_nomem(rnr->interp);
 		return false;
 	}
+	rnr->stack = ptr;
 
 	rnr->stacksz = newsz;
 	return true;
@@ -129,9 +131,8 @@ static bool integer_binary_operation(struct Runner *rnr, enum BcOpKind bok)
 	if(!res)
 		return false;
 
-	bool ok = push2stack(rnr, res);
-	OBJECT_DECREF(res);
-	return ok;
+	rnr->stack[rnr->stacklen++] = res;   // it will fit because x and y came from the stack
+	return true;
 }
 
 
@@ -191,11 +192,11 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 	{
 		DEBUG_PRINTF("jumpif\n");
 		assert(rnr->stacklen >= 1);
-		struct Object *ocond = rnr->stack[--rnr->stacklen];
-		bool bcond = boolobj_asda2c(ocond);
-		OBJECT_DECREF(ocond);
+		struct Object *obj = rnr->stack[--rnr->stacklen];
+		bool b = boolobj_asda2c(obj);
+		OBJECT_DECREF(obj);
 
-		if(bcond) {
+		if(b) {
 			DEBUG_PRINTF("  jumping...\n");
 			rnr->opidx = op->data.jump_idx;
 			goto skip_opidx_plusplus;
@@ -240,7 +241,11 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 			OBJECT_DECREF(*ptr);
 
 		rnr->stacklen -= op->data.strjoin_nstrs;
-		rnr->stack[rnr->stacklen++] = res;
+		bool ok = push2stack(rnr, res);   // grow the stack if this was a join of 0 strings (result is empty string)
+		OBJECT_DECREF(res);
+
+		if (!ok)
+			return RUNNER_ERROR;
 		break;
 	}
 
@@ -266,6 +271,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 	}
 
 	case BC_VOIDRETURN:
+		DEBUG_PRINTF("void return\n");
 		ret = RUNNER_VOIDRETURN;
 		break;
 	case BC_VALUERETURN:
