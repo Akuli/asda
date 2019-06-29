@@ -6,6 +6,7 @@
 #include "asdafunc.h"
 #include "bc.h"
 #include "interp.h"
+#include "partialfunc.h"
 #include "objects/bool.h"
 #include "objects/func.h"
 #include "objects/int.h"
@@ -221,7 +222,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 		assert(rnr->stacklen >= 1);
 		struct BcLookupMethodData data = op->data.lookupmethod;
 		struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
-		struct Object *parti = funcobj_new_partial(rnr->interp, data.type->methods[data.index], ptr, 1);
+		struct Object *parti = partialfunc_create(rnr->interp, data.type->methods[data.index], ptr, 1);
 		if(!parti)
 			return RUNNER_ERROR;
 
