@@ -1,0 +1,2 @@
+let print_and_return = (Str message) -> void:
+    void
