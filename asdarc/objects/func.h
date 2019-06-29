@@ -35,8 +35,8 @@ struct FuncObjData {
 struct Object *funcobj_new_ret  (struct Interp *interp, funcobj_cfunc_ret   f, struct ObjData data);
 struct Object *funcobj_new_noret(struct Interp *interp, funcobj_cfunc_noret f, struct ObjData data);
 
-struct Object* funcobj_call_ret  (struct Interp *interp, struct Object *f, struct Object **args, size_t nargs);
-bool           funcobj_call_noret(struct Interp *interp, struct Object *f, struct Object **args, size_t nargs);
+struct Object* funcobj_call_ret  (struct Interp *interp, struct Object *f, struct Object *const *args, size_t nargs);
+bool           funcobj_call_noret(struct Interp *interp, struct Object *f, struct Object *const *args, size_t nargs);
 
 
 #endif   // OBJECTS_FUNC_H

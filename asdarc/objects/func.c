@@ -10,14 +10,14 @@ const struct Type funcobj_type_ret   = { .methods = NULL, .nmethods = 0 };
 const struct Type funcobj_type_noret = { .methods = NULL, .nmethods = 0 };
 
 
-struct Object *funcobj_call_ret(struct Interp *interp, struct Object *f, struct Object **args, size_t nargs)
+struct Object *funcobj_call_ret(struct Interp *interp, struct Object *f, struct Object *const *args, size_t nargs)
 {
 	assert(f->type == &funcobj_type_ret);
 	struct FuncObjData *fod = f->data.val;
 	return fod->cfunc.ret(interp, fod->data, args, nargs);
 }
 
-bool funcobj_call_noret(struct Interp *interp, struct Object *f, struct Object **args, size_t nargs)
+bool funcobj_call_noret(struct Interp *interp, struct Object *f, struct Object *const *args, size_t nargs)
 {
 	assert(f->type == &funcobj_type_noret);
 	struct FuncObjData *fod = f->data.val;
