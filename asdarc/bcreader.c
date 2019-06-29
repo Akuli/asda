@@ -8,8 +8,9 @@
 #include "objtyp.h"
 #include "path.h"
 #include "objects/bool.h"
-#include "objects/string.h"
+#include "objects/func.h"
 #include "objects/int.h"
+#include "objects/string.h"
 
 #define IMPORT_SECTION 'i'
 #define SET_VAR 'V'
@@ -21,6 +22,7 @@
 #define CALL_VOID_FUNCTION '('
 #define CALL_RETURNING_FUNCTION ')'
 #define BOOLNEG '!'
+#define POP_ONE 'P'
 #define JUMPIF 'J'
 #define STRING_JOIN 'j'
 #define GET_METHOD '.'   // currently all attributes are methods
@@ -30,9 +32,15 @@
 #define INT_SUB '-'
 #define INT_NEG '_'
 #define INT_MUL '*'
+#define CREATE_FUNCTION 'f'
+#define VOID_RETURN 'r'
+#define VALUE_RETURN 'R'
+#define DIDNT_RETURN_ERROR 'd'
 #define END_OF_BODY 'E'
 
 #define TYPEBYTE_BUILTIN 'b'
+#define TYPEBYTE_FUNC 'f'
+#define TYPEBYTE_VOID 'v'
 
 // from the tables in ascii(7), we see that '!' is first printable ascii char and '~' is last
 #define is_printable_ascii(c) ('!' <= (c) && (c) <= '~')
@@ -225,27 +233,57 @@ static bool read_opbyte(struct BcReader *bcr, unsigned char *ob)
 	return true;
 }
 
-const struct Type *read_type(struct BcReader *bcr)
+static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowvoid)
 {
-	// TODO: many types missing here
 	unsigned char byte;
 	if(!read_bytes(bcr, &byte, 1))
-		return NULL;
+		return false;
 
 	switch(byte) {
 	case TYPEBYTE_BUILTIN:
 	{
 		uint8_t i;
 		if (!read_uint8(bcr, &i))
-			return NULL;
+			return false;
 		assert(i < builtin_ntypes);
-		return builtin_types[i];
+		*typ = builtin_types[i];
+		return true;
+	}
+
+	case TYPEBYTE_VOID:
+		if (allowvoid) {
+			*typ = NULL;
+			return true;
+		}
+
+		interp_errstr_printf(bcr->interp, "unexpected void type byte");
+		append_byte_2_errstr(bcr->interp, byte);
+		return false;
+
+	case TYPEBYTE_FUNC:
+	{
+		// TODO: this throws away most of the information, should it be used somewhere instead?
+		const struct Type *rettyp;
+		if(!read_type(bcr, &rettyp, true))
+			return false;
+
+		uint8_t nargs;
+		if(!read_bytes(bcr, &nargs, 1))
+			return false;
+		for (uint8_t i = 0; i < nargs; i++) {
+			const struct Type *ignored;
+			if(!read_type(bcr, &ignored, false))
+				return false;
+		}
+
+		*typ = rettyp ? &funcobj_type_ret : &funcobj_type_noret;
+		return true;
 	}
 
 	default:
 		interp_errstr_printf(bcr->interp, "unknown type byte");
 		append_byte_2_errstr(bcr->interp, byte);
-		return NULL;
+		return false;
 	}
 }
 
@@ -300,6 +338,34 @@ static bool read_int_constant(struct BcReader *bcr, struct Object **objptr, bool
 	return !!*objptr;
 }
 
+
+static bool read_body(struct BcReader *bcr, struct Bc *bc);  // forward declare
+static bool read_create_function(struct BcReader *bcr, struct BcOp *res)
+{
+	res->kind = BC_CREATEFUNC;
+
+	if (ungetc(TYPEBYTE_FUNC, bcr->in) == EOF) {
+		interp_errstr_printf_errno(bcr->interp, "ungetc failed");
+		return false;
+	}
+
+	const struct Type *functyp;
+	if(!read_type(bcr, &functyp, false))
+		return false;
+
+	unsigned char retbyt;
+	if(!read_bytes(bcr, &retbyt, 1))
+		return false;
+	if(retbyt != 0 && retbyt != 1) {
+		interp_errstr_printf(bcr->interp, "expected 0 byte or 1 byte to indicate whether function is returning");
+		append_byte_2_errstr(bcr->interp, retbyt);
+		return false;
+	}
+	res->data.createfunc.returning = retbyt;
+
+	return read_body(bcr, &res->data.createfunc.body);
+}
+
 static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res)
 {
 	switch(opbyte) {
@@ -321,9 +387,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res
 		return read_callfunc(bcr, res, BC_CALLVOIDFUNC);
 	case CALL_RETURNING_FUNCTION:
 		return read_callfunc(bcr, res, BC_CALLRETFUNC);
-	case BOOLNEG:
-		res->kind = BC_BOOLNEG;
-		return true;
 	case JUMPIF:
 		res->kind = BC_JUMPIF;
 		return read_uint16(bcr, &res->data.jump_idx);
@@ -333,16 +396,26 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res
 		return read_int_constant(bcr, &res->data.obj, opbyte==NEGATIVE_INT_CONSTANT);
 	case GET_METHOD:
 		res->kind = BC_GETMETHOD;
-		if (!( res->data.lookupmethod.type = read_type(bcr) ))
+		if(!read_type(bcr, &res->data.lookupmethod.type, false))
 			return false;
 		if (!read_uint16(bcr, &res->data.lookupmethod.index))
 			return false;
 		assert(res->data.lookupmethod.index < res->data.lookupmethod.type->nmethods);
 		return true;
 
+	case CREATE_FUNCTION:
+		return read_create_function(bcr, res);
+
 	case STRING_JOIN:
 		res->kind = BC_STRJOIN;
 		return read_uint16(bcr, &res->data.strjoin_nstrs);
+
+	case BOOLNEG: res->kind = BC_BOOLNEG; return true;
+	case POP_ONE: res->kind = BC_POP1; return true;
+
+	case VOID_RETURN: res->kind = BC_VOIDRETURN; return true;
+	case VALUE_RETURN: res->kind = BC_VALUERETURN; return true;
+	case DIDNT_RETURN_ERROR: res->kind = BC_DIDNTRETURNERROR; return true;
 
 	case INT_ADD: res->kind = BC_INT_ADD; return true;
 	case INT_SUB: res->kind = BC_INT_SUB; return true;

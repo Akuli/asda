@@ -19,12 +19,20 @@ static bool run(struct Interp *interp, struct Bc code)
 		return false;
 
 	struct Runner rnr;
-	runner_init(&rnr, interp, scope);  // increfs scope as needed
+	runner_init(&rnr, interp, scope, code);  // increfs scope as needed
 	OBJECT_DECREF(scope);
 
-	bool ok = runner_run(&rnr, code);
+	enum RunnerResult res = runner_run(&rnr);
 	runner_free(&rnr);
-	return ok;
+
+	switch(res) {
+	case RUNNER_DIDNTRETURN:
+		return true;
+	case RUNNER_ERROR:
+		return false;
+	default:
+		assert(0);  // compiler shouldn't allow anything else
+	}
 }
 
 

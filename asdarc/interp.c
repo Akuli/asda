@@ -25,8 +25,9 @@ void interp_destroy(struct Interp *interp)
 
 	struct Object *next;
 	for (struct Object *obj = interp->objliststart; obj; obj = next){
+		//printf("refcount cycling object %p\n", (void*)obj);
 		next = obj->next;
-		free(obj);
+		object_destroy(obj, false, true);
 	}
 }
 

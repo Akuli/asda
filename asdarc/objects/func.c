@@ -1,6 +1,7 @@
 #include "func.h"
 #include <assert.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "../interp.h"
@@ -46,9 +47,9 @@ static union call_result call(struct Interp *interp, struct Object *f, struct Ob
 	}
 
 	if(ret)
-		res.ret = fod->cfunc.ret(interp, allargs, fod->npartial + nargs);
+		res.ret = fod->cfunc.ret(interp, fod->data, allargs, fod->npartial + nargs);
 	else
-		res.noret = fod->cfunc.noret(interp, allargs, fod->npartial + nargs);
+		res.noret = fod->cfunc.noret(interp, fod->data, allargs, fod->npartial + nargs);
 
 	if(fod->npartial != 0)
 		free(allargs);
@@ -70,6 +71,9 @@ static void funcdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 {
 	struct FuncObjData *data = vpdata;
 
+	if (data->data.destroy)
+		data->data.destroy(data->data.val, decrefrefs, freenonrefs);
+
 	if(decrefrefs) {
 		for (struct Object **ptr = data->partial; ptr < data->partial+data->npartial; ptr++)
 			OBJECT_DECREF(*ptr);
@@ -79,6 +83,39 @@ static void funcdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 		free(data);
 	}
 }
+
+
+static struct Object *new_function(struct Interp *interp, struct FuncObjData fod, const struct Type *typ)
+{
+	struct FuncObjData *fodp = malloc(sizeof(*fodp));
+	if(!fodp) {
+		interp_errstr_nomem(interp);
+		if(fod.data.destroy)
+			fod.data.destroy(fod.data.val, true, true);
+		return NULL;
+	}
+
+	*fodp = fod;
+	return object_new(interp, typ, (struct ObjData){
+		.val = fodp,
+		.destroy = funcdata_destroy,
+	});
+}
+
+struct Object *funcobj_new_noret(struct Interp *interp, funcobj_cfunc_noret f, struct ObjData data)
+{
+	struct FuncObjData fod = FUNCOBJDATA_COMPILETIMECREATE_NORET(f);
+	fod.data = data;
+	return new_function(interp, fod, &funcobj_type_noret);
+}
+
+struct Object *funcobj_new_ret(struct Interp *interp, funcobj_cfunc_ret f, struct ObjData data)
+{
+	struct FuncObjData fod = FUNCOBJDATA_COMPILETIMECREATE_RET(f);
+	fod.data = data;
+	return new_function(interp, fod, &funcobj_type_ret);
+}
+
 
 struct Object *funcobj_new_partial(struct Interp *interp, struct Object *f, struct Object **args, size_t nargs)
 {
@@ -100,6 +137,9 @@ struct Object *funcobj_new_partial(struct Interp *interp, struct Object *f, stru
 		interp_errstr_nomem(interp);
 		return NULL;
 	}
+
+	newdata->data = data->data;
+	newdata->data.destroy = NULL;    // FIXME: this is brokene hack
 
 	memcpy(newpartial, data->partial, data->npartial * sizeof(struct Object*));
 	memcpy(newpartial+data->npartial, args, nargs * sizeof(struct Object*));

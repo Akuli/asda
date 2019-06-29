@@ -1,7 +1,9 @@
 #include "runner.h"
 #include <assert.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include "asdafunc.h"
 #include "bc.h"
 #include "interp.h"
 #include "objects/bool.h"
@@ -17,7 +19,7 @@
 #define DEBUG_PRINTF(...) ((void)0)
 
 
-void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope)
+void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope, struct Bc bc)
 {
 	rnr->interp = interp;
 	rnr->scope = scope;
@@ -25,6 +27,7 @@ void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope
 	rnr->stack = NULL;
 	rnr->stacklen = 0;
 	rnr->stacksz = 0;
+	rnr->bc = bc;
 	rnr->opidx = 0;
 }
 
@@ -131,14 +134,17 @@ static bool integer_binary_operation(struct Runner *rnr, enum BcOpKind bok)
 	return ok;
 }
 
+
 // this function is long, but it feels ok because it divides nicely into max 10-ish line chunks
-static bool run_one_op(struct Runner *rnr, const struct BcOp *op)
+static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 {
+	enum RunnerResult ret = RUNNER_DIDNTRETURN;
+
 	switch(op->kind) {
 	case BC_CONSTANT:
 		DEBUG_PRINTF("constant\n");
 		if(!push2stack(rnr, op->data.obj))
-			return false;
+			return RUNNER_ERROR;
 		break;
 
 	case BC_SETVAR:
@@ -162,11 +168,11 @@ static bool run_one_op(struct Runner *rnr, const struct BcOp *op)
 		struct Object **ptr = get_var_pointer(rnr, op);
 		if(!*ptr) {
 			interp_errstr_printf(rnr->interp, "value of a variable hasn't been set");
-			return false;
+			return RUNNER_ERROR;
 		}
 
 		if(!push2stack(rnr, *ptr))
-			return false;
+			return RUNNER_ERROR;
 		break;
 	}
 
@@ -192,18 +198,18 @@ static bool run_one_op(struct Runner *rnr, const struct BcOp *op)
 		if(bcond) {
 			DEBUG_PRINTF("  jumping...\n");
 			rnr->opidx = op->data.jump_idx;
-			return true;   // skip rnr->opidx++
+			goto skip_opidx_plusplus;
 		}
 		break;
 	}
 
 	case BC_CALLRETFUNC:
 		if(!call_function(rnr, true, op->data.callfunc_nargs))
-			return false;
+			return RUNNER_ERROR;
 		break;
 	case BC_CALLVOIDFUNC:
 		if(!call_function(rnr, false, op->data.callfunc_nargs))
-			return false;
+			return RUNNER_ERROR;
 		break;
 
 	case BC_GETMETHOD:
@@ -214,7 +220,7 @@ static bool run_one_op(struct Runner *rnr, const struct BcOp *op)
 		struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
 		struct Object *parti = funcobj_new_partial(rnr->interp, data.type->methods[data.index], ptr, 1);
 		if(!parti)
-			return false;
+			return RUNNER_ERROR;
 
 		OBJECT_DECREF(*ptr);
 		*ptr = parti;
@@ -228,7 +234,7 @@ static bool run_one_op(struct Runner *rnr, const struct BcOp *op)
 		struct Object **ptr = rnr->stack + rnr->stacklen - op->data.strjoin_nstrs;
 		struct Object *res = stringobj_join(rnr->interp, ptr, op->data.strjoin_nstrs);
 		if(!res)
-			return false;
+			return RUNNER_ERROR;
 
 		for (; ptr < rnr->stack + rnr->stacklen; ptr++)
 			OBJECT_DECREF(*ptr);
@@ -238,11 +244,44 @@ static bool run_one_op(struct Runner *rnr, const struct BcOp *op)
 		break;
 	}
 
+	case BC_POP1:
+	{
+		DEBUG_PRINTF("pop 1\n");
+		assert(rnr->stacklen >= 1);
+		struct Object *obj = rnr->stack[--rnr->stacklen];
+		OBJECT_DECREF(obj);
+		break;
+	}
+
+	case BC_CREATEFUNC:
+	{
+		DEBUG_PRINTF("create func\n");
+		assert(!op->data.createfunc.returning);   // TODO
+		struct Object *f = asdafunc_create_noret(rnr->interp, rnr->scope, op->data.createfunc.body);
+		bool ok = push2stack(rnr, f);
+		OBJECT_DECREF(f);
+		if(!ok)
+			return RUNNER_ERROR;
+		break;
+	}
+
+	case BC_VOIDRETURN:
+		ret = RUNNER_VOIDRETURN;
+		break;
+	case BC_VALUERETURN:
+		assert(0);   // TODO
+
+	// TODO: what is the point of this op?
+	case BC_DIDNTRETURNERROR:
+		DEBUG_PRINTF("didn't return error\n");
+		interp_errstr_printf(rnr->interp, "function didn't return");
+		return RUNNER_ERROR;
+
 	case BC_INT_ADD:
 	case BC_INT_SUB:
 	case BC_INT_MUL:
 		if(!integer_binary_operation(rnr, op->kind))
-			return false;
+			return RUNNER_ERROR;
 		break;
 
 	case BC_INT_NEG:
@@ -250,7 +289,7 @@ static bool run_one_op(struct Runner *rnr, const struct BcOp *op)
 		struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
 		struct Object *obj = intobj_neg(rnr->interp, *ptr);
 		if(!obj)
-			return false;
+			return RUNNER_ERROR;
 		OBJECT_DECREF(*ptr);
 		*ptr = obj;
 		break;
@@ -259,15 +298,20 @@ static bool run_one_op(struct Runner *rnr, const struct BcOp *op)
 	}   // end of switch
 
 	rnr->opidx++;
-	return true;
+	// "fall through" to return statement
+
+skip_opidx_plusplus:
+	return ret;
 }
 
-bool runner_run(struct Runner *rnr, struct Bc bc)
+enum RunnerResult runner_run(struct Runner *rnr)
 {
-	while (rnr->opidx < bc.nops) {
-		if(!run_one_op(rnr, &bc.ops[rnr->opidx]))
-			return false;
+	while (rnr->opidx < rnr->bc.nops) {
+		enum RunnerResult res = run_one_op(rnr, &rnr->bc.ops[rnr->opidx]);
+		if(res != RUNNER_DIDNTRETURN)
+			return res;
 	}
-	assert(rnr->opidx == bc.nops);
-	return true;
+
+	assert(rnr->opidx == rnr->bc.nops);
+	return RUNNER_DIDNTRETURN;
 }

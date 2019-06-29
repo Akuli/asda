@@ -121,7 +121,7 @@ empty:
 }
 
 
-static struct Object *tostring_impl(struct Interp *interp, struct Object **args, size_t nargs)
+static struct Object *tostring_impl(struct Interp *interp, struct ObjData data, struct Object **args, size_t nargs)
 {
 	assert(nargs == 1);
 	assert(args[0]->type == &stringobj_type);
