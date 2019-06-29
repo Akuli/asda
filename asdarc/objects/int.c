@@ -1,10 +1,11 @@
 #include "int.h"
 #include <assert.h>
-#include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <gmp.h>
 #include "../interp.h"
+#include "../objtyp.h"
 #include "func.h"
 #include "string.h"
 
@@ -41,20 +42,15 @@ static struct Object *new_from_mpzt(struct Interp *interp, mpz_t mpz)
 	});
 }
 
-// see mpz_import docs
-#define BIG_ENDIAN 1
-
 struct Object *intobj_new_bebytes(struct Interp *interp, const unsigned char *seq, size_t len, bool negate)
 {
 	mpz_t mpz;
 	mpz_init(mpz);
-	mpz_import(mpz, len, BIG_ENDIAN, 1, 0, 0, seq);
+	mpz_import(mpz, len, 1, 1, 0, 0, seq);    // see docs for all the magic numbers
 	if(negate)
 		mpz_neg(mpz, mpz);
 	return new_from_mpzt(interp, mpz);
 }
-
-#undef BIG_ENDIAN
 
 
 static struct Object *binary_operation(

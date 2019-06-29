@@ -1,10 +1,9 @@
 #include "gc.h"
-#include <assert.h>
 #include <limits.h>
-#include <stdlib.h>
-#include <string.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include "interp.h"
+#include "objtyp.h"
 #include "objects/string.h"
 
 static void refcount_debug_object(struct Object *obj, unsigned int is, unsigned int shouldB)

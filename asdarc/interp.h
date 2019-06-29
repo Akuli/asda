@@ -2,9 +2,10 @@
 #define INTERP_H
 
 // errno is used in the macros, iwyu doesn't know that
+// i have no idea why it doesn't realze that struct Object comes from objtyp.h
 #include <errno.h>   // IWYU pragma: keep
 #include <stdbool.h>
-#include "objtyp.h"
+#include "objtyp.h"  // IWYU pragma: keep
 
 struct Interp {
 	const char *argv0;

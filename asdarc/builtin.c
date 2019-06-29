@@ -2,7 +2,6 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include "interp.h"
 #include "objtyp.h"
 #include "objects/bool.h"

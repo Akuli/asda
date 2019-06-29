@@ -1,8 +1,10 @@
 #ifndef OBJECTS_INT_H
 #define OBJECTS_INT_H
 
-#include <gmp.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include "../interp.h"
+#include "../objtyp.h"
 
 // returns a new integer from an arbitrarily long sequence of bytes (big-endian)
 struct Object *intobj_new_bebytes(struct Interp *interp, const unsigned char *seq, size_t len, bool negate);

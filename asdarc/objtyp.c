@@ -2,7 +2,6 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include "gc.h"
 #include "interp.h"
 
 

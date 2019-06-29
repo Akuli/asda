@@ -1,6 +1,4 @@
 #include "bc.h"
-#include <assert.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include "objtyp.h"
 

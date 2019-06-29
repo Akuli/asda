@@ -5,8 +5,8 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include "gc.h"
 
+// there is a bug in iwyu, it doesn't see that this is here
 struct Interp;
 
 // destroy function can be NULL

@@ -1,5 +1,8 @@
 #include "bool.h"
 #include <assert.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include "../objtyp.h"
 
 const struct Type boolobj_type = { .methods = NULL, .nmethods = 0 };
 struct Object boolobj_true = OBJECT_COMPILETIMECREATE(&boolobj_type, NULL);

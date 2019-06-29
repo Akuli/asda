@@ -5,6 +5,7 @@
 #include <string.h>
 #include "bc.h"
 #include "builtin.h"
+#include "objtyp.h"
 #include "path.h"
 #include "objects/bool.h"
 #include "objects/string.h"

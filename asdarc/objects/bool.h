@@ -1,6 +1,7 @@
 #ifndef OBJECTS_BOOL_H
 #define OBJECTS_BOOL_H
 
+#include <stdbool.h>
 #include "../objtyp.h"
 
 extern struct Object boolobj_true, boolobj_false;
