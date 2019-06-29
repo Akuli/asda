@@ -3,6 +3,7 @@
 #ifndef ASDAFUNC_H
 #define ASDAFUNC_H
 
+#include <stdbool.h>
 #include "bc.h"
 #include "interp.h"
 #include "objtyp.h"
