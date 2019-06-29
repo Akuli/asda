@@ -286,7 +286,6 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 		ret = RUNNER_VALUERETURN;
 		break;
 
-	// TODO: what is the point of this op?
 	case BC_DIDNTRETURNERROR:
 		DEBUG_PRINTF("didn't return error\n");
 		interp_errstr_printf(rnr->interp, "function didn't return");

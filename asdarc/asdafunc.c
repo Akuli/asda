@@ -45,6 +45,7 @@ static struct Object *asda_function_cfunc_ret(struct Interp *interp, struct ObjD
 {
 	struct Runner rnr;
 	switch (run(interp, data.val, &rnr, args, nargs)) {
+	// compiler adds a didn't return error to end of returning functions, so RUNNER_DIDNTRETURN can't happen here
 	case RUNNER_ERROR:
 		return NULL;
 	case RUNNER_VALUERETURN:
@@ -58,10 +59,10 @@ static bool asda_function_cfunc_noret(struct Interp *interp, struct ObjData data
 {
 	struct Runner rnr;
 	switch (run(interp, data.val, &rnr, args, nargs)) {
+	// compiler adds a void return to end of non-returning functions, so RUNNER_DIDNTRETURN can't happen here
 	case RUNNER_ERROR:
 		return false;
 	case RUNNER_VOIDRETURN:
-	case RUNNER_DIDNTRETURN:
 		return true;
 	default:
 		assert(0);    // bug in asda compiler or something not implemented in this interpreter
