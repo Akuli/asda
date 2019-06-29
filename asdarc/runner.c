@@ -29,6 +29,7 @@ void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope
 	rnr->stacksz = 0;
 	rnr->bc = bc;
 	rnr->opidx = 0;
+	// leave rnr->retval uninitialized for better valgrinding
 }
 
 void runner_free(const struct Runner *rnr)
@@ -37,6 +38,7 @@ void runner_free(const struct Runner *rnr)
 		OBJECT_DECREF(*ptr);
 	free(rnr->stack);
 	OBJECT_DECREF(rnr->scope);
+	// leave rnr->retval untouched, caller of runner_run() should handle its decreffing
 }
 
 static bool grow_stack(struct Runner *rnr, size_t minsz)
@@ -78,7 +80,7 @@ static bool push2stack(struct Runner *rnr, struct Object *obj)
 static struct Object **get_var_pointer(struct Runner *rnr, const struct BcOp *op)
 {
 	struct Object *scope = scopeobj_getforlevel(rnr->scope, op->data.var.level);
-	return scopeobj_getlocalvarptr(scope, op->data.var.index);
+	return scopeobj_getlocalvarsptr(scope) + op->data.var.index;
 }
 
 static bool call_function(struct Runner *rnr, bool ret, size_t nargs)
@@ -261,8 +263,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 	case BC_CREATEFUNC:
 	{
 		DEBUG_PRINTF("create func\n");
-		assert(!op->data.createfunc.returning);   // TODO
-		struct Object *f = asdafunc_create_noret(rnr->interp, rnr->scope, op->data.createfunc.body);
+		struct Object *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc.body, op->data.createfunc.returning);
 		bool ok = push2stack(rnr, f);
 		OBJECT_DECREF(f);
 		if(!ok)
@@ -275,7 +276,11 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 		ret = RUNNER_VOIDRETURN;
 		break;
 	case BC_VALUERETURN:
-		assert(0);   // TODO
+		DEBUG_PRINTF("value return\n");
+		rnr->retval = rnr->stack[--rnr->stacklen];
+		assert(rnr->retval);
+		ret = RUNNER_VALUERETURN;
+		break;
 
 	// TODO: what is the point of this op?
 	case BC_DIDNTRETURNERROR:

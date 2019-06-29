@@ -19,7 +19,7 @@ struct Object *scopeobj_newsub(struct Interp *interp, struct Object *parent, uin
 // does NOT return a new reference
 struct Object *scopeobj_getforlevel(struct Object *scope, size_t level);
 
-struct Object **scopeobj_getlocalvarptr(struct Object *scope, size_t i);
+struct Object **scopeobj_getlocalvarsptr(struct Object *scope);
 
 extern const struct Type scopeobj_type;
 

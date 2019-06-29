@@ -15,6 +15,7 @@ struct Runner {
 	size_t stacklen, stacksz;
 	size_t opidx;
 	struct Bc bc;
+	struct Object *retval;  // returned value, NOT an implementation detail unlike everything else
 };
 
 // never fails
@@ -33,6 +34,7 @@ enum RunnerResult {
 };
 
 // must not be called multiple times
+// if returns RUNNER_VALUERETURN, caller may use rnr->retval and must decref it eventually
 enum RunnerResult runner_run(struct Runner *rnr);
 
 

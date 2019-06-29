@@ -353,15 +353,13 @@ static bool read_create_function(struct BcReader *bcr, struct BcOp *res)
 	if(!read_type(bcr, &functyp, false))
 		return false;
 
-	unsigned char retbyt;
-	if(!read_bytes(bcr, &retbyt, 1))
+	assert(functyp == &funcobj_type_ret || functyp == &funcobj_type_noret);
+	res->data.createfunc.returning = (functyp == &funcobj_type_ret);
+
+	unsigned char yieldbyt;
+	if(!read_bytes(bcr, &yieldbyt, 1))
 		return false;
-	if(retbyt != 0 && retbyt != 1) {
-		interp_errstr_printf(bcr->interp, "expected 0 byte or 1 byte to indicate whether function is returning");
-		append_byte_2_errstr(bcr->interp, retbyt);
-		return false;
-	}
-	res->data.createfunc.returning = retbyt;
+	assert(yieldbyt == 0);   // TODO: support yielding
 
 	return read_body(bcr, &res->data.createfunc.body);
 }

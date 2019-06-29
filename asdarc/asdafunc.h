@@ -10,6 +10,7 @@
 // TODO: returning functions
 
 // bc is never destroyed because destroying the bc of the entire file will destroy it eventually
-struct Object *asdafunc_create_noret(struct Interp *interp, struct Object *defscope, struct Bc bc);
+// ret==true means returns a value, false means returns void or doesnt return
+struct Object *asdafunc_create(struct Interp *interp, struct Object *defscope, struct Bc bc, bool ret);
 
 #endif   // ASDAFUNC_H

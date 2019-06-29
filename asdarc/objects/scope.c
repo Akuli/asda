@@ -45,7 +45,7 @@ struct Object *scopeobj_newsub(struct Interp *interp, struct Object *parent, uin
 		return NULL;
 	}
 
-	if (!( ptr->locals = calloc(nlocals, sizeof(struct Object*)) )) {
+	if (!( ptr->locals = calloc(nlocals, sizeof(struct Object*)) ) && nlocals) {
 		free(ptr);
 		interp_errstr_nomem(interp);
 		return NULL;
@@ -93,9 +93,9 @@ struct Object *scopeobj_getforlevel(struct Object *scope, size_t level)
 #undef PARENT
 }
 
-struct Object **scopeobj_getlocalvarptr(struct Object *scope, size_t i)
+struct Object **scopeobj_getlocalvarsptr(struct Object *scope)
 {
-	return & ((struct ScopeData*) scope->data.val)->locals[i];
+	return ((struct ScopeData*) scope->data.val)->locals;
 }
 
 
