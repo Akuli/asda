@@ -118,8 +118,12 @@ static bool integer_binary_operation(struct Runner *rnr, enum BcOpKind bok)
 {
 	DEBUG_PRINTF("integer binary op\n");
 	assert(rnr->stacklen >= 2);
-	struct Object *x = rnr->stack[--rnr->stacklen];
+	// y before x because the stack is like this:
+	//
+	//   |---|---|---|---|---|---|---|---|---|
+	//   | stuff we don't care about | x | y |
 	struct Object *y = rnr->stack[--rnr->stacklen];
+	struct Object *x = rnr->stack[--rnr->stacklen];
 	struct Object *res;
 
 	switch(bok) {
