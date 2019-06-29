@@ -2,7 +2,7 @@
 #define RUNNER_H
 
 #include <stddef.h>
-#include "bc.h"
+#include "code.h"
 #include "interp.h"
 #include "objtyp.h"
 
@@ -13,14 +13,14 @@ struct Runner {
 	struct Object **stack;
 	size_t stacklen, stacksz;
 	size_t opidx;
-	struct Bc bc;
+	struct Code code;
 	struct Object *retval;  // returned value, NOT an implementation detail unlike everything else
 };
 
 // never fails
 // increfs the scope as needed
 // never frees the bc
-void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope, struct Bc bc);
+void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope, struct Code code);
 
 // never fails
 void runner_free(const struct Runner *rnr);

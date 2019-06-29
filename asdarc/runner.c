@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include "asdafunc.h"
-#include "bc.h"
+#include "code.h"
 #include "interp.h"
 #include "partialfunc.h"
 #include "objects/bool.h"
@@ -19,7 +19,7 @@
 #define DEBUG_PRINTF(...) ((void)0)
 
 
-void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope, struct Bc bc)
+void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope, struct Code code)
 {
 	rnr->interp = interp;
 	rnr->scope = scope;
@@ -27,7 +27,7 @@ void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope
 	rnr->stack = NULL;
 	rnr->stacklen = 0;
 	rnr->stacksz = 0;
-	rnr->bc = bc;
+	rnr->code = code;
 	rnr->opidx = 0;
 	// leave rnr->retval uninitialized for better valgrinding
 }
@@ -77,7 +77,7 @@ static bool push2stack(struct Runner *rnr, struct Object *obj)
 	return true;
 }
 
-static struct Object **get_var_pointer(struct Runner *rnr, const struct BcOp *op)
+static struct Object **get_var_pointer(struct Runner *rnr, const struct CodeOp *op)
 {
 	struct Object *scope = scopeobj_getforlevel(rnr->scope, op->data.var.level);
 	return scopeobj_getlocalvarsptr(scope) + op->data.var.index;
@@ -113,7 +113,7 @@ static bool call_function(struct Runner *rnr, bool ret, size_t nargs)
 	return true;
 }
 
-static bool integer_binary_operation(struct Runner *rnr, enum BcOpKind bok)
+static bool integer_binary_operation(struct Runner *rnr, enum CodeOpKind bok)
 {
 	DEBUG_PRINTF("integer binary op\n");
 	assert(rnr->stacklen >= 2);
@@ -126,9 +126,9 @@ static bool integer_binary_operation(struct Runner *rnr, enum BcOpKind bok)
 	struct Object *res;
 
 	switch(bok) {
-		case BC_INT_ADD: res = intobj_add(rnr->interp, x, y); break;
-		case BC_INT_SUB: res = intobj_sub(rnr->interp, x, y); break;
-		case BC_INT_MUL: res = intobj_mul(rnr->interp, x, y); break;
+		case CODE_INT_ADD: res = intobj_add(rnr->interp, x, y); break;
+		case CODE_INT_SUB: res = intobj_sub(rnr->interp, x, y); break;
+		case CODE_INT_MUL: res = intobj_mul(rnr->interp, x, y); break;
 		default: assert(0);
 	}
 	OBJECT_DECREF(x);
@@ -143,18 +143,18 @@ static bool integer_binary_operation(struct Runner *rnr, enum BcOpKind bok)
 
 
 // this function is long, but it feels ok because it divides nicely into max 10-ish line chunks
-static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
+static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 {
 	enum RunnerResult ret = RUNNER_DIDNTRETURN;
 
 	switch(op->kind) {
-	case BC_CONSTANT:
+	case CODE_CONSTANT:
 		DEBUG_PRINTF("constant\n");
 		if(!push2stack(rnr, op->data.obj))
 			return RUNNER_ERROR;
 		break;
 
-	case BC_SETVAR:
+	case CODE_SETVAR:
 	{
 		DEBUG_PRINTF("setvar level=%d index=%d\n",
 			(int)op->data.var.level, (int)op->data.var.index);
@@ -168,7 +168,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 		break;
 	}
 
-	case BC_GETVAR:
+	case CODE_GETVAR:
 	{
 		DEBUG_PRINTF("getvar level=%d index=%d\n",
 			(int)op->data.var.level, (int)op->data.var.index);
@@ -183,7 +183,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 		break;
 	}
 
-	case BC_BOOLNEG:
+	case CODE_BOOLNEG:
 	{
 		DEBUG_PRINTF("boolneg\n");
 		assert(rnr->stacklen >= 1);
@@ -194,7 +194,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 		break;
 	}
 
-	case BC_JUMPIF:
+	case CODE_JUMPIF:
 	{
 		DEBUG_PRINTF("jumpif\n");
 		assert(rnr->stacklen >= 1);
@@ -210,20 +210,20 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 		break;
 	}
 
-	case BC_CALLRETFUNC:
+	case CODE_CALLRETFUNC:
 		if(!call_function(rnr, true, op->data.callfunc_nargs))
 			return RUNNER_ERROR;
 		break;
-	case BC_CALLVOIDFUNC:
+	case CODE_CALLVOIDFUNC:
 		if(!call_function(rnr, false, op->data.callfunc_nargs))
 			return RUNNER_ERROR;
 		break;
 
-	case BC_GETMETHOD:
+	case CODE_GETMETHOD:
 	{
 		DEBUG_PRINTF("getmethod\n");
 		assert(rnr->stacklen >= 1);
-		struct BcLookupMethodData data = op->data.lookupmethod;
+		struct CodeLookupMethodData data = op->data.lookupmethod;
 		struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
 		struct Object *parti = partialfunc_create(rnr->interp, data.type->methods[data.index], ptr, 1);
 		if(!parti)
@@ -234,7 +234,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 		break;
 	}
 
-	case BC_STRJOIN:
+	case CODE_STRJOIN:
 	{
 		DEBUG_PRINTF("string join of %zu strings\n", (size_t)op->data.strjoin_nstrs);
 		assert(rnr->stacklen >= op->data.strjoin_nstrs);
@@ -255,7 +255,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 		break;
 	}
 
-	case BC_POP1:
+	case CODE_POP1:
 	{
 		DEBUG_PRINTF("pop 1\n");
 		assert(rnr->stacklen >= 1);
@@ -264,7 +264,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 		break;
 	}
 
-	case BC_CREATEFUNC:
+	case CODE_CREATEFUNC:
 	{
 		DEBUG_PRINTF("create func\n");
 		struct Object *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc.body, op->data.createfunc.returning);
@@ -275,30 +275,30 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct BcOp *op)
 		break;
 	}
 
-	case BC_VOIDRETURN:
+	case CODE_VOIDRETURN:
 		DEBUG_PRINTF("void return\n");
 		ret = RUNNER_VOIDRETURN;
 		break;
-	case BC_VALUERETURN:
+	case CODE_VALUERETURN:
 		DEBUG_PRINTF("value return\n");
 		rnr->retval = rnr->stack[--rnr->stacklen];
 		assert(rnr->retval);
 		ret = RUNNER_VALUERETURN;
 		break;
 
-	case BC_DIDNTRETURNERROR:
+	case CODE_DIDNTRETURNERROR:
 		DEBUG_PRINTF("didn't return error\n");
 		interp_errstr_printf(rnr->interp, "function didn't return");
 		return RUNNER_ERROR;
 
-	case BC_INT_ADD:
-	case BC_INT_SUB:
-	case BC_INT_MUL:
+	case CODE_INT_ADD:
+	case CODE_INT_SUB:
+	case CODE_INT_MUL:
 		if(!integer_binary_operation(rnr, op->kind))
 			return RUNNER_ERROR;
 		break;
 
-	case BC_INT_NEG:
+	case CODE_INT_NEG:
 	{
 		struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
 		struct Object *obj = intobj_neg(rnr->interp, *ptr);
@@ -320,12 +320,12 @@ skip_opidx_plusplus:
 
 enum RunnerResult runner_run(struct Runner *rnr)
 {
-	while (rnr->opidx < rnr->bc.nops) {
-		enum RunnerResult res = run_one_op(rnr, &rnr->bc.ops[rnr->opidx]);
+	while (rnr->opidx < rnr->code.nops) {
+		enum RunnerResult res = run_one_op(rnr, &rnr->code.ops[rnr->opidx]);
 		if(res != RUNNER_DIDNTRETURN)
 			return res;
 	}
 
-	assert(rnr->opidx == rnr->bc.nops);
+	assert(rnr->opidx == rnr->code.nops);
 	return RUNNER_DIDNTRETURN;
 }

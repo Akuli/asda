@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include "bc.h"
+#include "code.h"
 #include "builtin.h"
 #include "objtyp.h"
 #include "path.h"
@@ -287,9 +287,9 @@ static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowv
 	}
 }
 
-static bool read_vardata(struct BcReader *bcr, struct BcOp *res, enum BcOpKind kind)
+static bool read_vardata(struct BcReader *bcr, struct CodeOp *res, enum CodeOpKind kind)
 {
-	struct BcVarData vd;
+	struct CodeVarData vd;
 	if (!read_uint8(bcr, &vd.level)) return false;
 	if (!read_uint16(bcr, &vd.index)) return false;
 
@@ -298,7 +298,7 @@ static bool read_vardata(struct BcReader *bcr, struct BcOp *res, enum BcOpKind k
 	return true;
 }
 
-static bool read_callfunc(struct BcReader *bcr, struct BcOp *res, enum BcOpKind kind)
+static bool read_callfunc(struct BcReader *bcr, struct CodeOp *res, enum CodeOpKind kind)
 {
 	res->kind = kind;
 	return read_uint8(bcr, &res->data.callfunc_nargs);
@@ -339,10 +339,10 @@ static bool read_int_constant(struct BcReader *bcr, struct Object **objptr, bool
 }
 
 
-static bool read_body(struct BcReader *bcr, struct Bc *bc);  // forward declare
-static bool read_create_function(struct BcReader *bcr, struct BcOp *res)
+static bool read_body(struct BcReader *bcr, struct Code *code);  // forward declare
+static bool read_create_function(struct BcReader *bcr, struct CodeOp *res)
 {
-	res->kind = BC_CREATEFUNC;
+	res->kind = CODE_CREATEFUNC;
 
 	if (ungetc(TYPEBYTE_FUNC, bcr->in) == EOF) {
 		interp_errstr_printf_errno(bcr->interp, "ungetc failed");
@@ -364,36 +364,36 @@ static bool read_create_function(struct BcReader *bcr, struct BcOp *res)
 	return read_body(bcr, &res->data.createfunc.body);
 }
 
-static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res)
+static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *res)
 {
 	switch(opbyte) {
 	case STR_CONSTANT:
-		res->kind = BC_CONSTANT;
+		res->kind = CODE_CONSTANT;
 		return read_string_constant(bcr, &res->data.obj);
 
 	case TRUE_CONSTANT:
 	case FALSE_CONSTANT:
-		res->kind = BC_CONSTANT;
+		res->kind = CODE_CONSTANT;
 		res->data.obj = boolobj_c2asda(opbyte == TRUE_CONSTANT);
 		return true;
 
 	case SET_VAR:
-		return read_vardata(bcr, res, BC_SETVAR);
+		return read_vardata(bcr, res, CODE_SETVAR);
 	case GET_VAR:
-		return read_vardata(bcr, res, BC_GETVAR);
+		return read_vardata(bcr, res, CODE_GETVAR);
 	case CALL_VOID_FUNCTION:
-		return read_callfunc(bcr, res, BC_CALLVOIDFUNC);
+		return read_callfunc(bcr, res, CODE_CALLVOIDFUNC);
 	case CALL_RETURNING_FUNCTION:
-		return read_callfunc(bcr, res, BC_CALLRETFUNC);
+		return read_callfunc(bcr, res, CODE_CALLRETFUNC);
 	case JUMPIF:
-		res->kind = BC_JUMPIF;
+		res->kind = CODE_JUMPIF;
 		return read_uint16(bcr, &res->data.jump_idx);
 	case NON_NEGATIVE_INT_CONSTANT:
 	case NEGATIVE_INT_CONSTANT:
-		res->kind = BC_CONSTANT;
+		res->kind = CODE_CONSTANT;
 		return read_int_constant(bcr, &res->data.obj, opbyte==NEGATIVE_INT_CONSTANT);
 	case GET_METHOD:
-		res->kind = BC_GETMETHOD;
+		res->kind = CODE_GETMETHOD;
 		if(!read_type(bcr, &res->data.lookupmethod.type, false))
 			return false;
 		if (!read_uint16(bcr, &res->data.lookupmethod.index))
@@ -405,20 +405,20 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res
 		return read_create_function(bcr, res);
 
 	case STRING_JOIN:
-		res->kind = BC_STRJOIN;
+		res->kind = CODE_STRJOIN;
 		return read_uint16(bcr, &res->data.strjoin_nstrs);
 
-	case BOOLNEG: res->kind = BC_BOOLNEG; return true;
-	case POP_ONE: res->kind = BC_POP1; return true;
+	case BOOLNEG: res->kind = CODE_BOOLNEG; return true;
+	case POP_ONE: res->kind = CODE_POP1; return true;
 
-	case VOID_RETURN: res->kind = BC_VOIDRETURN; return true;
-	case VALUE_RETURN: res->kind = BC_VALUERETURN; return true;
-	case DIDNT_RETURN_ERROR: res->kind = BC_DIDNTRETURNERROR; return true;
+	case VOID_RETURN: res->kind = CODE_VOIDRETURN; return true;
+	case VALUE_RETURN: res->kind = CODE_VALUERETURN; return true;
+	case DIDNT_RETURN_ERROR: res->kind = CODE_DIDNTRETURNERROR; return true;
 
-	case INT_ADD: res->kind = BC_INT_ADD; return true;
-	case INT_SUB: res->kind = BC_INT_SUB; return true;
-	case INT_NEG: res->kind = BC_INT_NEG; return true;
-	case INT_MUL: res->kind = BC_INT_MUL; return true;
+	case INT_ADD: res->kind = CODE_INT_ADD; return true;
+	case INT_SUB: res->kind = CODE_INT_SUB; return true;
+	case INT_NEG: res->kind = CODE_INT_NEG; return true;
+	case INT_MUL: res->kind = CODE_INT_MUL; return true;
 
 	default:
 		interp_errstr_printf(bcr->interp, "unknown op byte");
@@ -427,19 +427,19 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct BcOp *res
 	}
 }
 
-// this is for a temporary linked list of BcOps
+// this is for a temporary linked list of CodeOps
 struct Link {
-	struct BcOp op;
+	struct CodeOp op;
 	struct Link *prev;
 };
 
-static bool read_body(struct BcReader *bcr, struct Bc *bc)
+static bool read_body(struct BcReader *bcr, struct Code *code)
 {
-	if (!read_uint16(bcr, &bc->nlocalvars))
+	if (!read_uint16(bcr, &code->nlocalvars))
 		return false;
 
 	struct Link *last = NULL;
-	bc->nops = 0;
+	code->nops = 0;
 
 	while(true) {
 		unsigned char ob;
@@ -448,7 +448,7 @@ static bool read_body(struct BcReader *bcr, struct Bc *bc)
 		if (ob == END_OF_BODY)
 			break;
 
-		struct BcOp val;
+		struct CodeOp val;
 		val.lineno = bcr->lineno;
 		// val.kind and val.data must be set in read_op()
 
@@ -457,7 +457,7 @@ static bool read_body(struct BcReader *bcr, struct Bc *bc)
 
 		struct Link *lnk = malloc(sizeof *lnk);
 		if (!lnk) {
-			bcop_destroy(&val);
+			codeop_destroy(&val);
 			interp_errstr_nomem(bcr->interp);
 			goto error;
 		}
@@ -465,18 +465,18 @@ static bool read_body(struct BcReader *bcr, struct Bc *bc)
 		lnk->op = val;
 		lnk->prev = last;
 		last = lnk;
-		bc->nops++;
+		code->nops++;
 	}
 
-	if(!( bc->ops = malloc(sizeof(struct BcOp) * bc->nops) )) {
+	if(!( code->ops = malloc(sizeof(struct CodeOp) * code->nops) )) {
 		interp_errstr_nomem(bcr->interp);
 		goto error;
 	}
 
-	size_t i = bc->nops;
+	size_t i = code->nops;
 	for (struct Link *lnk = last, *prev; lnk; lnk = prev) {
 		prev = lnk->prev;
-		bc->ops[--i] = lnk->op;
+		code->ops[--i] = lnk->op;
 		free(lnk);
 	}
 	return true;
@@ -484,14 +484,14 @@ static bool read_body(struct BcReader *bcr, struct Bc *bc)
 error:
 	for (struct Link *lnk = last, *prev; lnk; lnk = prev) {
 		prev = lnk->prev;
-		bcop_destroy(&lnk->op);
+		codeop_destroy(&lnk->op);
 		free(lnk);
 	}
 	return false;
 }
 
-bool bcreader_readcodepart(struct BcReader *bcr, struct Bc *bc)
+bool bcreader_readcodepart(struct BcReader *bcr, struct Code *code)
 {
 	// TODO: check byte after body
-	return read_body(bcr, bc);
+	return read_body(bcr, code);
 }

@@ -10,12 +10,12 @@
 
 struct AsdaFunctionData {
 	struct Object *defscope;
-	struct Bc bc;
+	struct Code code;
 };
 
 static void destroy_asdafunc_data(void *vpdata, bool decrefrefs, bool freenonrefs)
 {
-	// bc is not destroyed, reason explained in asdafunc.h
+	// code is not destroyed, reason explained in asdafunc.h
 	if(decrefrefs)
 		OBJECT_DECREF( ((struct AsdaFunctionData*)vpdata)->defscope );
 	if(freenonrefs)
@@ -24,16 +24,16 @@ static void destroy_asdafunc_data(void *vpdata, bool decrefrefs, bool freenonref
 
 static enum RunnerResult run(struct Interp *interp, const struct AsdaFunctionData *afd, struct Runner *rnr, struct Object **args, size_t nargs)
 {
-	struct Object *sco = scopeobj_newsub(interp, afd->defscope, afd->bc.nlocalvars);
+	struct Object *sco = scopeobj_newsub(interp, afd->defscope, afd->code.nlocalvars);
 	if(!sco)
 		return RUNNER_ERROR;
 
-	assert(nargs <= afd->bc.nlocalvars);
+	assert(nargs <= afd->code.nlocalvars);
 	memcpy(scopeobj_getlocalvarsptr(sco), args, sizeof(args[0]) * nargs);
 	for (size_t i = 0; i < nargs; i++)
 		OBJECT_INCREF(args[i]);
 
-	runner_init(rnr, interp, sco, afd->bc);
+	runner_init(rnr, interp, sco, afd->code);
 	OBJECT_DECREF(sco);
 
 	enum RunnerResult res = runner_run(rnr);
@@ -69,7 +69,7 @@ static bool asda_function_cfunc_noret(struct Interp *interp, struct ObjData data
 	}
 }
 
-struct Object *asdafunc_create(struct Interp *interp, struct Object *defscope, struct Bc bc, bool ret)
+struct Object *asdafunc_create(struct Interp *interp, struct Object *defscope, struct Code code, bool ret)
 {
 	struct AsdaFunctionData *afd = malloc(sizeof(*afd));
 	if(!afd) {
@@ -79,7 +79,7 @@ struct Object *asdafunc_create(struct Interp *interp, struct Object *defscope, s
 
 	afd->defscope = defscope;
 	OBJECT_INCREF(defscope);
-	afd->bc = bc;
+	afd->code = code;
 
 	struct ObjData od = { .val = afd, .destroy = destroy_asdafunc_data };
 	if(ret)

@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "bc.h"
 #include "bcreader.h"
+#include "code.h"
 #include "interp.h"
 #include "objtyp.h"
 #include "path.h"
@@ -12,7 +12,7 @@
 #include "objects/int.h"
 #include "objects/scope.h"
 
-static bool run(struct Interp *interp, struct Bc code)
+static bool run(struct Interp *interp, struct Code code)
 {
 	struct Object *scope = scopeobj_newsub(interp, interp->builtinscope, code.nlocalvars);
 	if(!scope)
@@ -65,7 +65,7 @@ int main(int argc, char **argv)
 	}
 
 	struct BcReader bcr = bcreader_new(&interp, f, dir);
-	struct Bc code;
+	struct Code code;
 
 	if (!bcreader_readasdabytes(&bcr))
 		goto error;
@@ -77,7 +77,7 @@ int main(int argc, char **argv)
 	f = NULL;
 
 	bool ok = run(&interp, code);
-	bc_destroy(&code);
+	code_destroy(&code);
 	if (!ok)
 		goto error;
 

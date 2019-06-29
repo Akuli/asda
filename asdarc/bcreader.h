@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "bc.h"
+#include "code.h"
 #include "interp.h"
 
 
@@ -29,7 +29,7 @@ bool bcreader_readimports(struct BcReader *bcr, char ***paths, uint16_t *npaths)
 void bcreader_freeimports(char **paths, uint16_t npaths);
 
 // if this succeeds (returns true), the res should be bc_destroy()ed
-bool bcreader_readcodepart(struct BcReader *bcr, struct Bc *res);
+bool bcreader_readcodepart(struct BcReader *bcr, struct Code *res);
 
 
 #endif   // BCREADER_H
