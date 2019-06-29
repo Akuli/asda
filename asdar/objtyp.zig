@@ -15,7 +15,7 @@ pub const Type = struct {
         return Type{ .methods = methods };
     }
 
-    pub fn getAttribute(self: *Type, interp: *Interp, obj: *Object, index: u16) !*Object {
+    pub fn getMethod(self: *Type, interp: *Interp, obj: *Object, index: u16) !*Object {
         return try objects.function.newPartial(interp, self.methods[index], []const *Object { obj });
     }
 };
