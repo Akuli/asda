@@ -35,8 +35,8 @@ void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope
 
 void runner_free(const struct Runner *rnr)
 {
-	for (struct Object **ptr = rnr->stack; ptr < rnr->stack + rnr->stacklen; ptr++)
-		OBJECT_DECREF(*ptr);
+	for (size_t i = 0; i < rnr->stacklen; i++)
+		OBJECT_DECREF(rnr->stack[i]);
 	free(rnr->stack);
 	OBJECT_DECREF(rnr->scope);
 	// leave rnr->retval untouched, caller of runner_run() should handle its decreffing

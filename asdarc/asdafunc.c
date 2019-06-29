@@ -30,8 +30,8 @@ static enum RunnerResult run(struct Interp *interp, const struct AsdaFunctionDat
 
 	assert(nargs <= afd->bc.nlocalvars);
 	memcpy(scopeobj_getlocalvarsptr(sco), args, sizeof(args[0]) * nargs);
-	for (struct Object **ptr = args; ptr < args + nargs; ptr++)
-		OBJECT_INCREF(*ptr);
+	for (size_t i = 0; i < nargs; i++)
+		OBJECT_INCREF(args[i]);
 
 	runner_init(rnr, interp, sco, afd->bc);
 	OBJECT_DECREF(sco);

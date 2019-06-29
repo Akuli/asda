@@ -35,7 +35,7 @@ void bcop_destroy(const struct BcOp *op)
 
 void bc_destroy(const struct Bc *bc)
 {
-	for (struct BcOp *ptr = bc->ops; ptr < bc->ops + bc->nops; ptr++)
-		bcop_destroy(ptr);
+	for (size_t i = 0; i < bc->nops; i++)
+		bcop_destroy(&bc->ops[i]);
 	free(bc->ops);
 }

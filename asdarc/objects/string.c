@@ -94,8 +94,8 @@ struct Object *stringobj_join(struct Interp *interp, struct Object *const *strs,
 	}
 
 	size_t lensum = 0;
-	for (struct Object *const *ptr = strs; ptr < strs+nstrs; ptr++)
-		lensum += ((struct StringData *) (*ptr)->data.val)->len;
+	for (size_t i = 0; i < nstrs; i++)
+		lensum += ((struct StringData *) strs[i]->data.val)->len;
 
 	if(!lensum)
 		goto empty;  // malloc(0) is special
@@ -107,8 +107,8 @@ struct Object *stringobj_join(struct Interp *interp, struct Object *const *strs,
 	}
 
 	uint32_t *p = buf;
-	for (struct Object *const *ptr = strs; ptr < strs+nstrs; ptr++) {
-		struct StringData *strdat = (*ptr)->data.val;
+	for (size_t i = 0; i < nstrs; i++) {
+		struct StringData *strdat = strs[i]->data.val;
 		memcpy(p, strdat->val, sizeof(uint32_t)*strdat->len);
 		p += strdat->len;
 	}

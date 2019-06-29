@@ -20,11 +20,9 @@ static void scopedata_destroy_without_pointer(struct ScopeData data, bool decref
 	if (decrefrefs) {
 		if(data.parent)
 			OBJECT_DECREF(data.parent);
-		for (struct Object **ptr = data.locals; ptr < data.locals + data.nlocals; ptr++)
-		{
-			if(*ptr)
-				OBJECT_DECREF(*ptr);
-		}
+		for (size_t i = 0; i < data.nlocals; i++)
+			if (data.locals[i])
+				OBJECT_DECREF(data.locals[i]);
 	}
 	if (freenonrefs)
 		free(data.locals);
