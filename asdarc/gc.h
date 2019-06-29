@@ -3,8 +3,6 @@
 
 #include "interp.h"
 
-struct Interp;
-
-void gc_refcountdebug(struct Interp *interp);
+void gc_refcountdebug(Interp *interp);
 
 #endif   // GC_H

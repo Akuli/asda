@@ -5,9 +5,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-
-// there is a bug in iwyu, it doesn't see that this is here
-struct Interp;
+#include "interp.h"
 
 // destroy function can be NULL
 struct ObjData {
@@ -15,22 +13,36 @@ struct ObjData {
 	void (*destroy)(void *val, bool decrefrefs, bool freenonrefs);
 };
 
+/* if you are a typedef hater
+
+then please let this be, just compare this:
+
+	Object *foo(Object *bar, Object *biz, Object *baz, Object **spam, size_t nspam);
+
+to this:
+
+	Object *foo(Object *bar, Object *biz, Object *baz, Object **spam, size_t nspam);
+
+some function declarations actually use this struct many times!
+*/
+typedef struct ObjectStruct Object;
+
 struct Type {
-	struct Object **methods;
+	Object **methods;
 	size_t nmethods;
 };
 
-struct Object {
+struct ObjectStruct {
 	const struct Type *type;
 	unsigned int refcount;       // TODO: atomic?
 	unsigned int gcflag;         // gc.c uses this for an implementation-detaily thing
-	struct Interp *interp;       // NULL for statically allocated objects
+	Interp *interp;       // NULL for statically allocated objects
 	struct ObjData data;
 
 	// runtime created objects go into a doubly linked list
 	// it is doubly linked to make removing objects from the list O(1)
-	struct Object *prev;
-	struct Object *next;
+	Object *prev;
+	Object *next;
 };
 
 #define OBJECT_COMPILETIMECREATE(TYPE, DATAVAL) { \
@@ -55,7 +67,7 @@ struct Object {
 
 Destroys od on no mem, so you can do this:
 
-	static struct Object *someobj_new(struct Interp *interp)
+	static Object *someobj_new(Interp *interp)
 	{
 		struct ObjData od;
 		fill up od somehow;
@@ -70,10 +82,10 @@ Destroys od on no mem, so you can do this:
 
 Now od is destroyed correctly even if object_new() runs out of memory.
 */
-struct Object *object_new(struct Interp *interp, const struct Type *type, struct ObjData od);
+Object *object_new(Interp *interp, const struct Type *type, struct ObjData od);
 
 // use decref instead of calling this yourself
-void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs);
+void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs);
 
 extern const struct Type object_type;
 

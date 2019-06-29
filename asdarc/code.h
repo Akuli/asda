@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "objtyp.h"
 
 enum CodeOpKind {
 	CODE_CONSTANT,
@@ -48,7 +49,7 @@ typedef union {
 	uint16_t strjoin_nstrs;
 	struct CodeLookupMethodData lookupmethod;
 	struct CodeCreateFuncData createfunc;
-	struct Object *obj;
+	Object *obj;
 } CodeData;
 
 struct CodeOp {

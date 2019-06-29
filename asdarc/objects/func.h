@@ -9,9 +9,8 @@
 extern const struct Type funcobj_type_ret;
 extern const struct Type funcobj_type_noret;
 
-// TODO: add const to args
-typedef struct Object* (*funcobj_cfunc_ret  )(struct Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs);
-typedef bool           (*funcobj_cfunc_noret)(struct Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs);
+typedef Object* (*funcobj_cfunc_ret  )(Interp *interp, struct ObjData data, Object *const *args, size_t nargs);
+typedef bool    (*funcobj_cfunc_noret)(Interp *interp, struct ObjData data, Object *const *args, size_t nargs);
 
 // it is an implementation detail that this is here, don't rely on it
 // currently it is needed for FUNCOBJDATA_COMPILETIMECREATE macros
@@ -32,11 +31,11 @@ struct FuncObjData {
 #define FUNCOBJDATA_COMPILETIMECREATE_NORET(f) { .cfunc = {.noret=(f)} }
 
 // data is always destroyed (on error immediately, on success whenever function is destroyed)
-struct Object *funcobj_new_ret  (struct Interp *interp, funcobj_cfunc_ret   f, struct ObjData data);
-struct Object *funcobj_new_noret(struct Interp *interp, funcobj_cfunc_noret f, struct ObjData data);
+Object *funcobj_new_ret  (Interp *interp, funcobj_cfunc_ret   f, struct ObjData data);
+Object *funcobj_new_noret(Interp *interp, funcobj_cfunc_noret f, struct ObjData data);
 
-struct Object* funcobj_call_ret  (struct Interp *interp, struct Object *f, struct Object *const *args, size_t nargs);
-bool           funcobj_call_noret(struct Interp *interp, struct Object *f, struct Object *const *args, size_t nargs);
+Object* funcobj_call_ret  (Interp *interp, Object *f, Object *const *args, size_t nargs);
+bool    funcobj_call_noret(Interp *interp, Object *f, Object *const *args, size_t nargs);
 
 
 #endif   // OBJECTS_FUNC_H

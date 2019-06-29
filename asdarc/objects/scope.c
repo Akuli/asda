@@ -10,9 +10,9 @@
 
 
 struct ScopeData {
-	struct Object **locals;
+	Object **locals;
 	size_t nlocals;
-	struct Object *parent;
+	Object *parent;
 };
 
 static void scopedata_destroy_without_pointer(struct ScopeData data, bool decrefrefs, bool freenonrefs)
@@ -35,7 +35,7 @@ static void scopedata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 		free(vpdata);
 }
 
-struct Object *scopeobj_newsub(struct Interp *interp, struct Object *parent, uint16_t nlocals)
+Object *scopeobj_newsub(Interp *interp, Object *parent, uint16_t nlocals)
 {
 	struct ScopeData *ptr = malloc(sizeof(*ptr));
 	if (!ptr) {
@@ -43,7 +43,7 @@ struct Object *scopeobj_newsub(struct Interp *interp, struct Object *parent, uin
 		return NULL;
 	}
 
-	if (!( ptr->locals = calloc(nlocals, sizeof(struct Object*)) ) && nlocals) {
+	if (!( ptr->locals = calloc(nlocals, sizeof(Object*)) ) && nlocals) {
 		free(ptr);
 		interp_errstr_nomem(interp);
 		return NULL;
@@ -60,9 +60,9 @@ struct Object *scopeobj_newsub(struct Interp *interp, struct Object *parent, uin
 	});
 }
 
-struct Object *scopeobj_newglobal(struct Interp *interp)
+Object *scopeobj_newglobal(Interp *interp)
 {
-	struct Object *res = scopeobj_newsub(interp, NULL, (uint16_t)builtin_nobjects);
+	Object *res = scopeobj_newsub(interp, NULL, (uint16_t)builtin_nobjects);
 	if(!res)
 		return NULL;
 
@@ -73,13 +73,13 @@ struct Object *scopeobj_newglobal(struct Interp *interp)
 	return res;
 }
 
-struct Object *scopeobj_getforlevel(struct Object *scope, size_t level)
+Object *scopeobj_getforlevel(Object *scope, size_t level)
 {
 #define PARENT(s) ( ((struct ScopeData*) (s)->data.val)->parent )
 
 	// FIXME: this looks like it's inefficient lol
 	size_t mylevel = 0;
-	for (struct Object *par = PARENT(scope); par; par = PARENT(par))
+	for (Object *par = PARENT(scope); par; par = PARENT(par))
 		mylevel++;
 
 	assert(level <= mylevel);
@@ -91,7 +91,7 @@ struct Object *scopeobj_getforlevel(struct Object *scope, size_t level)
 #undef PARENT
 }
 
-struct Object **scopeobj_getlocalvarsptr(struct Object *scope)
+Object **scopeobj_getlocalvarsptr(Object *scope)
 {
 	return ((struct ScopeData*) scope->data.val)->locals;
 }

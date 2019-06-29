@@ -9,7 +9,7 @@
 // reference: https://en.wikipedia.org/wiki/UTF-8
 
 
-static int how_many_bytes(struct Interp *interp, uint32_t codepnt)
+static int how_many_bytes(Interp *interp, uint32_t codepnt)
 {
 	if (codepnt <= 0x7f)
 		return 1;
@@ -34,10 +34,7 @@ invalid_code_point:
 // example: ONES(6) is 111111 in binary
 #define ONES(n) ((1<<(n))-1)
 
-bool utf8_encode(
-	struct Interp *interp,
-	const uint32_t *unicode, size_t unicodelen,
-	char **utf8, size_t *utf8len)
+bool utf8_encode(Interp *interp, const uint32_t *unicode, size_t unicodelen, char **utf8, size_t *utf8len)
 {
 	// don't set utf8len if this fails
 	size_t utf8len_val = 0;
@@ -87,7 +84,7 @@ bool utf8_encode(
 }
 
 
-static int decode_character(struct Interp *interp, const unsigned char *uutf8, size_t utf8len, uint32_t *ptr)
+static int decode_character(Interp *interp, const unsigned char *uutf8, size_t utf8len, uint32_t *ptr)
 {
 #define CHECK_UTF8LEN(n)      do{ if (utf8len < (size_t)(n)) { sprintf(interp->errstr, "unexpected end of string");           return -1; }}while(0)
 #define CHECK_CONTINUATION(c) do{ if ((c)>>6 != 1<<1)        { sprintf(interp->errstr, "invalid continuation byte %#x", (c)); return -1; }}while(0)
@@ -136,10 +133,7 @@ static int decode_character(struct Interp *interp, const unsigned char *uutf8, s
 	return -1;
 }
 
-bool utf8_decode(
-	struct Interp *interp,
-	const char *utf8, size_t utf8len,
-	uint32_t **unicode, size_t *unicodelen)
+bool utf8_decode(Interp *interp, const char *utf8, size_t utf8len, uint32_t **unicode, size_t *unicodelen)
 {
 	if (utf8len == 0) {
 		*unicodelen = 0;

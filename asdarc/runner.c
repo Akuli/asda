@@ -19,7 +19,7 @@
 #define DEBUG_PRINTF(...) ((void)0)
 
 
-void runner_init(struct Runner *rnr, struct Interp *interp, struct Object *scope, struct Code code)
+void runner_init(struct Runner *rnr, Interp *interp, Object *scope, struct Code code)
 {
 	rnr->interp = interp;
 	rnr->scope = scope;
@@ -57,7 +57,7 @@ static bool grow_stack(struct Runner *rnr, size_t minsz)
 	if (newsz < minsz)
 		newsz = minsz;
 
-	struct Object **ptr = realloc(rnr->stack, sizeof(struct Object*) * newsz);
+	Object **ptr = realloc(rnr->stack, sizeof(Object*) * newsz);
 	if(!ptr) {
 		interp_errstr_nomem(rnr->interp);
 		return false;
@@ -68,7 +68,7 @@ static bool grow_stack(struct Runner *rnr, size_t minsz)
 	return true;
 }
 
-static bool push2stack(struct Runner *rnr, struct Object *obj)
+static bool push2stack(struct Runner *rnr, Object *obj)
 {
 	if (!grow_stack(rnr, rnr->stacklen+1))
 		return false;
@@ -77,9 +77,9 @@ static bool push2stack(struct Runner *rnr, struct Object *obj)
 	return true;
 }
 
-static struct Object **get_var_pointer(struct Runner *rnr, const struct CodeOp *op)
+static Object **get_var_pointer(struct Runner *rnr, const struct CodeOp *op)
 {
-	struct Object *scope = scopeobj_getforlevel(rnr->scope, op->data.var.level);
+	Object *scope = scopeobj_getforlevel(rnr->scope, op->data.var.level);
 	return scopeobj_getlocalvarsptr(scope) + op->data.var.index;
 }
 
@@ -88,11 +88,11 @@ static bool call_function(struct Runner *rnr, bool ret, size_t nargs)
 	DEBUG_PRINTF("callfunc ret=%s nargs=%zu\n", ret?"true":"false", nargs);
 	assert(rnr->stacklen >= nargs + 1);
 	rnr->stacklen -= nargs;
-	struct Object **argptr = rnr->stack + rnr->stacklen;
-	struct Object *func = rnr->stack[--rnr->stacklen];
+	Object **argptr = rnr->stack + rnr->stacklen;
+	Object *func = rnr->stack[--rnr->stacklen];
 
 	bool ok;
-	struct Object *res;
+	Object *res;
 	if(ret)
 		ok = !!( res = funcobj_call_ret(rnr->interp, func, argptr, nargs) );
 	else {
@@ -121,9 +121,9 @@ static bool integer_binary_operation(struct Runner *rnr, enum CodeOpKind bok)
 	//
 	//   |---|---|---|---|---|---|---|---|---|
 	//   | stuff we don't care about | x | y |
-	struct Object *y = rnr->stack[--rnr->stacklen];
-	struct Object *x = rnr->stack[--rnr->stacklen];
-	struct Object *res;
+	Object *y = rnr->stack[--rnr->stacklen];
+	Object *x = rnr->stack[--rnr->stacklen];
+	Object *res;
 
 	switch(bok) {
 		case CODE_INT_ADD: res = intobj_add(rnr->interp, x, y); break;
@@ -159,7 +159,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		DEBUG_PRINTF("setvar level=%d index=%d\n",
 			(int)op->data.var.level, (int)op->data.var.index);
 		assert(rnr->stacklen >= 1);
-		struct Object **ptr = get_var_pointer(rnr, op);
+		Object **ptr = get_var_pointer(rnr, op);
 		if(*ptr)
 			OBJECT_DECREF(*ptr);
 
@@ -172,7 +172,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	{
 		DEBUG_PRINTF("getvar level=%d index=%d\n",
 			(int)op->data.var.level, (int)op->data.var.index);
-		struct Object **ptr = get_var_pointer(rnr, op);
+		Object **ptr = get_var_pointer(rnr, op);
 		if(!*ptr) {
 			interp_errstr_printf(rnr->interp, "value of a variable hasn't been set");
 			return RUNNER_ERROR;
@@ -187,8 +187,8 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	{
 		DEBUG_PRINTF("boolneg\n");
 		assert(rnr->stacklen >= 1);
-		struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
-		struct Object *old = *ptr;
+		Object **ptr = &rnr->stack[rnr->stacklen - 1];
+		Object *old = *ptr;
 		*ptr = boolobj_c2asda(!boolobj_asda2c(old));
 		OBJECT_DECREF(old);
 		break;
@@ -198,7 +198,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	{
 		DEBUG_PRINTF("jumpif\n");
 		assert(rnr->stacklen >= 1);
-		struct Object *obj = rnr->stack[--rnr->stacklen];
+		Object *obj = rnr->stack[--rnr->stacklen];
 		bool b = boolobj_asda2c(obj);
 		OBJECT_DECREF(obj);
 
@@ -224,8 +224,8 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		DEBUG_PRINTF("getmethod\n");
 		assert(rnr->stacklen >= 1);
 		struct CodeLookupMethodData data = op->data.lookupmethod;
-		struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
-		struct Object *parti = partialfunc_create(rnr->interp, data.type->methods[data.index], ptr, 1);
+		Object **ptr = &rnr->stack[rnr->stacklen - 1];
+		Object *parti = partialfunc_create(rnr->interp, data.type->methods[data.index], ptr, 1);
 		if(!parti)
 			return RUNNER_ERROR;
 
@@ -238,8 +238,8 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	{
 		DEBUG_PRINTF("string join of %zu strings\n", (size_t)op->data.strjoin_nstrs);
 		assert(rnr->stacklen >= op->data.strjoin_nstrs);
-		struct Object **ptr = rnr->stack + rnr->stacklen - op->data.strjoin_nstrs;
-		struct Object *res = stringobj_join(rnr->interp, ptr, op->data.strjoin_nstrs);
+		Object **ptr = rnr->stack + rnr->stacklen - op->data.strjoin_nstrs;
+		Object *res = stringobj_join(rnr->interp, ptr, op->data.strjoin_nstrs);
 		if(!res)
 			return RUNNER_ERROR;
 
@@ -259,7 +259,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	{
 		DEBUG_PRINTF("pop 1\n");
 		assert(rnr->stacklen >= 1);
-		struct Object *obj = rnr->stack[--rnr->stacklen];
+		Object *obj = rnr->stack[--rnr->stacklen];
 		OBJECT_DECREF(obj);
 		break;
 	}
@@ -267,7 +267,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	case CODE_CREATEFUNC:
 	{
 		DEBUG_PRINTF("create func\n");
-		struct Object *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc.body, op->data.createfunc.returning);
+		Object *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc.body, op->data.createfunc.returning);
 		bool ok = push2stack(rnr, f);
 		OBJECT_DECREF(f);
 		if(!ok)
@@ -300,8 +300,8 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 
 	case CODE_INT_NEG:
 	{
-		struct Object **ptr = &rnr->stack[rnr->stacklen - 1];
-		struct Object *obj = intobj_neg(rnr->interp, *ptr);
+		Object **ptr = &rnr->stack[rnr->stacklen - 1];
+		Object *obj = intobj_neg(rnr->interp, *ptr);
 		if(!obj)
 			return RUNNER_ERROR;
 		OBJECT_DECREF(*ptr);

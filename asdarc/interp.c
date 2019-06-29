@@ -7,7 +7,7 @@
 #include "objects/scope.h"
 
 
-bool interp_init(struct Interp *interp, const char *argv0)
+bool interp_init(Interp *interp, const char *argv0)
 {
 	interp->argv0 = argv0;
 	interp->errstr[0] = 0;
@@ -18,19 +18,19 @@ bool interp_init(struct Interp *interp, const char *argv0)
 	return true;
 }
 
-void interp_destroy(struct Interp *interp)
+void interp_destroy(Interp *interp)
 {
 	OBJECT_DECREF(interp->builtinscope);
 
-	struct Object *next;
-	for (struct Object *obj = interp->objliststart; obj; obj = next){
+	Object *next;
+	for (Object *obj = interp->objliststart; obj; obj = next){
 		//printf("refcount cycling object %p\n", (void*)obj);
 		next = obj->next;
 		object_destroy(obj, false, true);
 	}
 }
 
-void interp_errstr_printf_errno(struct Interp *interp, const char *fmt, ...)
+void interp_errstr_printf_errno(Interp *interp, const char *fmt, ...)
 {
 	int errsav = errno;
 	assert(interp->errstr[0] == 0);   // don't overwrite a previous error

@@ -9,7 +9,7 @@
 #include "objects/scope.h"
 
 struct AsdaFunctionData {
-	struct Object *defscope;
+	Object *defscope;
 	struct Code code;
 };
 
@@ -22,11 +22,10 @@ static void destroy_asdafunc_data(void *vpdata, bool decrefrefs, bool freenonref
 		free(vpdata);
 }
 
-static enum RunnerResult run(
-	struct Interp *interp, const struct AsdaFunctionData *afd, struct Runner *rnr,
-	struct Object *const*args, size_t nargs)
+static enum RunnerResult
+run(Interp *interp, const struct AsdaFunctionData *afd, struct Runner *rnr, Object *const *args, size_t nargs)
 {
-	struct Object *sco = scopeobj_newsub(interp, afd->defscope, afd->code.nlocalvars);
+	Object *sco = scopeobj_newsub(interp, afd->defscope, afd->code.nlocalvars);
 	if(!sco)
 		return RUNNER_ERROR;
 
@@ -43,8 +42,7 @@ static enum RunnerResult run(
 	return res;
 }
 
-static struct Object *asda_function_cfunc_ret(struct Interp *interp, struct ObjData data,
-	struct Object *const *args, size_t nargs)
+static Object *asda_function_cfunc_ret(Interp *interp, struct ObjData data, Object *const *args, size_t nargs)
 {
 	struct Runner rnr;
 	switch (run(interp, data.val, &rnr, args, nargs)) {
@@ -58,8 +56,7 @@ static struct Object *asda_function_cfunc_ret(struct Interp *interp, struct ObjD
 	}
 }
 
-static bool asda_function_cfunc_noret(struct Interp *interp, struct ObjData data,
-	struct Object *const *args, size_t nargs)
+static bool asda_function_cfunc_noret(Interp *interp, struct ObjData data, Object *const *args, size_t nargs)
 {
 	struct Runner rnr;
 	switch (run(interp, data.val, &rnr, args, nargs)) {
@@ -73,7 +70,7 @@ static bool asda_function_cfunc_noret(struct Interp *interp, struct ObjData data
 	}
 }
 
-struct Object *asdafunc_create(struct Interp *interp, struct Object *defscope, struct Code code, bool ret)
+Object *asdafunc_create(Interp *interp, Object *defscope, struct Code code, bool ret)
 {
 	struct AsdaFunctionData *afd = malloc(sizeof(*afd));
 	if(!afd) {

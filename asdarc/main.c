@@ -12,9 +12,9 @@
 #include "objects/int.h"
 #include "objects/scope.h"
 
-static bool run(struct Interp *interp, struct Code code)
+static bool run(Interp *interp, struct Code code)
 {
-	struct Object *scope = scopeobj_newsub(interp, interp->builtinscope, code.nlocalvars);
+	Object *scope = scopeobj_newsub(interp, interp->builtinscope, code.nlocalvars);
 	if(!scope)
 		return false;
 
@@ -48,7 +48,7 @@ int main(int argc, char **argv)
 		return 2;
 	}
 
-	struct Interp interp;
+	Interp interp;
 	if (!interp_init(&interp, argv[0]))   // sets interp.errstr on error
 		goto error_dont_destroy_interp;
 

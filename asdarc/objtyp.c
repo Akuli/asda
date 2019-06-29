@@ -8,7 +8,7 @@
 const struct Type object_type = { .methods = NULL, .nmethods = 0 };
 
 
-void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs)
+void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs)
 {
 	/*
 	if this fails, a compile-time created object is being decreffed too
@@ -35,10 +35,10 @@ void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs)
 	}
 }
 
-struct Object *object_new(struct Interp *interp, const struct Type *type, struct ObjData od)
+Object *object_new(Interp *interp, const struct Type *type, struct ObjData od)
 {
 	assert(interp);
-	struct Object *obj = malloc(sizeof(*obj));
+	Object *obj = malloc(sizeof(*obj));
 	if (!obj) {
 		if (od.destroy)
 			od.destroy(od.val, true, true);

@@ -46,7 +46,7 @@
 #define is_printable_ascii(c) ('!' <= (c) && (c) <= '~')
 
 
-struct BcReader bcreader_new(struct Interp *interp, FILE *in, const char *indirname)
+struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname)
 {
 	struct BcReader res;
 	res.interp = interp;
@@ -203,7 +203,7 @@ void bcreader_freeimports(char **paths, uint16_t npaths)
 }
 
 
-static void append_byte_2_errstr(struct Interp *interp, unsigned char byte)
+static void append_byte_2_errstr(Interp *interp, unsigned char byte)
 {
 	char *ptr = interp->errstr + strlen(interp->errstr);
 	char *max = interp->errstr + sizeof(interp->errstr);
@@ -303,7 +303,7 @@ static bool read_callfunc(struct BcReader *bcr, struct CodeOp *res, enum CodeOpK
 	return read_bytes(bcr, &res->data.callfunc_nargs, 1);
 }
 
-static bool read_string_constant(struct BcReader *bcr, struct Object **objptr)
+static bool read_string_constant(struct BcReader *bcr, Object **objptr)
 {
 	char *str;
 	uint32_t len;
@@ -315,7 +315,7 @@ static bool read_string_constant(struct BcReader *bcr, struct Object **objptr)
 	return !!*objptr;
 }
 
-static bool read_int_constant(struct BcReader *bcr, struct Object **objptr, bool negate)
+static bool read_int_constant(struct BcReader *bcr, Object **objptr, bool negate)
 {
 	uint32_t len;
 	if(!read_uint32(bcr, &len))

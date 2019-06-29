@@ -9,8 +9,8 @@
 #include "objects/func.h"
 
 struct PartialFuncData {
-	struct Object *f;
-	struct Object **partial;
+	Object *f;
+	Object **partial;
 	size_t npartial;
 };
 
@@ -29,12 +29,12 @@ static void partialfunc_data_destroy(void *vpdata, bool decrefrefs, bool freenon
 }
 
 union call_result {
-	struct Object *ret;
+	Object *ret;
 	bool noret;
 };
 
 static union call_result
-call_partial_func(struct Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs, bool ret)
+call_partial_func(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, bool ret)
 {
 	const struct PartialFuncData *pfd = data.val;
 
@@ -47,7 +47,7 @@ call_partial_func(struct Interp *interp, struct ObjData data, struct Object *con
 		res.noret = false;
 	}
 
-	struct Object **allargs;
+	Object **allargs;
 	if (nargs == 0)
 		allargs = pfd->partial;
 	else {
@@ -70,19 +70,18 @@ call_partial_func(struct Interp *interp, struct ObjData data, struct Object *con
 	return res;
 }
 
-struct Object *partialfunc_cfunc_ret(struct Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs)
+Object *partialfunc_cfunc_ret(Interp *interp, struct ObjData data, Object *const *args, size_t nargs)
 {
 	return call_partial_func(interp, data, args, nargs, true).ret;
 }
 
-bool partialfunc_cfunc_noret(struct Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs)
+bool partialfunc_cfunc_noret(Interp *interp, struct ObjData data, Object *const *args, size_t nargs)
 {
 	return call_partial_func(interp, data, args, nargs, false).noret;
 }
 
 
-struct Object *
-partialfunc_create(struct Interp *interp, struct Object *f, struct Object *const *partial, size_t npartial)
+Object *partialfunc_create(Interp *interp, Object *f, Object *const *partial, size_t npartial)
 {
 	if (npartial == 0) {
 		OBJECT_INCREF(f);
@@ -90,7 +89,7 @@ partialfunc_create(struct Interp *interp, struct Object *f, struct Object *const
 	}
 
 	struct PartialFuncData *pfd = malloc(sizeof(*pfd));
-	struct Object **partialcp = malloc(sizeof(partial[0]) * npartial);
+	Object **partialcp = malloc(sizeof(partial[0]) * npartial);
 	if(!partialcp || !pfd) {
 		interp_errstr_nomem(interp);
 		return NULL;

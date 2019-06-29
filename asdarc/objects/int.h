@@ -7,12 +7,12 @@
 #include "../objtyp.h"
 
 // returns a new integer from an arbitrarily long sequence of bytes (big-endian)
-struct Object *intobj_new_bebytes(struct Interp *interp, const unsigned char *seq, size_t len, bool negate);
+Object *intobj_new_bebytes(Interp *interp, const unsigned char *seq, size_t len, bool negate);
 
-struct Object *intobj_add(struct Interp *interp, struct Object *x, struct Object *y);  // x+y
-struct Object *intobj_sub(struct Interp *interp, struct Object *x, struct Object *y);  // x-y
-struct Object *intobj_neg(struct Interp *interp, struct Object *x);                    // -x
-struct Object *intobj_mul(struct Interp *interp, struct Object *x, struct Object *y);  // x*y
+Object *intobj_add(Interp *interp, Object *x, Object *y);  // x+y
+Object *intobj_sub(Interp *interp, Object *x, Object *y);  // x-y
+Object *intobj_neg(Interp *interp, Object *x);             // -x
+Object *intobj_mul(Interp *interp, Object *x, Object *y);  // x*y
 
 
 extern const struct Type intobj_type;

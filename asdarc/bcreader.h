@@ -11,7 +11,7 @@
 
 
 struct BcReader {
-	struct Interp *interp;
+	Interp *interp;
 	FILE *in;
 	const char *indirname;
 	uint32_t lineno;
@@ -19,7 +19,7 @@ struct BcReader {
 
 // never fails
 // TODO: decide when indirname can be freed and change all codes accordingly
-struct BcReader bcreader_new(struct Interp *interp, FILE *in, const char *indirname);
+struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname);
 
 bool bcreader_readasdabytes(struct BcReader *bcr);
 

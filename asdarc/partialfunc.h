@@ -5,7 +5,6 @@
 #include "interp.h"
 #include "objtyp.h"
 
-struct Object *
-partialfunc_create(struct Interp *interp, struct Object *f, struct Object *const *partial, size_t npartial);
+Object *partialfunc_create(Interp *interp, Object *f, Object *const *partial, size_t npartial);
 
 #endif    // PARTIALFUNC_H

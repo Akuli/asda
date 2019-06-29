@@ -30,7 +30,7 @@ static void stringdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 }
 
 
-struct Object *stringobj_new_nocpy(struct Interp *interp, uint32_t *val, size_t len)
+Object *stringobj_new_nocpy(Interp *interp, uint32_t *val, size_t len)
 {
 	struct StringData *strdat=malloc(sizeof(*strdat));
 	if(!strdat) {
@@ -48,7 +48,7 @@ struct Object *stringobj_new_nocpy(struct Interp *interp, uint32_t *val, size_t 
 	});
 }
 
-struct Object *stringobj_new(struct Interp *interp, const uint32_t *val, size_t len)
+Object *stringobj_new(Interp *interp, const uint32_t *val, size_t len)
 {
 	uint32_t *valcp = malloc(sizeof(uint32_t)*len);
 	if (len && !valcp) {   // malloc(0) is special
@@ -60,7 +60,7 @@ struct Object *stringobj_new(struct Interp *interp, const uint32_t *val, size_t 
 	return stringobj_new_nocpy(interp, valcp, len);
 }
 
-struct Object *stringobj_new_utf8(struct Interp *interp, const char *utf, size_t utflen)
+Object *stringobj_new_utf8(Interp *interp, const char *utf, size_t utflen)
 {
 	uint32_t *uni;
 	size_t unilen;
@@ -69,7 +69,7 @@ struct Object *stringobj_new_utf8(struct Interp *interp, const char *utf, size_t
 	return stringobj_new_nocpy(interp, uni, unilen);
 }
 
-bool stringobj_toutf8(struct Object *obj, const char **val, size_t *len)
+bool stringobj_toutf8(Object *obj, const char **val, size_t *len)
 {
 	struct StringData *strdat = obj->data.val;
 	if( !strdat->utf8cache &&
@@ -84,7 +84,7 @@ bool stringobj_toutf8(struct Object *obj, const char **val, size_t *len)
 	return true;
 }
 
-struct Object *stringobj_join(struct Interp *interp, struct Object *const *strs, size_t nstrs)
+Object *stringobj_join(Interp *interp, Object *const *strs, size_t nstrs)
 {
 	if(nstrs == 0)
 		goto empty;
@@ -121,8 +121,8 @@ empty:
 }
 
 
-static struct Object *tostring_impl(struct Interp *interp, struct ObjData data,
-	struct Object *const *args, size_t nargs)
+static Object *tostring_impl(Interp *interp, struct ObjData data,
+	Object *const *args, size_t nargs)
 {
 	assert(nargs == 1);
 	assert(args[0]->type == &stringobj_type);
@@ -131,9 +131,9 @@ static struct Object *tostring_impl(struct Interp *interp, struct ObjData data,
 }
 
 static struct FuncObjData tostringdata = FUNCOBJDATA_COMPILETIMECREATE_RET(tostring_impl);
-static struct Object tostring = OBJECT_COMPILETIMECREATE(&funcobj_type_ret, &tostringdata);
+static Object tostring = OBJECT_COMPILETIMECREATE(&funcobj_type_ret, &tostringdata);
 
 // TODO: first string method should be uppercase
-static struct Object *methods[] = { &tostring, &tostring };
+static Object *methods[] = { &tostring, &tostring };
 
 const struct Type stringobj_type = { .methods = methods, .nmethods = sizeof(methods)/sizeof(methods[0]) };
