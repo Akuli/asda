@@ -49,7 +49,7 @@ int main(int argc, char **argv)
 	}
 
 	struct Interp interp;
-	if (!interp_init(&interp, argv[0]))
+	if (!interp_init(&interp, argv[0]))   // sets interp.errstr on error
 		goto error_dont_destroy_interp;
 
 	if (!( dir = path_toabsolute(argv[1]) )) {

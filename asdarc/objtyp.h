@@ -53,7 +53,7 @@ struct Object {
 
 /* returns an object with refcount 1
 
-On no mem, destroys od and returns NULL. This means that you can do this:
+Destroys od on no mem, so you can do this:
 
 	static struct Object *someobj_new(struct Interp *interp)
 	{
@@ -61,6 +61,7 @@ On no mem, destroys od and returns NULL. This means that you can do this:
 		fill up od somehow;
 		if (failure with filling) {
 			destroy things that have been filled so far;
+			set message to interp->errstr;
 			return NULL;
 		}
 

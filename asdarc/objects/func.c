@@ -40,8 +40,10 @@ static union call_result call(struct Interp *interp, struct Object *f, struct Ob
 	if (fod->npartial == 0) {
 		allargs = args;
 	} else {
-		if(!( allargs = malloc((fod->npartial + nargs) * sizeof(allargs[0])) ))
+		if(!( allargs = malloc((fod->npartial + nargs) * sizeof(allargs[0])) )) {
+			interp_errstr_nomem(interp);
 			return res;
+		}
 		memcpy(allargs, fod->partial, fod->npartial * sizeof(allargs[0]));
 		memcpy(allargs+fod->npartial, args, nargs * sizeof(allargs[0]));
 	}

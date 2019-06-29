@@ -42,6 +42,7 @@ struct Object *object_new(struct Interp *interp, const struct Type *type, struct
 	if (!obj) {
 		if (od.destroy)
 			od.destroy(od.val, true, true);
+		interp_errstr_nomem(interp);
 		return NULL;
 	}
 

@@ -30,6 +30,7 @@ static struct Object *new_from_mpzt(struct Interp *interp, mpz_t mpz)
 	struct IntData *data = malloc(sizeof *data);
 	if(!data) {
 		mpz_clear(mpz);
+		interp_errstr_nomem(interp);
 		return NULL;
 	}
 
