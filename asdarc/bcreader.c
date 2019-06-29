@@ -84,7 +84,6 @@ static bool read_uint ## N (struct BcReader *bcr, uint ## N ## _t *res) \
 	return true; \
 }
 
-CREATE_UINT_READER(8)
 CREATE_UINT_READER(16)
 CREATE_UINT_READER(32)
 
@@ -243,7 +242,7 @@ static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowv
 	case TYPEBYTE_BUILTIN:
 	{
 		uint8_t i;
-		if (!read_uint8(bcr, &i))
+		if (!read_bytes(bcr, &i, 1))
 			return false;
 		assert(i < builtin_ntypes);
 		*typ = builtin_types[i];
@@ -290,7 +289,7 @@ static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowv
 static bool read_vardata(struct BcReader *bcr, struct CodeOp *res, enum CodeOpKind kind)
 {
 	struct CodeVarData vd;
-	if (!read_uint8(bcr, &vd.level)) return false;
+	if (!read_bytes(bcr, &vd.level, 1)) return false;
 	if (!read_uint16(bcr, &vd.index)) return false;
 
 	res->data.var = vd;
@@ -301,7 +300,7 @@ static bool read_vardata(struct BcReader *bcr, struct CodeOp *res, enum CodeOpKi
 static bool read_callfunc(struct BcReader *bcr, struct CodeOp *res, enum CodeOpKind kind)
 {
 	res->kind = kind;
-	return read_uint8(bcr, &res->data.callfunc_nargs);
+	return read_bytes(bcr, &res->data.callfunc_nargs, 1);
 }
 
 static bool read_string_constant(struct BcReader *bcr, struct Object **objptr)
