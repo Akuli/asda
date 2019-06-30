@@ -1,15 +1,7 @@
-# this comment suppresses all of flake8 for this file:
-# flake8: noqa
-
 import collections
-import contextlib
 import enum
-import functools
 import itertools
-import operator
 import os
-
-import more_itertools
 
 from . import common, string_parser, tokenizer
 
@@ -110,8 +102,8 @@ _PRECEDENCE_LIST = [
     # has_lhs is None for e.g. '-', because x-y and -x are valid expressions
     [('*', OperatorKind.BINARY | OperatorKind.BINARY_CHAINING)],
     [('+', OperatorKind.BINARY | OperatorKind.BINARY_CHAINING),
-     ('-', OperatorKind.PREFIX |
-           OperatorKind.BINARY | OperatorKind.BINARY_CHAINING)],
+     ('-', (OperatorKind.PREFIX |
+            OperatorKind.BINARY | OperatorKind.BINARY_CHAINING))],
     [('==', OperatorKind.BINARY),
      ('!=', OperatorKind.BINARY)],
     [('.', OperatorKind.BINARY | OperatorKind.BINARY_CHAINING)],
@@ -470,7 +462,7 @@ class _AsdaParser:
                     lhs = parts[index-1][1]
                     assert token is parts[index][1]
                     mid = parts[index+1][1]
-                    token2 = parts[index+2][1]
+                    # the second token at parts[index+2][1] is ignored here
                     rhs = parts[index+3][1]
 
                     # taking just one of the operator tokens feels wrong,
@@ -510,11 +502,11 @@ class _AsdaParser:
                             token.location, token.value, after)
                     elif before is not None and after is not None:
                         valid = bool(kind & OperatorKind.BINARY)
-                        if (valid and
-                            after_after is not None and
-                            after_after.value == token.value and
-                            not (kind & OperatorKind.BINARY_CHAINING)):
-                            # it's chaining, but not allowed for this operator
+                        if (
+                          valid and
+                          after_after is not None and
+                          after_after.value == token.value and
+                          not (kind & OperatorKind.BINARY_CHAINING)):
                             raise common.CompileError(
                                 "'a {0} b {0} c' means '(a {0} b) {0} c', "
                                 "which is likely not what you want. If it is, "
@@ -599,7 +591,7 @@ class _AsdaParser:
                        export=False)
 
         if self.tokens.peek().value == 'export':
-            export_token = self.tokens.next_token()
+            self.tokens.next_token()
             if self.tokens.peek().value != 'let':
                 raise common.CompileError(
                     "should be 'let'", self.tokens.peek().location)
@@ -629,7 +621,7 @@ class _AsdaParser:
 
     def parse_imports(self):
         while (not self.tokens.eof()) and self.tokens.peek().value == 'import':
-            import_token = self.tokens.next_token()
+            self.tokens.next_token()
 
             string_token = self.tokens.next_token()
             if string_token.type != 'STRING':
