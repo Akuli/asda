@@ -162,23 +162,37 @@ def test_output_file_paths_lowercase_and_dotdot(monkeypatch, tmp_path):
         file.write('print("B")')
 
     os.mkdir('SubSubDir')
-    with open(os.path.join('SubSubDir', 'C.ASDA'), 'x') as file:
-        file.write('print("C")')
+    with open(os.path.join('SubSubDir', 'Import.ASDA'), 'x') as file:
+        file.write('''\
+import "../A.ASDA" as a
+import "../../B.ASDA" as b
+''')
 
     monkeypatch.setattr(sys, 'argv', [
-        'asdac', 'A.ASDA', os.path.join('..', 'B.ASDA'),
-        os.path.join('SubSubDir', 'C.ASDA')])
+        'asdac', os.path.join('SubSubDir', 'Import.ASDA')])
     asdac.__main__.main()
 
     assert tree(pathlib.Path('..')) == {
         'B.ASDA': 'file',
         'subDIR': {
             'A.ASDA': 'file',
-            'SubSubDir': {'C.ASDA': 'file'},
+            'SubSubDir': {'Import.ASDA': 'file'},
             'asda-compiled': {
                 'a.asdac': 'file',
                 'dotdot': {'b.asdac': 'file'},
-                'subsubdir': {'c.asdac': 'file'},
+                'subsubdir': {'import.asdac': 'file'},
             },
         },
     }
+
+    path = pathlib.Path('asda-compiled', 'subsubdir', 'import.asdac')
+    with path.open('r', encoding='ascii', errors='ignore') as file:
+        paths = re.findall(r'[a-z\./]+\.asdac?', file.read(), re.IGNORECASE)
+
+    # bytecode paths for the interpreter
+    assert '../a.asdac' in paths
+    assert '../dotdot/b.asdac' in paths
+
+    # source paths for the compiler
+    assert '../../A.ASDA' in paths
+    assert '../../../B.ASDA' in paths
