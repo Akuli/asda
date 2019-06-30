@@ -319,17 +319,6 @@ class _OpCoder:
             self.output.ops.append(JumpIf(None, beginning))
             self.output.ops.append(end)
 
-        elif isinstance(statement, cooked_ast.CreateGenericFunction):
-            dynamic_functype = statement.generic_obj.get_real_type(
-                [tybe.parent_type
-                 for tybe in statement.generic_obj.type_markers],
-                statement.location)
-            self.do_statement(cooked_ast.CreateLocalVar(
-                statement.location, None, statement.name,
-                cooked_ast.CreateFunction(
-                    statement.location, dynamic_functype, statement.name,
-                    statement.argnames, statement.body, statement.yields)))
-
         else:
             assert False, statement     # pragma: no cover
 

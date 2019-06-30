@@ -214,7 +214,7 @@ def test_string_formatting_with_bad_type(compiler):
 def test_void_statement(monkeypatch, compiler):
     monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
     code = '''
-if TRUE:
+let f = () -> void:
     print("a")
     %s
     print("b")

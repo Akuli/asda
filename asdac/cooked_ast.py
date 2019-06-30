@@ -447,7 +447,7 @@ class _Chef:
         subchef = _Chef(self, True, yield_location is not None, returntype)
         subchef.vars.update(dict(zip(argnames, argtypes)))
         functype = objects.FunctionType(argtypes, returntype)
-        body = list(map(subchef.cook_statement, raw.body))
+        body = subchef.cook_body(raw.body)
 
         return CreateFunction(raw.location, functype,
                               argnames, body, yield_location is not None)
