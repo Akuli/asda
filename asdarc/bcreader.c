@@ -124,17 +124,26 @@ static bool read_string0(struct BcReader *bcr, char **str)
 	return true;
 }
 
-static bool read_path(struct BcReader *bcr, char **path)
+static bool read_path(struct BcReader *bcr, char **resptr)
 {
-	if (!read_string0(bcr, path))
+	char *path;
+	if (!read_string0(bcr, &path))
 		return false;
 
-	// lowercasing on windows is not needed here, compiler takes care of all that
+	// compiler lowercases all the paths, that's not needed here
 
-	for (char *p = *path; *p; p++)
-		if (*p == '/')
-			*p = PATH_SLASH;
+	if (PATH_SLASH != '/') {
+		char *p = path;
+		while (( p = strchr(p, '/') ))
+			*p++ = PATH_SLASH;
+	}
 
+	*resptr = path_concat_dotdot(bcr->indirname, path);
+	free(path);
+	if (!*resptr) {
+		interp_errstr_printf_errno(bcr->interp, "cannot create absolute path of '%s'", path);
+		return false;
+	}
 	return true;
 }
 

@@ -56,7 +56,7 @@ char *path_getcwd(void)
 
 bool path_isabsolute(const char *path)
 {
-#if WINDOWS
+#ifdef WINDOWS
 	// "\asd\toot" is equivalent to "X:\asd\toot" where X is... the drive of cwd i guess?
 	// path[0] is '\0' if the path is empty
 	if (path[0] == '\\')
@@ -96,24 +96,33 @@ char *path_toabsolute(const char *path)
 	return res;
 }
 
+// strdup is non-standard
+static char *duplicate_string(const char *src)
+{
+	char *res = malloc(strlen(src) + 1);
+	if (!res) {
+		errno = ENOMEM;
+		return NULL;
+	}
+	strcpy(res, src);
+	return res;
+}
+
 char *path_concat(const char *path1, const char *path2)
 {
 	size_t len1 = strlen(path1);
 	size_t len2 = strlen(path2);
 
-	if (len1 == 0) {
-		char *res = malloc(len2+1);
-		if (!res)
-			return NULL;
-		memcpy(res, path2, len2 + 1);
-		return res;
-	}
+	if (len1 == 0)
+		return duplicate_string(path2);
 	// python returns 'asd/' for os.path.join('asd', ''), maybe that's good
 
 	bool needslash = (path1[len1-1] != PATH_SLASH);
 	char *res = malloc(len1 + (size_t)needslash + len2 + 1 /* for \0 */);
-	if (!res)
+	if (!res) {
+		errno = ENOMEM;
 		return NULL;
+	}
 
 	memcpy(res, path1, len1);
 	if (needslash) {
@@ -124,18 +133,42 @@ char *path_concat(const char *path1, const char *path2)
 	return res;
 }
 
+char *path_concat_dotdot(const char *path1, const char *path2)
+{
+	// dd = dot dot = ".."
+	size_t ndd = 0;
+	while (path2[0] == '.' && path2[1] == '.' && path2[2] == '/') {
+		ndd++;
+		path2 += 3;
+	}
+
+	if (ndd == 0)
+		return path_concat(path1, path2);
+
+	char *prefix = duplicate_string(path1);
+	if (!prefix)
+		return NULL;
+
+	for (size_t i = 0; i < ndd; i++)
+		prefix[path_findlastslash(prefix)] = 0;
+
+	char *res = path_concat(prefix, path2);
+	free(prefix);
+	return res;
+}
+
 size_t path_findlastslash(const char *path)
 {
 	if (path[0] == 0)
 		return 0;
 
 	// if the path ends with a slash, it must be ignored
-	// this is also the reason why strchr() isn't useful here
+	// this is also the reason why strrchr() isn't useful here
 	size_t i = strlen(path)-1;
 	while (i >= 1 && path[i] == PATH_SLASH)
 		i--;
 
-	// TODO: i think C:asd.ö is a valid windows path??
+	// TODO: i think C:blah.txt is a valid windows path??
 	for (; i >= 1; i-- /* behaves well because >=1 */)
 	{
 		if (path[i] == PATH_SLASH)

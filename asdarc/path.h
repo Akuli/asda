@@ -29,9 +29,13 @@ bool path_isabsolute(const char *path);
 char *path_toabsolute(const char *path);
 
 // join two paths by PATH_SLASH
-// returns NULL on no mem
+// sets errno to ENOMEM and returns NULL on no mem
 // return value must be free()'d
 char *path_concat(const char *path1, const char *path2);
+
+// like path_concat, but handles path2 starting with ".." components
+// this does funny stuff with symlinks, use only when that is known to not be an issue
+char *path_concat_dotdot(const char *path1, const char *path2);
 
 // on non-windows, path_findlastslash("a/b/c.ö) returns the index of "/" before "c"
 // on windows, same gibberish with backslashes
