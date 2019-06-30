@@ -2,18 +2,18 @@ CFLAGS += -std=c99 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wconversion -
 CFLAGS += -g
 LDFLAGS += -lgmp
 
-SRC := $(filter-out main.c, $(wildcard *.c objects/*.c))
-OBJ := $(SRC:%.c=obj/%.o)
-HEADERS := $(wildcard *.h objects/*.h)
+SRC := $(filter-out src/main.c, $(wildcard src/*.c src/objects/*.c))
+OBJ := $(SRC:src/%.c=obj/%.o)
+HEADERS := $(wildcard src/*.h src/objects/*.h)
 
 IWYU ?= iwyu
 
 all: asdar
 
-asdar: main.c $(OBJ) $(HEADERS)
+asdar: src/main.c $(OBJ) $(HEADERS)
 	$(CC) $(CFLAGS) $< $(OBJ) -o $@ $(LDFLAGS)
 
-obj/%.o: %.c $(HEADERS)
+obj/%.o: src/%.c $(HEADERS)
 	mkdir -p $(@D) && $(CC) -c -o $@ $< $(CFLAGS)
 
 .PHONY: clean
@@ -22,11 +22,11 @@ clean:
 
 .PHONY: iwyu.% iwyu.objects/%
 iwyu.%:
-	@ $(IWYU) -Xiwyu --no_fwd_decl $(shell echo $@ | sed 's/^iwyu\.//') || true
+	@ $(IWYU) -Xiwyu --no_fwd_decl $(shell echo $@ | sed 's:^iwyu\.:src/:') || true
 iwyu.objects/%:
-	@ $(IWYU) -Xiwyu --no_fwd_decl $(shell echo $@ | sed 's/^iwyu\.//') || true
+	@ $(IWYU) -Xiwyu --no_fwd_decl $(shell echo $@ | sed 's:^iwyu\.:src/:') || true
 
-IWYU_TARGETS := $(SRC:%=iwyu.%) $(HEADERS:%=iwyu.%)
+IWYU_TARGETS := $(SRC:src/%=iwyu.%) $(HEADERS:src/%=iwyu.%)
 
 .PHONY: iwyu
 iwyu: $(IWYU_TARGETS)
@@ -37,4 +37,4 @@ help:
 	@echo "  make                   Compile all files that need compiling"
 	@echo "  make iwyu              Run IWYU for all .c and .h files"
 	@echo "  make iwyu.FILENAME     Run IWYU for one file. The FILENAME should"
-	@echo "                         end with '.c' or '.h'."
+	@echo "                         be e.g. 'main.c' or 'objects/int.h'."
