@@ -61,24 +61,20 @@ def test_precedence_and_chaining(compiler, monkeypatch):
         '--x', "'-' cannot be used like this", '-', rindex=False)
 
     compiler.raw_parse('(x == y) == z')
-    compiler.doesnt_raw_parse(
-        'x == y == z',
-        "'a == b == c' means '(a == b) == c', which is likely not what you "
-        "want. If it is, write it as '(a == b) == c' using parentheses.",
-        '==')
+
+
+def test_confusing_operator_chaining_disallowed(compiler):
+    for ops in itertools.product(['==', '!='], repeat=2):
+        compiler.doesnt_raw_parse(
+            'x %s y %s z' % ops,
+            "'a %s b %s c' is not valid syntax" % ops,
+            ops[1])
 
 
 def test_invalid_operator_stuff(compiler):
     compiler.raw_parse('let x = -1')
     compiler.doesnt_raw_parse('let x = +1',
                               "'+' cannot be used like this", '+')
-
-
-# TODO
-@pytest.mark.xfail
-def test_confusing_operator_chaining_disallowed(compiler):
-    for ops in itertools.product(['==', '!='], repeat=2):
-        compiler.doesnt_raw_parse('x %s y %s z' % ops, "syntax error", ops[1])
 
 
 def test_empty_string(compiler):

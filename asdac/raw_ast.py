@@ -87,27 +87,20 @@ class _TokenIterator:
 #
 # i would use enum.IntFlag but it's new in python 3.6, and other stuff works
 # on python works 3.5
-class OperatorKind(enum.IntEnum):
-    PREFIX = 1 << 0     # -x
-    BINARY = 1 << 1     # x + y
-    TERNARY = 1 << 2    # x `y` z
-
-    # allow writing e.g. 'x + y + z'
-    BINARY_CHAINING = 1 << 3
+OP_PREFIX = 1 << 0              # -x
+OP_BINARY = 1 << 1              # x + y
+OP_TERNARY = 1 << 2             # x `y` z
+OP_BINARY_CHAINING = 1 << 3     # allow writing e.g. 'x + y + z'
 
 
 _PRECEDENCE_LIST = [
-    # lists of items like (operator, has_lhs, has_rhs)
-    #
-    # has_lhs is None for e.g. '-', because x-y and -x are valid expressions
-    [('*', OperatorKind.BINARY | OperatorKind.BINARY_CHAINING)],
-    [('+', OperatorKind.BINARY | OperatorKind.BINARY_CHAINING),
-     ('-', (OperatorKind.PREFIX |
-            OperatorKind.BINARY | OperatorKind.BINARY_CHAINING))],
-    [('==', OperatorKind.BINARY),
-     ('!=', OperatorKind.BINARY)],
-    [('.', OperatorKind.BINARY | OperatorKind.BINARY_CHAINING)],
-    [('`', OperatorKind.TERNARY)],
+    [('*', OP_BINARY | OP_BINARY_CHAINING)],
+    [('+', OP_BINARY | OP_BINARY_CHAINING),
+     ('-', (OP_PREFIX | OP_BINARY | OP_BINARY_CHAINING))],
+    [('==', OP_BINARY),
+     ('!=', OP_BINARY)],
+    [('.', OP_BINARY | OP_BINARY_CHAINING)],
+    [('`', OP_TERNARY)],
 ]
 
 
@@ -422,8 +415,8 @@ class _AsdaParser:
                 "invalid syntax", bad1.location + bad2.location)
 
         # welcome to my hell
-        for op_kind_pairs in _PRECEDENCE_LIST:
-            ops = [op for op, kind in op_kind_pairs]
+        for op_flags_pairs in _PRECEDENCE_LIST:
+            ops = [op for op, flags in op_flags_pairs]
 
             while True:
                 for index, (is_expression, token) in enumerate(parts):
@@ -433,15 +426,15 @@ class _AsdaParser:
                         i = ops.index(token.value)
                     except ValueError:
                         continue
-                    kind = op_kind_pairs[i][1]
+                    flags = op_flags_pairs[i][1]
                     break
                 else:
                     break
 
                 # now we have these variables: index, kind, token
 
-                if kind & OperatorKind.TERNARY:
-                    assert kind == OperatorKind.TERNARY     # no other flags
+                if flags & OP_TERNARY:
+                    assert flags == OP_TERNARY     # no other flags
 
                     if not (index-1 >= 0 and
                             index+4 <= len(parts) and
@@ -497,21 +490,24 @@ class _AsdaParser:
                         after_after = None
 
                     if before is None and after is not None:
-                        valid = bool(kind & OperatorKind.PREFIX)
+                        valid = bool(flags & OP_PREFIX)
                         result = PrefixOperator(
                             token.location, token.value, after)
                     elif before is not None and after is not None:
-                        valid = bool(kind & OperatorKind.BINARY)
+                        valid = bool(flags & OP_BINARY)
                         if (
                           valid and
+                          not (flags & OP_BINARY_CHAINING) and
                           after_after is not None and
-                          after_after.value == token.value and
-                          not (kind & OperatorKind.BINARY_CHAINING)):
+                          any(
+                            (other_op == after_after.value and
+                             (other_flags & OP_BINARY) and
+                             not (other_flags & OP_BINARY_CHAINING))
+                            for other_op, other_flags in op_flags_pairs
+                          )):
                             raise common.CompileError(
-                                "'a {0} b {0} c' means '(a {0} b) {0} c', "
-                                "which is likely not what you want. If it is, "
-                                "write it as '(a {0} b) {0} c' using "
-                                "parentheses.".format(token.value),
+                                "'a {0} b {1} c' is not valid syntax"
+                                .format(token.value, after_after.value),
                                 after_after.location)
                         result = BinaryOperator(
                             token.location, token.value, before, after)
