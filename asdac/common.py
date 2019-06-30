@@ -100,14 +100,15 @@ class Compilation:
 
     def _get_bytecode_path(self, compiled_dir):
         relative = relpath(self.source_path, compiled_dir.parent)
-        relative_c = relative.with_name(relative.name + 'c')
+        relative_c = relative.with_suffix('.asdac')
 
         # avoid having weird things happening
-        def handle_dotdot(string):
-            return 'dotdot' if string == '..' else string
+        # lowercasing makes the compiled files work on both case-sensitive and
+        # case-insensitive file systems
+        def handle_part(string):
+            return 'dotdot' if string == '..' else string.lower()
 
-        literal_dotdots = pathlib.Path(*map(handle_dotdot, relative_c.parts))
-        return compiled_dir / literal_dotdots
+        return compiled_dir / pathlib.Path(*map(handle_part, relative_c.parts))
 
     def __repr__(self):
         return '<%s of %s>' % (type(self).__name__, self.source_path)

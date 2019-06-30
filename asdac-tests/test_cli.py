@@ -133,3 +133,52 @@ def test_report_compile_error_corner_cases(monkeypatch):
             offset=1, length=2,
         )), red)
     assert sys.stderr.getvalue() == 'error in does.not.exist:1,1...1,3: omg2\n'
+
+
+# this file is not an ideal place for this, but it's not worth making a new
+# file for just this one test
+
+def tree(path):
+    result = {}
+    for subpath in path.iterdir():
+        if subpath.is_dir():
+            result[subpath.name] = tree(subpath)
+        elif subpath.is_file():
+            result[subpath.name] = 'file'
+        else:
+            result[subpath.name] = '?'
+    return result
+
+
+def test_output_file_paths_lowercase_and_dotdot(monkeypatch, tmp_path):
+    subdir = pathlib.Path(str(tmp_path)) / 'subDIR'
+    subdir.mkdir()
+    os.chdir(str(subdir))
+
+    with open('A.ASDA', 'x') as file:
+        file.write('print("A")')
+
+    with open(os.path.join('..', 'B.ASDA'), 'x') as file:
+        file.write('print("B")')
+
+    os.mkdir('SubSubDir')
+    with open(os.path.join('SubSubDir', 'C.ASDA'), 'x') as file:
+        file.write('print("C")')
+
+    monkeypatch.setattr(sys, 'argv', [
+        'asdac', 'A.ASDA', os.path.join('..', 'B.ASDA'),
+        os.path.join('SubSubDir', 'C.ASDA')])
+    asdac.__main__.main()
+
+    assert tree(pathlib.Path('..')) == {
+        'B.ASDA': 'file',
+        'subDIR': {
+            'A.ASDA': 'file',
+            'SubSubDir': {'C.ASDA': 'file'},
+            'asda-compiled': {
+                'a.asdac': 'file',
+                'dotdot': {'b.asdac': 'file'},
+                'subsubdir': {'c.asdac': 'file'},
+            },
+        },
+    }
