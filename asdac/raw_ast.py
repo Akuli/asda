@@ -91,7 +91,7 @@ class _TokenIterator:
             return True
 
 
-# the values can be used as bit flags, e.g. PREFIX | BINARY
+# the values can be used as bit flags, e.g. PREFIX | BINARY_WITH_CHAINING
 #
 # i would use enum.IntFlag but it's new in python 3.6, and other stuff works
 # on python works 3.5
@@ -100,17 +100,21 @@ class OperatorKind(enum.IntEnum):
     BINARY = 1 << 1     # x + y
     TERNARY = 1 << 2    # x `y` z
 
+    # allow writing e.g. 'x + y + z'
+    BINARY_CHAINING = 1 << 3
+
 
 _PRECEDENCE_LIST = [
     # lists of items like (operator, has_lhs, has_rhs)
     #
     # has_lhs is None for e.g. '-', because x-y and -x are valid expressions
-    [('*', OperatorKind.BINARY)],
-    [('+', OperatorKind.BINARY),
-     ('-', OperatorKind.PREFIX | OperatorKind.BINARY)],
+    [('*', OperatorKind.BINARY | OperatorKind.BINARY_CHAINING)],
+    [('+', OperatorKind.BINARY | OperatorKind.BINARY_CHAINING),
+     ('-', OperatorKind.PREFIX |
+           OperatorKind.BINARY | OperatorKind.BINARY_CHAINING)],
     [('==', OperatorKind.BINARY),
      ('!=', OperatorKind.BINARY)],
-    [('.', OperatorKind.BINARY)],
+    [('.', OperatorKind.BINARY | OperatorKind.BINARY_CHAINING)],
     [('`', OperatorKind.TERNARY)],
 ]
 
@@ -494,12 +498,29 @@ class _AsdaParser:
                     else:
                         after = None
 
+                    if index+2 < len(parts) and not parts[index+2][0]:
+                        after_after = parts[index+2][1]
+                        assert after_after is not None
+                    else:
+                        after_after = None
+
                     if before is None and after is not None:
                         valid = bool(kind & OperatorKind.PREFIX)
                         result = PrefixOperator(
                             token.location, token.value, after)
                     elif before is not None and after is not None:
                         valid = bool(kind & OperatorKind.BINARY)
+                        if (valid and
+                            after_after is not None and
+                            after_after.value == token.value and
+                            not (kind & OperatorKind.BINARY_CHAINING)):
+                            # it's chaining, but not allowed for this operator
+                            raise common.CompileError(
+                                "'a {0} b {0} c' means '(a {0} b) {0} c', "
+                                "which is likely not what you want. If it is, "
+                                "write it as '(a {0} b) {0} c' using "
+                                "parentheses.".format(token.value),
+                                after_after.location)
                         result = BinaryOperator(
                             token.location, token.value, before, after)
                     else:

@@ -46,7 +46,7 @@ def test_backtick_function_call(compiler, monkeypatch):
         'x ` y', "should be: expression `expression` expression", '`')
 
 
-def test_precedence(compiler, monkeypatch):
+def test_precedence_and_chaining(compiler, monkeypatch):
     monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
     assert compiler.raw_parse('x == -1') == compiler.raw_parse('x == (-1)')
     assert (compiler.raw_parse('1 - 2 + 3 - 4') ==
@@ -55,8 +55,17 @@ def test_precedence(compiler, monkeypatch):
             compiler.raw_parse('(1 - 2) + (3 - 4)'))
     assert (compiler.raw_parse('1 - 2 + 3 - 4') !=
             compiler.raw_parse('1 - (2 + (3 - 4))'))
+
+    compiler.raw_parse('-(-x)')
     compiler.doesnt_raw_parse(
         '--x', "'-' cannot be used like this", '-', rindex=False)
+
+    compiler.raw_parse('(x == y) == z')
+    compiler.doesnt_raw_parse(
+        'x == y == z',
+        "'a == b == c' means '(a == b) == c', which is likely not what you "
+        "want. If it is, write it as '(a == b) == c' using parentheses.",
+        '==')
 
 
 def test_invalid_operator_stuff(compiler):
