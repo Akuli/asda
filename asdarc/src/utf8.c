@@ -26,7 +26,7 @@ static int how_many_bytes(Interp *interp, uint32_t codepnt)
 	// "fall through" to invalid_code_point
 
 invalid_code_point:
-	sprintf(interp->errstr, "invalid Unicode code point %04lu", (unsigned long)codepnt);
+	interp_errstr_printf(interp, "invalid Unicode code point U+%04lX", (unsigned long)codepnt);
 	return -1;
 }
 
@@ -86,8 +86,8 @@ bool utf8_encode(Interp *interp, const uint32_t *unicode, size_t unicodelen, cha
 
 static int decode_character(Interp *interp, const unsigned char *uutf8, size_t utf8len, uint32_t *ptr)
 {
-#define CHECK_UTF8LEN(n)      do{ if (utf8len < (size_t)(n)) { sprintf(interp->errstr, "unexpected end of string");           return -1; }}while(0)
-#define CHECK_CONTINUATION(c) do{ if ((c)>>6 != 1<<1)        { sprintf(interp->errstr, "invalid continuation byte %#x", (c)); return -1; }}while(0)
+#define CHECK_UTF8LEN(n)      do{ if (utf8len < (size_t)(n)) { interp_errstr_printf(interp, "unexpected end of string");           return -1; }}while(0)
+#define CHECK_CONTINUATION(c) do{ if ((c)>>6 != 1<<1)        { interp_errstr_printf(interp, "invalid continuation byte %#x", (c)); return -1; }}while(0)
 	if (uutf8[0] >> 7 == 0) {
 		CHECK_UTF8LEN(1);
 		*ptr = uutf8[0];
@@ -129,7 +129,7 @@ static int decode_character(Interp *interp, const unsigned char *uutf8, size_t u
 #undef CHECK_UTF8LEN
 #undef CHECK_CONTINUATION
 
-	sprintf(interp->errstr, "invalid start byte %#x", (int) uutf8[0]);
+	interp_errstr_printf(interp, "invalid start byte %#x", (int) uutf8[0]);
 	return -1;
 }
 
@@ -167,11 +167,11 @@ bool utf8_decode(Interp *interp, const char *utf8, size_t utf8len, uint32_t **un
 		if (nbytes > expected_nbytes) {
 			// overlong encoding
 			if (nbytes == 2)
-				sprintf(interp->errstr, "overlong encoding: %#x %#x", (int) uutf8[0], (int) uutf8[1]);
+				interp_errstr_printf(interp, "overlong encoding: %#x %#x", (int) uutf8[0], (int) uutf8[1]);
 			else if (nbytes == 3)
-				sprintf(interp->errstr, "overlong encoding: %#x %#x %#x", (int) uutf8[0], (int) uutf8[1], (int) uutf8[2]);
+				interp_errstr_printf(interp, "overlong encoding: %#x %#x %#x", (int) uutf8[0], (int) uutf8[1], (int) uutf8[2]);
 			else if (nbytes == 4)
-				sprintf(interp->errstr, "overlong encoding: %#x %#x %#x %#x", (int) uutf8[0], (int) uutf8[1], (int) uutf8[2], (int) uutf8[3]);
+				interp_errstr_printf(interp, "overlong encoding: %#x %#x %#x %#x", (int) uutf8[0], (int) uutf8[1], (int) uutf8[2], (int) uutf8[3]);
 			else
 				assert(0);
 			goto error;
