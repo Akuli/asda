@@ -33,6 +33,7 @@ char *path_getcwd(void)
 	for (size_t bufsize = 64; ; bufsize *= 2) {
 		void *tmp = realloc(buf, bufsize);     // mallocs if buf is NULL
 		if (!tmp) {
+			free(buf);
 			errno = ENOMEM;
 			return NULL;
 		}
@@ -72,30 +73,6 @@ bool path_isabsolute(const char *path)
 #endif
 }
 
-char *path_toabsolute(const char *path)
-{
-	if (path_isabsolute(path)) {
-		size_t len = strlen(path);
-		char *res = malloc(len+1);
-		if (!res) {
-			errno = ENOMEM;
-			return NULL;
-		}
-		memcpy(res, path, len+1);
-		return res;
-	}
-
-	char *cwd = path_getcwd();
-	if (!cwd)
-		return NULL;
-
-	char *res = path_concat(cwd, path);
-	free(cwd);
-	if (!res)
-		errno = ENOMEM;
-	return res;
-}
-
 // strdup is non-standard
 static char *duplicate_string(const char *src)
 {
@@ -105,6 +82,22 @@ static char *duplicate_string(const char *src)
 		return NULL;
 	}
 	strcpy(res, src);
+	return res;
+}
+
+char *path_toabsolute(const char *path)
+{
+	if (path_isabsolute(path))
+		return duplicate_string(path);
+
+	char *cwd = path_getcwd();
+	if (!cwd)
+		return NULL;
+
+	char *res = path_concat(cwd, path);
+	free(cwd);
+	if (!res)
+		errno = ENOMEM;
 	return res;
 }
 
