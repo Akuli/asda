@@ -3,6 +3,7 @@ CFLAGS += -g
 LDFLAGS += -lgmp
 
 SRC := $(filter-out src/main.c, $(wildcard src/*.c src/objects/*.c))
+TESTS_SRC = $(wildcard tests/test_*.c)
 OBJ := $(SRC:src/%.c=obj/%.o)
 HEADERS := $(wildcard src/*.h src/objects/*.h)
 
@@ -10,15 +11,26 @@ IWYU ?= iwyu
 
 all: asdar
 
-asdar: src/main.c $(OBJ) $(HEADERS)
-	$(CC) $(CFLAGS) $< $(OBJ) -o $@ $(LDFLAGS)
-
 obj/%.o: src/%.c $(HEADERS)
 	mkdir -p $(@D) && $(CC) -c -o $@ $< $(CFLAGS)
 
+asdar: src/main.c $(OBJ) $(HEADERS)
+	$(CC) $(CFLAGS) $< $(OBJ) -o $@ $(LDFLAGS)
+
+# have fun reading this
+tests/runcalls.h: $(TESTS_SRC) tests/create_runcalls.sh
+	sh tests/create_runcalls.sh > tests/runcalls.h
+
+testrunner: $(TESTS_SRC) $(OBJ) tests/main.c tests/util.h tests/runcalls.h
+	$(CC) $(CFLAGS) tests/main.c $(TESTS_SRC) -I. $(OBJ) -o $@ $(LDFLAGS)
+
+.PHONY: test
+test: testrunner
+	./testrunner
+
 .PHONY: clean
 clean:
-	rm -rvf asdar obj
+	git clean -fXd
 
 .PHONY: iwyu.% iwyu.objects/%
 iwyu.%:
