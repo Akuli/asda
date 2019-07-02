@@ -11,14 +11,14 @@ static bool endswith(const char *str, const char *end)
 	return slen >= elen && strcmp(str + slen - elen, end) == 0;
 }
 
-TEST(endswith)
+TEST(path_endswith_util)
 {
 	assert(endswith("abc", "abc"));
 	assert(endswith("abc", "bc"));
 	assert(!endswith("abc", "ab"));
 }
 
-TEST(isabsolute)
+TEST(path_isabsolute)
 {
 	assert(!path_isabsolute("asdf"));
 	assert(!path_isabsolute("." PATH_SLASHSTR "asdf"));
@@ -36,7 +36,7 @@ TEST(isabsolute)
 	}
 }
 
-TEST(getcwd)
+TEST(path_getcwd)
 {
 	char *cwd = path_getcwd();
 	assert(cwd);
@@ -45,7 +45,7 @@ TEST(getcwd)
 	free(cwd);
 }
 
-TEST(toabsolute)
+TEST(path_toabsolute)
 {
 	char *cwd = path_getcwd();
 	assert(path_isabsolute(cwd));
@@ -61,7 +61,7 @@ TEST(toabsolute)
 	free(cwd);
 }
 
-TEST(concat)
+TEST(path_concat)
 {
 	char *s = path_concat("a", "b");
 	assert(strcmp(s, "a" PATH_SLASHSTR "b") == 0);
@@ -80,7 +80,7 @@ TEST(concat)
 	free(s);
 }
 
-TEST(concat_dotdot)
+TEST(path_concat_dotdot)
 {
 	char *s = path_concat_dotdot("a" PATH_SLASHSTR "b", ".." PATH_SLASHSTR "c");
 	assert(strcmp(s, "a" PATH_SLASHSTR "c") == 0);
@@ -95,7 +95,7 @@ TEST(concat_dotdot)
 	free(s);
 }
 
-TEST(findlastslash)
+TEST(path_findlastslash)
 {
 	assert(path_findlastslash("") == 0);
 	assert(path_findlastslash("asd") == 0);
@@ -103,14 +103,3 @@ TEST(findlastslash)
 	assert(path_findlastslash("asd" PATH_SLASHSTR "blah" PATH_SLASHSTR) == 3);
 	assert(path_findlastslash("asd" PATH_SLASHSTR "blah" PATH_SLASHSTR PATH_SLASHSTR) == 3);
 }
-
-
-DEFINE_TESTS(path,
-	DEFINE_TEST(endswith)
-	DEFINE_TEST(isabsolute)
-	DEFINE_TEST(getcwd)
-	DEFINE_TEST(toabsolute)
-	DEFINE_TEST(concat)
-	DEFINE_TEST(concat_dotdot)
-	DEFINE_TEST(findlastslash)
-)

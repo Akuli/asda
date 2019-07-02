@@ -64,7 +64,7 @@ static const struct Utf8Example examples[] = {
 	{ {0xee, 0x80, 0x80}, 3, {0xe000U}, 1, "", SUCCEED, SUCCEED },
 };
 
-TEST(encode)
+TEST(utf8_encode)
 {
 	for (size_t i = 0; i < sizeof(examples)/sizeof(examples[0]); i++) {
 		const struct Utf8Example ex = examples[i];
@@ -96,7 +96,7 @@ TEST(encode)
 	}
 }
 
-TEST(decode)
+TEST(utf8_decode)
 {
 	for (size_t i = 0; i < sizeof(examples)/sizeof(examples[0]); i++) {
 		const struct Utf8Example ex = examples[i];
@@ -130,9 +130,3 @@ TEST(decode)
 			interp->errstr[0] = 0;
 	}
 }
-
-
-DEFINE_TESTS(utf8,
-	DEFINE_TEST(encode)
-	DEFINE_TEST(decode)
-)
