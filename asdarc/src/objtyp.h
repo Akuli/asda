@@ -17,11 +17,11 @@ struct ObjData {
 
 then please let this be, just compare this:
 
-	Object *foo(Object *bar, Object *biz, Object *baz, Object **spam, size_t nspam);
+	Object *foo(Interp *interp, Object *bar, Object *baz, Object **spam, size_t nspam);
 
 to this:
 
-	Object *foo(Object *bar, Object *biz, Object *baz, Object **spam, size_t nspam);
+	struct Object *foo(struct Interp *interp, struct Object *bar, struct Object *baz, struct Object **spam, size_t nspam);
 
 some function declarations actually use this struct many times!
 */

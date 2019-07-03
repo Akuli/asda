@@ -3,7 +3,7 @@ CFLAGS += -g
 LDFLAGS += -lgmp
 
 SRC := $(filter-out src/main.c, $(wildcard src/*.c src/objects/*.c))
-TESTS_SRC = $(wildcard tests/test_*.c)
+TESTS_SRC = $(wildcard tests/test_*.c tests/objects/test_*.c)
 OBJ := $(SRC:src/%.c=obj/%.o)
 HEADERS := $(wildcard src/*.h src/objects/*.h)
 
@@ -18,7 +18,7 @@ asdar: src/main.c $(OBJ) $(HEADERS)
 	$(CC) $(CFLAGS) $< $(OBJ) -o $@ $(LDFLAGS)
 
 tests/runcalls.h: $(TESTS_SRC) tests/create_runcalls.sh
-	sh tests/create_runcalls.sh tests/test_*.c > tests/runcalls.h
+	sh tests/create_runcalls.sh $(TESTS_SRC) > tests/runcalls.h
 
 testrunner: $(TESTS_SRC) $(OBJ) tests/main.c tests/util.h tests/runcalls.h
 	$(CC) $(CFLAGS) tests/main.c $(TESTS_SRC) -I. $(OBJ) -o $@ $(LDFLAGS)

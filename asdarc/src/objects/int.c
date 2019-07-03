@@ -11,6 +11,7 @@
 
 struct IntData {
 	mpz_t mpz;
+	Object *str;   // string object, in base 10, NULL for not computed yet
 };
 
 
@@ -43,6 +44,13 @@ static Object *new_from_mpzt(Interp *interp, mpz_t mpz)
 	});
 }
 
+Object *intobj_new_long(Interp *interp, long l)
+{
+	mpz_t mpz;
+	mpz_init_set_si(mpz, l);
+	return new_from_mpzt(interp, mpz);
+}
+
 Object *intobj_new_bebytes(Interp *interp, const unsigned char *seq, size_t len, bool negate)
 {
 	mpz_t mpz;
@@ -51,6 +59,19 @@ Object *intobj_new_bebytes(Interp *interp, const unsigned char *seq, size_t len,
 	if(negate)
 		mpz_neg(mpz, mpz);
 	return new_from_mpzt(interp, mpz);
+}
+
+int intobj_cmp(Object *x, Object *y)
+{
+	assert(x->type == &intobj_type);
+	assert(y->type == &intobj_type);
+	return mpz_cmp( ((struct IntData*)x->data.val)->mpz, ((struct IntData*)y->data.val)->mpz );
+}
+
+int intobj_cmp_long(Object *x, long y)
+{
+	assert(x->type == &intobj_type);
+	return mpz_cmp_si( ((struct IntData*)x->data.val)->mpz, y );
 }
 
 
@@ -79,27 +100,50 @@ Object *intobj_neg(Interp *interp, Object *x)
 	return new_from_mpzt(interp, res);
 }
 
+// this does NOT return a new reference, you need to incref
+static Object *get_string_object(Interp *interp, Object *x)
+{
+	assert(x->type == &intobj_type);
+	struct IntData *id = x->data.val;
+
+	if (id->str)
+		return id->str;
+
+	// +2 is explained in mpz_get_str docs
+	char *str = malloc(mpz_sizeinbase(id->mpz, 10) + 2);
+	if (!str) {
+		interp_errstr_nomem(interp);
+		return NULL;
+	}
+	mpz_get_str(str, 10, id->mpz);
+
+	id->str = stringobj_new_utf8(interp, str, strlen(str));   // may be NULL
+	free(str);
+	return id->str;   // may be NULL
+}
+
+const char *intobj_tocstr(Interp *interp, Object *x)
+{
+	Object *obj = get_string_object(interp, x);
+	if (!obj)
+		return NULL;
+
+	const char *res;
+	size_t junk;
+	if (!stringobj_toutf8(obj, &res, &junk))
+		return NULL;
+	return res;
+}
 
 static Object *tostring_impl(Interp *interp, struct ObjData data, Object *const *args, size_t nargs)
 {
 	assert(nargs == 1);
-	assert(args[0]->type == &intobj_type);
 
-	// I couldn't figure out how to assign an mpz_t to a local variable, but this works well enough
-	struct IntData *id = args[0]->data.val;
-
-	// +2 as documentation for mpz_get_str says: +1 for possible minus sign, +1 for 0 byte at end
-	char *str = malloc(mpz_sizeinbase(id->mpz, 10) + 2);
-	if(!str) {
-		interp_errstr_nomem(interp);
+	Object *obj = get_string_object(interp, args[0]);
+	if (!obj)
 		return NULL;
-	}
-
-	mpz_get_str(str, 10, id->mpz);
-
-	Object *res = stringobj_new_utf8(interp, str, strlen(str));
-	free(str);
-	return res;   // may be NULL
+	OBJECT_INCREF(obj);
+	return obj;
 }
 
 static struct FuncObjData tostringdata = FUNCOBJDATA_COMPILETIMECREATE_RET(tostring_impl);
