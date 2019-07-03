@@ -39,9 +39,12 @@ TEST(scope_newsub_and_getforlevel)
 				continue;
 
 			assert(scope == shouldB[level]);
-			OBJECT_DECREF(scope);
 		}
 	}
+
+	OBJECT_DECREF(a);
+	OBJECT_DECREF(b);
+	OBJECT_DECREF(c);
 }
 
 TEST(scope_0_locals)
