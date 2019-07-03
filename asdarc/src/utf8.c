@@ -80,6 +80,9 @@ bool utf8_encode(Interp *interp, const uint32_t *unicode, size_t unicodelen, cha
 			assert(0);
 		}
 	}
+
+	assert((char *)ptr == *utf8 + utf8len_val);
+	*ptr = 0;
 	return true;
 }
 

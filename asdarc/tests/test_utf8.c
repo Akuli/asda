@@ -55,7 +55,6 @@ static const struct Utf8Example examples[] = {
 	{ {0xf0,0x82,0x82}, 3, {0}, 0, "unexpected end of string", SKIP, FAIL },
 
 	// code points from U+D800 to U+DFFF are invalid
-	// TODO: 0xd800-1 and 0xdfff+1
 	{ {0xed, 0x9f, 0xbf}, 3, {0xd7ffU}, 1, "", SUCCEED, SUCCEED },
 	{ {0xed, 0xa0, 0x80}, 3, {0xd800U}, 1, "invalid Unicode code point U+D800", FAIL, FAIL },
 	{ {0xed, 0xa0, 0x81}, 3, {0xd801U}, 1, "invalid Unicode code point U+D801", FAIL, FAIL },
@@ -80,6 +79,7 @@ TEST(utf8_encode)
 			assert(ok);
 			assert(utf8len == ex.utf8len);
 			assert(memcmp(ex.utf8, utf8, utf8len) == 0);
+			assert(utf8[utf8len] == 0);
 			break;
 		case FAIL:
 			assert(!ok);

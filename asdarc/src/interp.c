@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include "gc.h"
 #include "objects/scope.h"
 
 
@@ -21,6 +22,7 @@ bool interp_init(Interp *interp, const char *argv0)
 void interp_destroy(Interp *interp)
 {
 	OBJECT_DECREF(interp->builtinscope);
+	gc_refcountdebug(interp);
 
 	Object *next;
 	for (Object *obj = interp->objliststart; obj; obj = next){
