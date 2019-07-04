@@ -13,6 +13,7 @@ bool interp_init(Interp *interp, const char *argv0)
 	interp->argv0 = argv0;
 	interp->errstr[0] = 0;
 	interp->objliststart = NULL;
+	interp->firstmod = NULL;
 
 	if (!( interp->builtinscope = scopeobj_newglobal(interp) ))
 		return false;

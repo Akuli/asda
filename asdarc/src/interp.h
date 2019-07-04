@@ -5,8 +5,9 @@
 #include <errno.h>   // IWYU pragma: keep
 #include <stdbool.h>
 
-// the Object typedef comes from objtyp.h, but that file includes this file
+// forward declarations needed because many things need an Interp
 struct ObjectStruct;
+struct Module;
 
 typedef struct InterpStruct {
 	const char *argv0;
@@ -19,6 +20,9 @@ typedef struct InterpStruct {
 	// DON'T PUT ARBITRARILY LONG STRINGS HERE
 	// TODO: add exceptions to asda
 	char errstr[200];
+
+	// don't access this directly, use functions in module.h instead
+	struct Module *firstmod;
 } Interp;
 
 // returns false and sets an error to interp->errstr on no mem
