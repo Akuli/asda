@@ -33,11 +33,9 @@ TEST(scope_newsub_and_getforlevel)
 	};
 
 	for (int level = 0; level < 4; level++) {
-		for (int i = 0; i < 4; i++) {
+		for (int i = 0; i < 4-level; i++) {
 			Object *scope = is[level][i];
-			if (!scope)
-				continue;
-
+			assert(scope);
 			assert(scope == shouldB[level]);
 		}
 	}
