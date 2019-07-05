@@ -53,12 +53,38 @@ $ python3 -m pyasda asda-compiled/hello.asdac
 Hello World!
 ```
 
-`pyasda` is a "temporary" interpreter for the compiled asda files. I'm planning
-to write an interpreter in C later, but first I want to get the python
-interpreter to work like I want it to work.
-
 There isn't much [documentation](docs/) yet, but there are many
 [code examples](examples/). All code examples should compile and run nicely.
+
+## C Interpreter
+
+`pyasda` is a "temporary" interpreter for the compiled asda files. There is
+also an interpreter written in C, but it may be lacking some features. Here are
+the instructions for running asda code with it.
+
+Install dependencies:
+
+```
+$ sudo apt install gcc make libgmp-dev
+```
+
+If you don't have apt, I have no idea what you should do to get the
+dependencies installed. Sorry.
+
+Then you can compile the interpreter:
+
+```
+$ cd asdar
+$ make
+$ make test
+$ cd ..
+```
+
+Now you can use it:
+
+```
+$ asdar/asdar asda-compiled/hello.asdac
+```
 
 
 ## FAQ
@@ -99,7 +125,10 @@ in this, you can ask me to document stuff by creating an issue.
 
 ## Developing asda
 
-This command installs everything you need for developing asda:
+Use your favorite C debugging tools if you want to work on the C interpreter.
+
+This command installs everything you need for developing the compiler and the
+Python interpreter:
 
 ```
 $ python3 -m pip install --user pytest pytest-cov coverage
