@@ -30,6 +30,7 @@ void codeop_destroy(const struct CodeOp *op)
 	case CODE_INT_SUB:
 	case CODE_INT_NEG:
 	case CODE_INT_MUL:
+	case CODE_INT_EQ:
 		break;
 	}
 }

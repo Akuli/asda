@@ -30,6 +30,7 @@ enum CodeOpKind {
 	CODE_INT_SUB,   // x-y
 	CODE_INT_NEG,   // -x
 	CODE_INT_MUL,   // x*y
+	CODE_INT_EQ,    // x == y
 };
 
 struct CodeOp;

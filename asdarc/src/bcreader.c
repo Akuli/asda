@@ -35,6 +35,7 @@
 #define INT_SUB '-'
 #define INT_NEG '_'
 #define INT_MUL '*'
+#define INT_EQ '='
 #define CREATE_FUNCTION 'f'
 #define VOID_RETURN 'r'
 #define VALUE_RETURN 'R'
@@ -449,6 +450,7 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case INT_SUB: res->kind = CODE_INT_SUB; return true;
 	case INT_NEG: res->kind = CODE_INT_NEG; return true;
 	case INT_MUL: res->kind = CODE_INT_MUL; return true;
+	case INT_EQ: res->kind = CODE_INT_EQ; return true;
 
 	default:
 		interp_errstr_printf(bcr->interp, "unknown op byte");

@@ -326,6 +326,15 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		break;
 	}
 
+	case CODE_INT_EQ:
+	{
+		Object *x = rnr->stack[--rnr->stacklen];
+		Object *y = rnr->stack[--rnr->stacklen];
+		rnr->stack[rnr->stacklen++] = boolobj_c2asda(intobj_cmp(x, y) == 0);
+		OBJECT_DECREF(x);
+		OBJECT_DECREF(y);
+	}
+
 	}   // end of switch
 
 	rnr->opidx++;
