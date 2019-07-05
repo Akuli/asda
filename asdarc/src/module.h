@@ -2,15 +2,12 @@
 #define MODULE_H
 
 #include "code.h"
+#include "interp.h"
 #include "objtyp.h"
 
 struct Module {
-	// case (in)sensitivity handling for the path:
-	// compiler makes all output file paths relative and lower case
-	// all paths are loaded by joining them to an absoloute path of what is passed as an argument to the interpreter
-	// the path declared here is absolute
-
-	char *path;         // path of the compiled bytecode file, not the source file
+	// see interp->basedir comments for more details about the path
+	char *path;         // path of the compiled bytecode file relative to interp->basedir
 	Object *scope;      // a subscope of the built-in scope
 	struct Code code;   // loaded from the path
 

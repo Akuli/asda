@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include "gc.h"
+#include "objtyp.h"
 #include "objects/scope.h"
 
 

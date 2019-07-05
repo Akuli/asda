@@ -183,6 +183,22 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		break;
 	}
 
+	case CODE_GETFROMPTR:
+	{
+		DEBUG_PRINTF("getfromptr: pointer = %p, current value = %p\n",
+			(void*)op->data.objptr, (void*)*op->data.objptr);
+		Object *val = *op->data.objptr;
+		if (!val) {
+			// FIXME: better error message
+			interp_errstr_printf(rnr->interp, "value of something hasn't been set. That's all I know. Sorry. :(");
+			return RUNNER_ERROR;
+		}
+
+		if (!push2stack(rnr, val))
+			return RUNNER_ERROR;
+		break;
+	}
+
 	case CODE_BOOLNEG:
 	{
 		DEBUG_PRINTF("boolneg\n");

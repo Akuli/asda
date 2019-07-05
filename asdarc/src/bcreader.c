@@ -5,11 +5,13 @@
 #include <string.h>
 #include "code.h"
 #include "builtin.h"
+#include "module.h"
 #include "objtyp.h"
 #include "path.h"
 #include "objects/bool.h"
 #include "objects/func.h"
 #include "objects/int.h"
+#include "objects/scope.h"
 #include "objects/string.h"
 
 #define IMPORT_SECTION 'i'
@@ -26,6 +28,7 @@
 #define JUMPIF 'J'
 #define STRING_JOIN 'j'
 #define GET_METHOD '.'   // currently all attributes are methods
+#define GET_FROM_MODULE 'm'
 #define NON_NEGATIVE_INT_CONSTANT '1'
 #define NEGATIVE_INT_CONSTANT '2'
 #define INT_ADD '+'
@@ -53,7 +56,19 @@ struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname)
 	res.in = in;
 	res.indirname = indirname;
 	res.lineno = 1;
+
+	// for bcreader_destroy
+	res.imports = NULL;
+	res.nimports = 0;
+
 	return res;
+}
+
+void bcreader_destroy(const struct BcReader *bcr)
+{
+	for (size_t i = 0; i < bcr->nimports; i++)
+		free(bcr->imports[i]);
+	free(bcr->imports);
 }
 
 
@@ -63,7 +78,7 @@ static bool read_bytes(struct BcReader *bcr, unsigned char *buf, size_t n)
 		return true;
 
 	if (feof(bcr->in))
-		strcpy(bcr->interp->errstr, "unexpected end of file");
+		interp_errstr_printf(bcr->interp, "unexpected end of file");
 	else   // TODO: include file name in error msg
 		interp_errstr_printf_errno(bcr->interp, "reading failed");
 	return false;
@@ -160,12 +175,8 @@ bool bcreader_readasdabytes(struct BcReader *bcr)
 	return false;
 }
 
-bool bcreader_readimports(struct BcReader *bcr, char ***paths, uint16_t *npaths)
+bool bcreader_readimports(struct BcReader *bcr)
 {
-	*paths = NULL;
-	*npaths = 0;
-	char **ptr;
-
 	unsigned char b;
 	if (!read_bytes(bcr, &b, 1))
 		goto error;
@@ -173,42 +184,34 @@ bool bcreader_readimports(struct BcReader *bcr, char ***paths, uint16_t *npaths)
 		interp_errstr_printf(bcr->interp, "expected import section, got %#x", (int)b);
 		goto error;
 	}
-	if (!read_uint16(bcr, npaths))
+
+	uint16_t tmp;
+	if (!read_uint16(bcr, &tmp))
 		goto error;
+	bcr->nimports = tmp;
 
-	if (npaths == 0) {
+	if (bcr->nimports == 0)
 		return true;
-	}
 
-	*paths = malloc(sizeof(char*) * *npaths);
-	if (!*paths) {
+	if (!( bcr->imports = malloc(sizeof(char*) * bcr->nimports) )) {
 		interp_errstr_nomem(bcr->interp);
 		goto error;
 	}
 
-	for (ptr = *paths; ptr < *paths + *npaths; ptr++) {
-		if (!read_path(bcr, ptr))
+	for (size_t i=0; i < bcr->nimports; i++)
+		if (!read_path(bcr, bcr->imports + i)) {
+			for (size_t j=0; j<i; j++)
+				free(bcr->imports[j]);
+			free(bcr->imports);
 			goto error;
-	}
+		}
 
 	return true;
 
 error:
-	if (*paths) {
-		while (--ptr >= *paths)
-			free(*ptr);
-		free(*paths);
-	}
-	*paths = NULL;
-	*npaths = 0;
+	bcr->imports = NULL;
+	bcr->nimports = 0;
 	return false;
-}
-
-void bcreader_freeimports(char **paths, uint16_t npaths)
-{
-	for (char **ptr = paths; ptr < paths + npaths; ptr++)
-		free(*ptr);
-	free(paths);
 }
 
 
@@ -372,6 +375,21 @@ static bool read_create_function(struct BcReader *bcr, struct CodeOp *res)
 	return read_body(bcr, &res->data.createfunc.body);
 }
 
+static Object **get_module_member_pointer(struct BcReader *bcr)
+{
+	uint16_t modidx, membidx;
+	if (!read_uint16(bcr, &modidx))
+		return NULL;
+	if (!read_uint16(bcr, &membidx))
+		return NULL;
+
+	// the module has been imported already when this runs
+	// TODO: call module_get less times?
+	const struct Module *mod = module_get(bcr->interp, bcr->imports[modidx]);
+	assert(mod);
+	return scopeobj_getlocalvarsptr(mod->scope) + membidx;
+}
+
 static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *res)
 {
 	switch(opbyte) {
@@ -408,6 +426,10 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 			return false;
 		assert(res->data.lookupmethod.index < res->data.lookupmethod.type->nmethods);
 		return true;
+
+	case GET_FROM_MODULE:
+		res->kind = CODE_GETFROMPTR;
+		return !!( res->data.objptr = get_module_member_pointer(bcr) );
 
 	case CREATE_FUNCTION:
 		return read_create_function(bcr, res);
