@@ -428,8 +428,8 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 		return true;
 
 	case GET_FROM_MODULE:
-		res->kind = CODE_GETFROMPTR;
-		return !!( res->data.objptr = get_module_member_pointer(bcr) );
+		res->kind = CODE_GETFROMMODULE;
+		return !!( res->data.modmemberptr = get_module_member_pointer(bcr) );
 
 	case CREATE_FUNCTION:
 		return read_create_function(bcr, res);

@@ -13,7 +13,7 @@ enum CodeOpKind {
 	CODE_SETVAR,
 	CODE_GETVAR,
 	CODE_GETMETHOD,
-	CODE_GETFROMPTR,   // TODO: use this for more things
+	CODE_GETFROMMODULE,
 	CODE_CALLVOIDFUNC,
 	CODE_CALLRETFUNC,
 	CODE_BOOLNEG,
@@ -51,7 +51,7 @@ typedef union {
 	struct CodeLookupMethodData lookupmethod;
 	struct CodeCreateFuncData createfunc;
 	Object *obj;
-	Object **objptr;
+	Object **modmemberptr;
 } CodeData;
 
 struct CodeOp {

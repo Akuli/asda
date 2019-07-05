@@ -16,7 +16,7 @@ void codeop_destroy(const struct CodeOp *op)
 	case CODE_SETVAR:
 	case CODE_GETVAR:
 	case CODE_GETMETHOD:
-	case CODE_GETFROMPTR:
+	case CODE_GETFROMMODULE:
 	case CODE_CALLVOIDFUNC:
 	case CODE_CALLRETFUNC:
 	case CODE_BOOLNEG:

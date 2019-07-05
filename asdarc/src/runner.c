@@ -183,14 +183,13 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		break;
 	}
 
-	case CODE_GETFROMPTR:
+	case CODE_GETFROMMODULE:
 	{
-		DEBUG_PRINTF("getfromptr: pointer = %p, current value = %p\n",
+		DEBUG_PRINTF("getfrommodule: pointer = %p, current value = %p\n",
 			(void*)op->data.objptr, (void*)*op->data.objptr);
-		Object *val = *op->data.objptr;
+		Object *val = *op->data.modmemberptr;
 		if (!val) {
-			// FIXME: better error message
-			interp_errstr_printf(rnr->interp, "value of something hasn't been set. That's all I know. Sorry. :(");
+			interp_errstr_printf(rnr->interp, "value of an exported variable hasn't been set");
 			return RUNNER_ERROR;
 		}
 
