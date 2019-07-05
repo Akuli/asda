@@ -48,7 +48,7 @@ static bool read_bytecode_file(Interp *interp, const char *path, struct Code *co
 
 	// TODO: handle import cycles
 	for (size_t i = 0; i < bcr.nimports; i++)
-		if (!module_get(interp, path) && !import(interp, bcr.imports[i]))
+		if (!module_get(interp, bcr.imports[i]) && !import(interp, bcr.imports[i]))
 			goto error;
 
 	if (!bcreader_readcodepart(&bcr, code))
