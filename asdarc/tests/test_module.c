@@ -66,3 +66,10 @@ TEST(module_creation_and_destroying)
 	module_destroyall(interp);
 	assert(!interp->firstmod);
 }
+
+TEST(module_destroyall_no_modules)
+{
+	assert(!interp->firstmod);
+	module_destroyall(interp);
+	assert(!interp->firstmod);
+}

@@ -42,18 +42,19 @@ void module_add(Interp *interp, struct Module *mod)
 // feel free to do this differently if this recurses too bad
 static void destroy_a_module(struct Module *mod)
 {
+	if (!mod)
+		return;
+
 	free(mod->path);
 	OBJECT_DECREF(mod->scope);
 	code_destroy(&mod->code);
-	if (mod->left)
-		destroy_a_module(mod->left);
-	if (mod->right)
-		destroy_a_module(mod->right);
+	destroy_a_module(mod->left);
+	destroy_a_module(mod->right);
 	free(mod);
 }
 
 void module_destroyall(Interp *interp)
 {
-	destroy_a_module(interp->firstmod);
+	destroy_a_module(interp->firstmod);   // does the right thing if interp->firstmod is NULL
 	interp->firstmod = NULL;
 }
