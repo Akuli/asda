@@ -6,8 +6,7 @@ htmlcov/
 env/
 
 zig-cache
-asdar/asda
-asdarc/asdar
-asdarc/obj/
-asdarc/testrunner
-asdarc/tests/runcalls.h
+asdar/asdar
+asdar/obj/
+asdar/testrunner
+asdar/tests/runcalls.h
