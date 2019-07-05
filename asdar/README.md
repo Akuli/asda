@@ -57,7 +57,7 @@ like this:
 
 4. Run the IWYU
 
-        $ cd ~/path/to/asda/asdarc
+        $ cd ~/path/to/asda/asdar
         $ export IWYU=~/akuli-iwyu/build/bin/include-what-you-use
         $ make iwyu
 
