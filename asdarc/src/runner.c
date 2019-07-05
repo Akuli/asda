@@ -1,6 +1,8 @@
 #include "runner.h"
 #include <assert.h>
 #include <stdbool.h>
+// stdio.h is for DEBUG_PRINTF, iwyu doesn't recognize it when DEBUG_PRINTF is "disabled"
+#include <stdio.h>   // IWYU pragma: keep
 #include <stdlib.h>
 #include "asdafunc.h"
 #include "code.h"
@@ -186,7 +188,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	case CODE_GETFROMMODULE:
 	{
 		DEBUG_PRINTF("getfrommodule: pointer = %p, current value = %p\n",
-			(void*)op->data.objptr, (void*)*op->data.objptr);
+			(void*)op->data.modmemberptr, (void*)*op->data.modmemberptr);
 		Object *val = *op->data.modmemberptr;
 		if (!val) {
 			interp_errstr_printf(rnr->interp, "value of an exported variable hasn't been set");
