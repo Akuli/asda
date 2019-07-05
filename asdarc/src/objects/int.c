@@ -18,6 +18,10 @@ struct IntData {
 static void intdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 {
 	struct IntData *data = vpdata;
+	if (decrefrefs) {
+		if (data->str)
+			OBJECT_DECREF(data->str);
+	}
 	if (freenonrefs) {
 		mpz_clear(data->mpz);
 		free(data);
@@ -35,8 +39,8 @@ static Object *new_from_mpzt(Interp *interp, mpz_t mpz)
 		return NULL;
 	}
 
-	// this might be relying on GMP's implementation details, but it works :D
-	*data->mpz = *mpz;
+	*data->mpz = *mpz;   // this might be relying on GMP's implementation details, but it works :D
+	data->str = NULL;
 
 	return object_new(interp, &intobj_type, (struct ObjData){
 		.val = data,
