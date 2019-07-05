@@ -26,7 +26,7 @@ static struct Module *create_test_module(Interp *interp, const char *name)
 	return mod;
 }
 
-TEST(module_creation_and_destroying)
+TEST(module_create_and_destroying_and_getting)
 {
 	struct Module *a = create_test_module(interp, "a");
 	struct Module *b = create_test_module(interp, "b");
@@ -62,6 +62,15 @@ TEST(module_creation_and_destroying)
 	assert(d->right == NULL);
 	assert(e->left == d);
 	assert(e->right == NULL);
+
+	assert(module_get(interp, "a") == a);
+	assert(module_get(interp, "b") == b);
+	assert(module_get(interp, "c") == c);
+	assert(module_get(interp, "d") == d);
+	assert(module_get(interp, "e") == e);
+	assert(module_get(interp, "f") == NULL);
+	assert(module_get(interp, "") == NULL);
+	assert(module_get(interp, "asd") == NULL);
 
 	module_destroyall(interp);
 	assert(!interp->firstmod);
