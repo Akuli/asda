@@ -18,8 +18,12 @@ static void assert_object_equals_cstr(Object *obj, const char *cstr)
 	assert(len1 == len2);
 	assert(buf1 == buf2);
 
-	assert(len1 == strlen(cstr));
-	assert(memcmp(cstr, buf1, len1) == 0);
+	if (len1 != strlen(cstr) || memcmp(cstr, buf1, len1) != 0) {
+		printf("strings are not equal\n");
+		printf("string from obj: (%zu) %.*s\n", len1, (int)len1, buf1);
+		printf("expected:        (%zu) %s\n", strlen(cstr), cstr);
+		abort();
+	}
 }
 
 TEST(stringobj_new_different_ways)
@@ -48,4 +52,16 @@ TEST(stringobj_new_different_ways)
 			OBJECT_DECREF(objs[i]);
 		}
 	}
+}
+
+TEST(stringobj_new_format)
+{
+	Object *b = stringobj_new_utf8(interp, "b", 1);
+	Object *str = stringobj_new_format(interp, "hello world, %s, %S, %U, %U, %B, %B, %zu, %%",
+		"a", b, (uint32_t)'c', (uint32_t)0xdddL, (unsigned char)'e', (unsigned char)0xf, (size_t)123);
+
+	assert_object_equals_cstr(str, "hello world, a, b, U+0063 'c', U+0DDD, 0x65 'e', 0x0f, 123, %");
+
+	OBJECT_DECREF(b);
+	OBJECT_DECREF(str);
 }
