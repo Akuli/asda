@@ -460,18 +460,15 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 }
 
 // this is for a temporary linked list of CodeOps
-struct Link {
-	struct CodeOp op;
-	struct Link *prev;
-};
-
 static bool read_body(struct BcReader *bcr, struct Code *code)
 {
 	if (!read_uint16(bcr, &code->nlocalvars))
 		return false;
 
-	struct Link *last = NULL;
 	code->nops = 0;
+
+	struct CodeOp *arr = NULL;
+	size_t capacity = 0;
 
 	while(true) {
 		unsigned char ob;
@@ -487,38 +484,36 @@ static bool read_body(struct BcReader *bcr, struct Code *code)
 		if (!read_op(bcr, ob, &val))
 			goto error;
 
-		struct Link *lnk = malloc(sizeof *lnk);
-		if (!lnk) {
-			codeop_destroy(&val);
-			interp_errstr_nomem(bcr->interp);
-			goto error;
+		if (code->nops >= capacity) {
+			capacity = capacity == 0 ? 1 : capacity * 2;
+			arr = realloc(arr, capacity * sizeof *arr);
+
+			if (!arr) {
+				codeop_destroy(&val);
+				interp_errstr_nomem(bcr->interp);
+				goto error;
+			}
 		}
 
-		lnk->op = val;
-		lnk->prev = last;
-		last = lnk;
+		arr[code->nops] = val;
 		code->nops++;
 	}
 
-	if(!( code->ops = malloc(sizeof(struct CodeOp) * code->nops) )) {
+	/* shrink arr to fit */
+	arr = realloc(arr, code->nops * sizeof *arr);
+	if(!arr) {
 		interp_errstr_nomem(bcr->interp);
 		goto error;
 	}
 
-	size_t i = code->nops;
-	for (struct Link *lnk = last, *prev; lnk; lnk = prev) {
-		prev = lnk->prev;
-		code->ops[--i] = lnk->op;
-		free(lnk);
-	}
+	code->ops = arr;
 	return true;
 
 error:
-	for (struct Link *lnk = last, *prev; lnk; lnk = prev) {
-		prev = lnk->prev;
-		codeop_destroy(&lnk->op);
-		free(lnk);
+	for (size_t i = 0; i < code->nops; ++i) {
+		codeop_destroy(&arr[i]);
 	}
+	free(arr);
 	return false;
 }
 
