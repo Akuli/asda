@@ -1,8 +1,6 @@
 #include "runner.h"
 #include <assert.h>
 #include <stdbool.h>
-// stdio.h is for DEBUG_PRINTF, iwyu doesn't recognize it when DEBUG_PRINTF is "disabled"
-#include <stdio.h>   // IWYU pragma: keep
 #include <stdlib.h>
 #include "asdafunc.h"
 #include "code.h"
@@ -17,10 +15,13 @@
 #include "objects/string.h"
 
 
-// toggle these to choose whether running each op is printed:
-
-//#define DEBUG_PRINTF(...) printf(__VA_ARGS__)
-#define DEBUG_PRINTF(...) ((void)0)
+// change this to choose whether running each op is printed:
+#if true
+	#include <stdio.h>
+	#define DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+	#define DEBUG_PRINTF(...) ((void)0)
+#endif
 
 
 void runner_init(struct Runner *rnr, Interp *interp, Object *scope, struct Code code)
