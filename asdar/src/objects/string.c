@@ -12,18 +12,9 @@
 #include "../objtyp.h"
 
 
-struct StringData {
-	uint32_t *val;
-	size_t len;
-
-	// don't use these directly, they are optimizations
-	char *utf8cache;     // NULL for not cached
-	size_t utf8cachelen;
-};
-
 static void stringdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 {
-	struct StringData *data = vpdata;
+	struct StringObjData *data = vpdata;
 	if (freenonrefs) {
 		free(data->utf8cache);
 		free(data->val);
@@ -34,7 +25,7 @@ static void stringdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 
 Object *stringobj_new_nocpy(Interp *interp, uint32_t *val, size_t len)
 {
-	struct StringData *strdat=malloc(sizeof(*strdat));
+	struct StringObjData *strdat=malloc(sizeof(*strdat));
 	if(!strdat) {
 		free(val);
 		interp_errstr_nomem(interp);
@@ -148,13 +139,10 @@ static void short_ascii_to_part(const char *ascii, struct Part *part)
 	part->len = (size_t)(src - ascii);
 }
 
-Object *stringobj_new_format(Interp *interp, const char *fmt, ...)
+Object *stringobj_new_vformat(Interp *interp, const char *fmt, va_list ap)
 {
 	struct Part parts[20];
 	size_t nparts = 0;
-
-	va_list ap;
-	va_start(ap, fmt);
 
 	while (*fmt) {
 		if (fmt[0] != '%') {
@@ -183,10 +171,24 @@ Object *stringobj_new_format(Interp *interp, const char *fmt, ...)
 			break;
 		}
 
+		case 'd':
+			sprintf(ascii, "%d", va_arg(ap, int));
+			short_ascii_to_part(ascii, &parts[nparts]);
+			break;
+
+		case 'z':
+		{
+			char next = *fmt++;
+			assert(next == 'u');
+			sprintf(ascii, "%zu", va_arg(ap, size_t));
+			short_ascii_to_part(ascii, &parts[nparts]);
+			break;
+		}
+
 		case 'S':
 		{
 			Object *obj = va_arg(ap, Object *);
-			struct StringData *dat = obj->data.val;
+			struct StringObjData *dat = obj->data.val;
 			parts[nparts].valkind = PVK_BIG_CONST;
 			parts[nparts].val.bigconst = dat->val;
 			parts[nparts].len = dat->len;
@@ -216,15 +218,6 @@ Object *stringobj_new_format(Interp *interp, const char *fmt, ...)
 			break;
 		}
 
-		case 'z':
-		{
-			char next = *fmt++;
-			assert(next == 'u');
-			sprintf(ascii, "%zu", va_arg(ap, size_t));
-			short_ascii_to_part(ascii, &parts[nparts]);
-			break;
-		}
-
 		case '%':
 			short_ascii_to_part("%", &parts[nparts]);
 			break;
@@ -236,8 +229,6 @@ Object *stringobj_new_format(Interp *interp, const char *fmt, ...)
 		nparts++;
 	}
 
-	va_end(ap);
-
 	return create_new_string_from_parts(interp, parts, nparts);
 
 error:
@@ -246,10 +237,19 @@ error:
 	return NULL;
 }
 
+Object *stringobj_new_format(Interp *interp, const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	Object *res = stringobj_new_vformat(interp, fmt, ap);   // may be NULL
+	va_end(ap);
+	return res;
+}
+
 
 bool stringobj_toutf8(Object *obj, const char **val, size_t *len)
 {
-	struct StringData *strdat = obj->data.val;
+	struct StringObjData *strdat = obj->data.val;
 	if( !strdat->utf8cache &&
 		!utf8_encode(obj->interp, strdat->val, strdat->len, &strdat->utf8cache, &strdat->utf8cachelen) )
 	{
@@ -278,7 +278,7 @@ Object *stringobj_join(Interp *interp, Object *const *strs, size_t nstrs)
 	}
 
 	for (size_t i = 0; i < nstrs; i++) {
-		struct StringData *sd = strs[i]->data.val;
+		struct StringObjData *sd = strs[i]->data.val;
 		parts[i].valkind = PVK_BIG_CONST;
 		parts[i].val.bigconst = sd->val;
 		parts[i].len = sd->len;

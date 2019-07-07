@@ -21,8 +21,8 @@ asdar: src/main.c $(OBJ) $(HEADERS)
 tests/runcalls.h: $(TESTS_SRC) tests/create_runcalls.sh
 	sh tests/create_runcalls.sh $(TESTS_SRC) > tests/runcalls.h
 
-testrunner: $(TESTS_SRC) $(OBJ) tests/main.c tests/util.h tests/runcalls.h
-	$(CC) $(CFLAGS) tests/main.c $(TESTS_SRC) -I. $(OBJ) -o $@ $(LDFLAGS)
+testrunner: $(TESTS_SRC) $(OBJ) tests/main.c $(wildcard tests/util.*) tests/runcalls.h
+	$(CC) $(CFLAGS) tests/main.c tests/util.c $(TESTS_SRC) -I. $(OBJ) -o $@ $(LDFLAGS)
 
 .PHONY: test
 test: testrunner

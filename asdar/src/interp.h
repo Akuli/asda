@@ -18,8 +18,11 @@ typedef struct InterpStruct {
 	struct ObjectStruct *objliststart;
 
 	// DON'T PUT ARBITRARILY LONG STRINGS HERE
-	// TODO: add exceptions to asda
+	// TODO: delete this
 	char errstr[200];
+
+	// see objects/err.h
+	struct ObjectStruct *err;
 
 	// don't access this directly, use functions in module.h instead
 	struct Module *firstmod;

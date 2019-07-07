@@ -28,9 +28,6 @@ class Type:
         return '<%s type %r>' % (__name__, self.name)
 
 
-OBJECT = Type('Object', None)
-
-
 class FunctionType(Type):
 
     # returntype can be None for void return
@@ -58,12 +55,21 @@ class FunctionType(Type):
              self.returntype.undo_generics(type_dict)))
 
 
+OBJECT = Type('Object', None)
+ERROR = Type('Error', OBJECT)
+
 BUILTIN_TYPES = collections.OrderedDict([
     ('Str', Type('Str', OBJECT)),
     ('Int', Type('Int', OBJECT)),
     ('Bool', Type('Bool', OBJECT)),
     ('Object', OBJECT),
+    ('Error', ERROR),
+    ('NoMemError', Type('NoMemError', ERROR)),
+    ('VariableError', Type('VariableError', ERROR)),
+    ('ValueError', Type('ValueError', ERROR)),
+    ('OsError', Type('OsError', ERROR)),
 ])
+
 BUILTIN_TYPES['Str'].add_method('uppercase', [], BUILTIN_TYPES['Str'])
 BUILTIN_TYPES['Str'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 BUILTIN_TYPES['Int'].add_method('to_string', [], BUILTIN_TYPES['Str'])

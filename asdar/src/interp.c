@@ -13,6 +13,7 @@ bool interp_init(Interp *interp, const char *argv0)
 {
 	interp->argv0 = argv0;
 	interp->errstr[0] = 0;
+	interp->err = NULL;
 	interp->objliststart = NULL;
 	interp->firstmod = NULL;
 
