@@ -19,13 +19,13 @@ struct StringObjData {
 };
 
 // this is kind of painful to use
-// you need to do e.g. STRINGOBJDATA_COMPILETIMECREATE("hello", 'h','e','l','l','o')
+// you need to do e.g. STRINGOBJDATA_COMPILETIMECREATE('h','e','l','l','o')
 // only ascii supported
-#define STRINGOBJDATA_COMPILETIMECREATE(STRING, ...) { \
-	.val = (uint32_t[]){ __VA_ARGS__ }, \
-	.len = sizeof(STRING)-1, \
-	.utf8cache = (STRING), \
-	.utf8cachelen = sizeof(STRING)-1, \
+#define STRINGOBJDATA_COMPILETIMECREATE(...) { \
+	.val = (uint32_t[]){__VA_ARGS__}, \
+	.len = sizeof( (uint32_t[]){__VA_ARGS__} ) / sizeof(uint32_t), \
+	.utf8cache = (char[]){__VA_ARGS__, 0}, \
+	.utf8cachelen = sizeof( (char[]){__VA_ARGS__} ), \
 }
 
 

@@ -34,7 +34,6 @@ static void errdata_destructor(void *vp, bool decrefrefs, bool freenonrefs)
 // nomemerr is not created with malloc() because ... you know
 
 static struct StringObjData nomemerr_string_data = STRINGOBJDATA_COMPILETIMECREATE(
-	"not enough memory",
 	'n','o','t',' ','e','n','o','u','g','h',' ','m','e','m','o','r','y');
 static Object nomemerr_string = OBJECT_COMPILETIMECREATE(&stringobj_type, &nomemerr_string_data);
 static struct ErrData nomemerr_data = { .msgstr = &nomemerr_string };
