@@ -9,3 +9,7 @@ asdar/asdar
 asdar/obj/
 asdar/testrunner
 asdar/tests/runcalls.h
+
+asdar/callgrind.out
+asdar/graph.gv
+asdar/graph.png

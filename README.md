@@ -125,7 +125,8 @@ in this, you can ask me to document stuff by creating an issue.
 
 ## Developing asda
 
-Use your favorite C debugging tools if you want to work on the C interpreter.
+See [the C interpreter's README](asdar/README.md) if you want to work on the C
+interpreter.
 
 This command installs everything you need for developing the compiler and the
 Python interpreter:
@@ -173,5 +174,3 @@ Then open `htmlcov/index.html` in your favorite browser to view the results.
 
 The `buggy` folder contains asda codes that don't work like they should
 work. Try compiling and running them to see the difference.
-
-There are also READMEs in some subdirectories. Read them too.

@@ -77,9 +77,9 @@ Run `make help` for more instructions.
 ## Code Style
 
 The coding style is Linux kernel style-ish. The "-ish" stands for two things:
-1. It's ok if you don't follow the style exactly. I will likely accept your
-   code as it is without complaining about style. (I don't have any
-   contributors yet, but I would like to have someone writing this with me.)
+1. I'm not nit-picky; it's ok if you don't follow the style exactly. I will likely accept your
+   code as it is without complaining about style. (I don't have many
+   contributors yet, but I would like to have more people working on this with me.)
 2. Some things are done differently than in the kernel style:
 
     - Long lines are allowed. There is no limit. Break stuff to multiple lines
@@ -91,3 +91,27 @@ The coding style is Linux kernel style-ish. The "-ish" stands for two things:
       typedef names are `Interp` and `Object`, defined in `interp.h` and
       `objtyp.h` respectively. It's also fine to create typedefs for callback
       functions with long signatures as is done in `objects/func.h`.
+    - There are probably some other things that I forgot to mention here.
+
+## Performance Graph
+
+Install dependencies:
+
+    $ sudo apt install valgrind graphviz
+    $ python3 -m pip install --user gprof2dot
+
+Check that `gprof2dot` is in your `$PATH`:
+
+    $ which gprof2dot
+
+If you get no output, add ~/.local/bin/ to your `$PATH` and try again.
+
+Next, create `hello.asda` in the `asdar` directory:
+
+    $ cp ../examples/hello.asda .
+
+Create the graph:
+
+    $ make graph.png FILE=hello.asda
+
+Now you can open `graph.png` in an image viewer to see the results.
