@@ -33,6 +33,20 @@ static void intdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 // will clear the mpz_t (immediately on error, otherise when returned object is destroyed)
 static Object *new_from_mpzt(Interp *interp, mpz_t mpz)
 {
+	int cacheidx;
+	if (0 <= mpz_cmp_ui(mpz, 0) &&
+		mpz_cmp_ui(mpz, sizeof(interp->intcache)/sizeof(interp->intcache[0])) < 0)
+	{
+		cacheidx = (int)mpz_get_ui(mpz);
+	} else {
+		cacheidx = -1;
+	}
+
+	if (cacheidx != -1 && interp->intcache[cacheidx]) {
+		OBJECT_INCREF(interp->intcache[cacheidx]);
+		return interp->intcache[cacheidx];
+	}
+
 	struct IntData *data = malloc(sizeof *data);
 	if(!data) {
 		mpz_clear(mpz);
@@ -43,10 +57,15 @@ static Object *new_from_mpzt(Interp *interp, mpz_t mpz)
 	*data->mpz = *mpz;   // this might be relying on GMP's implementation details, but it works :D
 	data->str = NULL;
 
-	return object_new(interp, &intobj_type, (struct ObjData){
+	Object *res = object_new(interp, &intobj_type, (struct ObjData){
 		.val = data,
 		.destroy = intdata_destroy,
 	});
+	if (res != NULL && cacheidx != -1) {
+		interp->intcache[cacheidx] = res;
+		OBJECT_INCREF(res);
+	}
+	return res;
 }
 
 Object *intobj_new_long(Interp *interp, long l)

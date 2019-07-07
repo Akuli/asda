@@ -1,6 +1,7 @@
 #include "interp.h"
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
 #include "gc.h"
 #include "objtyp.h"
 #include "objects/scope.h"
@@ -13,6 +14,9 @@ bool interp_init(Interp *interp, const char *argv0)
 	interp->objliststart = NULL;
 	interp->firstmod = NULL;
 
+	// not strictly standard compliant but simpler than a loop
+	memset(interp->intcache, 0, sizeof(interp->intcache));
+
 	if (!( interp->builtinscope = scopeobj_newglobal(interp) ))
 		return false;
 	return true;
@@ -22,6 +26,10 @@ void interp_destroy(Interp *interp)
 {
 	if (interp->builtinscope)
 		OBJECT_DECREF(interp->builtinscope);
+	for (size_t i = 0; i < sizeof(interp->intcache)/sizeof(interp->intcache[0]); i++)
+		if (interp->intcache[i])
+			OBJECT_DECREF(interp->intcache[i]);
+
 	gc_refcountdebug(interp);
 
 	Object *next;

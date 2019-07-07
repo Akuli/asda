@@ -42,6 +42,9 @@ typedef struct InterpStruct {
 	This is an absolute path and it's set in main.c
 	*/
 	const char *basedir;
+
+	// optimization for Int objects, contains integers 0, 1, 2, ...
+	struct ObjectStruct* intcache[20];
 } Interp;
 
 // returns false and sets an error to interp->err on no mem
