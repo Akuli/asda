@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <src/utf8.h>
+#include <src/objects/err.h>
 #include "util.h"
 
 // what should the encode or decode test do with this example?
@@ -44,11 +45,11 @@ static const struct Utf8Example examples[] = {
 	{ {0xe2,0x82,0xac}, 3, {0x20ac}, 1, "", SUCCEED, SUCCEED },
 
 	// euro sign with overlong encoding, from wikipedia
-	{ {0xf0,0x82,0x82,0xac}, 4, {0}, 0, "overlong encoding: 0xf0 0x82 0x82 0xac", SKIP, FAIL },
+	{ {0xf0,0x82,0x82,0xac}, 4, {0}, 0, "overlong encoding: 0xf0, 0x82, 0x82, 0xac", SKIP, FAIL },
 
 	// euro sign with first byte missing, unexpected continuation byte, non-overlong and overlong
-	{ {0x82,0xac}, 2, {0}, 0, "invalid start byte 0x82", SKIP, FAIL },
-	{ {0x82,0x82,0xac}, 3, {0}, 0, "invalid start byte 0x82", SKIP, FAIL },
+	{ {0x82,0xac}, 2, {0}, 0, "invalid start byte: 0x82", SKIP, FAIL },
+	{ {0x82,0x82,0xac}, 3, {0}, 0, "invalid start byte: 0x82", SKIP, FAIL },
 
 	// euro sign with last byte missing, non-overlong and overlong
 	{ {0xe2,0x82}, 2, {0}, 0, "unexpected end of string", SKIP, FAIL },
@@ -80,19 +81,15 @@ TEST(utf8_encode)
 			assert(utf8len == ex.utf8len);
 			assert(memcmp(ex.utf8, utf8, utf8len) == 0);
 			assert(utf8[utf8len] == 0);
+			free(utf8);
 			break;
 		case FAIL:
 			assert(!ok);
-			assert(strcmp(interp->errstr, ex.errstr) == 0);
+			assert_error_matches_and_clear(interp, &errobj_type_value, ex.errstr);
 			break;
 		case SKIP:
 			assert(0);
 		}
-
-		if (ok)
-			free(utf8);
-		else
-			interp->errstr[0] = 0;
 	}
 }
 
@@ -115,18 +112,14 @@ TEST(utf8_decode)
 			// if those assumptions aren't true, then your platform is unsupported, sorry
 			// i support only posix (and maybe windows in the future)
 			assert(memcmp(uni, ex.uni, unilen * sizeof(uint32_t)) == 0);
+			free(uni);
 			break;
 		case FAIL:
 			assert(!ok);
-			assert(strcmp(interp->errstr, ex.errstr) == 0);
+			assert_error_matches_and_clear(interp, &errobj_type_value, ex.errstr);
 			break;
 		case SKIP:
 			assert(0);
 		}
-
-		if (ok)
-			free(uni);
-		else
-			interp->errstr[0] = 0;
 	}
 }

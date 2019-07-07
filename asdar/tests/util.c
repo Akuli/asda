@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <src/objects/err.h>
 #include <src/objects/string.h>
 
 void assert_cstr_eq_cstr(const char *s1, const char *s2)
@@ -22,4 +23,22 @@ void assert_strobj_eq_cstr(Object *obj, const char *s)
 	bool ok = stringobj_toutf8(obj, &objstr, &junk);
 	assert(ok);
 	assert_cstr_eq_cstr(objstr, s);
+}
+
+void assert_error_matches_and_clear(Interp *interp, const struct Type *errtype, const char *cstr)
+{
+	assert(interp->err);
+	assert(interp->err->type == errtype);
+
+	if (errtype == &errobj_type_nomem)
+		assert(interp->err->refcount == 2);   // interp->err and wherever the global nomemerr is stored
+	else
+		assert(interp->err->refcount == 1);
+
+	Object *strobj = errobj_getstring(interp->err);
+	assert_strobj_eq_cstr(strobj, cstr);
+	OBJECT_DECREF(strobj);
+
+	OBJECT_DECREF(interp->err);
+	interp->err = NULL;
 }
