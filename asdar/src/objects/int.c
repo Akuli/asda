@@ -34,13 +34,10 @@ static void intdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 static Object *new_from_mpzt(Interp *interp, mpz_t mpz)
 {
 	int cacheidx;
-	if (0 <= mpz_cmp_ui(mpz, 0) &&
-		mpz_cmp_ui(mpz, sizeof(interp->intcache)/sizeof(interp->intcache[0])) < 0)
-	{
+	if (mpz_sgn(mpz) >= 0 && mpz_cmp_ui(mpz, sizeof(interp->intcache)/sizeof(interp->intcache[0])) < 0)
 		cacheidx = (int)mpz_get_ui(mpz);
-	} else {
+	else
 		cacheidx = -1;
-	}
 
 	if (cacheidx != -1 && interp->intcache[cacheidx]) {
 		OBJECT_INCREF(interp->intcache[cacheidx]);
