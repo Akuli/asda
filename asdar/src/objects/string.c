@@ -88,8 +88,12 @@ static Object *create_new_string_from_parts(Interp *interp, const struct Part *p
 	size_t lensum = 0;
 	for (size_t i=0; i < nparts; i++)
 		lensum += parts[i].len;
-	if (lensum == 0)
-		goto empty;   // avoid malloc(0) special case
+
+	if (lensum == 0) {
+		for (size_t i=0; i < nparts; i++)
+			destroy_part(parts[i]);
+		return stringobj_new_nocpy(interp, NULL, 0);
+	}
 
 	uint32_t *buf = malloc(lensum * sizeof(buf[0]));
 	if (!buf) {
@@ -113,11 +117,6 @@ static Object *create_new_string_from_parts(Interp *interp, const struct Part *p
 
 	assert(p == buf+lensum);
 	return stringobj_new_nocpy(interp, buf, lensum);
-
-empty:
-	for (size_t i=0; i < nparts; i++)
-		destroy_part(parts[i]);
-	return stringobj_new_nocpy(interp, NULL, 0);
 
 error:
 	for (size_t i=0; i < nparts; i++)
