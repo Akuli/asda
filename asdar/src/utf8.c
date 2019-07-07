@@ -26,7 +26,7 @@ static int how_many_bytes(Interp *interp, uint32_t codepnt)
 	// "fall through" to invalid_code_point
 
 invalid_code_point:
-	errobj_set_format(interp, &errobj_type_value, "invalid Unicode code point %U", codepnt);
+	errobj_set(interp, &errobj_type_value, "invalid Unicode code point %U", codepnt);
 	return -1;
 }
 
@@ -89,8 +89,8 @@ bool utf8_encode(Interp *interp, const uint32_t *unicode, size_t unicodelen, cha
 
 static int decode_character(Interp *interp, const unsigned char *uutf8, size_t utf8len, uint32_t *ptr)
 {
-#define CHECK_UTF8LEN(n)      do{ if (utf8len < (size_t)(n)) { errobj_set(interp, &errobj_type_value, "unexpected end of string");                 return -1; }}while(0)
-#define CHECK_CONTINUATION(c) do{ if ((c)>>6 != 1<<1)        { errobj_set_format(interp, &errobj_type_value, "invalid continuation byte %B", (c)); return -1; }}while(0)
+#define CHECK_UTF8LEN(n)      do{ if (utf8len < (size_t)(n)) { errobj_set(interp, &errobj_type_value, "unexpected end of string");          return -1; }}while(0)
+#define CHECK_CONTINUATION(c) do{ if ((c)>>6 != 1<<1)        { errobj_set(interp, &errobj_type_value, "invalid continuation byte %B", (c)); return -1; }}while(0)
 	if (uutf8[0] >> 7 == 0) {
 		CHECK_UTF8LEN(1);
 		*ptr = uutf8[0];
@@ -132,7 +132,7 @@ static int decode_character(Interp *interp, const unsigned char *uutf8, size_t u
 #undef CHECK_UTF8LEN
 #undef CHECK_CONTINUATION
 
-	errobj_set_format(interp, &errobj_type_value, "invalid start byte: %B", uutf8[0]);
+	errobj_set(interp, &errobj_type_value, "invalid start byte: %B", uutf8[0]);
 	return -1;
 }
 
@@ -170,11 +170,11 @@ bool utf8_decode(Interp *interp, const char *utf8, size_t utf8len, uint32_t **un
 		if (nbytes > expected_nbytes) {
 			// overlong encoding
 			if (nbytes == 2)
-				errobj_set_format(interp, &errobj_type_value, "overlong encoding: %B, %B", uutf8[0], uutf8[1]);
+				errobj_set(interp, &errobj_type_value, "overlong encoding: %B, %B", uutf8[0], uutf8[1]);
 			else if (nbytes == 3)
-				errobj_set_format(interp, &errobj_type_value, "overlong encoding: %B, %B, %B", uutf8[0], uutf8[1], uutf8[2]);
+				errobj_set(interp, &errobj_type_value, "overlong encoding: %B, %B, %B", uutf8[0], uutf8[1], uutf8[2]);
 			else if (nbytes == 4)
-				errobj_set_format(interp, &errobj_type_value, "overlong encoding: %B, %B, %B, %B", uutf8[0], uutf8[1], uutf8[2], uutf8[3]);
+				errobj_set(interp, &errobj_type_value, "overlong encoding: %B, %B, %B, %B", uutf8[0], uutf8[1], uutf8[2], uutf8[3]);
 			else
 				assert(0);
 			goto error;

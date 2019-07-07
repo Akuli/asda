@@ -185,7 +185,7 @@ bool bcreader_readimports(struct BcReader *bcr)
 	if (!read_bytes(bcr, &b, 1))
 		goto error;
 	if (b != IMPORT_SECTION) {
-		errobj_set_format(bcr->interp, &errobj_type_value, "expected import section, got %B", b);
+		errobj_set(bcr->interp, &errobj_type_value, "expected import section, got %B", b);
 		goto error;
 	}
 
@@ -226,7 +226,7 @@ static bool read_opbyte(struct BcReader *bcr, unsigned char *ob)
 		if (!read_uint32(bcr, &bcr->lineno)) return false;
 		if (!read_bytes(bcr, ob, 1)) return false;
 		if (*ob == SET_LINENO) {
-			errobj_set_format(bcr->interp, &errobj_type_value, "repeated lineno byte: %B", SET_LINENO);
+			errobj_set(bcr->interp, &errobj_type_value, "repeated lineno byte: %B", SET_LINENO);
 			return false;
 		}
 	}
@@ -256,7 +256,7 @@ static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowv
 			return true;
 		}
 
-		errobj_set_format(bcr->interp, &errobj_type_value, "unexpected void type byte: %B", byte);
+		errobj_set(bcr->interp, &errobj_type_value, "unexpected void type byte: %B", byte);
 		return false;
 
 	case TYPEBYTE_FUNC:
@@ -280,7 +280,7 @@ static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowv
 	}
 
 	default:
-		errobj_set_format(bcr->interp, &errobj_type_value, "unknown type byte: %B", byte);
+		errobj_set(bcr->interp, &errobj_type_value, "unknown type byte: %B", byte);
 		return false;
 	}
 }
@@ -439,7 +439,7 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case INT_EQ: res->kind = CODE_INT_EQ; return true;
 
 	default:
-		errobj_set_format(bcr->interp, &errobj_type_value, "unknown op byte: %B", opbyte);
+		errobj_set(bcr->interp, &errobj_type_value, "unknown op byte: %B", opbyte);
 		return false;
 	}
 }
