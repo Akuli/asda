@@ -6,6 +6,7 @@
 #include <string.h>
 #include "interp.h"
 #include "objtyp.h"
+#include "objects/err.h"
 #include "objects/func.h"
 
 struct PartialFuncData {
@@ -53,7 +54,7 @@ call_partial_func(Interp *interp, struct ObjData data, Object *const *args, size
 	else {
 		// this doesn't do malloc(0)
 		if(!( allargs = malloc((pfd->npartial + nargs) * sizeof(allargs[0])) )) {
-			interp_errstr_nomem(interp);
+			errobj_set_nomem(interp);
 			return res;
 		}
 		memcpy(allargs, pfd->partial, pfd->npartial * sizeof(allargs[0]));
@@ -91,7 +92,7 @@ Object *partialfunc_create(Interp *interp, Object *f, Object *const *partial, si
 	struct PartialFuncData *pfd = malloc(sizeof(*pfd));
 	Object **partialcp = malloc(sizeof(partial[0]) * npartial);
 	if(!partialcp || !pfd) {
-		interp_errstr_nomem(interp);
+		errobj_set_nomem(interp);
 		return NULL;
 	}
 

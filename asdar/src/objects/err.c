@@ -74,7 +74,7 @@ static void set_from_string_obj(Interp *interp, const struct Type *errtype, Obje
 	interp->err = obj;
 }
 
-void errobj_set(Interp *interp, const struct Type *errtype, const char *fmt, ...)
+void errobj_set_format(Interp *interp, const struct Type *errtype, const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
@@ -85,6 +85,11 @@ void errobj_set(Interp *interp, const struct Type *errtype, const char *fmt, ...
 		set_from_string_obj(interp, errtype, str);
 		OBJECT_DECREF(str);
 	}
+}
+
+void errobj_set(Interp *interp, const struct Type *errtype, const char *msg)
+{
+	errobj_set_format(interp, errtype, "%s", msg);
 }
 
 void errobj_set_oserr(Interp *interp, const char *fmt, ...)
@@ -99,7 +104,7 @@ void errobj_set_oserr(Interp *interp, const char *fmt, ...)
 		return;
 
 	if (savno)
-		errobj_set(interp, &errobj_type_os, "%S: %s (errno %d)", str, strerror(savno), savno);
+		errobj_set_format(interp, &errobj_type_os, "%S: %s (errno %d)", str, strerror(savno), savno);
 	else
 		set_from_string_obj(interp, &errobj_type_os, str);
 	OBJECT_DECREF(str);

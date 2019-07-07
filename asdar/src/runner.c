@@ -9,6 +9,7 @@
 #include "interp.h"
 #include "partialfunc.h"
 #include "objects/bool.h"
+#include "objects/err.h"
 #include "objects/func.h"
 #include "objects/int.h"
 #include "objects/scope.h"
@@ -61,7 +62,7 @@ static bool grow_stack(struct Runner *rnr, size_t minsz)
 
 	Object **ptr = realloc(rnr->stack, sizeof(Object*) * newsz);
 	if(!ptr) {
-		interp_errstr_nomem(rnr->interp);
+		errobj_set_nomem(rnr->interp);
 		return false;
 	}
 	rnr->stack = ptr;
@@ -176,7 +177,8 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 			(int)op->data.var.level, (int)op->data.var.index);
 		Object **ptr = get_var_pointer(rnr, op);
 		if(!*ptr) {
-			interp_errstr_printf(rnr->interp, "value of a variable hasn't been set");
+			// TODO: include variable name here somehow
+			errobj_set(rnr->interp, &errobj_type_variable, "value of a variable hasn't been set");
 			return RUNNER_ERROR;
 		}
 
@@ -191,7 +193,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 			(void*)op->data.modmemberptr, (void*)*op->data.modmemberptr);
 		Object *val = *op->data.modmemberptr;
 		if (!val) {
-			interp_errstr_printf(rnr->interp, "value of an exported variable hasn't been set");
+			errobj_set(rnr->interp, &errobj_type_variable, "value of an exported variable hasn't been set");
 			return RUNNER_ERROR;
 		}
 
@@ -305,7 +307,8 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 
 	case CODE_DIDNTRETURNERROR:
 		DEBUG_PRINTF("didn't return error\n");
-		interp_errstr_printf(rnr->interp, "function didn't return");
+		// TODO: create a nicer error type for this
+		errobj_set(rnr->interp, &errobj_type_value, "function didn't return");
 		return RUNNER_ERROR;
 
 	case CODE_INT_ADD:

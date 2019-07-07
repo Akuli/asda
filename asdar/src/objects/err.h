@@ -13,8 +13,9 @@ extern const struct Type
 
 // see string.h for info about the format strings
 
-// use this when other error setting functions aren't suitable
-void errobj_set(Interp *interp, const struct Type *errtype, const char *fmt, ...);
+// use these when other error setting functions aren't suitable
+void errobj_set(Interp *interp, const struct Type *errtype, const char *msg);
+void errobj_set_format(Interp *interp, const struct Type *errtype, const char *fmt, ...);
 
 // use this when {m,re,c}alloc returns NULL
 void errobj_set_nomem(Interp *interp);

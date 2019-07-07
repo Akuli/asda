@@ -8,7 +8,31 @@
 #include "module.h"
 #include "objtyp.h"
 #include "path.h"
+#include "objects/err.h"
 #include "objects/int.h"
+#include "objects/string.h"
+
+
+static void print_error(Interp *interp)
+{
+	Object *strobj = errobj_getstring(interp->err);
+	assert(strobj);   // that cannot fail
+	OBJECT_DECREF(interp->err);
+	interp->err = NULL;
+
+	const char *str;
+	size_t len;
+	if (stringobj_toutf8(strobj, &str, &len)) {
+		fprintf(stderr, "%s: error: %s\n", interp->argv0, str);
+		OBJECT_DECREF(strobj);
+		return;
+	}
+
+	OBJECT_DECREF(strobj);
+	OBJECT_DECREF(interp->err);
+	interp->err = NULL;
+	fprintf(stderr, "%s: an error occurred, and another error occurred while printing the error. Sorry. :(\n", interp->argv0);
+}
 
 
 int main(int argc, char **argv)
@@ -21,12 +45,11 @@ int main(int argc, char **argv)
 	}
 
 	Interp interp;
-	if (!interp_init(&interp, argv[0]))   // sets interp.errstr on error
-		goto error_dont_destroy_interp;
+	if (!interp_init(&interp, argv[0]))
+		goto error;
 
 	if (!( basedir = path_toabsolute(argv[1]) )) {
-		interp_errstr_printf_errno(&interp,
-			"finding absolute path of \"%s\" failed", argv[1]);
+		errobj_set_oserr(&interp, "finding absolute path of '%s' failed", argv[1]);
 		goto error;
 	}
 
@@ -45,12 +68,9 @@ int main(int argc, char **argv)
 	return 0;
 
 error:
+	print_error(&interp);
 	module_destroyall(&interp);
-	interp_destroy(&interp);     // leaves errstr untouched
-	// "fall through"
-
-error_dont_destroy_interp:
-	fprintf(stderr, "%s: error: %s\n", argv[0], interp.errstr);
+	interp_destroy(&interp);
 	free(basedir);
 	return 1;
 }

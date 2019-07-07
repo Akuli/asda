@@ -6,6 +6,7 @@
 #include <gmp.h>
 #include "../interp.h"
 #include "../objtyp.h"
+#include "err.h"
 #include "func.h"
 #include "string.h"
 
@@ -35,7 +36,7 @@ static Object *new_from_mpzt(Interp *interp, mpz_t mpz)
 	struct IntData *data = malloc(sizeof *data);
 	if(!data) {
 		mpz_clear(mpz);
-		interp_errstr_nomem(interp);
+		errobj_set_nomem(interp);
 		return NULL;
 	}
 
@@ -116,7 +117,7 @@ static Object *get_string_object(Interp *interp, Object *x)
 	// +2 is explained in mpz_get_str docs
 	char *str = malloc(mpz_sizeinbase(id->mpz, 10) + 2);
 	if (!str) {
-		interp_errstr_nomem(interp);
+		errobj_set_nomem(interp);
 		return NULL;
 	}
 	mpz_get_str(str, 10, id->mpz);

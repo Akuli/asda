@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "err.h"
 #include "func.h"
 #include "../utf8.h"
 #include "../interp.h"
@@ -28,7 +29,7 @@ Object *stringobj_new_nocpy(Interp *interp, uint32_t *val, size_t len)
 	struct StringObjData *strdat=malloc(sizeof(*strdat));
 	if(!strdat) {
 		free(val);
-		interp_errstr_nomem(interp);
+		errobj_set_nomem(interp);
 		return NULL;
 	}
 	strdat->val = val;
@@ -45,7 +46,7 @@ Object *stringobj_new(Interp *interp, const uint32_t *val, size_t len)
 {
 	uint32_t *valcp = malloc(sizeof(uint32_t)*len);
 	if (len && !valcp) {   // malloc(0) is special
-		interp_errstr_nomem(interp);
+		errobj_set_nomem(interp);
 		return NULL;
 	}
 
@@ -92,7 +93,7 @@ Object *create_new_string_from_parts(Interp *interp, const struct Part *parts, s
 
 	uint32_t *buf = malloc(lensum * sizeof(buf[0]));
 	if (!buf) {
-		interp_errstr_nomem(interp);
+		errobj_set_nomem(interp);
 		goto error;
 	}
 
@@ -273,7 +274,7 @@ Object *stringobj_join(Interp *interp, Object *const *strs, size_t nstrs)
 
 	struct Part *parts = malloc(nstrs * sizeof(parts[0]));
 	if (!parts) {
-		interp_errstr_nomem(interp);
+		errobj_set_nomem(interp);
 		return NULL;
 	}
 

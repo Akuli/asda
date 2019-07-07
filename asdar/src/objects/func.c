@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include "../interp.h"
 #include "../objtyp.h"
+#include "err.h"
 
 
 const struct Type funcobj_type_ret   = { .methods = NULL, .nmethods = 0 };
@@ -41,7 +42,7 @@ static Object *new_function(Interp *interp, struct FuncObjData fod, const struct
 {
 	struct FuncObjData *fodp = malloc(sizeof(*fodp));
 	if(!fodp) {
-		interp_errstr_nomem(interp);
+		errobj_set_nomem(interp);
 		if(fod.data.destroy)
 			fod.data.destroy(fod.data.val, true, true);
 		return NULL;

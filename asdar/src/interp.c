@@ -6,13 +6,13 @@
 #include <stdbool.h>
 #include "gc.h"
 #include "objtyp.h"
+#include "objects/err.h"
 #include "objects/scope.h"
 
 
 bool interp_init(Interp *interp, const char *argv0)
 {
 	interp->argv0 = argv0;
-	interp->errstr[0] = 0;
 	interp->err = NULL;
 	interp->objliststart = NULL;
 	interp->firstmod = NULL;
@@ -24,7 +24,8 @@ bool interp_init(Interp *interp, const char *argv0)
 
 void interp_destroy(Interp *interp)
 {
-	OBJECT_DECREF(interp->builtinscope);
+	if (interp->builtinscope)
+		OBJECT_DECREF(interp->builtinscope);
 	gc_refcountdebug(interp);
 
 	Object *next;
@@ -33,25 +34,4 @@ void interp_destroy(Interp *interp)
 		next = obj->next;
 		object_destroy(obj, false, true);
 	}
-}
-
-void interp_errstr_printf_errno(Interp *interp, const char *fmt, ...)
-{
-	int errsav = errno;
-	assert(interp->errstr[0] == 0);   // don't overwrite a previous error
-
-#define where2print (interp->errstr + strlen(interp->errstr))
-#define bytesleft ( (int)sizeof(interp->errstr) - (int)strlen(interp->errstr) )
-
-	va_list ap;
-	va_start(ap, fmt);
-	if(bytesleft>1)
-		vsnprintf(where2print, (size_t)bytesleft, fmt, ap);
-	va_end(ap);
-
-	if(errsav && bytesleft>1)
-		snprintf(where2print, (size_t)bytesleft, " (errno %d: %s)", errsav, strerror(errsav));
-
-#undef where2print
-#undef bytesleft
 }

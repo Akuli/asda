@@ -11,6 +11,7 @@
 #include "objtyp.h"
 #include "path.h"
 #include "runner.h"
+#include "objects/err.h"
 #include "objects/scope.h"
 
 static bool read_bytecode_file(Interp *interp, const char *path, struct Code *code)
@@ -19,7 +20,7 @@ static bool read_bytecode_file(Interp *interp, const char *path, struct Code *co
 
 	char *fullpath = path_concat(interp->basedir, path);
 	if (!fullpath) {
-		interp_errstr_printf_errno(interp, "getting the full path to '%s' failed", path);
+		errobj_set_oserr(interp, "getting the full path to '%s' failed", path);
 		return false;
 	}
 
@@ -27,18 +28,20 @@ static bool read_bytecode_file(Interp *interp, const char *path, struct Code *co
 	char *dir = malloc(i+1);
 	if (!dir) {
 		free(fullpath);
-		interp_errstr_nomem(interp);
+		errobj_set_nomem(interp);
 		return false;
 	}
 	memcpy(dir, path, i);
 	dir[i] = 0;
 
 	FILE *f = fopen(fullpath, "rb");
-	free(fullpath);
 	if (!f) {
-		interp_errstr_printf_errno(interp, "cannot open '%s'", fullpath);
+		errobj_set_oserr(interp, "cannot open '%s'", fullpath);
+		free(dir);
+		free(fullpath);
 		return false;
 	}
+	free(fullpath);
 
 	struct BcReader bcr = bcreader_new(interp, f, dir);
 	if (!bcreader_readasdabytes(&bcr))

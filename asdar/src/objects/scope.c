@@ -7,6 +7,7 @@
 #include "../builtin.h"
 #include "../interp.h"
 #include "../objtyp.h"
+#include "err.h"
 
 
 struct ScopeData {
@@ -39,13 +40,13 @@ Object *scopeobj_newsub(Interp *interp, Object *parent, uint16_t nlocals)
 {
 	struct ScopeData *ptr = malloc(sizeof(*ptr));
 	if (!ptr) {
-		interp_errstr_nomem(interp);
+		errobj_set_nomem(interp);
 		return NULL;
 	}
 
 	if (!( ptr->locals = calloc(nlocals, sizeof(Object*)) ) && nlocals) {
 		free(ptr);
-		interp_errstr_nomem(interp);
+		errobj_set_nomem(interp);
 		return NULL;
 	}
 

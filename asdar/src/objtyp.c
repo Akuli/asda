@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include "interp.h"
+#include "objects/err.h"
 
 
 const struct Type object_type = { .methods = NULL, .nmethods = 0 };
@@ -42,7 +43,10 @@ Object *object_new(Interp *interp, const struct Type *type, struct ObjData od)
 	if (!obj) {
 		if (od.destroy)
 			od.destroy(od.val, true, true);
-		interp_errstr_nomem(interp);
+
+		// errobj_set_nomem does NOT create an object with object_new for this
+		// ituses a statically allocated no mem error object and does no allocations
+		errobj_set_nomem(interp);
 		return NULL;
 	}
 

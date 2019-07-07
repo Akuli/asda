@@ -9,6 +9,7 @@
 #include "objtyp.h"
 #include "path.h"
 #include "objects/bool.h"
+#include "objects/err.h"
 #include "objects/func.h"
 #include "objects/int.h"
 #include "objects/scope.h"
@@ -78,10 +79,11 @@ static bool read_bytes(struct BcReader *bcr, unsigned char *buf, size_t n)
 	if (fread(buf, 1, n, bcr->in) == n)
 		return true;
 
-	if (feof(bcr->in))
-		interp_errstr_printf(bcr->interp, "unexpected end of file");
-	else   // TODO: include file name in error msg
-		interp_errstr_printf_errno(bcr->interp, "reading failed");
+	// TODO: include file name in error msg?
+	if (feof(bcr->in))   // feof does not set errno
+		errobj_set_oserr(bcr->interp, "unexpected end of file");
+	else
+		errobj_set_oserr(bcr->interp, "reading failed");
 	return false;
 }
 
@@ -114,7 +116,7 @@ static bool read_string(struct BcReader *bcr, char **str, uint32_t *len)
 	// len+1 so that adding 0 byte will be easy if needed, and empty string is not a special case
 	if (!( *str = malloc((*len)+1) )) {
 		*len = 0;
-		interp_errstr_nomem(bcr->interp);
+		errobj_set_nomem(bcr->interp);
 		return false;
 	}
 	if (!read_bytes(bcr, (unsigned char*) *str, *len)) {
@@ -133,7 +135,8 @@ static bool read_string0(struct BcReader *bcr, char **str)
 
 	(*str)[len] = 0;
 	if (strlen(*str) < (size_t)len) {
-		strcpy(bcr->interp->errstr, "unexpected 0 byte in string");
+		// TODO: maybe a separate error type for bytecode errors?
+		errobj_set(bcr->interp, &errobj_type_value, "unexpected 0 byte in string");
 		free(*str);
 		return false;
 	}
@@ -157,7 +160,7 @@ static bool read_path(struct BcReader *bcr, char **resptr)
 	*resptr = path_concat_dotdot(bcr->indirname, path);
 	free(path);
 	if (!*resptr) {
-		interp_errstr_printf_errno(bcr->interp, "cannot create absolute path of '%s'", path);
+		errobj_set_oserr(bcr->interp, "cannot create absolute path of '%s'", path);
 		return false;
 	}
 	return true;
@@ -172,7 +175,7 @@ bool bcreader_readasdabytes(struct BcReader *bcr)
 
 	if (memcmp(buf, "asda", sizeof(buf)) == 0)
 		return true;
-	strcpy(bcr->interp->errstr, "the file doesn't seem to be a compiled asda file");
+	errobj_set(bcr->interp, &errobj_type_value, "the file doesn't seem to be a compiled asda file");
 	return false;
 }
 
@@ -182,7 +185,7 @@ bool bcreader_readimports(struct BcReader *bcr)
 	if (!read_bytes(bcr, &b, 1))
 		goto error;
 	if (b != IMPORT_SECTION) {
-		interp_errstr_printf(bcr->interp, "expected import section, got %#x", (int)b);
+		errobj_set_format(bcr->interp, &errobj_type_value, "expected import section, got %B", b);
 		goto error;
 	}
 
@@ -195,7 +198,7 @@ bool bcreader_readimports(struct BcReader *bcr)
 		return true;
 
 	if (!( bcr->imports = malloc(sizeof(char*) * bcr->nimports) )) {
-		interp_errstr_nomem(bcr->interp);
+		errobj_set_nomem(bcr->interp);
 		goto error;
 	}
 
@@ -216,20 +219,6 @@ error:
 }
 
 
-static void append_byte_2_errstr(Interp *interp, unsigned char byte)
-{
-	char *ptr = interp->errstr + strlen(interp->errstr);
-	char *max = interp->errstr + sizeof(interp->errstr);
-	if(max-ptr < 2)   // need at least 1 byte to write stuff to, 1 byte for \0, otherwise would be useless
-		return;
-
-	if(is_printable_ascii(byte))
-		snprintf(ptr, (size_t)(max-ptr), ": %#x '%c'", (int)byte, byte);
-	else
-		snprintf(ptr, (size_t)(max-ptr), ": %#x", (int)byte);
-}
-
-
 static bool read_opbyte(struct BcReader *bcr, unsigned char *ob)
 {
 	if (!read_bytes(bcr, ob, 1)) return false;
@@ -237,8 +226,7 @@ static bool read_opbyte(struct BcReader *bcr, unsigned char *ob)
 		if (!read_uint32(bcr, &bcr->lineno)) return false;
 		if (!read_bytes(bcr, ob, 1)) return false;
 		if (*ob == SET_LINENO) {
-			interp_errstr_printf(bcr->interp, "repeated lineno byte");
-			append_byte_2_errstr(bcr->interp, SET_LINENO);
+			errobj_set_format(bcr->interp, &errobj_type_value, "repeated lineno byte: %B", SET_LINENO);
 			return false;
 		}
 	}
@@ -268,8 +256,7 @@ static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowv
 			return true;
 		}
 
-		interp_errstr_printf(bcr->interp, "unexpected void type byte");
-		append_byte_2_errstr(bcr->interp, byte);
+		errobj_set_format(bcr->interp, &errobj_type_value, "unexpected void type byte: %B", byte);
 		return false;
 
 	case TYPEBYTE_FUNC:
@@ -293,8 +280,7 @@ static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowv
 	}
 
 	default:
-		interp_errstr_printf(bcr->interp, "unknown type byte");
-		append_byte_2_errstr(bcr->interp, byte);
+		errobj_set_format(bcr->interp, &errobj_type_value, "unknown type byte: %B", byte);
 		return false;
 	}
 }
@@ -336,7 +322,7 @@ static bool read_int_constant(struct BcReader *bcr, Object **objptr, bool negate
 
 	unsigned char *buf = malloc(len);
 	if(!buf) {
-		interp_errstr_nomem(bcr->interp);
+		errobj_set_nomem(bcr->interp);
 		return false;
 	}
 
@@ -357,7 +343,7 @@ static bool read_create_function(struct BcReader *bcr, struct CodeOp *res)
 	res->kind = CODE_CREATEFUNC;
 
 	if (ungetc(TYPEBYTE_FUNC, bcr->in) == EOF) {
-		interp_errstr_printf_errno(bcr->interp, "ungetc failed");
+		errobj_set_oserr(bcr->interp, "ungetc() failed");
 		return false;
 	}
 
@@ -453,8 +439,7 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case INT_EQ: res->kind = CODE_INT_EQ; return true;
 
 	default:
-		interp_errstr_printf(bcr->interp, "unknown op byte");
-		append_byte_2_errstr(bcr->interp, opbyte);
+		errobj_set_format(bcr->interp, &errobj_type_value, "unknown op byte: %B", opbyte);
 		return false;
 	}
 }
@@ -490,7 +475,7 @@ static bool read_body(struct BcReader *bcr, struct Code *code)
 		struct Link *lnk = malloc(sizeof *lnk);
 		if (!lnk) {
 			codeop_destroy(&val);
-			interp_errstr_nomem(bcr->interp);
+			errobj_set_nomem(bcr->interp);
 			goto error;
 		}
 
@@ -501,7 +486,7 @@ static bool read_body(struct BcReader *bcr, struct Code *code)
 	}
 
 	if(!( code->ops = malloc(sizeof(struct CodeOp) * code->nops) )) {
-		interp_errstr_nomem(bcr->interp);
+		errobj_set_nomem(bcr->interp);
 		goto error;
 	}
 

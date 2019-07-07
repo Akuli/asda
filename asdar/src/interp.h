@@ -17,10 +17,6 @@ typedef struct InterpStruct {
 	// all (not yet destroyed) runtime created objects can be found from here with ->next
 	struct ObjectStruct *objliststart;
 
-	// DON'T PUT ARBITRARILY LONG STRINGS HERE
-	// TODO: delete this
-	char errstr[200];
-
 	// see objects/err.h
 	struct ObjectStruct *err;
 
@@ -48,18 +44,10 @@ typedef struct InterpStruct {
 	const char *basedir;
 } Interp;
 
-// returns false and sets an error to interp->errstr on no mem
+// returns false and sets an error to interp->err on no mem
 bool interp_init(Interp *interp, const char *argv0);
 
 // never fails, always leaves errstr untouched
 void interp_destroy(Interp *interp);
-
-// you can print arbitrarily long strings with these, uses snprintf internally
-void interp_errstr_printf_errno(Interp *interp, const char *fmt, ...);
-#define interp_errstr_printf(...) do{ \
-	errno = 0; \
-	interp_errstr_printf_errno(__VA_ARGS__); \
-}while(false)
-#define interp_errstr_nomem(interp) interp_errstr_printf((interp), "not enough memory")
 
 #endif   // INTERP_H

@@ -5,6 +5,7 @@
 #include <string.h>
 #include "objtyp.h"
 #include "runner.h"
+#include "objects/err.h"
 #include "objects/func.h"
 #include "objects/scope.h"
 
@@ -74,7 +75,7 @@ Object *asdafunc_create(Interp *interp, Object *defscope, struct Code code, bool
 {
 	struct AsdaFunctionData *afd = malloc(sizeof(*afd));
 	if(!afd) {
-		interp_errstr_nomem(interp);
+		errobj_set_nomem(interp);
 		return NULL;
 	}
 
