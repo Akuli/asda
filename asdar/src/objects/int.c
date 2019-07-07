@@ -40,6 +40,7 @@ static Object *new_from_mpzt(Interp *interp, mpz_t mpz)
 		cacheidx = -1;
 
 	if (cacheidx != -1 && interp->intcache[cacheidx]) {
+		mpz_clear(mpz);
 		OBJECT_INCREF(interp->intcache[cacheidx]);
 		return interp->intcache[cacheidx];
 	}
