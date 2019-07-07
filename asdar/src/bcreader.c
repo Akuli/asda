@@ -459,7 +459,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	}
 }
 
-// this is for a temporary linked list of CodeOps
 static bool read_body(struct BcReader *bcr, struct Code *code)
 {
 	if (!read_uint16(bcr, &code->nlocalvars))
@@ -486,25 +485,22 @@ static bool read_body(struct BcReader *bcr, struct Code *code)
 
 		if (code->nops >= capacity) {
 			capacity = capacity == 0 ? 1 : capacity * 2;
-			arr = realloc(arr, capacity * sizeof *arr);
 
-			if (!arr) {
+			void *tmp = realloc(arr, capacity * sizeof *arr);
+			if (!tmp) {
 				codeop_destroy(&val);
 				interp_errstr_nomem(bcr->interp);
 				goto error;
 			}
+			arr = tmp;
 		}
 
-		arr[code->nops] = val;
-		code->nops++;
+		arr[code->nops++] = val;
 	}
 
 	/* shrink arr to fit */
 	arr = realloc(arr, code->nops * sizeof *arr);
-	if(!arr) {
-		interp_errstr_nomem(bcr->interp);
-		goto error;
-	}
+	assert(arr);   // failing shrink would make no sense
 
 	code->ops = arr;
 	return true;
