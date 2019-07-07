@@ -15,12 +15,11 @@
 #include "objects/string.h"
 
 
-// change this to choose whether running each op is printed:
-#if true
+#ifdef NDEBUG
+	#define DEBUG_PRINTF(...) ((void)0)
+#else
 	#include <stdio.h>
 	#define DEBUG_PRINTF(...) printf(__VA_ARGS__)
-#else
-	#define DEBUG_PRINTF(...) ((void)0)
 #endif
 
 
