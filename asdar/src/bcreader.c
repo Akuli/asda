@@ -5,6 +5,7 @@
 #include <string.h>
 #include "code.h"
 #include "builtin.h"
+#include "interp.h"
 #include "module.h"
 #include "objtyp.h"
 #include "path.h"

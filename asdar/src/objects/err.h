@@ -1,7 +1,7 @@
 #ifndef OBJECTS_ERR_H
 #define OBJECTS_ERR_H
 
-#include <stdbool.h>
+#include "../interp.h"
 #include "../objtyp.h"
 
 extern const struct Type

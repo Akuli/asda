@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <src/interp.h>
 #include <src/objtyp.h>
 #include <src/objects/scope.h>
 #include "../util.h"

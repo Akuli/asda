@@ -1,8 +1,11 @@
 #include "util.h"
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <src/interp.h>
+#include <src/objtyp.h>
 #include <src/objects/err.h>
 #include <src/objects/string.h>
 

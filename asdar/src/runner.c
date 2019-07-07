@@ -7,6 +7,7 @@
 #include "asdafunc.h"
 #include "code.h"
 #include "interp.h"
+#include "objtyp.h"
 #include "partialfunc.h"
 #include "objects/bool.h"
 #include "objects/err.h"

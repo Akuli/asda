@@ -1,6 +1,8 @@
 // utf8 tests are in ../test_utf8.c
 
 #include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <src/objtyp.h>

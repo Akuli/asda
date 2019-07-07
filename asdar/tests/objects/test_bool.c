@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdbool.h>
 #include <src/objtyp.h>
 #include <src/objects/bool.h>
 #include "../util.h"

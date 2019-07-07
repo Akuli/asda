@@ -1,5 +1,6 @@
 #include <assert.h>
-#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <src/interp.h>
 #include <src/objtyp.h>
 #include <src/objects/bool.h>

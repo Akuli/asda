@@ -1,9 +1,9 @@
 #include <assert.h>
+#include <errno.h>
 #include <stddef.h>
-#include <string.h>
+#include <stdio.h>
 #include <src/interp.h>
 #include <src/objects/err.h>
-#include <src/objects/string.h>
 #include "../util.h"
 
 

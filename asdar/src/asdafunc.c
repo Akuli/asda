@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include "code.h"
+#include "interp.h"
 #include "objtyp.h"
 #include "runner.h"
 #include "objects/err.h"

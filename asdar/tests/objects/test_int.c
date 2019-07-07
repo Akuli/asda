@@ -1,5 +1,5 @@
 #include <assert.h>
-#include <src/interp.h>
+#include <stdbool.h>
 #include <src/objtyp.h>
 #include <src/objects/int.h>
 #include "../util.h"

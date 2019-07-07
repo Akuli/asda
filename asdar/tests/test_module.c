@@ -1,6 +1,8 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <src/code.h>
+#include <src/interp.h>
 #include <src/module.h>
 #include <src/objects/scope.h>
 #include "util.h"

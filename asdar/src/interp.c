@@ -1,12 +1,8 @@
 #include "interp.h"
-#include <assert.h>
-#include <stdarg.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdbool.h>
 #include "gc.h"
 #include "objtyp.h"
-#include "objects/err.h"
 #include "objects/scope.h"
 
 

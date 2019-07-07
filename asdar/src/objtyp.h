@@ -3,7 +3,7 @@
 #ifndef OBJTYP_H
 #define OBJTYP_H
 
-// TODO: somehow tell iwyu to not suggest adding 'struct ObjectStruct;'? it's defined below
+// IWYU pragma: no_forward_declare ObjectStruct
 #include <stdbool.h>
 #include <stddef.h>
 #include "interp.h"

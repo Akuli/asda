@@ -1,9 +1,12 @@
 #include "err.h"
 #include <assert.h>
+#include <errno.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include "string.h"
+#include "../interp.h"
 #include "../objtyp.h"
 
 
