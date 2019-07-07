@@ -83,7 +83,7 @@ static void destroy_part(struct Part part)
 }
 
 // frees the bigmalloc vals of the parts
-Object *create_new_string_from_parts(Interp *interp, const struct Part *parts, size_t nparts)
+static Object *create_new_string_from_parts(Interp *interp, const struct Part *parts, size_t nparts)
 {
 	size_t lensum = 0;
 	for (size_t i=0; i < nparts; i++)
