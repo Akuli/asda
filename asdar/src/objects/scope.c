@@ -24,6 +24,8 @@ static void scopedata_destroy_without_pointer(struct ScopeData data, bool decref
 		for (size_t i = 0; i < data.nlocals; i++)
 			if (data.locals[i])
 				OBJECT_DECREF(data.locals[i]);
+
+		if (data.nparents != 0) OBJECT_DECREF(data.parents[data.nparents - 1]);
 	}
 	if (freenonrefs)
 		free(data.locals);
@@ -58,6 +60,7 @@ Object *scopeobj_newsub(Interp *interp, Object *parent, uint16_t nlocals)
 		ptr->nparents = 0;
 		ptr->parents = malloc(0);
 	} else {
+		OBJECT_INCREF(parent);
 		struct ScopeData *parent_data = parent->data.val;
 		ptr->nparents = parent_data->nparents + 1;
 		ptr->parents = malloc(ptr->nparents * sizeof *ptr->parents);
