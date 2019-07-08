@@ -18,9 +18,22 @@ Object *boolobj_c2asda(bool cbool)
 // asserts that the object is boolobj_true or boolobj_false
 bool boolobj_asda2c(Object *asdabool)
 {
-	if(asdabool == &boolobj_true)
+	if(asdabool == &boolobj_true) {
 		return true;
-	if(asdabool == &boolobj_false)
+	} else {
+		assert(asdabool == &boolobj_false);
 		return false;
-	assert(0);
+	}
+}
+
+Object *boolobj_neg(Object *obj) {
+	Object *res;
+	if (obj == &boolobj_true) {
+		res = &boolobj_false;
+	} else {
+		assert(obj == &boolobj_false);
+		res = &boolobj_true;
+	}
+	OBJECT_INCREF(res);
+	return res;
 }

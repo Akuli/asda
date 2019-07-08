@@ -149,6 +149,8 @@ static bool integer_binary_operation(struct Runner *rnr, enum CodeOpKind bok)
 // this function is long, but it feels ok because it divides nicely into max 10-ish line chunks
 static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 {
+	DEBUG_PRINTF("%d: ", op->lineno);
+
 	enum RunnerResult ret = RUNNER_DIDNTRETURN;
 
 	switch(op->kind) {
@@ -209,7 +211,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		assert(rnr->stacklen >= 1);
 		Object **ptr = &rnr->stack[rnr->stacklen - 1];
 		Object *old = *ptr;
-		*ptr = boolobj_c2asda(!boolobj_asda2c(old));
+		*ptr = boolobj_neg(old);
 		OBJECT_DECREF(old);
 		break;
 	}
