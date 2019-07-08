@@ -2,6 +2,7 @@
 
 This runs the bytecode files produced by the compiler.
 
+
 ## Compiling
 
     $ make
@@ -11,6 +12,7 @@ If you have multiple CPU cores and you want to compile faster, run e.g.
 cores at a time). The number after `-j` shouldn't be greater than the
 number of CPU cores; that will consume more RAM without making the build
 any faster.
+
 
 ## IWYU
 
@@ -74,6 +76,154 @@ like this:
 
 Run `make help` for more instructions.
 
+
+## Reference Counts
+
+The interpreter uses reference counting to figure out when objects are not
+needed anymore and can be freed. The object struct has a `refcount` integer,
+and its value tells how many things are currently using the object.
+
+Incrementing this number is called increffing, and decrementing is called
+decreffing. These are done with `OBJECT_INCREF` and `OBJECT_DECREF` defined in
+`src/objtyp.h`. Decreffing may destroy the object (that is, `free()` it, decref
+other objects that the object refers to etc).
+
+Most functions that return objects expect you to decref the object when you are
+done with using it. This is called "returning a new reference". For example,
+`boolobject_c2asda(true)` returns an object that represents the asda `TRUE`
+constant, and it returns a new reference, so you are supposed to use it like
+this:
+
+```c
+#include <stdbool.h>
+#include "objtyp.h"
+#include "objects/bool.h"
+
+void do_something(void)
+{
+    Object *asdatrue = boolobj_c2asda(true);
+    // do something with asdatrue
+    OBJECT_DECREF(asdatrue);
+}
+```
+
+If you create a function that does not return a new reference, then please
+**add a comment** about it.
+
+
+## Common Bugs
+
+Here is some code:
+
+```c
+static Object *create_a_string(Interp *interp)
+{
+    char *buf = malloc(123);
+    if (!buf)
+        return NULL;
+
+    Object *obj = get_another_object_somehow(interp);
+    if (!obj)
+        return NULL;
+
+    fill the buf using the obj somehow;
+    if (filling failed)
+        return NULL;
+
+    return stringobj_new_utf8(interp, buf, strlen(buf));
+}
+```
+
+Even though this code is short, it contains *many* bugs:
+
+- The code does not set an error to the interpreter when `malloc` fails. It
+  should do that so that the interpreter can report the error to the user, or
+  the asda programmer can handle the error somehow (not implemented yet at the
+  time of writing this). Almost all functions do this.
+
+    ```c
+    if (!buf) {
+        errobj_set_nomem(interp);
+        return NULL;
+    }
+    ```
+
+    If your function returns `NULL` (or some other error marker value, e.g.
+    `false` or `-1`) without setting an error to the `interp`, then please
+    **add a comment** about it, and make sure to handle the error setting
+    whenever you call the function.
+
+    If you want to test whether you got this right, you can replace
+    `malloc(123)` with `NULL` in the code and see what it does.
+
+- `get_another_object_somehow()` likely sets an error to `interp` because it
+  takes the `interp` as an argument, but if it fails, the `buf` must be freed:
+
+    ```c
+    Object *obj = get_another_object_somehow(interp);
+    if (!obj) {
+        free(buf);
+        return NULL;
+    }
+    ```
+
+    You can use `valgrind` to find missing `free()`s, but in this case you
+    would need to also replace `get_another_object_somehow(interp)` with `NULL`
+    to see the bug in action.
+
+- If filling the `buf` failed, `buf` must be freed and `obj` must be decreffed
+  (see above for more about decreffing). Also make sure that an error is set to
+  the `interp` as explained above.
+
+    ```c
+    if (filling failed) {
+        OBJECT_DECREF(obj);
+        free(buf);
+        return NULL;
+    }
+    ```
+
+    If you decref too much or don't incref enough, `valgrind` will report a
+    double free or something similar.
+
+    If you incref too much or don't decref enough, there are a couple things
+    that can happen:
+
+    - Nothing noticable happens to compile-time created objects. There's no
+      good way to find refcount bugs with them.
+    - The interpreter and test runner display a warning if you do this for
+      objects created at runtime.
+
+- You also need to free `buf` and decref `obj` if everything succeeds or if
+  `stringobj_new_utf8` fails. Both of those cases can be handled at once like
+  this:
+
+    ```c
+    Object *res = stringobj_new_utf8(interp, strlen(buf), buf);
+    free(buf);
+    OBJECT_DECREF(obj);
+    return res;   // may be NULL
+    ```
+
+    Returning `res` does not create a refcount bug; it just makes
+    `create_a_string()` return a new reference on success, which is good.
+
+The `obj` is not needed for anything after filling `buf` with it, so you can
+simplify the code by decreffing `obj` earlier, like this:
+
+```c
+fill the buf using the obj somehow;
+OBJECT_DECREF(obj);
+if (filling failed) {
+    free(buf);
+    return NULL;
+}
+```
+
+You can also use `goto` for error handling, but as always, make sure that you
+get all corner cases right. (No, `goto` is not evil.)
+
+
 ## Code Style
 
 The coding style is Linux kernel style-ish. The "-ish" stands for two things:
@@ -92,6 +242,7 @@ The coding style is Linux kernel style-ish. The "-ish" stands for two things:
       `objtyp.h` respectively. It's also fine to create typedefs for callback
       functions with long signatures as is done in `objects/func.h`.
     - There are probably some other things that I forgot to mention here.
+
 
 ## Performance Graph
 
