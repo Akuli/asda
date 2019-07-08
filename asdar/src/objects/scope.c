@@ -27,10 +27,11 @@ static void scopedata_destroy_without_pointer(struct ScopeData data, bool decref
 
 		if (data.nparents != 0) OBJECT_DECREF(data.parents[data.nparents - 1]);
 	}
-	if (freenonrefs)
-		free(data.locals);
 
-	free(data.parents);
+	if (freenonrefs) {
+		free(data.locals);
+		free(data.parents);
+	}
 }
 
 static void scopedata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
