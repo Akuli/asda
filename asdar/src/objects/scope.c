@@ -13,7 +13,6 @@ struct ScopeData {
 	Object **locals;
 	size_t nlocals;
 
-	/* XXX: do we need to manage references to parents? */
 	size_t nparents;
 	Object **parents;
 };
@@ -59,7 +58,7 @@ Object *scopeobj_newsub(Interp *interp, Object *parent, uint16_t nlocals)
 
 	if (parent == NULL) {
 		ptr->nparents = 0;
-		ptr->parents = malloc(0);
+		ptr->parents = NULL;
 	} else {
 		OBJECT_INCREF(parent);
 		struct ScopeData *parent_data = parent->data.val;
