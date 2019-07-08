@@ -42,7 +42,11 @@ static void intdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 // will clear the mpz_t (immediately on error, otherise when returned object is destroyed)
 static Object *new_from_mpzt(Interp *interp, mpz_t mpz)
 {
-	if (mpz_fits_sint_p(mpz)) return intobj_new_long(interp, mpz_get_si(mpz));
+	if (mpz_fits_sint_p(mpz)) {
+		long value = mpz_get_si(mpz);
+		mpz_clear(mpz);
+		return intobj_new_long(interp, value);
+	}
 
 	int cacheidx;
 	if (mpz_sgn(mpz) >= 0 && mpz_cmp_ui(mpz, sizeof(interp->intcache)/sizeof(interp->intcache[0])) < 0)
