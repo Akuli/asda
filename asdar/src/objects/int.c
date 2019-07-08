@@ -69,9 +69,8 @@ static Object *new_from_mpzt(Interp *interp, mpz_t mpz)
 
 	data->spilled = true;
 
-	/* XXX: is this safe at all? do we know where data->mpz points to? isn't it
-	 * initialized memory? */
-	*data->mpz = *mpz;   // this might be relying on GMP's implementation details, but it works :D
+	/* `data->mpz` is actually an array, due to GMP implementation details */
+	*data->mpz = *mpz;
 	data->str = NULL;
 
 	Object *res = object_new(interp, &intobj_type, (struct ObjData){
