@@ -168,8 +168,6 @@ int intobj_cmp_long(Object *x, long y)
 	}
 }
 
-#define CORRECT_ORDER(x_data, y_data) \
-
 static void intobj_spill(Object *obj) {
 	assert(obj->type == &intobj_type);
 
