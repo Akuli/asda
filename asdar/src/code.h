@@ -42,7 +42,7 @@ struct Code {
 
 struct CodeVarData { uint8_t level; uint16_t index; };
 struct CodeLookupMethodData { const struct Type *type; uint16_t index; };
-struct CodeCreateFuncData { bool returning; struct Code body; };
+struct CodeCreateFuncData { struct Code body; };
 
 typedef union {
 	struct CodeVarData var;

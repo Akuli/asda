@@ -14,14 +14,12 @@
 #include "objects/scope.h"
 #include "objects/string.h"
 
-
 #ifdef NDEBUG
 	#define DEBUG_PRINTF(...) ((void)0)
 #else
 	#include <stdio.h>
 	#define DEBUG_PRINTF(...) printf(__VA_ARGS__)
 #endif
-
 
 void runner_init(struct Runner *rnr, Interp *interp, Object *scope, struct Code code)
 {
@@ -95,25 +93,16 @@ static bool call_function(struct Runner *rnr, bool ret, size_t nargs)
 	Object **argptr = rnr->stack + rnr->stacklen;
 	Object *func = rnr->stack[--rnr->stacklen];
 
-	bool ok;
-	Object *res;
-	if(ret)
-		ok = !!( res = funcobj_call_ret(rnr->interp, func, argptr, nargs) );
-	else {
-		ok = funcobj_call_noret(rnr->interp, func, argptr, nargs);
-		res = NULL;
-	}
+	Object *result;
+	bool ok = funcobj_call(rnr->interp, func, argptr, nargs, &result);
 
 	OBJECT_DECREF(func);
-	for(size_t i=0; i < nargs; i++)
-		OBJECT_DECREF(argptr[i]);
-	if(!ok)
-		return false;
+	for(size_t i=0; i < nargs; i++) OBJECT_DECREF(argptr[i]);
 
-	if(res) {
-		// it will fit because func (and 0 or more args) came from the stack
-		rnr->stack[rnr->stacklen++] = res;
-	}
+	if(!ok) return false;
+
+	// it will fit because func (and 0 or more args) came from the stack
+	if(result) rnr->stack[rnr->stacklen++] = result;
 	return true;
 }
 
@@ -289,7 +278,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	case CODE_CREATEFUNC:
 	{
 		DEBUG_PRINTF("create func\n");
-		Object *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc.body, op->data.createfunc.returning);
+		Object *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc.body);
 		bool ok = push2stack(rnr, f);
 		OBJECT_DECREF(f);
 		if(!ok)

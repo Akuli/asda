@@ -359,19 +359,20 @@ const char *intobj_tocstr(Interp *interp, Object *x)
 	return res;
 }
 
-static Object *tostring_impl(Interp *interp, struct ObjData data, Object *const *args, size_t nargs)
+static bool tostring_impl(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
 	assert(nargs == 1);
 
 	Object *obj = get_string_object(interp, args[0]);
 	if (!obj)
-		return NULL;
+		return false;
 	OBJECT_INCREF(obj);
-	return obj;
+	*result = obj;
+	return true;
 }
 
-static struct FuncObjData tostringdata = FUNCOBJDATA_COMPILETIMECREATE_RET(tostring_impl);
-static Object tostring = OBJECT_COMPILETIMECREATE(&funcobj_type_ret, &tostringdata);
+static struct FuncObjData tostringdata = FUNCOBJDATA_COMPILETIMECREATE(tostring_impl);
+static Object tostring = OBJECT_COMPILETIMECREATE(&funcobj_type, &tostringdata);
 
 static Object *methods[] = { &tostring };
 

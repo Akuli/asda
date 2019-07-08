@@ -276,7 +276,7 @@ static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowv
 				return false;
 		}
 
-		*typ = rettyp ? &funcobj_type_ret : &funcobj_type_noret;
+		*typ = &funcobj_type;
 		return true;
 	}
 
@@ -352,8 +352,7 @@ static bool read_create_function(struct BcReader *bcr, struct CodeOp *res)
 	if(!read_type(bcr, &functyp, false))
 		return false;
 
-	assert(functyp == &funcobj_type_ret || functyp == &funcobj_type_noret);
-	res->data.createfunc.returning = (functyp == &funcobj_type_ret);
+	assert(functyp == &funcobj_type);
 
 	unsigned char yieldbyt;
 	if(!read_bytes(bcr, &yieldbyt, 1))

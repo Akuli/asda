@@ -11,7 +11,7 @@
 #include "objects/string.h"
 
 
-static bool print_impl(Interp *interp, struct ObjData data, Object *const *args, size_t nargs)
+static bool print_impl(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
 	assert(nargs == 1);
 	assert(args[0]->type == &stringobj_type);
@@ -24,11 +24,12 @@ static bool print_impl(Interp *interp, struct ObjData data, Object *const *args,
 	for (const char *p = str; p < str+len; p++)
 		putchar(*p);
 	putchar('\n');
+	*result = NULL;
 	return true;
 }
 
-static struct FuncObjData printdata = FUNCOBJDATA_COMPILETIMECREATE_NORET(print_impl);
-static Object print = OBJECT_COMPILETIMECREATE(&funcobj_type_noret, &printdata);
+static struct FuncObjData printdata = FUNCOBJDATA_COMPILETIMECREATE(print_impl);
+static Object print = OBJECT_COMPILETIMECREATE(&funcobj_type, &printdata);
 
 Object* const builtin_objects[] = { &print, &boolobj_true, &boolobj_false };
 const size_t builtin_nobjects = sizeof(builtin_objects)/sizeof(builtin_objects[0]);

@@ -10,6 +10,6 @@
 
 // bc is never destroyed because destroying the bc of the entire file will destroy it eventually
 // ret==true means returns a value, false means returns void or doesnt return
-Object *asdafunc_create(Interp *interp, Object *defscope, struct Code code, bool ret);
+Object *asdafunc_create(Interp *interp, Object *defscope, struct Code code);
 
 #endif   // ASDAFUNC_H

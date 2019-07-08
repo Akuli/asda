@@ -29,58 +29,35 @@ static void partialfunc_data_destroy(void *vpdata, bool decrefrefs, bool freenon
 	}
 }
 
-union call_result {
-	Object *ret;
-	bool noret;
-};
-
-static union call_result
-call_partial_func(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, bool ret)
+static bool
+call_partial_func(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
 	const struct PartialFuncData *pfd = data.val;
 
-	union call_result res;
-	if(ret) {
-		assert(pfd->f->type == &funcobj_type_ret);
-		res.ret = NULL;
-	} else {
-		assert(pfd->f->type == &funcobj_type_noret);
-		res.noret = false;
-	}
+	assert(pfd->f->type == &funcobj_type);
 
 	Object **allargs;
-	if (nargs == 0)
+	if (nargs == 0) {
 		allargs = pfd->partial;
-	else {
+	} else {
 		// this doesn't do malloc(0)
 		if(!( allargs = malloc((pfd->npartial + nargs) * sizeof(allargs[0])) )) {
 			errobj_set_nomem(interp);
-			return res;
+			return false;
 		}
 		memcpy(allargs, pfd->partial, pfd->npartial * sizeof(allargs[0]));
 		memcpy(allargs+pfd->npartial, args, nargs * sizeof(allargs[0]));
 	}
 
-	if(ret)
-		res.ret = funcobj_call_ret(interp, pfd->f, allargs, pfd->npartial + nargs);
-	else
-		res.noret = funcobj_call_noret(interp, pfd->f, allargs, pfd->npartial + nargs);
-
-	if (nargs != 0)
-		free(allargs);
-	return res;
+	bool ok = funcobj_call(interp, pfd->f, allargs, pfd->npartial + nargs, result);
+	if (nargs != 0) free(allargs);
+	return ok;
 }
 
-Object *partialfunc_cfunc_ret(Interp *interp, struct ObjData data, Object *const *args, size_t nargs)
+static bool partialfunc_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
-	return call_partial_func(interp, data, args, nargs, true).ret;
+	return call_partial_func(interp, data, args, nargs, result);
 }
-
-bool partialfunc_cfunc_noret(Interp *interp, struct ObjData data, Object *const *args, size_t nargs)
-{
-	return call_partial_func(interp, data, args, nargs, false).noret;
-}
-
 
 Object *partialfunc_create(Interp *interp, Object *f, Object *const *partial, size_t npartial)
 {
@@ -107,9 +84,6 @@ Object *partialfunc_create(Interp *interp, Object *f, Object *const *partial, si
 
 	struct ObjData od = { .val = pfd, .destroy = partialfunc_data_destroy };
 
-	if (f->type == &funcobj_type_ret)
-		return funcobj_new_ret(interp, partialfunc_cfunc_ret, od);
-	if (f->type == &funcobj_type_noret)
-		return funcobj_new_noret(interp, partialfunc_cfunc_noret, od);
-	assert(0);
+	assert(f->type == &funcobj_type);
+	return funcobj_new(interp, partialfunc_cfunc, od);
 }
