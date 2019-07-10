@@ -9,24 +9,28 @@
 #include "../objtyp.h"
 #include "err.h"
 
-
 struct ScopeData {
 	Object **locals;
 	size_t nlocals;
-	Object *parent;
+
+	size_t nparents;
+	Object **parents;
 };
 
 static void scopedata_destroy_without_pointer(struct ScopeData data, bool decrefrefs, bool freenonrefs)
 {
 	if (decrefrefs) {
-		if(data.parent)
-			OBJECT_DECREF(data.parent);
 		for (size_t i = 0; i < data.nlocals; i++)
 			if (data.locals[i])
 				OBJECT_DECREF(data.locals[i]);
+
+		if (data.nparents != 0) OBJECT_DECREF(data.parents[data.nparents - 1]);
 	}
-	if (freenonrefs)
+
+	if (freenonrefs) {
 		free(data.locals);
+		free(data.parents);
+	}
 }
 
 static void scopedata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
@@ -51,9 +55,18 @@ Object *scopeobj_newsub(Interp *interp, Object *parent, uint16_t nlocals)
 	}
 
 	ptr->nlocals = nlocals;
-	ptr->parent = parent;
-	if(parent)
+
+	if (parent == NULL) {
+		ptr->nparents = 0;
+		ptr->parents = NULL;
+	} else {
 		OBJECT_INCREF(parent);
+		struct ScopeData *parent_data = parent->data.val;
+		ptr->nparents = parent_data->nparents + 1;
+		ptr->parents = malloc(ptr->nparents * sizeof *ptr->parents);
+		memcpy(ptr->parents, parent_data->parents, parent_data->nparents * sizeof *parent_data->parents);
+		ptr->parents[ptr->nparents - 1] = parent;
+	}
 
 	return object_new(interp, &scopeobj_type, (struct ObjData){
 		.val = ptr,
@@ -76,20 +89,10 @@ Object *scopeobj_newglobal(Interp *interp)
 
 Object *scopeobj_getforlevel(Object *scope, size_t level)
 {
-#define PARENT(s) ( ((struct ScopeData*) (s)->data.val)->parent )
-
-	// FIXME: this looks like it's inefficient lol
-	size_t mylevel = 0;
-	for (Object *par = PARENT(scope); par; par = PARENT(par))
-		mylevel++;
-
-	assert(level <= mylevel);
-	for ( ; level < mylevel; level++)
-		scope = PARENT(scope);
-
-	return scope;
-
-#undef PARENT
+	struct ScopeData *data = scope->data.val;
+	assert(level <= data->nparents);
+	if (level == data->nparents) return scope;
+	else return data->parents[level];
 }
 
 Object **scopeobj_getlocalvarsptr(Object *scope)

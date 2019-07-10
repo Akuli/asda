@@ -1,17 +1,38 @@
-#include "int.h"
 #include <assert.h>
+#include <gmp.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <gmp.h>
+
 #include "../interp.h"
 #include "../objtyp.h"
 #include "err.h"
 #include "func.h"
+#include "int.h"
 #include "string.h"
 
+/*
+this code assigns mpz_t's to each other like this
+
+	*mpz1 = *mpz2
+
+it works because mpz_t is an array of 1 element
+I don't know whether that is documented
+*/
+
+// TODO: this code has a LOT of ifs... add tests for most things
+
+
 struct IntData {
-	mpz_t mpz;
+	/** Represents if the IntData has "spilled", i.e. > LONG_MAX || LONG_MIN */
+	bool spilled;
+
+	union {
+		long lon;
+		mpz_t mpz;
+	} val;
+
 	Object *str;   // string object, in base 10, NULL for not computed yet
 };
 
@@ -24,35 +45,34 @@ static void intdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
 			OBJECT_DECREF(data->str);
 	}
 	if (freenonrefs) {
-		mpz_clear(data->mpz);
+		if (data->spilled) mpz_clear(data->val.mpz);
 		free(data);
 	}
 }
 
 
-// will clear the mpz_t (immediately on error, otherise when returned object is destroyed)
-static Object *new_from_mpzt(Interp *interp, mpz_t mpz)
+Object *intobj_new_long(Interp *interp, long l)
 {
-	int cacheidx;
-	if (mpz_sgn(mpz) >= 0 && mpz_cmp_ui(mpz, sizeof(interp->intcache)/sizeof(interp->intcache[0])) < 0)
-		cacheidx = (int)mpz_get_ui(mpz);
-	else
-		cacheidx = -1;
+	long cacheidx;
+	if (l >= 0 && (unsigned long)l < sizeof(interp->intcache)/sizeof(interp->intcache[0])) {
+		cacheidx = l;
 
-	if (cacheidx != -1 && interp->intcache[cacheidx]) {
-		mpz_clear(mpz);
-		OBJECT_INCREF(interp->intcache[cacheidx]);
-		return interp->intcache[cacheidx];
+		if (interp->intcache[cacheidx]) {
+			OBJECT_INCREF(interp->intcache[cacheidx]);
+			return interp->intcache[cacheidx];
+		}
+	} else {
+		cacheidx = -1;
 	}
 
 	struct IntData *data = malloc(sizeof *data);
 	if(!data) {
-		mpz_clear(mpz);
 		errobj_set_nomem(interp);
 		return NULL;
 	}
 
-	*data->mpz = *mpz;   // this might be relying on GMP's implementation details, but it works :D
+	data->spilled = false;
+	data->val.lon = l;
 	data->str = NULL;
 
 	Object *res = object_new(interp, &intobj_type, (struct ObjData){
@@ -66,20 +86,49 @@ static Object *new_from_mpzt(Interp *interp, mpz_t mpz)
 	return res;
 }
 
-Object *intobj_new_long(Interp *interp, long l)
+// will clear the mpz_t (immediately on error, otherise when returned object is destroyed)
+static Object *new_from_mpzt(Interp *interp, mpz_t mpz)
 {
-	mpz_t mpz;
-	mpz_init_set_si(mpz, l);
-	return new_from_mpzt(interp, mpz);
+	if (mpz_fits_slong_p(mpz)) {
+		long value = mpz_get_si(mpz);
+		mpz_clear(mpz);
+		return intobj_new_long(interp, value);
+	}
+
+	struct IntData *data = malloc(sizeof *data);
+	if(!data) {
+		mpz_clear(mpz);
+		errobj_set_nomem(interp);
+		return NULL;
+	}
+
+	data->spilled = true;
+	*data->val.mpz = *mpz;
+	data->str = NULL;
+
+	return object_new(interp, &intobj_type, (struct ObjData){
+		.val = data,
+		.destroy = intdata_destroy,
+	});
 }
 
 Object *intobj_new_bebytes(Interp *interp, const unsigned char *seq, size_t len, bool negate)
 {
 	mpz_t mpz;
 	mpz_init(mpz);
-	mpz_import(mpz, len, 1, 1, 0, 0, seq);    // see docs for all the magic numbers
+	mpz_import(
+		mpz,
+		len,
+		1, // order; whole-array endianness
+		1, // size; Size of `seq` element in bytes
+		0, // endian; per-element endianness
+		0, // nails; bits-per-element to skip
+		seq
+	);
+
 	if(negate)
 		mpz_neg(mpz, mpz);
+
 	return new_from_mpzt(interp, mpz);
 }
 
@@ -87,40 +136,159 @@ int intobj_cmp(Object *x, Object *y)
 {
 	assert(x->type == &intobj_type);
 	assert(y->type == &intobj_type);
-	return mpz_cmp( ((struct IntData*)x->data.val)->mpz, ((struct IntData*)y->data.val)->mpz );
+
+	struct IntData *x_data = (struct IntData*) x->data.val;
+	struct IntData *y_data = (struct IntData*) y->data.val;
+
+	if (!x_data->spilled && !y_data->spilled) {
+		/* https://stackoverflow.com/a/10997428 */
+		return (x_data->val.lon > y_data->val.lon) - (x_data->val.lon < y_data->val.lon);
+	} else if (x_data->spilled && !y_data->spilled) {
+		return mpz_cmp_si(x_data->val.mpz, y_data->val.lon);
+	} else if (!x_data->spilled && y_data->spilled) {
+		return -mpz_cmp_si(y_data->val.mpz, x_data->val.lon);
+	} else {
+		return mpz_cmp( x_data->val.mpz, y_data->val.mpz );
+	}
 }
 
 int intobj_cmp_long(Object *x, long y)
 {
 	assert(x->type == &intobj_type);
-	return mpz_cmp_si( ((struct IntData*)x->data.val)->mpz, y );
+	struct IntData *data = (struct IntData*) x->data.val;
+
+	if (data->spilled) {
+		return mpz_cmp_si( ((struct IntData*)x->data.val)->val.mpz, y );
+	} else {
+		return (data->val.lon > y) - (data->val.lon < y);
+	}
 }
 
 
-static Object *binary_operation(Interp *interp, Object *x, Object *y,
-	void (*func)(mpz_t, const mpz_t, const mpz_t))
+// -LONG_MIN fits in unsigned long
+// -LONG_MIN doesn't fit in a long, but -(LONG_MIN+1) does
+#define NEGATIVE_LONG_TO_ULONG(x) ( ((unsigned long) -((x)+1)) + 1 )
+
+
+/* https://stackoverflow.com/a/2633929 */
+static bool add_would_overflow(long x, long y) {
+	return ((y > 0 && x > LONG_MAX - y) || (y < 0 && x < LONG_MIN - y));
+}
+
+static bool sub_would_overflow(long x, long y) {
+	// -LONG_MIN doesn't work
+	if (y == LONG_MIN)
+		return (x > 0);   // TODO: think through this while being less tired than im now
+
+	return add_would_overflow(x, -y);
+}
+
+/* https://stackoverflow.com/a/7684078 */
+static bool mul_would_overflow(long a, long b) {
+	return (!((b > 0 && a <= INT_MAX / b && a >= INT_MIN / b) || (b == 0) || (b == -1 && a >= -INT_MAX) || (b < -1 && a >= INT_MAX / b && a <= INT_MIN / b)));
+}
+
+// there is no mpz_add_si, mpz_sub_si, mpz_mul_si
+static void add_signedlong_mpz(mpz_t res, const mpz_t x, long y)   // x + y
+{
+	if (y >= 0) mpz_add_ui(res, x, (unsigned long)y);
+	else mpz_sub_ui(res, x, NEGATIVE_LONG_TO_ULONG(y));
+}
+
+static void sub_signedlong_mpz(mpz_t res, const mpz_t x, long y)   // x - y
+{
+	if (y >= 0) mpz_sub_ui(res, x, (unsigned long)y);
+	else mpz_add_ui(res, x, NEGATIVE_LONG_TO_ULONG(y));
+}
+
+static void mul_signedlong_mpz(mpz_t res, const mpz_t x, long y)   // x * y
+{
+	if (y >= 0) mpz_mul_ui(res, x, (unsigned long)y);
+	else {
+		mpz_mul_ui(res, x, NEGATIVE_LONG_TO_ULONG(y));
+		mpz_neg(res, res);
+	}
+}
+
+static long add_longs(long x, long y) { return x + y; }
+static long sub_longs(long x, long y) { return x - y; }
+static long mul_longs(long x, long y) { return x * y; }
+
+static Object *do_some_operation(Interp *interp, Object *x, Object *y,
+	void (*mpzmpzfunc)(mpz_t, const mpz_t, const mpz_t),
+	void (*mpzlongfunc)(mpz_t, const mpz_t, long),
+	long (*longlongfunc)(long, long),
+	bool (*overflowfunc)(long, long),
+	void (*commutefunc)(mpz_t, const mpz_t)   // applying this to 'x OP y' gives 'y OP x'
+)
 {
 	assert(x->type == &intobj_type);
 	assert(y->type == &intobj_type);
 
+	struct IntData *x_data = (struct IntData*) x->data.val;
+	struct IntData *y_data = (struct IntData*) y->data.val;
 	mpz_t res;
-	mpz_init(res);
-	func(res, ((struct IntData*)x->data.val)->mpz, ((struct IntData*)y->data.val)->mpz);
+
+	if (!x_data->spilled && !y_data->spilled) {
+		if (!overflowfunc(x_data->val.lon, y_data->val.lon))
+			return intobj_new_long(interp, longlongfunc(x_data->val.lon, y_data->val.lon));
+
+		mpz_init_set_si(res, x_data->val.lon);
+		mpzlongfunc(res, res, y_data->val.lon);
+	} else {
+		mpz_init(res);
+
+		if (x_data->spilled && y_data->spilled)
+			mpzmpzfunc(res, x_data->val.mpz, y_data->val.mpz);
+
+		else if (x_data->spilled && !y_data->spilled)
+			mpzlongfunc(res, x_data->val.mpz, y_data->val.lon);
+
+		else if (!x_data->spilled && y_data->spilled) {
+			mpzlongfunc(res, y_data->val.mpz, x_data->val.lon);
+			if (commutefunc)
+				commutefunc(res, res);
+		}
+
+		else
+			assert(0);
+	}
+
 	return new_from_mpzt(interp, res);
 }
 
-Object *intobj_add(Interp *interp, Object *x, Object *y) { return binary_operation(interp, x, y, mpz_add); }
-Object *intobj_sub(Interp *interp, Object *x, Object *y) { return binary_operation(interp, x, y, mpz_sub); }
-Object *intobj_mul(Interp *interp, Object *x, Object *y) { return binary_operation(interp, x, y, mpz_mul); }
+Object *intobj_add(Interp *interp, Object *x, Object *y) {
+	return do_some_operation(interp, x, y, mpz_add, add_signedlong_mpz, add_longs, add_would_overflow, NULL);
+}
+
+Object *intobj_sub(Interp *interp, Object *x, Object *y) {
+	return do_some_operation(interp, x, y, mpz_sub, sub_signedlong_mpz, sub_longs, sub_would_overflow, mpz_neg);
+}
+
+Object *intobj_mul(Interp *interp, Object *x, Object *y) {
+	return do_some_operation(interp, x, y, mpz_mul, mul_signedlong_mpz, mul_longs, mul_would_overflow, NULL);
+}
+
 
 Object *intobj_neg(Interp *interp, Object *x)
 {
 	assert(x->type == &intobj_type);
+
+	struct IntData *data = x->data.val;
 	mpz_t res;
-	mpz_init(res);
-	mpz_neg(res, ((struct IntData*)x->data.val)->mpz);
+
+	if (data->spilled) {
+		mpz_init(res);
+		mpz_neg(res, data->val.mpz);
+	}
+	else if (data->val.lon == LONG_MIN)
+		mpz_init_set_ui(res, NEGATIVE_LONG_TO_ULONG(LONG_MIN));
+	else
+		return intobj_new_long(interp, -data->val.lon);
+
 	return new_from_mpzt(interp, res);
 }
+
 
 // this does NOT return a new reference, you need to incref
 static Object *get_string_object(Interp *interp, Object *x)
@@ -131,16 +299,25 @@ static Object *get_string_object(Interp *interp, Object *x)
 	if (id->str)
 		return id->str;
 
-	// +2 is explained in mpz_get_str docs
-	char *str = malloc(mpz_sizeinbase(id->mpz, 10) + 2);
-	if (!str) {
-		errobj_set_nomem(interp);
-		return NULL;
+	char *str;
+	char buf[100];   // enough for a long
+
+	if (id->spilled) {
+		// +2 is explained in mpz_get_str docs
+		str = malloc(mpz_sizeinbase(id->val.mpz, 10) + 2);
+		if (!str) {
+			errobj_set_nomem(interp);
+			return NULL;
+		}
+		mpz_get_str(str, 10, id->val.mpz);
+	} else {
+		sprintf(buf, "%ld", id->val.lon);
+		str = buf;
 	}
-	mpz_get_str(str, 10, id->mpz);
 
 	id->str = stringobj_new_utf8(interp, str, strlen(str));   // may be NULL
-	free(str);
+	if (str != buf)
+		free(str);
 	return id->str;   // may be NULL
 }
 
@@ -157,19 +334,20 @@ const char *intobj_tocstr(Interp *interp, Object *x)
 	return res;
 }
 
-static Object *tostring_impl(Interp *interp, struct ObjData data, Object *const *args, size_t nargs)
+static bool tostring_impl(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
 	assert(nargs == 1);
 
 	Object *obj = get_string_object(interp, args[0]);
 	if (!obj)
-		return NULL;
+		return false;
 	OBJECT_INCREF(obj);
-	return obj;
+	*result = obj;
+	return true;
 }
 
-static struct FuncObjData tostringdata = FUNCOBJDATA_COMPILETIMECREATE_RET(tostring_impl);
-static Object tostring = OBJECT_COMPILETIMECREATE(&funcobj_type_ret, &tostringdata);
+static struct FuncObjData tostringdata = FUNCOBJDATA_COMPILETIMECREATE(tostring_impl);
+static Object tostring = OBJECT_COMPILETIMECREATE(&funcobj_type, &tostringdata);
 
 static Object *methods[] = { &tostring };
 

@@ -45,35 +45,26 @@ run(Interp *interp, const struct AsdaFunctionData *afd, struct Runner *rnr, Obje
 	return res;
 }
 
-static Object *asda_function_cfunc_ret(Interp *interp, struct ObjData data, Object *const *args, size_t nargs)
+static bool asda_function_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
 	struct Runner rnr;
+
 	switch (run(interp, data.val, &rnr, args, nargs)) {
-	// compiler adds a didn't return error to end of returning functions, so RUNNER_DIDNTRETURN can't happen here
-	case RUNNER_ERROR:
-		return NULL;
-	case RUNNER_VALUERETURN:
-		return rnr.retval;
-	default:
-		assert(0);
+		case RUNNER_VALUERETURN:
+			*result = rnr.retval;
+			return true;
+
+		case RUNNER_VOIDRETURN:
+			*result = NULL;
+			return true;
+
+		// compiler adds a didn't return error to end of returning functions, so RUNNER_DIDNTRETURN can't happen here
+		default:
+			return false;
 	}
 }
 
-static bool asda_function_cfunc_noret(Interp *interp, struct ObjData data, Object *const *args, size_t nargs)
-{
-	struct Runner rnr;
-	switch (run(interp, data.val, &rnr, args, nargs)) {
-	// compiler adds a void return to end of non-returning functions, so RUNNER_DIDNTRETURN can't happen here
-	case RUNNER_ERROR:
-		return false;
-	case RUNNER_VOIDRETURN:
-		return true;
-	default:
-		assert(0);
-	}
-}
-
-Object *asdafunc_create(Interp *interp, Object *defscope, struct Code code, bool ret)
+Object *asdafunc_create(Interp *interp, Object *defscope, struct Code code)
 {
 	struct AsdaFunctionData *afd = malloc(sizeof(*afd));
 	if(!afd) {
@@ -86,8 +77,5 @@ Object *asdafunc_create(Interp *interp, Object *defscope, struct Code code, bool
 	afd->code = code;
 
 	struct ObjData od = { .val = afd, .destroy = destroy_asdafunc_data };
-	if(ret)
-		return funcobj_new_ret(interp, asda_function_cfunc_ret, od);
-	else
-		return funcobj_new_noret(interp, asda_function_cfunc_noret, od);
+	return funcobj_new(interp, asda_function_cfunc, od);
 }

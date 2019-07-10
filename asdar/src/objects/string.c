@@ -283,21 +283,25 @@ Object *stringobj_join(Interp *interp, Object *const *strs, size_t nstrs)
 		parts[i].val.bigconst = sd->val;
 		parts[i].len = sd->len;
 	}
-	return create_new_string_from_parts(interp, parts, nstrs);
+
+	Object *res = create_new_string_from_parts(interp, parts, nstrs);
+	free(parts);
+	return res;
 }
 
 
-static Object *tostring_impl(Interp *interp, struct ObjData data,
-	Object *const *args, size_t nargs)
+static bool tostring_impl(Interp *interp, struct ObjData data,
+	Object *const *args, size_t nargs, Object **result)
 {
 	assert(nargs == 1);
 	assert(args[0]->type == &stringobj_type);
 	OBJECT_INCREF(args[0]);
-	return args[0];
+	*result = args[0];
+	return true;
 }
 
-static struct FuncObjData tostringdata = FUNCOBJDATA_COMPILETIMECREATE_RET(tostring_impl);
-static Object tostring = OBJECT_COMPILETIMECREATE(&funcobj_type_ret, &tostringdata);
+static struct FuncObjData tostringdata = FUNCOBJDATA_COMPILETIMECREATE(tostring_impl);
+static Object tostring = OBJECT_COMPILETIMECREATE(&funcobj_type, &tostringdata);
 
 // TODO: first string method should be uppercase
 static Object *methods[] = { &tostring, &tostring };

@@ -13,6 +13,9 @@ TESTS_HEADERS := $(filter-out tests/runcalls.h, $(wildcard tests/*.h)) tests/run
 
 IWYU ?= iwyu
 
+ifdef NDEBUG
+	CFLAGS += -DNDEBUG
+endif
 
 all: asdar
 

@@ -8,8 +8,8 @@
 #include "interp.h"
 #include "objtyp.h"
 
-// bc is never destroyed because destroying the bc of the entire file will destroy it eventually
-// ret==true means returns a value, false means returns void or doesnt return
-Object *asdafunc_create(Interp *interp, Object *defscope, struct Code code, bool ret);
+// code is never destroyed because destroying the code of the entire file will destroy it eventually
+// this is used for both returning and non-returning asda functions
+Object *asdafunc_create(Interp *interp, Object *defscope, struct Code code);
 
 #endif   // ASDAFUNC_H

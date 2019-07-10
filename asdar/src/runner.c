@@ -1,8 +1,6 @@
 #include "runner.h"
 #include <assert.h>
 #include <stdbool.h>
-// stdio.h is for DEBUG_PRINTF, iwyu doesn't recognize it when DEBUG_PRINTF is "disabled"
-#include <stdio.h>   // IWYU pragma: keep
 #include <stdlib.h>
 #include "asdafunc.h"
 #include "code.h"
@@ -16,12 +14,12 @@
 #include "objects/scope.h"
 #include "objects/string.h"
 
-
-// toggle these to choose whether running each op is printed:
-
-//#define DEBUG_PRINTF(...) printf(__VA_ARGS__)
-#define DEBUG_PRINTF(...) ((void)0)
-
+#ifdef NDEBUG
+	#define DEBUG_PRINTF(...) ((void)0)
+#else
+	#include <stdio.h>
+	#define DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#endif
 
 void runner_init(struct Runner *rnr, Interp *interp, Object *scope, struct Code code)
 {
@@ -95,25 +93,16 @@ static bool call_function(struct Runner *rnr, bool ret, size_t nargs)
 	Object **argptr = rnr->stack + rnr->stacklen;
 	Object *func = rnr->stack[--rnr->stacklen];
 
-	bool ok;
-	Object *res;
-	if(ret)
-		ok = !!( res = funcobj_call_ret(rnr->interp, func, argptr, nargs) );
-	else {
-		ok = funcobj_call_noret(rnr->interp, func, argptr, nargs);
-		res = NULL;
-	}
+	Object *result;
+	bool ok = funcobj_call(rnr->interp, func, argptr, nargs, &result);
 
 	OBJECT_DECREF(func);
-	for(size_t i=0; i < nargs; i++)
-		OBJECT_DECREF(argptr[i]);
-	if(!ok)
-		return false;
+	for(size_t i=0; i < nargs; i++) OBJECT_DECREF(argptr[i]);
 
-	if(res) {
-		// it will fit because func (and 0 or more args) came from the stack
-		rnr->stack[rnr->stacklen++] = res;
-	}
+	if(!ok) return false;
+
+	// it will fit because func (and 0 or more args) came from the stack
+	if(result) rnr->stack[rnr->stacklen++] = result;
 	return true;
 }
 
@@ -149,6 +138,8 @@ static bool integer_binary_operation(struct Runner *rnr, enum CodeOpKind bok)
 // this function is long, but it feels ok because it divides nicely into max 10-ish line chunks
 static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 {
+	DEBUG_PRINTF("%d: ", op->lineno);
+
 	enum RunnerResult ret = RUNNER_DIDNTRETURN;
 
 	switch(op->kind) {
@@ -209,7 +200,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		assert(rnr->stacklen >= 1);
 		Object **ptr = &rnr->stack[rnr->stacklen - 1];
 		Object *old = *ptr;
-		*ptr = boolobj_c2asda(!boolobj_asda2c(old));
+		*ptr = boolobj_neg(old);
 		OBJECT_DECREF(old);
 		break;
 	}
@@ -287,7 +278,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	case CODE_CREATEFUNC:
 	{
 		DEBUG_PRINTF("create func\n");
-		Object *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc.body, op->data.createfunc.returning);
+		Object *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc_code);
 		bool ok = push2stack(rnr, f);
 		OBJECT_DECREF(f);
 		if(!ok)

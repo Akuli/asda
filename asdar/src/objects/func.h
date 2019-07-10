@@ -6,36 +6,32 @@
 #include "../interp.h"
 #include "../objtyp.h"
 
-extern const struct Type funcobj_type_ret;
-extern const struct Type funcobj_type_noret;
+extern const struct Type funcobj_type;
 
-typedef Object* (*funcobj_cfunc_ret  )(Interp *interp, struct ObjData data, Object *const *args, size_t nargs);
-typedef bool    (*funcobj_cfunc_noret)(Interp *interp, struct ObjData data, Object *const *args, size_t nargs);
+// returning functions set *result to their return value on success
+// non-returning functions set it to NULL on success
+// on failure, everything returns false and doesn't need to set *result
+typedef bool (*funcobj_cfunc)(Interp*, struct ObjData userdata, Object *const *args, size_t nargs, Object **result);
 
 // it is an implementation detail that this is here, don't rely on it
 // currently it is needed for FUNCOBJDATA_COMPILETIMECREATE macros
-//
-// this is also wrapped in a struct to make it a valid void* pointer value
 struct FuncObjData {
-	union {
-		funcobj_cfunc_ret ret;
-		funcobj_cfunc_noret noret;
-	} cfunc;
-
-	// for passing data to cfunc
-	struct ObjData data;
+	funcobj_cfunc cfunc;
+	struct ObjData userdata;   // for passing data to cfunc
 };
 
-// everything else defaults to NULL or 0
-#define FUNCOBJDATA_COMPILETIMECREATE_RET(  f) { .cfunc = {.ret  =(f)} }
-#define FUNCOBJDATA_COMPILETIMECREATE_NORET(f) { .cfunc = {.noret=(f)} }
+#define FUNCOBJDATA_COMPILETIMECREATE(f) { .cfunc = f }
 
-// data is always destroyed (on error immediately, on success whenever function is destroyed)
-Object *funcobj_new_ret  (Interp *interp, funcobj_cfunc_ret   f, struct ObjData data);
-Object *funcobj_new_noret(Interp *interp, funcobj_cfunc_noret f, struct ObjData data);
+/* Create a new FuncObj
+ * userdata is destroyed on FuncObj destruction or on creation error
+ * cfunc must set *result to NULL if it does not return anything.
+ */
+Object *funcobj_new(Interp *interp, funcobj_cfunc cfunc, struct ObjData userdata);
 
-Object* funcobj_call_ret  (Interp *interp, Object *f, Object *const *args, size_t nargs);
-bool    funcobj_call_noret(Interp *interp, Object *f, Object *const *args, size_t nargs);
+/** Call a FuncObj
+ * Returns a boolean indicating success.
+ * On success, sets `*result` to the return value of the function, or NULL if it didn't return a value.
+ */
+bool funcobj_call(Interp*, Object*, Object *const *args, size_t nargs, Object **result);
 
-
-#endif   // OBJECTS_FUNC_H
+#endif // OBJECTS_FUNC_H
