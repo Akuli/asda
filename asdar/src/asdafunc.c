@@ -58,9 +58,12 @@ static bool asda_function_cfunc(Interp *interp, struct ObjData data, Object *con
 			*result = NULL;
 			return true;
 
-		// compiler adds a didn't return error to end of returning functions, so RUNNER_DIDNTRETURN can't happen here
-		default:
+		case RUNNER_ERROR:
 			return false;
+
+		case RUNNER_DIDNTRETURN:
+			// compiler adds a didn't return error to end of returning functions
+			assert(0);
 	}
 }
 
