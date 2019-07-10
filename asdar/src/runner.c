@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include "asdafunc.h"
+#include "dynarray.h"
 #include "code.h"
 #include "interp.h"
 #include "objtyp.h"
@@ -25,9 +26,7 @@ void runner_init(struct Runner *rnr, Interp *interp, Object *scope, struct Code 
 	rnr->interp = interp;
 	rnr->scope = scope;
 	OBJECT_INCREF(scope);
-	rnr->stack = NULL;
-	rnr->stacklen = 0;
-	rnr->stacksz = 0;
+	dynarray_init(&rnr->stack);
 	rnr->code = code;
 	rnr->opidx = 0;
 	// leave rnr->retval uninitialized for better valgrinding
@@ -35,45 +34,17 @@ void runner_init(struct Runner *rnr, Interp *interp, Object *scope, struct Code 
 
 void runner_free(const struct Runner *rnr)
 {
-	for (size_t i = 0; i < rnr->stacklen; i++)
-		OBJECT_DECREF(rnr->stack[i]);
-	free(rnr->stack);
+	for (size_t i = 0; i < rnr->stack.len; i++)
+		OBJECT_DECREF(rnr->stack.ptr[i]);
+	free(rnr->stack.ptr);
 	OBJECT_DECREF(rnr->scope);
 	// leave rnr->retval untouched, caller of runner_run() should handle its decreffing
 }
 
-static bool grow_stack(struct Runner *rnr, size_t minsz)
-{
-	if (rnr->stacksz >= minsz)
-		return true;
-
-	size_t newsz;
-
-	// I haven't tried changing the hard-coded constants to optimize
-	if (rnr->stacksz == 0)
-		newsz = 3;
-	else
-		newsz = 2 * rnr->stacksz;
-
-	if (newsz < minsz)
-		newsz = minsz;
-
-	Object **ptr = realloc(rnr->stack, sizeof(Object*) * newsz);
-	if(!ptr) {
-		errobj_set_nomem(rnr->interp);
-		return false;
-	}
-	rnr->stack = ptr;
-
-	rnr->stacksz = newsz;
-	return true;
-}
-
 static bool push2stack(struct Runner *rnr, Object *obj)
 {
-	if (!grow_stack(rnr, rnr->stacklen+1))
+	if (!dynarray_push(rnr->interp, &rnr->stack, obj))
 		return false;
-	rnr->stack[rnr->stacklen++] = obj;
 	OBJECT_INCREF(obj);
 	return true;
 }
@@ -87,10 +58,10 @@ static Object **get_var_pointer(struct Runner *rnr, const struct CodeOp *op)
 static bool call_function(struct Runner *rnr, bool ret, size_t nargs)
 {
 	DEBUG_PRINTF("callfunc ret=%s nargs=%zu\n", ret?"true":"false", nargs);
-	assert(rnr->stacklen >= nargs + 1);
-	rnr->stacklen -= nargs;
-	Object **argptr = rnr->stack + rnr->stacklen;
-	Object *func = rnr->stack[--rnr->stacklen];
+	assert(rnr->stack.len >= nargs + 1);
+	rnr->stack.len -= nargs;
+	Object **argptr = rnr->stack.ptr + rnr->stack.len;
+	Object *func = dynarray_pop(&rnr->stack);
 
 	Object *result;
 	bool ok = funcobj_call(rnr->interp, func, argptr, nargs, &result);
@@ -100,21 +71,21 @@ static bool call_function(struct Runner *rnr, bool ret, size_t nargs)
 
 	if(!ok) return false;
 
-	// it will fit because func (and 0 or more args) came from the stack
-	if(result) rnr->stack[rnr->stacklen++] = result;
+	if(result)
+		dynarray_push_itwillfit(&rnr->stack, result);
 	return true;
 }
 
 static bool integer_binary_operation(struct Runner *rnr, enum CodeOpKind bok)
 {
 	DEBUG_PRINTF("integer binary op\n");
-	assert(rnr->stacklen >= 2);
+	assert(rnr->stack.len >= 2);
 	// y before x because the stack is like this:
 	//
 	//   |---|---|---|---|---|---|---|---|---|
 	//   | stuff we don't care about | x | y |
-	Object *y = rnr->stack[--rnr->stacklen];
-	Object *x = rnr->stack[--rnr->stacklen];
+	Object *y = dynarray_pop(&rnr->stack);
+	Object *x = dynarray_pop(&rnr->stack);
 	Object *res;
 
 	switch(bok) {
@@ -128,8 +99,7 @@ static bool integer_binary_operation(struct Runner *rnr, enum CodeOpKind bok)
 
 	if(!res)
 		return false;
-
-	rnr->stack[rnr->stacklen++] = res;   // it will fit because x and y came from the stack
+	dynarray_push_itwillfit(&rnr->stack, res);
 	return true;
 }
 
@@ -152,12 +122,12 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	{
 		DEBUG_PRINTF("setvar level=%d index=%d\n",
 			(int)op->data.var.level, (int)op->data.var.index);
-		assert(rnr->stacklen >= 1);
+		assert(rnr->stack.len >= 1);
 		Object **ptr = get_var_pointer(rnr, op);
 		if(*ptr)
 			OBJECT_DECREF(*ptr);
 
-		*ptr = rnr->stack[--rnr->stacklen];
+		*ptr = dynarray_pop(&rnr->stack);
 		assert(*ptr);
 		break;
 	}
@@ -196,8 +166,8 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	case CODE_BOOLNEG:
 	{
 		DEBUG_PRINTF("boolneg\n");
-		assert(rnr->stacklen >= 1);
-		Object **ptr = &rnr->stack[rnr->stacklen - 1];
+		assert(rnr->stack.len >= 1);
+		Object **ptr = &rnr->stack.ptr[rnr->stack.len - 1];
 		Object *old = *ptr;
 		*ptr = boolobj_neg(old);
 		OBJECT_DECREF(old);
@@ -207,8 +177,8 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	case CODE_JUMPIF:
 	{
 		DEBUG_PRINTF("jumpif\n");
-		assert(rnr->stacklen >= 1);
-		Object *obj = rnr->stack[--rnr->stacklen];
+		assert(rnr->stack.len >= 1);
+		Object *obj = dynarray_pop(&rnr->stack);
 		bool b = boolobj_asda2c(obj);
 		OBJECT_DECREF(obj);
 
@@ -232,9 +202,9 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	case CODE_GETMETHOD:
 	{
 		DEBUG_PRINTF("getmethod\n");
-		assert(rnr->stacklen >= 1);
+		assert(rnr->stack.len >= 1);
 		struct CodeLookupMethodData data = op->data.lookupmethod;
-		Object **ptr = &rnr->stack[rnr->stacklen - 1];
+		Object **ptr = &rnr->stack.ptr[rnr->stack.len - 1];
 		Object *parti = partialfunc_create(rnr->interp, data.type->methods[data.index], ptr, 1);
 		if(!parti)
 			return RUNNER_ERROR;
@@ -247,17 +217,17 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	case CODE_STRJOIN:
 	{
 		DEBUG_PRINTF("string join of %zu strings\n", (size_t)op->data.strjoin_nstrs);
-		assert(rnr->stacklen >= op->data.strjoin_nstrs);
-		Object **ptr = rnr->stack + rnr->stacklen - op->data.strjoin_nstrs;
+		assert(rnr->stack.len >= op->data.strjoin_nstrs);
+		Object **ptr = rnr->stack.ptr + rnr->stack.len - op->data.strjoin_nstrs;
 		Object *res = stringobj_join(rnr->interp, ptr, op->data.strjoin_nstrs);
 		if(!res)
 			return RUNNER_ERROR;
 
-		for (; ptr < rnr->stack + rnr->stacklen; ptr++)
+		for (; ptr < rnr->stack.ptr + rnr->stack.len; ptr++)
 			OBJECT_DECREF(*ptr);
 
-		rnr->stacklen -= op->data.strjoin_nstrs;
-		bool ok = push2stack(rnr, res);   // grow the stack if this was a join of 0 strings (result is empty string)
+		rnr->stack.len -= op->data.strjoin_nstrs;
+		bool ok = push2stack(rnr, res);   // grows the stack if this was a join of 0 strings (result is empty string)
 		OBJECT_DECREF(res);
 
 		if (!ok)
@@ -268,8 +238,8 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	case CODE_POP1:
 	{
 		DEBUG_PRINTF("pop 1\n");
-		assert(rnr->stacklen >= 1);
-		Object *obj = rnr->stack[--rnr->stacklen];
+		assert(rnr->stack.len >= 1);
+		Object *obj = dynarray_pop(&rnr->stack);
 		OBJECT_DECREF(obj);
 		break;
 	}
@@ -291,7 +261,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		break;
 	case CODE_VALUERETURN:
 		DEBUG_PRINTF("value return\n");
-		rnr->retval = rnr->stack[--rnr->stacklen];
+		rnr->retval = dynarray_pop(&rnr->stack);
 		assert(rnr->retval);
 		ret = RUNNER_VALUERETURN;
 		break;
@@ -311,7 +281,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 
 	case CODE_INT_NEG:
 	{
-		Object **ptr = &rnr->stack[rnr->stacklen - 1];
+		Object **ptr = &rnr->stack.ptr[rnr->stack.len - 1];
 		Object *obj = intobj_neg(rnr->interp, *ptr);
 		if(!obj)
 			return RUNNER_ERROR;
@@ -322,9 +292,10 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 
 	case CODE_INT_EQ:
 	{
-		Object *x = rnr->stack[--rnr->stacklen];
-		Object *y = rnr->stack[--rnr->stacklen];
-		rnr->stack[rnr->stacklen++] = boolobj_c2asda(intobj_cmp(x, y) == 0);
+		Object *x = dynarray_pop(&rnr->stack);
+		Object *y = dynarray_pop(&rnr->stack);
+		Object *res = boolobj_c2asda(intobj_cmp(x, y) == 0);
+		dynarray_push(rnr->interp, &rnr->stack, res);
 		OBJECT_DECREF(x);
 		OBJECT_DECREF(y);
 	}

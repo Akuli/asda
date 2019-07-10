@@ -4,8 +4,7 @@
 #include "util.h"
 
 
-// needed for passing it to a function
-typedef DynArray(int) DynArrayOfInt;
+typedef DynArray(int) DynArrayOfInt;   // needed for passing it to a function
 
 static void check_12745(DynArrayOfInt da)
 {
@@ -28,11 +27,11 @@ TEST(dynarray_basic_stuff)
 	int *nullptr = NULL;           // needed to avoid a "clever" gcc warning and to annoy C++ people
 
 	bool ok;
-	ok = dynarray_push(&da, 1); assert(ok);
-	ok = dynarray_push(&da, 2); assert(ok);
-	ok = dynarray_push(&da, 3); assert(ok);
-	ok = dynarray_pushmany(&da, nullptr, 0); assert(ok);
-	ok = dynarray_pushmany(&da, fourfivesix, 2); assert(ok);
+	ok = dynarray_push(interp, &da, 1); assert(ok);
+	ok = dynarray_push(interp, &da, 2); assert(ok);
+	ok = dynarray_push(interp, &da, 3); assert(ok);
+	ok = dynarray_pushmany(interp, &da, nullptr, 0); assert(ok);
+	ok = dynarray_pushmany(interp, &da, fourfivesix, 2); assert(ok);
 
 	da.ptr[2] = 7;
 	check_12745(da);
@@ -60,7 +59,7 @@ TEST(dynarray_zero_size)
 	assert(da.len == 0);
 	assert(da.ptr == NULL);
 
-	bool ok = dynarray_alloc(&da, 0);
+	bool ok = dynarray_alloc(interp, &da, 0);
 	assert(ok);
 	assert(da.alloc == 0);
 	assert(da.len == 0);
