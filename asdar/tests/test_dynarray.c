@@ -70,3 +70,19 @@ TEST(dynarray_zero_size)
 	assert(da.len == 0);
 	assert(da.ptr == NULL);
 }
+
+TEST(dynarray_type_casts_nicely)
+{
+	DynArray(char) da;
+	dynarray_init(&da);
+	bool ok =
+		dynarray_push(interp, &da, 'a') &&
+		dynarray_push(interp, &da, (long long)'s') &&
+		dynarray_push(interp, &da, (unsigned long long)'d') &&
+		dynarray_push(interp, &da, (unsigned char)'a') &&
+		dynarray_push(interp, &da, 0);
+	assert(ok);
+
+	assert_cstr_eq_cstr(da.ptr, "asda");
+	free(da.ptr);
+}
