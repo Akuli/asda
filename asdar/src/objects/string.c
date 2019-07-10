@@ -283,7 +283,10 @@ Object *stringobj_join(Interp *interp, Object *const *strs, size_t nstrs)
 		parts[i].val.bigconst = sd->val;
 		parts[i].len = sd->len;
 	}
-	return create_new_string_from_parts(interp, parts, nstrs);
+
+	Object *res = create_new_string_from_parts(interp, parts, nstrs);
+	free(parts);
+	return res;
 }
 
 
