@@ -48,9 +48,6 @@
 #define TYPEBYTE_FUNC 'f'
 #define TYPEBYTE_VOID 'v'
 
-// from the tables in ascii(7), we see that '!' is first printable ascii char and '~' is last
-#define is_printable_ascii(c) ('!' <= (c) && (c) <= '~')
-
 
 struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname)
 {
