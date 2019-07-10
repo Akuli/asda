@@ -8,13 +8,16 @@
 
 extern const struct Type funcobj_type;
 
+// returning functions set *result to their return value on success
+// non-returning functions set it to NULL on success
+// on failure, everything returns false and doesn't need to set *result
 typedef bool (*funcobj_cfunc)(Interp*, struct ObjData userdata, Object *const *args, size_t nargs, Object **result);
 
 // it is an implementation detail that this is here, don't rely on it
 // currently it is needed for FUNCOBJDATA_COMPILETIMECREATE macros
 struct FuncObjData {
 	funcobj_cfunc cfunc;
-	struct ObjData userdata;
+	struct ObjData userdata;   // for passing data to cfunc
 };
 
 #define FUNCOBJDATA_COMPILETIMECREATE(f) { .cfunc = f }
@@ -27,7 +30,7 @@ Object *funcobj_new(Interp *interp, funcobj_cfunc cfunc, struct ObjData userdata
 
 /** Call a FuncObj
  * Returns a boolean indicating success.
- * Sets `*result` to the result of the function on success
+ * On success, sets `*result` to the return value of the function, or NULL if it didn't return a value.
  */
 bool funcobj_call(Interp*, Object*, Object *const *args, size_t nargs, Object **result);
 

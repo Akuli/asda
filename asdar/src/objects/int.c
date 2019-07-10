@@ -273,15 +273,18 @@ Object *intobj_neg(Interp *interp, Object *x)
 	assert(x->type == &intobj_type);
 
 	struct IntData *data = x->data.val;
+	mpz_t res;
 
 	if (data->spilled) {
-		mpz_t res;
 		mpz_init(res);
 		mpz_neg(res, data->val.mpz);
-		return new_from_mpzt(interp, res);
-	} else {
-		return intobj_new_long(interp, -data->val.lon);   // FIXME: -LONG_MIN bug
 	}
+	else if (data->val.lon == LONG_MIN)
+		mpz_init_set_ui(res, NEGATIVE_LONG_TO_ULONG(LONG_MIN));
+	else
+		return intobj_new_long(interp, -data->val.lon);
+
+	return new_from_mpzt(interp, res);
 }
 
 
@@ -291,29 +294,28 @@ static Object *get_string_object(Interp *interp, Object *x)
 	assert(x->type == &intobj_type);
 	struct IntData *id = x->data.val;
 
-	if (!id->str) {
-		char *str;
+	if (id->str)
+		return id->str;
 
-		if (id->spilled) {
-			// +2 is explained in mpz_get_str docs
-			str = malloc(mpz_sizeinbase(id->val.mpz, 10) + 2);
-			if (!str) {
-				errobj_set_nomem(interp);
-				return NULL;
-			}
-			mpz_get_str(str, 10, id->val.mpz);
-		} else {
-			/* https://stackoverflow.com/questions/8257714/how-to-convert-an-int-to-string-in-c#comment45289620_8257728 */
-			int len = snprintf(NULL, 0, "%ld", id->val.lon);
-			assert(len > 0);
-			str = malloc(((size_t)len + 1) * sizeof(char));
-			sprintf(str, "%ld", id->val.lon);
+	char *str;
+	char buf[100];   // enough for a long
+
+	if (id->spilled) {
+		// +2 is explained in mpz_get_str docs
+		str = malloc(mpz_sizeinbase(id->val.mpz, 10) + 2);
+		if (!str) {
+			errobj_set_nomem(interp);
+			return NULL;
 		}
-
-		id->str = stringobj_new_utf8(interp, str, strlen(str));   // may be NULL
-		free(str);
+		mpz_get_str(str, 10, id->val.mpz);
+	} else {
+		sprintf(buf, "%ld", id->val.lon);
+		str = buf;
 	}
 
+	id->str = stringobj_new_utf8(interp, str, strlen(str));   // may be NULL
+	if (str != buf)
+		free(str);
 	return id->str;   // may be NULL
 }
 

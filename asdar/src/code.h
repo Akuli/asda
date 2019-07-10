@@ -42,7 +42,6 @@ struct Code {
 
 struct CodeVarData { uint8_t level; uint16_t index; };
 struct CodeLookupMethodData { const struct Type *type; uint16_t index; };
-struct CodeCreateFuncData { struct Code body; };
 
 typedef union {
 	struct CodeVarData var;
@@ -50,7 +49,7 @@ typedef union {
 	uint16_t jump_idx;
 	uint16_t strjoin_nstrs;
 	struct CodeLookupMethodData lookupmethod;
-	struct CodeCreateFuncData createfunc;
+	struct Code createfunc_code;
 	Object *obj;
 	Object **modmemberptr;
 } CodeData;

@@ -278,7 +278,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	case CODE_CREATEFUNC:
 	{
 		DEBUG_PRINTF("create func\n");
-		Object *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc.body);
+		Object *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc_code);
 		bool ok = push2stack(rnr, f);
 		OBJECT_DECREF(f);
 		if(!ok)

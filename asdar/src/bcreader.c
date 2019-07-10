@@ -359,7 +359,7 @@ static bool read_create_function(struct BcReader *bcr, struct CodeOp *res)
 		return false;
 	assert(yieldbyt == 0);   // TODO: support yielding
 
-	return read_body(bcr, &res->data.createfunc.body);
+	return read_body(bcr, &res->data.createfunc_code);
 }
 
 static Object **get_module_member_pointer(struct BcReader *bcr)
