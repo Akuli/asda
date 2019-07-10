@@ -187,28 +187,23 @@ static bool mul_would_overflow(long a, long b) {
 }
 
 // there is no mpz_add_si, mpz_sub_si, mpz_mul_si
-static void add_signedlong_mpz(mpz_t res, long val)
+static void add_signedlong_mpz(mpz_t res, const mpz_t x, long y)   // x + y
 {
-	if (val >= 0)
-		mpz_add_ui(res, res, (unsigned long)val);
-	else
-		mpz_sub_ui(res, res, NEGATIVE_LONG_TO_ULONG(val));
+	if (y >= 0) mpz_add_ui(res, x, (unsigned long)y);
+	else mpz_sub_ui(res, x, NEGATIVE_LONG_TO_ULONG(y));
 }
 
-static void sub_signedlong_mpz(mpz_t res, long val)
+static void sub_signedlong_mpz(mpz_t res, const mpz_t x, long y)   // x - y
 {
-	if (val >= 0)
-		mpz_sub_ui(res, res, (unsigned long)val);
-	else
-		mpz_add_ui(res, res, NEGATIVE_LONG_TO_ULONG(val));
+	if (y >= 0) mpz_sub_ui(res, x, (unsigned long)y);
+	else mpz_add_ui(res, x, NEGATIVE_LONG_TO_ULONG(y));
 }
 
-static void mul_signedlong_mpz(mpz_t res, long val)
+static void mul_signedlong_mpz(mpz_t res, const mpz_t x, long y)   // x * y
 {
-	if (val >= 0) {
-		mpz_mul_ui(res, res, (unsigned long)val);
-	} else {
-		mpz_mul_ui(res, res, NEGATIVE_LONG_TO_ULONG(val));
+	if (y >= 0) mpz_mul_ui(res, x, (unsigned long)y);
+	else {
+		mpz_mul_ui(res, x, NEGATIVE_LONG_TO_ULONG(y));
 		mpz_neg(res, res);
 	}
 }
@@ -219,46 +214,59 @@ static long mul_longs(long x, long y) { return x * y; }
 
 static Object *do_some_operation(Interp *interp, Object *x, Object *y,
 	void (*mpzmpzfunc)(mpz_t, const mpz_t, const mpz_t),
-	void (*mpzlongfunc)(mpz_t, long),
+	void (*mpzlongfunc)(mpz_t, const mpz_t, long),
 	long (*longlongfunc)(long, long),
-	bool (*overflowfunc)(long, long))
+	bool (*overflowfunc)(long, long),
+	void (*commutefunc)(mpz_t, const mpz_t)   // applying this to 'x OP y' gives 'y OP x'
+)
 {
 	assert(x->type == &intobj_type);
 	assert(y->type == &intobj_type);
 
 	struct IntData *x_data = (struct IntData*) x->data.val;
 	struct IntData *y_data = (struct IntData*) y->data.val;
-
-	if (!x_data->spilled && !y_data->spilled && !overflowfunc(x_data->val.lon, y_data->val.lon))
-		return intobj_new_long(interp, longlongfunc(x_data->val.lon, y_data->val.lon));
-
 	mpz_t res;
-	mpz_init(res);
 
-	if (x_data->spilled)
-		mpzmpzfunc(res, res, x_data->val.mpz);
-	else
-		mpzlongfunc(res, x_data->val.lon);
+	if (!x_data->spilled && !y_data->spilled) {
+		if (!overflowfunc(x_data->val.lon, y_data->val.lon))
+			return intobj_new_long(interp, longlongfunc(x_data->val.lon, y_data->val.lon));
 
-	if (y_data->spilled)
-		mpzmpzfunc(res, res, y_data->val.mpz);
-	else
-		mpzlongfunc(res, y_data->val.lon);
+		mpz_init_set_si(res, x_data->val.lon);
+		mpzlongfunc(res, res, y_data->val.lon);
+	} else {
+		mpz_init(res);
+
+		if (x_data->spilled && y_data->spilled)
+			mpzmpzfunc(res, x_data->val.mpz, y_data->val.mpz);
+
+		else if (x_data->spilled && !y_data->spilled)
+			mpzlongfunc(res, x_data->val.mpz, y_data->val.lon);
+
+		else if (!x_data->spilled && y_data->spilled) {
+			mpzlongfunc(res, y_data->val.mpz, x_data->val.lon);
+			if (commutefunc)
+				commutefunc(res, res);
+		}
+
+		else
+			assert(0);
+	}
 
 	return new_from_mpzt(interp, res);
 }
 
 Object *intobj_add(Interp *interp, Object *x, Object *y) {
-	return do_some_operation(interp, x, y, mpz_add, add_signedlong_mpz, add_longs, add_would_overflow);
+	return do_some_operation(interp, x, y, mpz_add, add_signedlong_mpz, add_longs, add_would_overflow, NULL);
 }
 
 Object *intobj_sub(Interp *interp, Object *x, Object *y) {
-	return do_some_operation(interp, x, y, mpz_sub, sub_signedlong_mpz, sub_longs, sub_would_overflow);
+	return do_some_operation(interp, x, y, mpz_sub, sub_signedlong_mpz, sub_longs, sub_would_overflow, mpz_neg);
 }
 
 Object *intobj_mul(Interp *interp, Object *x, Object *y) {
-	return do_some_operation(interp, x, y, mpz_mul, mul_signedlong_mpz, mul_longs, mul_would_overflow);
+	return do_some_operation(interp, x, y, mpz_mul, mul_signedlong_mpz, mul_longs, mul_would_overflow, NULL);
 }
+
 
 Object *intobj_neg(Interp *interp, Object *x)
 {
