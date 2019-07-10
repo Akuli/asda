@@ -21,6 +21,8 @@ it works because mpz_t is an array of 1 element
 I don't know whether that is documented
 */
 
+// TODO: this code has a LOT of ifs... add tests for most things
+
 
 struct IntData {
 	/** Represents if the IntData has "spilled", i.e. > LONG_MAX || LONG_MIN */
