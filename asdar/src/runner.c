@@ -14,12 +14,11 @@
 #include "objects/scope.h"
 #include "objects/string.h"
 
-#ifdef NDEBUG
-	#define DEBUG_PRINTF(...) ((void)0)
-#else
-	#include <stdio.h>
-	#define DEBUG_PRINTF(...) printf(__VA_ARGS__)
-#endif
+/*
+#include <stdio.h>
+#define DEBUG_PRINTF(...) printf(__VA_ARGS__)
+*/
+#define DEBUG_PRINTF(...) ((void)0)
 
 void runner_init(struct Runner *rnr, Interp *interp, Object *scope, struct Code code)
 {
