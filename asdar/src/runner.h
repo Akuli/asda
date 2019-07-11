@@ -2,6 +2,7 @@
 #define RUNNER_H
 
 #include <stddef.h>
+#include "dynarray.h"
 #include "code.h"
 #include "interp.h"
 #include "objtyp.h"
@@ -10,8 +11,7 @@
 struct Runner {
 	Interp *interp;
 	Object *scope;
-	Object **stack;
-	size_t stacklen, stacksz;
+	DynArray(Object*) stack;
 	size_t opidx;
 	struct Code code;
 	Object *retval;  // returned value, NOT an implementation detail unlike everything else

@@ -3,8 +3,9 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include "code.h"
 #include "builtin.h"
+#include "code.h"
+#include "dynarray.h"
 #include "interp.h"
 #include "module.h"
 #include "objtyp.h"
@@ -446,10 +447,8 @@ static bool read_body(struct BcReader *bcr, struct Code *code)
 	if (!read_uint16(bcr, &code->nlocalvars))
 		return false;
 
-	code->nops = 0;
-
-	struct CodeOp *arr = NULL;
-	size_t capacity = 0;
+	DynArray(struct CodeOp) ops;
+	dynarray_init(&ops);
 
 	while(true) {
 		unsigned char ob;
@@ -464,34 +463,21 @@ static bool read_body(struct BcReader *bcr, struct Code *code)
 
 		if (!read_op(bcr, ob, &val))
 			goto error;
-
-		if (code->nops >= capacity) {
-			capacity = capacity == 0 ? 1 : capacity * 2;
-
-			void *tmp = realloc(arr, capacity * sizeof *arr);
-			if (!tmp) {
-				codeop_destroy(&val);
-				errobj_set_nomem(bcr->interp);
-				goto error;
-			}
-			arr = tmp;
+		if (!dynarray_push(bcr->interp, &ops, val)) {
+			codeop_destroy(&val);
+			goto error;
 		}
-
-		arr[code->nops++] = val;
 	}
 
-	/* shrink arr to fit */
-	arr = realloc(arr, code->nops * sizeof *arr);
-	assert(arr);   // failing shrink would make no sense
-
-	code->ops = arr;
+	dynarray_shrink2fit(&ops);
+	code->ops = ops.ptr;
+	code->nops = ops.len;
 	return true;
 
 error:
-	for (size_t i = 0; i < code->nops; ++i) {
-		codeop_destroy(&arr[i]);
-	}
-	free(arr);
+	for (size_t i = 0; i < ops.len; ++i)
+		codeop_destroy(&ops.ptr[i]);
+	free(ops.ptr);
 	return false;
 }
 

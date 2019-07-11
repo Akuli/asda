@@ -17,9 +17,7 @@ bool interp_init(Interp *interp, const char *argv0)
 	// not strictly standard compliant but simpler than a loop
 	memset(interp->intcache, 0, sizeof(interp->intcache));
 
-	if (!( interp->builtinscope = scopeobj_newglobal(interp) ))
-		return false;
-	return true;
+	return !!( interp->builtinscope = scopeobj_newglobal(interp) );
 }
 
 void interp_destroy(Interp *interp)
