@@ -96,6 +96,7 @@ this:
 
 ```c
 #include <stdbool.h>
+#include "objtyp.h"
 #include "objects/bool.h"
 
 void do_something(void)
