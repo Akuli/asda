@@ -52,7 +52,7 @@ static bool push2stack(struct Runner *rnr, struct Object *obj)
 static struct Object **get_var_pointer(struct Runner *rnr, const struct CodeOp *op)
 {
 	struct ScopeObject *scope = scopeobj_getforlevel(rnr->scope, op->data.var.level);
-	return scopeobj_getlocalvarsptr(scope) + op->data.var.index;
+	return scope->locals + op->data.var.index;
 }
 
 static bool call_function(struct Runner *rnr, bool ret, size_t nargs)
@@ -167,7 +167,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		assert(rnr->stack.len >= 1);
 		struct BoolObject **ptr = (struct BoolObject **)&rnr->stack.ptr[rnr->stack.len - 1];
 		struct BoolObject *old = *ptr;
-		*ptr = boolobj_neg(old);
+		*ptr = boolobj_c2asda(!boolobj_asda2c(old));
 		OBJECT_DECREF(old);
 		break;
 	}

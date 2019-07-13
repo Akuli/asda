@@ -11,7 +11,8 @@ extern const struct Type funcobj_type;
 // returning functions set *result to their return value on success
 // non-returning functions set it to NULL on success
 // on failure, everything returns false and doesn't need to set *result
-typedef bool (*funcobj_cfunc)(Interp*, struct ObjData userdata, struct Object *const *args, size_t nargs, struct Object **result);
+typedef bool (*funcobj_cfunc)(Interp*, struct ObjData userdata,
+	struct Object *const *args, size_t nargs, struct Object **result);
 
 struct FuncObject {
 	OBJECT_HEAD
@@ -31,9 +32,7 @@ struct FuncObject *funcobj_new(Interp *interp, funcobj_cfunc cfunc, struct ObjDa
  * Returns a boolean indicating success.
  * On success, sets `*result` to the return value of the function, or NULL if it didn't return a value.
  */
-bool funcobj_call(
-	Interp *interp, struct FuncObject *f,
-	struct Object *const *args, size_t nargs,
-	struct Object **result);
+bool funcobj_call(Interp *interp, struct FuncObject *f,
+	struct Object *const *args, size_t nargs, struct Object **result);
 
 #endif // OBJECTS_FUNC_H

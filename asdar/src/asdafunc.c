@@ -33,7 +33,7 @@ run(Interp *interp, const struct AsdaFunctionData *afd, struct Runner *rnr, stru
 		return RUNNER_ERROR;
 
 	assert(nargs <= afd->code.nlocalvars);
-	memcpy(scopeobj_getlocalvarsptr(sco), args, sizeof(args[0]) * nargs);
+	memcpy(sco->locals, args, sizeof(args[0]) * nargs);
 	for (size_t i = 0; i < nargs; i++)
 		OBJECT_INCREF(args[i]);
 

@@ -372,7 +372,7 @@ static struct Object **get_module_member_pointer(struct BcReader *bcr)
 	// TODO: call module_get less times?
 	const struct Module *mod = module_get(bcr->interp, bcr->imports[modidx]);
 	assert(mod);
-	return scopeobj_getlocalvarsptr(mod->scope) + membidx;
+	return mod->scope->locals + membidx;
 }
 
 static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *res)

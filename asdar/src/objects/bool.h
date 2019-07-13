@@ -18,9 +18,4 @@ struct BoolObject *boolobj_c2asda(bool cbool);
 // asserts that the object is boolobj_true or boolobj_false
 bool boolobj_asda2c(struct BoolObject *asdabool);
 
-/** Negate a Boolean
- * Returns a new reference
- */
-struct BoolObject *boolobj_neg(struct BoolObject *obj);
-
 #endif   // OBJECTS_BOOL_H

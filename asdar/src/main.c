@@ -15,8 +15,8 @@
 
 static void print_error(Interp *interp)
 {
-	struct StringObject *strobj = errobj_getstring(interp->err);
-	assert(strobj);   // that cannot fail
+	struct StringObject *strobj = interp->err->msgstr;
+	OBJECT_INCREF(strobj);
 	OBJECT_DECREF(interp->err);
 	interp->err = NULL;
 

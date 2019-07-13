@@ -42,9 +42,5 @@ example:
 */
 void errobj_set_oserr(Interp *interp, const char *fmt, ...);
 
-// returns String object as a new reference, never fails
-// TODO: get rid of this and access msgstr directly instead
-struct StringObject *errobj_getstring(struct ErrObject *err);
-
 
 #endif   // OBJECTS_ERR_H

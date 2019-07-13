@@ -31,7 +31,4 @@ struct ScopeObject *scopeobj_newsub(Interp *interp, struct ScopeObject *parent, 
 // does NOT return a new reference
 struct ScopeObject *scopeobj_getforlevel(struct ScopeObject *scope, size_t level);
 
-// TODO: delete this and just access ->locals directly
-struct Object **scopeobj_getlocalvarsptr(struct ScopeObject *scope);
-
 #endif   // OBJECTS_SCOPE_H

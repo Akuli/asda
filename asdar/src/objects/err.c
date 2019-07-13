@@ -87,9 +87,3 @@ void errobj_set_oserr(Interp *interp, const char *fmt, ...)
 		set_from_string_obj(interp, &errobj_type_os, str);
 	OBJECT_DECREF(str);
 }
-
-struct StringObject *errobj_getstring(struct ErrObject *err)
-{
-	OBJECT_INCREF(err->msgstr);
-	return err->msgstr;
-}

@@ -89,9 +89,4 @@ struct ScopeObject *scopeobj_getforlevel(struct ScopeObject *scope, size_t level
 	return (level == scope->nparents) ? scope : scope->parents[level];
 }
 
-struct Object **scopeobj_getlocalvarsptr(struct ScopeObject *scope)
-{
-	return scope->locals;
-}
-
 const struct Type scopeobj_type = { .methods = NULL, .nmethods = 0 };

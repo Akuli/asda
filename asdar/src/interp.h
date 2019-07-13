@@ -1,8 +1,6 @@
 #ifndef INTERP_H
 #define INTERP_H
 
-// errno is used in the macros, iwyu doesn't know that
-#include <errno.h>   // IWYU pragma: keep
 #include <stdbool.h>
 
 // forward declarations needed because many things need an Interp
