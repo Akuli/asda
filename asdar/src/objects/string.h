@@ -10,7 +10,7 @@
 
 extern const struct Type stringobj_type;
 
-struct StringObject {
+typedef struct StringObject {
 	OBJECT_HEAD
 
 	uint32_t *val;
@@ -19,7 +19,7 @@ struct StringObject {
 	// use stringobj_toutf8() instead of accessing these directly
 	char *utf8cache;      // NULL if not cached yet
 	size_t utf8cachelen;
-};
+} StringObject;
 
 // this is kind of painful to use
 // you need to do e.g. STRINGOBJDATA_COMPILETIMECREATE('h','e','l','l','o')
@@ -32,13 +32,13 @@ struct StringObject {
 )
 
 // creates a copy of the val and uses that
-struct StringObject *stringobj_new(Interp *interp, const uint32_t *val, size_t len);
+StringObject *stringobj_new(Interp *interp, const uint32_t *val, size_t len);
 
 // the val will be freed (if error then immediately, otherwise whenever the object is destroyed)
-struct StringObject *stringobj_new_nocpy(Interp *interp, uint32_t *val, size_t len);
+StringObject *stringobj_new_nocpy(Interp *interp, uint32_t *val, size_t len);
 
 // if your utf8 is 0 terminated, pass strlen(utf8) for utflen
-struct StringObject *stringobj_new_utf8(Interp *interp, const char *utf, size_t utflen);
+StringObject *stringobj_new_utf8(Interp *interp, const char *utf, size_t utflen);
 
 /*
 printf-like string creating
@@ -49,18 +49,18 @@ format string must not come from user input:
 
 here is spec:
 
-	fmt part  argument type         description
-	========  =============         ===========
-	%s        const char *          \0 terminated utf-8 string
-	%d        int                   base 10
-	%zu       size_t                base 10
-	%S        struct StringObject*  string object
-	%U        uint32_t              Unicode code point, e.g. "U+007A 'z'" for (uint32_t)'z'
-	%B        unsigned char         byte with non-whitespace ascii character if any, e.g. "0x01" or "0x7a 'z'"
-	%%        no argument           literal % character added to output
+	fmt part  argument type    description
+	========  =============    ===========
+	%s        const char *     \0 terminated utf-8 string
+	%d        int              base 10
+	%zu       size_t           base 10
+	%S        StringObject *   string object
+	%U        uint32_t         Unicode code point, e.g. "U+007A 'z'" for (uint32_t)'z'
+	%B        unsigned char    byte with non-whitespace ascii character if any, e.g. "0x01" or "0x7a 'z'"
+	%%        no argument      literal % character added to output
 */
-struct StringObject *stringobj_new_format(Interp *interp, const char *fmt, ...);
-struct StringObject *stringobj_new_vformat(Interp *interp, const char *fmt, va_list ap);
+StringObject *stringobj_new_format(Interp *interp, const char *fmt, ...);
+StringObject *stringobj_new_vformat(Interp *interp, const char *fmt, va_list ap);
 
 /*
 behaves like utf8_encode
@@ -69,9 +69,9 @@ DON'T FREE the val
 note: you need to change this to take an interp as argument if if you add
 strings that have interp==NULL (i.e. strings created at compile time)
 */
-bool stringobj_toutf8(struct StringObject *obj, const char **val, size_t *len);
+bool stringobj_toutf8(StringObject *obj, const char **val, size_t *len);
 
 // joins all da strings
-struct StringObject *stringobj_join(Interp *interp, struct StringObject *const *strs, size_t nstrs);
+StringObject *stringobj_join(Interp *interp, StringObject *const *strs, size_t nstrs);
 
 #endif   // OBJECTS_STRING_H

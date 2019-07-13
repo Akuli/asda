@@ -6,14 +6,15 @@
 #include "code.h"
 #include "interp.h"
 #include "objtyp.h"
+#include "objects/scope.h"
 
 struct Runner {
-	struct Object *retval;
+	Object *retval;
 
 	// don't access rest of these directly
 	Interp *interp;
-	struct ScopeObject *scope;
-	DynArray(struct Object*) stack;
+	ScopeObject *scope;
+	DynArray(Object*) stack;
 	size_t opidx;
 	struct Code code;
 };
@@ -21,7 +22,7 @@ struct Runner {
 // never fails
 // increfs the scope as needed
 // never frees the bc
-void runner_init(struct Runner *rnr, Interp *interp, struct ScopeObject *scope, struct Code code);
+void runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, struct Code code);
 
 // never fails
 void runner_free(const struct Runner *rnr);

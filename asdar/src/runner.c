@@ -21,7 +21,7 @@
 */
 #define DEBUG_PRINTF(...) ((void)0)
 
-void runner_init(struct Runner *rnr, Interp *interp, struct ScopeObject *scope, struct Code code)
+void runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, struct Code code)
 {
 	rnr->interp = interp;
 	rnr->scope = scope;
@@ -41,7 +41,7 @@ void runner_free(const struct Runner *rnr)
 	// leave rnr->retval untouched, caller of runner_run() should handle its decreffing
 }
 
-static bool push2stack(struct Runner *rnr, struct Object *obj)
+static bool push2stack(struct Runner *rnr, Object *obj)
 {
 	if (!dynarray_push(rnr->interp, &rnr->stack, obj))
 		return false;
@@ -49,9 +49,9 @@ static bool push2stack(struct Runner *rnr, struct Object *obj)
 	return true;
 }
 
-static struct Object **get_var_pointer(struct Runner *rnr, const struct CodeOp *op)
+static Object **get_var_pointer(struct Runner *rnr, const struct CodeOp *op)
 {
-	struct ScopeObject *scope = scopeobj_getforlevel(rnr->scope, op->data.var.level);
+	ScopeObject *scope = scopeobj_getforlevel(rnr->scope, op->data.var.level);
 	return scope->locals + op->data.var.index;
 }
 
@@ -60,10 +60,10 @@ static bool call_function(struct Runner *rnr, bool ret, size_t nargs)
 	DEBUG_PRINTF("callfunc ret=%s nargs=%zu\n", ret?"true":"false", nargs);
 	assert(rnr->stack.len >= nargs + 1);
 	rnr->stack.len -= nargs;
-	struct Object **argptr = rnr->stack.ptr + rnr->stack.len;
-	struct FuncObject *func = (struct FuncObject *)dynarray_pop(&rnr->stack);
+	Object **argptr = rnr->stack.ptr + rnr->stack.len;
+	FuncObject *func = (FuncObject *)dynarray_pop(&rnr->stack);
 
-	struct Object *result;
+	Object *result;
 	bool ok = funcobj_call(rnr->interp, func, argptr, nargs, &result);
 
 	OBJECT_DECREF(func);
@@ -82,9 +82,9 @@ static bool integer_binary_operation(struct Runner *rnr, enum CodeOpKind bok)
 	//
 	//   |---|---|---|---|---|---|---|---|---|
 	//   | stuff we don't care about | x | y |
-	struct IntObject *y = (struct IntObject *)dynarray_pop(&rnr->stack);
-	struct IntObject *x = (struct IntObject *)dynarray_pop(&rnr->stack);
-	struct IntObject *res;
+	IntObject *y = (IntObject *)dynarray_pop(&rnr->stack);
+	IntObject *x = (IntObject *)dynarray_pop(&rnr->stack);
+	IntObject *res;
 
 	switch(bok) {
 		case CODE_INT_ADD: res = intobj_add(rnr->interp, x, y); break;
@@ -97,7 +97,7 @@ static bool integer_binary_operation(struct Runner *rnr, enum CodeOpKind bok)
 
 	if(!res)
 		return false;
-	dynarray_push_itwillfit(&rnr->stack, (struct Object*)res);
+	dynarray_push_itwillfit(&rnr->stack, (Object*)res);
 	return true;
 }
 
@@ -121,7 +121,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		DEBUG_PRINTF("setvar level=%d index=%d\n",
 			(int)op->data.var.level, (int)op->data.var.index);
 		assert(rnr->stack.len >= 1);
-		struct Object **ptr = get_var_pointer(rnr, op);
+		Object **ptr = get_var_pointer(rnr, op);
 		if(*ptr)
 			OBJECT_DECREF(*ptr);
 
@@ -134,7 +134,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	{
 		DEBUG_PRINTF("getvar level=%d index=%d\n",
 			(int)op->data.var.level, (int)op->data.var.index);
-		struct Object **ptr = get_var_pointer(rnr, op);
+		Object **ptr = get_var_pointer(rnr, op);
 		if(!*ptr) {
 			// TODO: include variable name here somehow
 			errobj_set(rnr->interp, &errobj_type_variable, "value of a variable hasn't been set");
@@ -150,7 +150,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	{
 		DEBUG_PRINTF("getfrommodule: pointer = %p, current value = %p\n",
 			(void*)op->data.modmemberptr, (void*)*op->data.modmemberptr);
-		struct Object *val = *op->data.modmemberptr;
+		Object *val = *op->data.modmemberptr;
 		if (!val) {
 			errobj_set(rnr->interp, &errobj_type_variable, "value of an exported variable hasn't been set");
 			return RUNNER_ERROR;
@@ -165,8 +165,8 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	{
 		DEBUG_PRINTF("boolneg\n");
 		assert(rnr->stack.len >= 1);
-		struct BoolObject **ptr = (struct BoolObject **)&rnr->stack.ptr[rnr->stack.len - 1];
-		struct BoolObject *old = *ptr;
+		BoolObject **ptr = (BoolObject **)&rnr->stack.ptr[rnr->stack.len - 1];
+		BoolObject *old = *ptr;
 		*ptr = boolobj_c2asda(!boolobj_asda2c(old));
 		OBJECT_DECREF(old);
 		break;
@@ -176,7 +176,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	{
 		DEBUG_PRINTF("jumpif\n");
 		assert(rnr->stack.len >= 1);
-		struct BoolObject *obj = (struct BoolObject *)dynarray_pop(&rnr->stack);
+		BoolObject *obj = (BoolObject *)dynarray_pop(&rnr->stack);
 		bool b = boolobj_asda2c(obj);
 		OBJECT_DECREF(obj);
 
@@ -202,13 +202,13 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		DEBUG_PRINTF("getmethod\n");
 		assert(rnr->stack.len >= 1);
 		struct CodeLookupMethodData data = op->data.lookupmethod;
-		struct Object **ptr = &rnr->stack.ptr[rnr->stack.len - 1];
-		struct FuncObject *parti = partialfunc_create(rnr->interp, data.type->methods[data.index], ptr, 1);
+		Object **ptr = &rnr->stack.ptr[rnr->stack.len - 1];
+		FuncObject *parti = partialfunc_create(rnr->interp, data.type->methods[data.index], ptr, 1);
 		if(!parti)
 			return RUNNER_ERROR;
 
 		OBJECT_DECREF(*ptr);
-		*ptr = (struct Object *)parti;
+		*ptr = (Object *)parti;
 		break;
 	}
 
@@ -216,8 +216,8 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	{
 		DEBUG_PRINTF("string join of %zu strings\n", (size_t)op->data.strjoin_nstrs);
 		assert(rnr->stack.len >= op->data.strjoin_nstrs);
-		struct Object **ptr = rnr->stack.ptr + rnr->stack.len - op->data.strjoin_nstrs;
-		struct StringObject *res = stringobj_join(rnr->interp, (struct StringObject **)ptr, op->data.strjoin_nstrs);
+		Object **ptr = rnr->stack.ptr + rnr->stack.len - op->data.strjoin_nstrs;
+		StringObject *res = stringobj_join(rnr->interp, (StringObject **)ptr, op->data.strjoin_nstrs);
 		if(!res)
 			return RUNNER_ERROR;
 
@@ -225,7 +225,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 			OBJECT_DECREF(*ptr);
 
 		rnr->stack.len -= op->data.strjoin_nstrs;
-		bool ok = push2stack(rnr, (struct Object *)res);   // grows the stack if this was a join of 0 strings (result is empty string)
+		bool ok = push2stack(rnr, (Object *)res);   // grows the stack if this was a join of 0 strings (result is empty string)
 		OBJECT_DECREF(res);
 
 		if (!ok)
@@ -237,7 +237,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	{
 		DEBUG_PRINTF("pop 1\n");
 		assert(rnr->stack.len >= 1);
-		struct Object *obj = dynarray_pop(&rnr->stack);
+		Object *obj = dynarray_pop(&rnr->stack);
 		OBJECT_DECREF(obj);
 		break;
 	}
@@ -245,8 +245,8 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	case CODE_CREATEFUNC:
 	{
 		DEBUG_PRINTF("create func\n");
-		struct FuncObject *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc_code);
-		bool ok = push2stack(rnr, (struct Object *)f);
+		FuncObject *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc_code);
+		bool ok = push2stack(rnr, (Object *)f);
 		OBJECT_DECREF(f);
 		if(!ok)
 			return RUNNER_ERROR;
@@ -279,8 +279,8 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 
 	case CODE_INT_NEG:
 	{
-		struct IntObject **ptr = (struct IntObject **)&rnr->stack.ptr[rnr->stack.len - 1];
-		struct IntObject *obj = intobj_neg(rnr->interp, *ptr);
+		IntObject **ptr = (IntObject **)&rnr->stack.ptr[rnr->stack.len - 1];
+		IntObject *obj = intobj_neg(rnr->interp, *ptr);
 		if(!obj)
 			return RUNNER_ERROR;
 		OBJECT_DECREF(*ptr);
@@ -290,10 +290,10 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 
 	case CODE_INT_EQ:
 	{
-		struct IntObject *x = (struct IntObject *)dynarray_pop(&rnr->stack);
-		struct IntObject *y = (struct IntObject *)dynarray_pop(&rnr->stack);
-		struct BoolObject *res = boolobj_c2asda(intobj_cmp(x, y) == 0);
-		dynarray_push(rnr->interp, &rnr->stack, (struct Object*)res);
+		IntObject *x = (IntObject *)dynarray_pop(&rnr->stack);
+		IntObject *y = (IntObject *)dynarray_pop(&rnr->stack);
+		BoolObject *res = boolobj_c2asda(intobj_cmp(x, y) == 0);
+		dynarray_push(rnr->interp, &rnr->stack, (Object*)res);
 		OBJECT_DECREF(x);
 		OBJECT_DECREF(y);
 	}

@@ -8,10 +8,10 @@
 
 TEST(intobj_new_long_and_cmp)
 {
-	struct IntObject *minusone = intobj_new_long(interp, -1);
-	struct IntObject *twentyfour = intobj_new_long(interp, 24);   // https://www.youtube.com/watch?v=RkP_OGDCLY0
-	struct IntObject *forty = intobj_new_long(interp, 40);
-	struct IntObject *fourty = intobj_new_long(interp, 40);
+	IntObject *minusone = intobj_new_long(interp, -1);
+	IntObject *twentyfour = intobj_new_long(interp, 24);   // https://www.youtube.com/watch?v=RkP_OGDCLY0
+	IntObject *forty = intobj_new_long(interp, 40);
+	IntObject *fourty = intobj_new_long(interp, 40);
 
 	assert(intobj_cmp(forty, forty) == 0);
 	assert(intobj_cmp(forty, fourty) == 0);
@@ -38,13 +38,13 @@ TEST(intobj_new_long_and_cmp)
 
 TEST(intobj_addsubmulneg)
 {
-	struct IntObject *minustwo = intobj_new_long(interp, -2);
-	struct IntObject *seven = intobj_new_long(interp, 7);
+	IntObject *minustwo = intobj_new_long(interp, -2);
+	IntObject *seven = intobj_new_long(interp, 7);
 
-	struct IntObject *add = intobj_add(interp, minustwo, seven);
-	struct IntObject *sub = intobj_sub(interp, minustwo, seven);
-	struct IntObject *mul = intobj_mul(interp, minustwo, seven);
-	struct IntObject *neg = intobj_neg(interp, minustwo);
+	IntObject *add = intobj_add(interp, minustwo, seven);
+	IntObject *sub = intobj_sub(interp, minustwo, seven);
+	IntObject *mul = intobj_mul(interp, minustwo, seven);
+	IntObject *neg = intobj_neg(interp, minustwo);
 
 	OBJECT_DECREF(minustwo);
 	OBJECT_DECREF(seven);
@@ -63,8 +63,8 @@ TEST(intobj_addsubmulneg)
 TEST(intobj_new_bebytes)
 {
 	unsigned char byt[] = { 0x7, 0x5b, 0xcd, 0x15 };
-	struct IntObject *pos = intobj_new_bebytes(interp, byt, sizeof byt, false);
-	struct IntObject *neg = intobj_new_bebytes(interp, byt, sizeof byt, true);
+	IntObject *pos = intobj_new_bebytes(interp, byt, sizeof byt, false);
+	IntObject *neg = intobj_new_bebytes(interp, byt, sizeof byt, true);
 	assert(intobj_cmp_long(pos, 123456789L) == 0);
 	assert(intobj_cmp_long(neg, -123456789L) == 0);
 	OBJECT_DECREF(pos);

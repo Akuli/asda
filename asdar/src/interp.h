@@ -10,7 +10,7 @@ struct IntObject;
 struct ScopeObject;
 struct Module;
 
-typedef struct InterpStruct {
+typedef struct {
 	const char *argv0;
 	struct ScopeObject *builtinscope;
 

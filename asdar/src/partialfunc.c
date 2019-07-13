@@ -10,8 +10,8 @@
 #include "objects/func.h"
 
 struct PartialFuncData {
-	struct FuncObject *f;
-	struct Object **partial;
+	FuncObject *f;
+	Object **partial;
 	size_t npartial;
 };
 
@@ -30,11 +30,11 @@ static void partialfunc_data_destroy(void *vpdata, bool decrefrefs, bool freenon
 }
 
 static bool
-call_partial_func(Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs, struct Object **result)
+call_partial_func(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
 	const struct PartialFuncData *pfd = data.val;
 
-	struct Object **allargs;
+	Object **allargs;
 	if (nargs == 0) {
 		allargs = pfd->partial;
 	} else {
@@ -52,13 +52,12 @@ call_partial_func(Interp *interp, struct ObjData data, struct Object *const *arg
 	return ok;
 }
 
-static bool partialfunc_cfunc(Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs, struct Object **result)
+static bool partialfunc_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
 	return call_partial_func(interp, data, args, nargs, result);
 }
 
-struct FuncObject *
-partialfunc_create(Interp *interp, struct FuncObject *f, struct Object *const *partial, size_t npartial)
+FuncObject *partialfunc_create(Interp *interp, FuncObject *f, Object *const *partial, size_t npartial)
 {
 	if (npartial == 0) {
 		OBJECT_INCREF(f);
@@ -66,7 +65,7 @@ partialfunc_create(Interp *interp, struct FuncObject *f, struct Object *const *p
 	}
 
 	struct PartialFuncData *pfd = malloc(sizeof(*pfd));
-	struct Object **partialcp = malloc(sizeof(partial[0]) * npartial);
+	Object **partialcp = malloc(sizeof(partial[0]) * npartial);
 	if(!partialcp || !pfd) {
 		errobj_set_nomem(interp);
 		return NULL;

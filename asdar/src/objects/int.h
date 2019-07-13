@@ -8,10 +8,11 @@
 
 #include "../interp.h"
 #include "../objtyp.h"
+#include "string.h"
 
 extern const struct Type intobj_type;
 
-struct IntObject {
+typedef struct IntObject {
 	OBJECT_HEAD
 
 	// don't use any of this stuff outside int.c
@@ -25,25 +26,25 @@ struct IntObject {
 	} val;
 
 	// TODO: add a function that computes and returns this when needed
-	struct StringObject *str;   // string object, in base 10, NULL for not computed yet
-};
+	StringObject *str;   // string object, in base 10, NULL for not computed yet
+} IntObject;
 
 // returns a new integer from an arbitrarily long sequence of bytes (big-endian)
-struct IntObject *intobj_new_bebytes(Interp *interp, const unsigned char *seq, size_t len, bool negate);
+IntObject *intobj_new_bebytes(Interp *interp, const unsigned char *seq, size_t len, bool negate);
 
-struct IntObject *intobj_new_long(Interp *interp, long l);
+IntObject *intobj_new_long(Interp *interp, long l);
 
 // similar to most other cmp-suffixed c functions
 // returns 0 if a=b, negative if a<b, positive if a>b
-int intobj_cmp(struct IntObject *x, struct IntObject *y);
-int intobj_cmp_long(struct IntObject *x, long y);
+int intobj_cmp(IntObject *x, IntObject *y);
+int intobj_cmp_long(IntObject *x, long y);
 
-struct IntObject *intobj_add(Interp *interp, struct IntObject *x, struct IntObject *y);  // x+y
-struct IntObject *intobj_sub(Interp *interp, struct IntObject *x, struct IntObject *y);  // x-y
-struct IntObject *intobj_neg(Interp *interp, struct IntObject *x);                       // -x
-struct IntObject *intobj_mul(Interp *interp, struct IntObject *x, struct IntObject *y);  // x*y
+IntObject *intobj_add(Interp *interp, IntObject *x, IntObject *y);  // x+y
+IntObject *intobj_sub(Interp *interp, IntObject *x, IntObject *y);  // x-y
+IntObject *intobj_neg(Interp *interp, IntObject *x);                       // -x
+IntObject *intobj_mul(Interp *interp, IntObject *x, IntObject *y);  // x*y
 
 // returns NULL on error, return value is \0 terminated and must NOT be free()d
-const char *intobj_tocstr(Interp *interp, struct IntObject *x);
+const char *intobj_tocstr(Interp *interp, IntObject *x);
 
 #endif   // OBJECTS_INT_H

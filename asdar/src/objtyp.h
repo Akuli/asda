@@ -1,4 +1,47 @@
-// objects and types
+/* objects and types
+
+Here is a complete usage example (with includes omitted):
+
+	////////////////// objects/example.h ////////////////// 
+
+	extern const struct Type exampleobj_type;
+
+	typedef struct ExampleObject {
+		OBJECT_HEAD
+		char *customthing;
+	} ExampleObject;
+
+
+	////////////////// objects/example.c ////////////////// 
+
+	static void destroy_exampleobj(Object *obj, bool decrefrefs, bool freenonrefs)
+	{
+		ExampleObject *ex = obj;
+		if (freenonrefs)
+			free(ex->customthing);
+	}
+
+	ExampleObject *exampleobj_new(Interp *interp)
+	{
+		char *customthing = malloc(123);
+		if (!customthing) {
+			errobj_set_nomem(interp);
+			return NULL;
+		}
+		strcpy(customthing, "hello world");
+
+		ExampleObject *obj = object_new(interp, &exampleobj_type, destroy_exampleobj, sizeof(*obj));
+		if (!obj) {
+			free(customthing);
+			return NULL;
+		}
+
+		obj->customthing = customthing;
+		return obj;
+	}
+
+	const struct Type exampleobj_type = { .methods = NULL, .nmethods = 0 };
+*/
 
 #ifndef OBJTYP_H
 #define OBJTYP_H
@@ -24,17 +67,9 @@ struct Type {
 
 
 /*
-other objects are created like this:
-
-	struct SomeOtherObject {
-		OBJECT_HEAD
-		custom stuff here
-	};
-
-any object can be casted to 'struct Object'
-'struct Object' can be usually casted to some other more specific struct
-that depends on the type
-
+look up "common initial members" if you are not familiar with this technique
+any object can be casted to Object
+Object can be usually casted to something more specific depending on the type
 TODO: make the refcount atomic?
 */
 #define OBJECT_HEAD \
@@ -45,17 +80,17 @@ TODO: make the refcount atomic?
 	Interp *interp;              /* NULL for OBJECT_COMPILETIMECREATE objects */ \
 	struct Object *prev, *next;  /* a doubly-linked list so that removing objects is O(1) */
 
-struct Object { OBJECT_HEAD };
+typedef struct Object { OBJECT_HEAD } Object;
 
 /*
 Usage:
 
-	struct SomeObject obj = OBJECT_COMPILETIMECREATE(&someobj_type,
+	ExampleObject obj = OBJECT_COMPILETIMECREATE(&exampleobj_type,
 		.customfield = 1,
 		.anotherfield = 2,
 	);
 
-if you don't want to set any custom fields, do OBJECT_COMPILETIMECREATE(&someobj_type, 0)
+if you don't want to set any fields not in OBJECT_HEAD, do OBJECT_COMPILETIMECREATE(&exampleobj_type, 0)
 the 0 is needed because c standard
 */
 #define OBJECT_COMPILETIMECREATE(TYPE, ...) { \
@@ -68,57 +103,26 @@ the 0 is needed because c standard
 
 
 // decref evaluates the arg multiple times
+// incref doesn't, but i don't recommend relying on it, might change in the future
 #define OBJECT_INCREF(obj) (obj)->refcount++
 #define OBJECT_DECREF(obj) do{  \
 	if (--(obj)->refcount == 0) { \
 		/* this should never happen for statically allocated objects */ \
-		object_destroy((struct Object *)(obj), true, true); \
+		object_destroy((Object *)(obj), true, true); \
 	} \
 } while(0)
 
-/* returns an object with refcount 1, and all fields not in OBJECT_HEAD unset
-
-Example:
-
-	struct SomeObject {
-		OBJECT_HEAD
-		char *customthing;
-	};
-
-	static void destroy_someobj(struct Object *obj, bool decrefrefs, bool freenonrefs)
-	{
-		struct SomeObject *sobj = obj;
-		free(sobj->customthing);
-	}
-
-	struct SomeObject *someobj_new(Interp *interp)
-	{
-		char *customthing = malloc(123);
-		if (!customthing) {
-			errobj_set_nomem(interp);
-			return NULL;
-		}
-		strcpy(customthing, "hello world");
-
-		struct SomeObject *obj = object_new(interp, &someobj_type, destroy_someobj, sizeof(*obj));
-		if (!obj) {
-			free(customthing);
-			return NULL;
-		}
-
-		obj->customthing = customthing;
-		return obj;
-	}
-
+/*
+returns an object with refcount 1, and all fields not in OBJECT_HEAD unset
 destroy can be NULL
-return type declared as void* to avoid a cast after calling object_new()
+return type declared as void* to avoid a cast when calling object_new()
 */
 void *object_new(Interp *interp, const struct Type *type,
-	void (*destroy)(struct Object *obj, bool decrefrefs, bool freenonrefs),
+	void (*destroy)(Object *obj, bool decrefrefs, bool freenonrefs),
 	size_t sz);
 
 // use decref instead of calling this yourself
-void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs);
+void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs);
 
 extern const struct Type object_type;
 

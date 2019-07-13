@@ -11,7 +11,7 @@
 
 TEST(stringobj_toutf8)
 {
-	struct StringObject *obj = stringobj_new(interp, (uint32_t[]){'h','e','l','l','o'}, 5);
+	StringObject *obj = stringobj_new(interp, (uint32_t[]){'h','e','l','l','o'}, 5);
 	assert(obj);
 
 	const char *buf1, *buf2;
@@ -41,7 +41,7 @@ TEST(stringobj_new_different_ways)
 		for (size_t i = 0; cstr[i]; i++)
 			buf[i] = buf2[i] = (unsigned char)cstr[i];
 
-		struct StringObject *objs[] = {
+		StringObject *objs[] = {
 			stringobj_new_nocpy(interp, buf, strlen(cstr)),
 			stringobj_new(interp, buf2, strlen(cstr)),
 			stringobj_new_utf8(interp, cstr, strlen(cstr)),
@@ -56,11 +56,11 @@ TEST(stringobj_new_different_ways)
 	}
 }
 
-static struct StringObject hello = STRINGOBJ_COMPILETIMECREATE('h','e','l','l','o');
+static StringObject hello = STRINGOBJ_COMPILETIMECREATE('h','e','l','l','o');
 
 TEST(stringobj_data_compiletimecreate)
 {
-	struct StringObject *obj = stringobj_new_format(interp, "hello", sizeof("hello")-1);
+	StringObject *obj = stringobj_new_format(interp, "hello", sizeof("hello")-1);
 	assert(obj);
 
 	const char *chjunk;
@@ -69,7 +69,7 @@ TEST(stringobj_data_compiletimecreate)
 	assert(ok);
 
 	int i = 0;
-	for (struct StringObject *s = obj; i++ < 2; s = &hello) {
+	for (StringObject *s = obj; i++ < 2; s = &hello) {
 		assert(s->len == 5);
 		assert(s->val[0] == 'h');
 		assert(s->val[1] == 'e');
@@ -86,8 +86,8 @@ TEST(stringobj_data_compiletimecreate)
 
 TEST(stringobj_new_format)
 {
-	struct StringObject *b = stringobj_new_utf8(interp, "b", 1);
-	struct StringObject *str = stringobj_new_format(interp, "hello world, %s, %S, %U, %U, %B, %B, %d, %zu, %%",
+	StringObject *b = stringobj_new_utf8(interp, "b", 1);
+	StringObject *str = stringobj_new_format(interp, "hello world, %s, %S, %U, %U, %B, %B, %d, %zu, %%",
 		"a", b, (uint32_t)'c', (uint32_t)0xdddL, (unsigned char)'e', (unsigned char)0xf, -123, (size_t)456);
 
 	assert_strobj_eq_cstr(str, "hello world, a, b, U+0063 'c', U+0DDD, 0x65 'e', 0x0f, -123, 456, %");

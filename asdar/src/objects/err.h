@@ -12,14 +12,14 @@ extern const struct Type
 	errobj_type_value,
 	errobj_type_os;
 
-struct ErrObject {
+typedef struct ErrObject {
 	OBJECT_HEAD
-	struct StringObject *msgstr;
+	StringObject *msgstr;
 	// TODO: stack trace info
 	// TODO: chained errors
 	//       but maybe not as linked list?
 	//       if linked list then how about multiple NoMemErrors chaining? avoid chaining onto itself
-};
+} ErrObject;
 
 // see string.h for info about the format strings
 

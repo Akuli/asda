@@ -16,9 +16,9 @@ const struct Type errobj_type_variable = { .methods = NULL, .nmethods = 0 };
 const struct Type errobj_type_value = { .methods = NULL, .nmethods = 0 };
 const struct Type errobj_type_os = { .methods = NULL, .nmethods = 0 };
 
-static void destroy_error(struct Object *obj, bool decrefrefs, bool freenonrefs)
+static void destroy_error(Object *obj, bool decrefrefs, bool freenonrefs)
 {
-	struct ErrObject *err = (struct ErrObject *)obj;
+	ErrObject *err = (ErrObject *)obj;
 	if (decrefrefs)
 		OBJECT_DECREF(err->msgstr);
 }
@@ -26,9 +26,9 @@ static void destroy_error(struct Object *obj, bool decrefrefs, bool freenonrefs)
 
 // nomemerr is not created with malloc() because ... you know
 
-static struct StringObject nomemerr_string = STRINGOBJ_COMPILETIMECREATE(
+static StringObject nomemerr_string = STRINGOBJ_COMPILETIMECREATE(
 	'n','o','t',' ','e','n','o','u','g','h',' ','m','e','m','o','r','y');
-static struct ErrObject nomemerr = OBJECT_COMPILETIMECREATE(&errobj_type_nomem,
+static ErrObject nomemerr = OBJECT_COMPILETIMECREATE(&errobj_type_nomem,
 	.msgstr = &nomemerr_string,
 );
 
@@ -44,9 +44,9 @@ void errobj_set_nomem(Interp *interp)
 // error setting functions don't do error handling with different return values, because who
 // cares if they fail to set the requested error and instead set NoMemError or something :D
 
-static void set_from_string_obj(Interp *interp, const struct Type *errtype, struct StringObject *str)
+static void set_from_string_obj(Interp *interp, const struct Type *errtype, StringObject *str)
 {
-	struct ErrObject *obj = object_new(interp, errtype, destroy_error, sizeof(*obj));
+	ErrObject *obj = object_new(interp, errtype, destroy_error, sizeof(*obj));
 	if (!obj)     // refactoring note: MAKE SURE that errobj_set_nomem() doesn't recurse here
 		return;
 
@@ -61,7 +61,7 @@ void errobj_set(Interp *interp, const struct Type *errtype, const char *fmt, ...
 {
 	va_list ap;
 	va_start(ap, fmt);
-	struct StringObject *str = stringobj_new_vformat(interp, fmt, ap);
+	StringObject *str = stringobj_new_vformat(interp, fmt, ap);
 	va_end(ap);
 
 	if (str) {
@@ -76,7 +76,7 @@ void errobj_set_oserr(Interp *interp, const char *fmt, ...)
 
 	va_list ap;
 	va_start(ap, fmt);
-	struct StringObject *str = stringobj_new_vformat(interp, fmt, ap);
+	StringObject *str = stringobj_new_vformat(interp, fmt, ap);
 	va_end(ap);
 	if (!str)
 		return;

@@ -25,9 +25,9 @@ I don't know whether that is documented
 // TODO: this code has a LOT of ifs... add tests for most things
 
 
-static void destroy_intobj(struct Object *obj, bool decrefrefs, bool freenonrefs)
+static void destroy_intobj(Object *obj, bool decrefrefs, bool freenonrefs)
 {
-	struct IntObject *x = (struct IntObject *)obj;
+	IntObject *x = (IntObject *)obj;
 	if (decrefrefs) {
 		if (x->str)
 			OBJECT_DECREF(x->str);
@@ -38,7 +38,7 @@ static void destroy_intobj(struct Object *obj, bool decrefrefs, bool freenonrefs
 }
 
 
-struct IntObject *intobj_new_long(Interp *interp, long l)
+IntObject *intobj_new_long(Interp *interp, long l)
 {
 	long cacheidx;
 	if (l >= 0 && (unsigned long)l < sizeof(interp->intcache)/sizeof(interp->intcache[0])) {
@@ -52,7 +52,7 @@ struct IntObject *intobj_new_long(Interp *interp, long l)
 		cacheidx = -1;
 	}
 
-	struct IntObject *obj = object_new(interp, &intobj_type, destroy_intobj, sizeof(*obj));
+	IntObject *obj = object_new(interp, &intobj_type, destroy_intobj, sizeof(*obj));
 	if (!obj)
 		return NULL;
 
@@ -68,7 +68,7 @@ struct IntObject *intobj_new_long(Interp *interp, long l)
 }
 
 // will clear the mpz_t (immediately on error, otherise when returned object is destroyed)
-static struct IntObject *new_from_mpzt(Interp *interp, mpz_t mpz)
+static IntObject *new_from_mpzt(Interp *interp, mpz_t mpz)
 {
 	if (mpz_fits_slong_p(mpz)) {
 		long value = mpz_get_si(mpz);
@@ -76,7 +76,7 @@ static struct IntObject *new_from_mpzt(Interp *interp, mpz_t mpz)
 		return intobj_new_long(interp, value);
 	}
 
-	struct IntObject *obj = object_new(interp, &intobj_type, destroy_intobj, sizeof(*obj));
+	IntObject *obj = object_new(interp, &intobj_type, destroy_intobj, sizeof(*obj));
 	if (!obj) {
 		mpz_clear(mpz);
 		return NULL;
@@ -88,7 +88,7 @@ static struct IntObject *new_from_mpzt(Interp *interp, mpz_t mpz)
 	return obj;
 }
 
-struct IntObject *intobj_new_bebytes(Interp *interp, const unsigned char *seq, size_t len, bool negate)
+IntObject *intobj_new_bebytes(Interp *interp, const unsigned char *seq, size_t len, bool negate)
 {
 	mpz_t mpz;
 	mpz_init(mpz);
@@ -108,7 +108,7 @@ struct IntObject *intobj_new_bebytes(Interp *interp, const unsigned char *seq, s
 	return new_from_mpzt(interp, mpz);
 }
 
-int intobj_cmp(struct IntObject *x, struct IntObject *y)
+int intobj_cmp(IntObject *x, IntObject *y)
 {
 	if (!x->spilled && !y->spilled) {
 		/* https://stackoverflow.com/a/10997428 */
@@ -122,7 +122,7 @@ int intobj_cmp(struct IntObject *x, struct IntObject *y)
 	}
 }
 
-int intobj_cmp_long(struct IntObject *x, long y)
+int intobj_cmp_long(IntObject *x, long y)
 {
 	if (x->spilled) {
 		return mpz_cmp_si(x->val.mpz, y);
@@ -181,7 +181,7 @@ static long add_longs(long x, long y) { return x + y; }
 static long sub_longs(long x, long y) { return x - y; }
 static long mul_longs(long x, long y) { return x * y; }
 
-static struct IntObject *do_some_operation(Interp *interp, struct IntObject *x, struct IntObject *y,
+static IntObject *do_some_operation(Interp *interp, IntObject *x, IntObject *y,
 	void (*mpzmpzfunc)(mpz_t, const mpz_t, const mpz_t),
 	void (*mpzlongfunc)(mpz_t, const mpz_t, long),
 	long (*longlongfunc)(long, long),
@@ -219,20 +219,20 @@ static struct IntObject *do_some_operation(Interp *interp, struct IntObject *x, 
 	return new_from_mpzt(interp, res);
 }
 
-struct IntObject *intobj_add(Interp *interp, struct IntObject *x, struct IntObject *y) {
+IntObject *intobj_add(Interp *interp, IntObject *x, IntObject *y) {
 	return do_some_operation(interp, x, y, mpz_add, add_signedlong_mpz, add_longs, add_would_overflow, NULL);
 }
 
-struct IntObject *intobj_sub(Interp *interp, struct IntObject *x, struct IntObject *y) {
+IntObject *intobj_sub(Interp *interp, IntObject *x, IntObject *y) {
 	return do_some_operation(interp, x, y, mpz_sub, sub_signedlong_mpz, sub_longs, sub_would_overflow, mpz_neg);
 }
 
-struct IntObject *intobj_mul(Interp *interp, struct IntObject *x, struct IntObject *y) {
+IntObject *intobj_mul(Interp *interp, IntObject *x, IntObject *y) {
 	return do_some_operation(interp, x, y, mpz_mul, mul_signedlong_mpz, mul_longs, mul_would_overflow, NULL);
 }
 
 
-struct IntObject *intobj_neg(Interp *interp, struct IntObject *x)
+IntObject *intobj_neg(Interp *interp, IntObject *x)
 {
 	mpz_t res;
 
@@ -250,7 +250,7 @@ struct IntObject *intobj_neg(Interp *interp, struct IntObject *x)
 
 
 // this does NOT return a new reference, you need to incref
-static struct StringObject *get_string_object(Interp *interp, struct IntObject *x)
+static StringObject *get_string_object(Interp *interp, IntObject *x)
 {
 	if (x->str)
 		return x->str;
@@ -277,9 +277,9 @@ static struct StringObject *get_string_object(Interp *interp, struct IntObject *
 	return x->str;   // may be NULL
 }
 
-const char *intobj_tocstr(Interp *interp, struct IntObject *x)
+const char *intobj_tocstr(Interp *interp, IntObject *x)
 {
-	struct StringObject *obj = get_string_object(interp, x);
+	StringObject *obj = get_string_object(interp, x);
 	if (!obj)
 		return NULL;
 
@@ -290,23 +290,23 @@ const char *intobj_tocstr(Interp *interp, struct IntObject *x)
 	return res;
 }
 
-static bool tostring_impl(Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs, struct Object **result)
+static bool tostring_impl(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
 	assert(nargs == 1);
 	assert(args[0]->type == &intobj_type);
-	struct IntObject *x = (struct IntObject *)args[0];
+	IntObject *x = (IntObject *)args[0];
 
-	struct StringObject *obj = get_string_object(interp, x);
+	StringObject *obj = get_string_object(interp, x);
 	if (!obj)
 		return false;
 
 	OBJECT_INCREF(obj);
-	*result = (struct Object *)obj;
+	*result = (Object *)obj;
 	return true;
 }
 
-static struct FuncObject tostring = FUNCOBJ_COMPILETIMECREATE(tostring_impl);
+static FuncObject tostring = FUNCOBJ_COMPILETIMECREATE(tostring_impl);
 
-static struct FuncObject *methods[] = { &tostring };
+static FuncObject *methods[] = { &tostring };
 
 const struct Type intobj_type = { .methods = methods, .nmethods = sizeof(methods)/sizeof(methods[0]) };

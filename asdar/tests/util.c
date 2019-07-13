@@ -19,7 +19,7 @@ void assert_cstr_eq_cstr(const char *s1, const char *s2)
 	}
 }
 
-void assert_strobj_eq_cstr(struct StringObject *obj, const char *s)
+void assert_strobj_eq_cstr(StringObject *obj, const char *s)
 {
 	const char *objstr;
 	size_t junk;

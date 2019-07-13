@@ -4,23 +4,23 @@
 #include <stddef.h>
 #include "../objtyp.h"
 
-struct BoolObject boolobj_true = OBJECT_COMPILETIMECREATE(&boolobj_type, 0);
-struct BoolObject boolobj_false = OBJECT_COMPILETIMECREATE(&boolobj_type, 0);
+BoolObject boolobj_true = OBJECT_COMPILETIMECREATE(&boolobj_type, 0);
+BoolObject boolobj_false = OBJECT_COMPILETIMECREATE(&boolobj_type, 0);
 
-struct BoolObject *boolobj_c2asda(bool cbool)
+BoolObject *boolobj_c2asda(bool cbool)
 {
-	struct BoolObject *res = cbool ? &boolobj_true : &boolobj_false;
+	BoolObject *res = cbool ? &boolobj_true : &boolobj_false;
 	OBJECT_INCREF(res);
 	return res;
 }
 
-bool boolobj_asda2c(struct BoolObject *asdabool)
+bool boolobj_asda2c(BoolObject *asdabool)
 {
 	assert(asdabool == &boolobj_true || asdabool == &boolobj_false);
 	return (asdabool == &boolobj_true);
 }
 
-struct BoolObject *boolobj_neg(struct BoolObject *obj) {
+BoolObject *boolobj_neg(BoolObject *obj) {
 	return boolobj_c2asda(!boolobj_asda2c(obj));
 }
 

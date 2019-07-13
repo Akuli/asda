@@ -9,9 +9,9 @@
 #include "../objtyp.h"
 #include "err.h"
 
-static void destroy_scope(struct Object *obj, bool decrefrefs, bool freenonrefs)
+static void destroy_scope(Object *obj, bool decrefrefs, bool freenonrefs)
 {
-	struct ScopeObject *scope = (struct ScopeObject *)obj;
+	ScopeObject *scope = (ScopeObject *)obj;
 	if (decrefrefs) {
 		for (size_t i = 0; i < scope->nlocals; i++)
 			if (scope->locals[i])
@@ -26,9 +26,9 @@ static void destroy_scope(struct Object *obj, bool decrefrefs, bool freenonrefs)
 	}
 }
 
-struct ScopeObject *scopeobj_newsub(Interp *interp, struct ScopeObject *parent, size_t nlocals)
+ScopeObject *scopeobj_newsub(Interp *interp, ScopeObject *parent, size_t nlocals)
 {
-	struct Object **locals;
+	Object **locals;
 	if (nlocals) {
 		if (!( locals = calloc(nlocals, sizeof(locals[0])) )) {
 			errobj_set_nomem(interp);
@@ -37,7 +37,7 @@ struct ScopeObject *scopeobj_newsub(Interp *interp, struct ScopeObject *parent, 
 	} else
 		locals = NULL;
 
-	struct ScopeObject **parents;
+	ScopeObject **parents;
 	size_t nparents;
 	if (parent) {
 		nparents = parent->nparents + 1;
@@ -51,7 +51,7 @@ struct ScopeObject *scopeobj_newsub(Interp *interp, struct ScopeObject *parent, 
 		nparents = 0;
 	}
 
-	struct ScopeObject *obj = object_new(interp, &scopeobj_type, destroy_scope, sizeof(*obj));
+	ScopeObject *obj = object_new(interp, &scopeobj_type, destroy_scope, sizeof(*obj));
 	if (!obj) {
 		free(parents);
 		free(locals);
@@ -71,9 +71,9 @@ struct ScopeObject *scopeobj_newsub(Interp *interp, struct ScopeObject *parent, 
 	return obj;
 }
 
-struct ScopeObject *scopeobj_newglobal(Interp *interp)
+ScopeObject *scopeobj_newglobal(Interp *interp)
 {
-	struct ScopeObject *res = scopeobj_newsub(interp, NULL, builtin_nobjects);
+	ScopeObject *res = scopeobj_newsub(interp, NULL, builtin_nobjects);
 	if(!res)
 		return NULL;
 
@@ -83,7 +83,7 @@ struct ScopeObject *scopeobj_newglobal(Interp *interp)
 	return res;
 }
 
-struct ScopeObject *scopeobj_getforlevel(struct ScopeObject *scope, size_t level)
+ScopeObject *scopeobj_getforlevel(ScopeObject *scope, size_t level)
 {
 	assert(level <= scope->nparents);
 	return (level == scope->nparents) ? scope : scope->parents[level];

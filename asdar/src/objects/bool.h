@@ -6,16 +6,16 @@
 
 extern const struct Type boolobj_type;
 
-struct BoolObject {
+typedef struct BoolObject {
 	OBJECT_HEAD
-};
+} BoolObject;
 
-extern struct BoolObject boolobj_true, boolobj_false;
+extern BoolObject boolobj_true, boolobj_false;
 
 // never fails, always returns a new reference
-struct BoolObject *boolobj_c2asda(bool cbool);
+BoolObject *boolobj_c2asda(bool cbool);
 
 // asserts that the object is boolobj_true or boolobj_false
-bool boolobj_asda2c(struct BoolObject *asdabool);
+bool boolobj_asda2c(BoolObject *asdabool);
 
 #endif   // OBJECTS_BOOL_H

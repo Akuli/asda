@@ -8,9 +8,9 @@
 
 struct Module {
 	// see interp->basedir comments for more details about the path
-	char *path;                 // path of the compiled bytecode file relative to interp->basedir
-	struct ScopeObject *scope;  // a subscope of the built-in scope
-	struct Code code;           // loaded from the path
+	char *path;          // path of the compiled bytecode file relative to interp->basedir
+	ScopeObject *scope;  // a subscope of the built-in scope
+	struct Code code;    // loaded from the path
 
 	// binary search tree for looking up modules by path quickly
 	// don't rely on these outside module.c

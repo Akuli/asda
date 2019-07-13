@@ -235,13 +235,14 @@ The coding style is Linux kernel style-ish. The "-ish" stands for two things:
     - Long lines are allowed. There is no limit. Break stuff to multiple lines
       whenever it feels good, but no more than that.
     - You generally shouldn't `typedef` every struct you make, but there are
-      **two** typedeffed structs in this project. The typedefs make the code
-      easier to read, because almost all non-`static` function declarations use
-      the typedef names and are a lot shorter than without typedefs. The
-      typedef names are `Interp` and `Object`, defined in `interp.h` and
-      `objtyp.h` respectively. It's also fine to create typedefs for callback
-      functions with long signatures as is done in `objects/func.h`.
-    - There are probably some other things that I forgot to mention here.
+      some typedefs in this project:
+        - `Object`, `IntObject`, `StringObject` etc. These are used a **lot** in
+          function declarations. These also have a named struct with the same
+          name, because those can be forward-declared (see `interp.h`).
+        - `Interp`. Also used a lot in function declarations.
+        - Callback functions with long signatures. See `objects/func.h`.
+    - There are probably some other things that I forgot to mention here. Again,
+      don't be nit-picky when it comes to style.
 
 
 ## Performance Graph

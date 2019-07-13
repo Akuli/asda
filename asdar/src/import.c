@@ -69,7 +69,7 @@ error:
 	return false;
 }
 
-static bool run(Interp *interp, struct ScopeObject *scope, struct Code code)
+static bool run(Interp *interp, ScopeObject *scope, struct Code code)
 {
 	struct Runner rnr;
 	runner_init(&rnr, interp, scope, code);

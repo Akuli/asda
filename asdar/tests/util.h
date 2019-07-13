@@ -10,7 +10,7 @@
 #define TEST(NAME) void test_##NAME(Interp *interp)
 
 void assert_cstr_eq_cstr(const char *s1, const char *s2);
-void assert_strobj_eq_cstr(struct StringObject *obj, const char *s);
+void assert_strobj_eq_cstr(StringObject *obj, const char *s);
 void assert_error_matches_and_clear(Interp *interp, const struct Type *errtype, const char *cstr);
 
 #endif   // TESTS_UTIL_H

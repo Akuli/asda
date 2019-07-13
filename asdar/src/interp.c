@@ -31,8 +31,8 @@ void interp_destroy(Interp *interp)
 
 	gc_refcountdebug(interp);
 
-	struct Object *next;
-	for (struct Object *obj = interp->objliststart; obj; obj = next){
+	Object *next;
+	for (Object *obj = interp->objliststart; obj; obj = next){
 		//printf("refcount cycling object %p\n", (void*)obj);
 		next = obj->next;
 		object_destroy(obj, false, true);

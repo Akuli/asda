@@ -12,13 +12,13 @@ extern const struct Type funcobj_type;
 // non-returning functions set it to NULL on success
 // on failure, everything returns false and doesn't need to set *result
 typedef bool (*funcobj_cfunc)(Interp*, struct ObjData userdata,
-	struct Object *const *args, size_t nargs, struct Object **result);
+	Object *const *args, size_t nargs, Object **result);
 
-struct FuncObject {
+typedef struct FuncObject {
 	OBJECT_HEAD
 	funcobj_cfunc cfunc;
 	struct ObjData userdata;   // for passing data to cfunc
-};
+} FuncObject;
 
 #define FUNCOBJ_COMPILETIMECREATE(f) OBJECT_COMPILETIMECREATE(&funcobj_type, .cfunc = f)
 
@@ -26,13 +26,13 @@ struct FuncObject {
  * userdata is destroyed on FuncObj destruction or on creation error
  * cfunc must set *result to NULL if it does not return anything.
  */
-struct FuncObject *funcobj_new(Interp *interp, funcobj_cfunc cfunc, struct ObjData userdata);
+FuncObject *funcobj_new(Interp *interp, funcobj_cfunc cfunc, struct ObjData userdata);
 
 /** Call a FuncObj
  * Returns a boolean indicating success.
  * On success, sets `*result` to the return value of the function, or NULL if it didn't return a value.
  */
-bool funcobj_call(Interp *interp, struct FuncObject *f,
-	struct Object *const *args, size_t nargs, struct Object **result);
+bool funcobj_call(Interp *interp, FuncObject *f,
+	Object *const *args, size_t nargs, Object **result);
 
 #endif // OBJECTS_FUNC_H

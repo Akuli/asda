@@ -15,7 +15,7 @@
 
 static void print_error(Interp *interp)
 {
-	struct StringObject *strobj = interp->err->msgstr;
+	StringObject *strobj = interp->err->msgstr;
 	OBJECT_INCREF(strobj);
 	OBJECT_DECREF(interp->err);
 	interp->err = NULL;

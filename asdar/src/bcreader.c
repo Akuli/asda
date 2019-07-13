@@ -301,19 +301,19 @@ static bool read_callfunc(struct BcReader *bcr, struct CodeOp *res, enum CodeOpK
 	return read_bytes(bcr, &res->data.callfunc_nargs, 1);
 }
 
-static bool read_string_constant(struct BcReader *bcr, struct Object **objptr)
+static bool read_string_constant(struct BcReader *bcr, Object **objptr)
 {
 	char *str;
 	uint32_t len;
 	if (!read_string(bcr, &str, &len))
 		return false;
 
-	*objptr = (struct Object *)stringobj_new_utf8(bcr->interp, str, len);
+	*objptr = (Object *)stringobj_new_utf8(bcr->interp, str, len);
 	free(str);
 	return !!*objptr;
 }
 
-static bool read_int_constant(struct BcReader *bcr, struct Object **objptr, bool negate)
+static bool read_int_constant(struct BcReader *bcr, Object **objptr, bool negate)
 {
 	uint32_t len;
 	if(!read_uint32(bcr, &len))
@@ -330,7 +330,7 @@ static bool read_int_constant(struct BcReader *bcr, struct Object **objptr, bool
 		return false;
 	}
 
-	*objptr = (struct Object *)intobj_new_bebytes(bcr->interp, buf, len, negate);
+	*objptr = (Object *)intobj_new_bebytes(bcr->interp, buf, len, negate);
 	free(buf);
 	return !!*objptr;
 }
@@ -360,7 +360,7 @@ static bool read_create_function(struct BcReader *bcr, struct CodeOp *res)
 	return read_body(bcr, &res->data.createfunc_code);
 }
 
-static struct Object **get_module_member_pointer(struct BcReader *bcr)
+static Object **get_module_member_pointer(struct BcReader *bcr)
 {
 	uint16_t modidx, membidx;
 	if (!read_uint16(bcr, &modidx))
@@ -385,7 +385,7 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case TRUE_CONSTANT:
 	case FALSE_CONSTANT:
 		res->kind = CODE_CONSTANT;
-		res->data.obj = (struct Object *)boolobj_c2asda(opbyte == TRUE_CONSTANT);
+		res->data.obj = (Object *)boolobj_c2asda(opbyte == TRUE_CONSTANT);
 		return true;
 
 	case SET_VAR:

@@ -10,7 +10,7 @@
 const struct Type object_type = { .methods = NULL, .nmethods = 0 };
 
 
-void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs)
+void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs)
 {
 	/*
 	if this fails, a compile-time created object is being decreffed too
@@ -39,13 +39,13 @@ void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs)
 }
 
 void *object_new(Interp *interp, const struct Type *type,
-	void (*destroy)(struct Object *, bool, bool),
+	void (*destroy)(Object *, bool, bool),
 	size_t sz)
 {
 	assert(interp);
 
-	assert(sz >= sizeof(struct Object));
-	struct Object *obj = malloc(sz);
+	assert(sz >= sizeof(Object));
+	Object *obj = malloc(sz);
 	if (!obj) {
 		// errobj_set_nomem does NOT create an object with object_new for this
 		// ituses a statically allocated no mem error object and does no allocations

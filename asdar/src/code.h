@@ -50,8 +50,8 @@ typedef union {
 	uint16_t strjoin_nstrs;
 	struct CodeLookupMethodData lookupmethod;
 	struct Code createfunc_code;
-	struct Object *obj;
-	struct Object **modmemberptr;
+	Object *obj;
+	Object **modmemberptr;
 } CodeData;
 
 struct CodeOp {
