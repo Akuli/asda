@@ -96,12 +96,11 @@ this:
 
 ```c
 #include <stdbool.h>
-#include "objtyp.h"
 #include "objects/bool.h"
 
 void do_something(void)
 {
-    Object *asdatrue = boolobj_c2asda(true);
+    BoolObject *asdatrue = boolobj_c2asda(true);
     // do something with asdatrue
     OBJECT_DECREF(asdatrue);
 }
@@ -116,7 +115,7 @@ If you create a function that does not return a new reference, then please
 Here is some code:
 
 ```c
-static Object *create_a_string(Interp *interp)
+static StringObject *create_a_string(Interp *interp)
 {
     char *buf = malloc(123);
     if (!buf)
@@ -199,7 +198,7 @@ Even though this code is short, it contains *many* bugs:
   this:
 
     ```c
-    Object *res = stringobj_new_utf8(interp, strlen(buf), buf);
+    StringObject *res = stringobj_new_utf8(interp, strlen(buf), buf);
     free(buf);
     OBJECT_DECREF(obj);
     return res;   // may be NULL
