@@ -31,7 +31,8 @@ static void print_error(Interp *interp)
 	OBJECT_DECREF(strobj);
 	OBJECT_DECREF(interp->err);
 	interp->err = NULL;
-	fprintf(stderr, "%s: an error occurred, and another error occurred while printing the error. Sorry. :(\n", interp->argv0);
+	fprintf(stderr, "%s: an error occurred, and another error occurred while printing the error. "
+		"The errors cannot be printed. Sorry. :(\n", interp->argv0);
 }
 
 
