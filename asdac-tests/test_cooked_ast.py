@@ -44,10 +44,11 @@ def test_function_calling_errors(compiler):
 
 
 def test_nested_generic_types(compiler):
-    [createlocalvar] = compiler.cooked_parse(
+    [createlocalvar, setvar] = compiler.cooked_parse(
         'let lol = () -> Generator[Generator[Str]]:\n    print("Lol")')
     assert createlocalvar.varname == 'lol'
-    assert createlocalvar.initial_value.type == objects.FunctionType(
+    assert setvar.varname == 'lol'
+    assert setvar.value.type == objects.FunctionType(
         [],
         objects.GeneratorType(objects.GeneratorType(
             objects.BUILTIN_TYPES['Str'])))
@@ -145,7 +146,7 @@ def test_assign_asd_to_asd(compiler):
         "there's already a 'asd' variable", 'let')
 
     # this one is fine, 'asd = asd' simply does nothing
-    assert len(compiler.cooked_parse('let asd = "key"\nasd = asd')) == 2
+    assert len(compiler.cooked_parse('let asd = "key"\nasd = asd')) == 3
 
 
 def test_yield_finding_bugs(compiler):
@@ -175,7 +176,7 @@ let g = () -> Generator[Str]:
 # not all Generator[Str] functions yield, it's also allowed to return
 # a generator
 def test_different_generator_creating_functions(compiler):
-    create_lol, create_lol2 = compiler.cooked_parse('''
+    create_lol, set_lol, create_lol2, set_lol2 = compiler.cooked_parse('''
 let lol = () -> Generator[Str]:
     yield "Hi"
     yield "There"
@@ -184,7 +185,7 @@ let lol2 = () -> Generator[Str]:
     return lol()
 ''')
 
-    assert create_lol.initial_value.type == create_lol2.initial_value.type
+    assert set_lol.value.type == set_lol2.value.type
 
 
 def test_non_bool_cond(compiler):
@@ -199,7 +200,7 @@ def test_non_bool_cond(compiler):
 
 
 def test_joined_string_location_corner_case(compiler):
-    let, print_ = compiler.cooked_parse('let x = 1\nprint("hello {x}")')
+    *let, print_ = compiler.cooked_parse('let x = 1\nprint("hello {x}")')
     [join] = print_.args
     assert join.location.offset == len('let x = 1\nprint(')
     assert join.location.length == len('"hello {x}"')
@@ -229,9 +230,10 @@ def test_exporting(compiler):
     cooked, exports = compiler.cooked_parse('let x = 1\nexport let y = 2',
                                             want_exports=True)
     assert exports == {'y': objects.BUILTIN_TYPES['Int']}
-    x_create, y_create = cooked
+    x_create, x_set, y_set = cooked
     assert isinstance(x_create, cooked_ast.CreateLocalVar)
-    assert isinstance(y_create, cooked_ast.SetVar)
+    assert isinstance(x_set, cooked_ast.SetVar)
+    assert isinstance(y_set, cooked_ast.SetVar)
 
 
 def test_exporting_generic_var(compiler):

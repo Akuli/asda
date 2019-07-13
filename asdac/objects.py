@@ -17,6 +17,13 @@ class Type:
 
         # keys are names, values are types
         self.attributes = collections.OrderedDict()
+        if parent_type is not None:
+            # FIXME: order breaks here because ChainMap source code has this:
+            #
+            #    def __iter__(self):
+            #        return iter(set().union(*self.maps))
+            self.attributes = collections.ChainMap(
+                self.attributes, parent_type.attributes)
 
     def undo_generics(self, type_dict):
         return self
@@ -73,6 +80,7 @@ BUILTIN_TYPES = collections.OrderedDict([
 BUILTIN_TYPES['Str'].add_method('uppercase', [], BUILTIN_TYPES['Str'])
 BUILTIN_TYPES['Str'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 BUILTIN_TYPES['Int'].add_method('to_string', [], BUILTIN_TYPES['Str'])
+BUILTIN_TYPES['Error'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 
 BUILTIN_VARS = collections.OrderedDict([
     ('print', FunctionType([BUILTIN_TYPES['Str']], None)),

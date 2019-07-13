@@ -1,0 +1,2 @@
+before bad print
+this is the error: value of a variable hasn't been set

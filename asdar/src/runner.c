@@ -27,6 +27,7 @@ void runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, struct 
 	rnr->scope = scope;
 	OBJECT_INCREF(scope);
 	dynarray_init(&rnr->stack);
+	dynarray_init(&rnr->errhnd);
 	rnr->code = code;
 	rnr->opidx = 0;
 	// leave rnr->retval uninitialized for better valgrinding
@@ -37,6 +38,7 @@ void runner_free(const struct Runner *rnr)
 	for (size_t i = 0; i < rnr->stack.len; i++)
 		OBJECT_DECREF(rnr->stack.ptr[i]);
 	free(rnr->stack.ptr);
+	free(rnr->errhnd.ptr);
 	OBJECT_DECREF(rnr->scope);
 	// leave rnr->retval untouched, caller of runner_run() should handle its decreffing
 }
@@ -212,6 +214,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		break;
 	}
 
+	// TODO: refactor this into a separate function, is 2 long
 	case CODE_STRJOIN:
 	{
 		DEBUG_PRINTF("string join of %zu strings\n", (size_t)op->data.strjoin_nstrs);
@@ -293,10 +296,15 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		IntObject *x = (IntObject *)dynarray_pop(&rnr->stack);
 		IntObject *y = (IntObject *)dynarray_pop(&rnr->stack);
 		BoolObject *res = boolobj_c2asda(intobj_cmp(x, y) == 0);
-		dynarray_push(rnr->interp, &rnr->stack, (Object*)res);
+		dynarray_push_itwillfit(&rnr->stack, (Object*)res);
 		OBJECT_DECREF(x);
 		OBJECT_DECREF(y);
 	}
+
+	case CODE_ERRHND_ADD:
+		if (!dynarray_push(rnr->interp, &rnr->errhnd, op->data.errhnd))
+			return RUNNER_ERROR;
+		break;
 
 	}   // end of switch
 
@@ -307,10 +315,40 @@ skip_opidx_plusplus:
 	return ret;
 }
 
+static void remove_old_error_handlers(struct Runner *rnr)
+{
+	while(rnr->errhnd.len) {
+		struct CodeErrHndData last = rnr->errhnd.ptr[rnr->errhnd.len - 1];
+		if (last.startidx <= rnr->opidx && rnr->opidx < last.endidx)
+			break;
+		(void) dynarray_pop(&rnr->errhnd);
+	}
+}
+
+static void begin_catch_block(struct Runner *rnr)
+{
+	struct CodeErrHndData eh = dynarray_pop(&rnr->errhnd);
+	rnr->opidx = eh.jmpidx;
+
+	assert(rnr->interp->err);
+	if (rnr->scope->locals[eh.errvar])
+		OBJECT_DECREF(rnr->scope->locals[eh.errvar]);
+	rnr->scope->locals[eh.errvar] = (Object *)rnr->interp->err;
+	rnr->interp->err = NULL;
+}
+
 enum RunnerResult runner_run(struct Runner *rnr)
 {
 	while (rnr->opidx < rnr->code.nops) {
 		enum RunnerResult res = run_one_op(rnr, &rnr->code.ops[rnr->opidx]);
+
+		if (res == RUNNER_ERROR && rnr->errhnd.len) {
+			begin_catch_block(rnr);
+			continue;
+		}
+
+		remove_old_error_handlers(rnr);
+
 		if(res != RUNNER_DIDNTRETURN)
 			return res;
 	}

@@ -15,6 +15,7 @@ struct Runner {
 	Interp *interp;
 	ScopeObject *scope;
 	DynArray(Object*) stack;
+	DynArray(struct CodeErrHndData) errhnd;
 	size_t opidx;
 	struct Code code;
 };

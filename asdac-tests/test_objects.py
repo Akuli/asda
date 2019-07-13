@@ -17,6 +17,6 @@ lol[Bool](TRUE)
 # there used to be a bug that couldn't handle genericness in void-returning
 # functions
 def test_void_returning_generic_bug(compiler):
-    lol_definition, f_definition = compiler.cooked_parse(
+    lol_create, lol_set, f_create, f_set = compiler.cooked_parse(
         'let lol[T] = () -> void:\n    print("Hello")\nlet f = lol[Str]')
-    assert f_definition.initial_value.type.returntype is None
+    assert f_set.value.type.returntype is None

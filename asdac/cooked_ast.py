@@ -1,4 +1,5 @@
 import collections
+import itertools
 
 from . import raw_ast, common, objects
 
@@ -19,15 +20,15 @@ LookupGenericFunction = _astclass('LookupGenericFunction',
                                   ['funcname', 'types', 'level'])
 LookupModule = _astclass('LookupModule', [])
 CreateFunction = _astclass('CreateFunction', ['argnames', 'body', 'yields'])
-CreateLocalVar = _astclass('CreateLocalVar', ['varname', 'initial_value'])
-CreateGenericLocalVar = _astclass('CreateGenericLocalVar',
-                                  ['varname', 'generic_obj', 'initial_value'])
+CreateLocalVar = _astclass('CreateLocalVar', ['varname'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
 VoidReturn = _astclass('VoidReturn', [])
 ValueReturn = _astclass('ValueReturn', ['value'])
 Yield = _astclass('Yield', ['value'])
 If = _astclass('If', ['condition', 'if_body', 'else_body'])
 Loop = _astclass('Loop', ['init', 'cond', 'incr', 'body'])    # while or for
+TryCatch = _astclass('TryCatch', ['try_body', 'errortype', 'caught_varname',
+                                  'catch_body'])
 
 Plus = _astclass('Plus', ['lhs', 'rhs'])
 Minus = _astclass('Minus', ['lhs', 'rhs'])
@@ -371,6 +372,7 @@ class _Chef:
 
             chef = chef.parent_chef
 
+    # returns a list, unlike most other cook_blah methods
     def cook_let(self, raw):
         self._check_name_not_exist(raw.varname, raw.location)
         if raw.generics is None:
@@ -406,21 +408,26 @@ class _Chef:
             if raw.export:
                 self._check_can_export(raw.location)
                 self.local_export_vars[raw.varname] = value.type
-                return SetVar(raw.location, None, raw.varname,
-                              self.level, value)
+                return [SetVar(raw.location, None, raw.varname,
+                               self.level, value)]
 
             self.vars[raw.varname] = value.type
-            return CreateLocalVar(raw.location, None, raw.varname, value)
+            return [
+                CreateLocalVar(raw.location, None, raw.varname),
+                SetVar(raw.location, None, raw.varname, self.level, value),
+            ]
 
         assert not raw.export, "sorry, cannot export generic variables yet :("
 
         generic = objects.Generic(
             list(generic_markers.values()), value.type)
         self.generic_vars[raw.varname] = generic
-        return CreateLocalVar(
-            raw.location, None, raw.varname,
-            _replace_generic_markers_with_object(
-                value, list(generic_markers.values())))
+        return [
+            CreateLocalVar(raw.location, None, raw.varname),
+            SetVar(raw.location, None, raw.varname, self.level,
+                   _replace_generic_markers_with_object(
+                        value, list(generic_markers.values()))),
+        ]
 
     # TODO: allow functions to call themselves
     def cook_function_definition(self, raw):
@@ -540,7 +547,7 @@ class _Chef:
                 "expected Bool, got " + cond.type.name, cond.location)
 
         body = self.cook_body(raw.body)
-        return Loop(raw.location, None, None, cond, None, body)
+        return Loop(raw.location, None, [], cond, [], body)
 
     def cook_for(self, raw):
         init = self.cook_statement(raw.init)
@@ -552,6 +559,20 @@ class _Chef:
         body = self.cook_body(raw.body)
         return Loop(raw.location, None, init, cond, incr, body)
 
+    def cook_try_catch(self, raw):
+        try_body = self.cook_body(raw.try_body)
+
+        self._check_name_not_exist(raw.varname, raw.varname_location)
+        errortype = self.cook_type(raw.errortype)
+        self.vars[raw.varname] = errortype
+        catch_body = self.cook_body(raw.catch_body)
+
+        return [
+            CreateLocalVar(raw.location, None, raw.varname),
+            TryCatch(raw.location, None, try_body, errortype, raw.varname,
+                     catch_body),
+        ]
+
     def _check_can_export(self, location):
         # 0 = global chef, 1 = file chef, 2 = function chef, etc
         if self.level != 1:
@@ -559,32 +580,34 @@ class _Chef:
             raise common.CompileError(
                 "export cannot be used in a function", location)
 
-    # note that this returns None for a void statement, cook_body() handles it
+    # returns a list, unlike most other cook_blah methods
     def cook_statement(self, raw_statement):
         if isinstance(raw_statement, raw_ast.Let):
             return self.cook_let(raw_statement)
         if isinstance(raw_statement, raw_ast.SetVar):
-            return self.cook_setvar(raw_statement)
+            return [self.cook_setvar(raw_statement)]
         if isinstance(raw_statement, raw_ast.FuncCall):
-            return self.cook_function_call(raw_statement)
+            return [self.cook_function_call(raw_statement)]
         if isinstance(raw_statement, raw_ast.Return):
-            return self.cook_return(raw_statement)
+            return [self.cook_return(raw_statement)]
         if isinstance(raw_statement, raw_ast.Yield):
-            return self.cook_yield(raw_statement)
+            return [self.cook_yield(raw_statement)]
         if isinstance(raw_statement, raw_ast.VoidStatement):
-            return None
+            return []
         if isinstance(raw_statement, raw_ast.If):
-            return self.cook_if(raw_statement)
+            return [self.cook_if(raw_statement)]
         if isinstance(raw_statement, raw_ast.While):
-            return self.cook_while(raw_statement)
+            return [self.cook_while(raw_statement)]
         if isinstance(raw_statement, raw_ast.For):
-            return self.cook_for(raw_statement)
+            return [self.cook_for(raw_statement)]
+        if isinstance(raw_statement, raw_ast.TryCatch):
+            return self.cook_try_catch(raw_statement)
 
         assert False, raw_statement     # pragma: no cover
 
     def cook_body(self, raw_statements):
-        return [cooked for cooked in map(self.cook_statement, raw_statements)
-                if cooked is not None]
+        flatten = itertools.chain.from_iterable
+        return list(flatten(map(self.cook_statement, raw_statements)))
 
 
 def cook(compilation, raw_ast_statements, import_compilation_dict):

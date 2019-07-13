@@ -5,16 +5,11 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include "func.h"
 #include "string.h"
 #include "../interp.h"
 #include "../objtyp.h"
 
-
-const struct Type errobj_type_error = { .methods = NULL, .nmethods = 0 };
-const struct Type errobj_type_nomem = { .methods = NULL, .nmethods = 0 };
-const struct Type errobj_type_variable = { .methods = NULL, .nmethods = 0 };
-const struct Type errobj_type_value = { .methods = NULL, .nmethods = 0 };
-const struct Type errobj_type_os = { .methods = NULL, .nmethods = 0 };
 
 static void destroy_error(Object *obj, bool decrefrefs, bool freenonrefs)
 {
@@ -87,3 +82,24 @@ void errobj_set_oserr(Interp *interp, const char *fmt, ...)
 		set_from_string_obj(interp, &errobj_type_os, str);
 	OBJECT_DECREF(str);
 }
+
+
+static bool tostring_impl(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
+{
+	assert(nargs == 1);
+	StringObject *s = ((ErrObject *) args[0])->msgstr;
+	OBJECT_INCREF(s);
+	*result = (Object *)s;
+	return true;
+}
+
+static FuncObject tostring = FUNCOBJ_COMPILETIMECREATE(tostring_impl);
+static FuncObject *methods[] = { &tostring };
+
+#define BOILERPLATE { .methods = methods, .nmethods = sizeof(methods)/sizeof(methods[0]) }
+const struct Type errobj_type_error = BOILERPLATE;
+const struct Type errobj_type_nomem = BOILERPLATE;
+const struct Type errobj_type_variable = BOILERPLATE;
+const struct Type errobj_type_value = BOILERPLATE;
+const struct Type errobj_type_os = BOILERPLATE;
+#undef BOILERPLATE

@@ -56,7 +56,12 @@ dynarray_alloc returns a success bool
 	( ((DAP)->len += (N)) , true ) \
 )
 
-// bad things happen if the dynarray is empty, never fails otherwise
+/*
+bad things happen if the dynarray is empty, never fails otherwise
+to ignore popped value and avoid compiler warning:
+
+	(void) dynarray_pop(&da);
+*/
 #define dynarray_pop(DAP) ( (DAP)->ptr[--(DAP)->len] )
 
 // you can use it after filling a DynArray to free up not-needed memory

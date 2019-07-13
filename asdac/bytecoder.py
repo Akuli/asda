@@ -39,6 +39,8 @@ TIMES = b'*'
 # DIVIDE = b'/'
 EQUAL = b'='
 
+ADD_ERROR_HANDLER = b'h'
+
 # these are used when bytecoding a type
 TYPE_BUILTIN = b'b'
 TYPE_GENERATOR = b'G'  # not to be confused with generator functions
@@ -233,6 +235,16 @@ class _BytecodeWriter:
             self.bytecode.add_uint16(
                 self.compilation.imports.index(op.compilation))
             self.bytecode.add_uint16(op.indeks)
+            return
+
+        if isinstance(op, opcoder.AddErrorHandler):
+            self.bytecode.add_byte(ADD_ERROR_HANDLER)
+            self.bytecode.add_uint16(self.jumpmarker2index[op.start_marker])
+            self.bytecode.add_uint16(self.jumpmarker2index[op.end_marker])
+            self.bytecode.add_uint16(self.jumpmarker2index[op.jumpto_marker])
+            self.write_type(op.errortype)
+            self.bytecode.add_uint16(
+                varlists[op.errorvarlevel].index(op.errorvar))
             return
 
         simple_things = [

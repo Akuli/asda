@@ -1,0 +1,9 @@
+if FALSE:
+    let string = "lol"
+
+try:
+    print("before bad print")
+    print(string)
+    print("after bad print")
+catch VariableError e:
+    print("this is the error: {e}")

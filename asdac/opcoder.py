@@ -51,6 +51,10 @@ Times = _op_class('Times', [])
 # Divide = _op_class('Divide', [])
 Equal = _op_class('Equal', [])
 
+AddErrorHandler = _op_class('AddErrorHandler', [
+    'start_marker', 'end_marker', 'jumpto_marker',
+    'errortype', 'errorvarlevel', 'errorvar'])
+
 
 class JumpMarker(common.Marker):
 
@@ -249,9 +253,6 @@ class _OpCoder:
             var = self.output.add_local_var()
             assert statement.varname not in self.local_vars
             self.local_vars[statement.varname] = var
-            self.do_expression(statement.initial_value)
-            self.output.ops.append(SetVar(
-                self._lineno(statement.location), self.level, var))
 
         elif isinstance(statement, cooked_ast.CallFunction):
             self.do_function_call(statement)
@@ -302,8 +303,8 @@ class _OpCoder:
             beginning = JumpMarker()
             end = JumpMarker()
 
-            if statement.init is not None:
-                self.do_statement(statement.init)
+            for substatement in statement.init:
+                self.do_statement(substatement)
 
             self.output.ops.append(beginning)
             self.do_expression(statement.cond)
@@ -312,19 +313,44 @@ class _OpCoder:
 
             for substatement in statement.body:
                 self.do_statement(substatement)
-            if statement.incr is not None:
-                self.do_statement(statement.incr)
+            for substatement in statement.incr:
+                self.do_statement(substatement)
 
             self.output.ops.append(BoolConstant(None, True))
             self.output.ops.append(JumpIf(None, beginning))
             self.output.ops.append(end)
+
+        elif isinstance(statement, cooked_ast.TryCatch):
+            try_start = JumpMarker()
+            try_end = JumpMarker()
+            catch_start = JumpMarker()
+            catch_end = JumpMarker()
+
+            self.output.ops.append(AddErrorHandler(
+                self._lineno(statement.location),
+                try_start, try_end, catch_start,
+                statement.errortype, self.level,
+                self.local_vars[statement.caught_varname]))
+
+            self.output.ops.append(try_start)
+            for substatement in statement.try_body:
+                self.do_statement(substatement)
+            self.output.ops.append(try_end)
+
+            self.output.ops.append(BoolConstant(None, True))
+            self.output.ops.append(JumpIf(None, catch_end))
+
+            self.output.ops.append(catch_start)
+            for substatement in statement.catch_body:
+                self.do_statement(substatement)
+            self.output.ops.append(catch_end)
 
         else:
             assert False, statement     # pragma: no cover
 
     def do_body(self, statements):
         for statement in statements:
-            assert not isinstance(statement, list)
+            assert not isinstance(statement, list), statement
             self.do_statement(statement)
 
 
