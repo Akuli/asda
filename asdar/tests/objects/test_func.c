@@ -15,7 +15,7 @@ struct ObjData leldata = {
 	.destroy = NULL,
 };
 
-static struct Object *bools = { (struct Object *)&boolobj_true, (struct Object *)&boolobj_false };
+static struct Object *bools[] = { (struct Object *)&boolobj_true, (struct Object *)&boolobj_false };
 
 static bool compiletime_func_running;
 

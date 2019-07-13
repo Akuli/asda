@@ -37,10 +37,7 @@ void assert_error_matches_and_clear(Interp *interp, const struct Type *errtype, 
 		assert(interp->err->refcount == 2);   // interp->err and wherever the global nomemerr is stored
 	else
 		assert(interp->err->refcount == 1);
-
-	struct StringObject *strobj = errobj_getstring(interp->err);
-	assert_strobj_eq_cstr(strobj, cstr);
-	OBJECT_DECREF(strobj);
+	assert_strobj_eq_cstr(interp->err->msgstr, cstr);
 
 	OBJECT_DECREF(interp->err);
 	interp->err = NULL;
