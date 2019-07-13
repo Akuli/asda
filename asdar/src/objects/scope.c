@@ -9,96 +9,89 @@
 #include "../objtyp.h"
 #include "err.h"
 
-struct ScopeData {
-	Object **locals;
-	size_t nlocals;
-
-	size_t nparents;
-	Object **parents;
-};
-
-static void scopedata_destroy_without_pointer(struct ScopeData data, bool decrefrefs, bool freenonrefs)
+static void destroy_scope(struct Object *obj, bool decrefrefs, bool freenonrefs)
 {
+	struct ScopeObject *scope = (struct ScopeObject *)obj;
 	if (decrefrefs) {
-		for (size_t i = 0; i < data.nlocals; i++)
-			if (data.locals[i])
-				OBJECT_DECREF(data.locals[i]);
+		for (size_t i = 0; i < scope->nlocals; i++)
+			if (scope->locals[i])
+				OBJECT_DECREF(scope->locals[i]);
 
-		if (data.nparents != 0) OBJECT_DECREF(data.parents[data.nparents - 1]);
+		if (scope->nparents != 0) OBJECT_DECREF(scope->parents[scope->nparents - 1]);
 	}
 
 	if (freenonrefs) {
-		free(data.locals);
-		free(data.parents);
+		free(scope->locals);
+		free(scope->parents);
 	}
 }
 
-static void scopedata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
+struct ScopeObject *scopeobj_newsub(Interp *interp, struct ScopeObject *parent, size_t nlocals)
 {
-	scopedata_destroy_without_pointer(*(struct ScopeData*)vpdata, decrefrefs, freenonrefs);
-	if (freenonrefs)
-		free(vpdata);
-}
+	struct Object **locals;
+	if (nlocals) {
+		if (!( locals = calloc(nlocals, sizeof(locals[0])) )) {
+			errobj_set_nomem(interp);
+			return NULL;
+		}
+	} else
+		locals = NULL;
 
-Object *scopeobj_newsub(Interp *interp, Object *parent, uint16_t nlocals)
-{
-	struct ScopeData *ptr = malloc(sizeof(*ptr));
-	if (!ptr) {
-		errobj_set_nomem(interp);
-		return NULL;
-	}
-
-	if (!( ptr->locals = calloc(nlocals, sizeof(Object*)) ) && nlocals) {
-		free(ptr);
-		errobj_set_nomem(interp);
-		return NULL;
-	}
-
-	ptr->nlocals = nlocals;
-
-	if (parent == NULL) {
-		ptr->nparents = 0;
-		ptr->parents = NULL;
+	struct ScopeObject **parents;
+	size_t nparents;
+	if (parent) {
+		nparents = parent->nparents + 1;
+		if (!( parents = malloc(nparents * sizeof(parents[0])) )) {
+			free(locals);
+			errobj_set_nomem(interp);
+			return NULL;
+		}
 	} else {
-		OBJECT_INCREF(parent);
-		struct ScopeData *parent_data = parent->data.val;
-		ptr->nparents = parent_data->nparents + 1;
-		ptr->parents = malloc(ptr->nparents * sizeof *ptr->parents);
-		memcpy(ptr->parents, parent_data->parents, parent_data->nparents * sizeof *parent_data->parents);
-		ptr->parents[ptr->nparents - 1] = parent;
+		parents = NULL;
+		nparents = 0;
 	}
 
-	return object_new(interp, &scopeobj_type, (struct ObjData){
-		.val = ptr,
-		.destroy = scopedata_destroy,
-	});
+	struct ScopeObject *obj = object_new(interp, &scopeobj_type, destroy_scope, sizeof(*obj));
+	if (!obj) {
+		free(parents);
+		free(locals);
+		return NULL;
+	}
+
+	if (parent) {
+		memcpy(parents, parent->parents, parent->nparents * sizeof *parent->parents);
+		parents[parent->nparents] = parent;
+		OBJECT_INCREF(parent);
+	}
+
+	obj->locals = locals;
+	obj->nlocals = nlocals;
+	obj->parents = parents;
+	obj->nparents = nparents;
+	return obj;
 }
 
-Object *scopeobj_newglobal(Interp *interp)
+struct ScopeObject *scopeobj_newglobal(Interp *interp)
 {
-	Object *res = scopeobj_newsub(interp, NULL, (uint16_t)builtin_nobjects);
+	struct ScopeObject *res = scopeobj_newsub(interp, NULL, builtin_nobjects);
 	if(!res)
 		return NULL;
 
-	struct ScopeData *sd = res->data.val;
-	memcpy(sd->locals, builtin_objects, builtin_nobjects*sizeof(builtin_objects[0]));
+	memcpy(res->locals, builtin_objects, builtin_nobjects*sizeof(builtin_objects[0]));
 	for (size_t i = 0; i < builtin_nobjects; i++)
-		OBJECT_INCREF(sd->locals[i]);
+		OBJECT_INCREF(res->locals[i]);
 	return res;
 }
 
-Object *scopeobj_getforlevel(Object *scope, size_t level)
+struct ScopeObject *scopeobj_getforlevel(struct ScopeObject *scope, size_t level)
 {
-	struct ScopeData *data = scope->data.val;
-	assert(level <= data->nparents);
-	if (level == data->nparents) return scope;
-	else return data->parents[level];
+	assert(level <= scope->nparents);
+	return (level == scope->nparents) ? scope : scope->parents[level];
 }
 
-Object **scopeobj_getlocalvarsptr(Object *scope)
+struct Object **scopeobj_getlocalvarsptr(struct ScopeObject *scope)
 {
-	return ((struct ScopeData*) scope->data.val)->locals;
+	return scope->locals;
 }
-
 
 const struct Type scopeobj_type = { .methods = NULL, .nmethods = 0 };

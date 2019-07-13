@@ -1,6 +1,7 @@
 #include "objtyp.h"
 #include <assert.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include "interp.h"
 #include "objects/err.h"
@@ -9,7 +10,7 @@
 const struct Type object_type = { .methods = NULL, .nmethods = 0 };
 
 
-void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs)
+void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs)
 {
 	/*
 	if this fails, a compile-time created object is being decreffed too
@@ -18,8 +19,9 @@ void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs)
 	*/
 	assert(obj->interp);
 
-	if (obj->data.destroy)
-		obj->data.destroy(obj->data.val, decrefrefs, freenonrefs);
+	if (obj->destroy) {
+		obj->destroy(obj, decrefrefs, freenonrefs);
+	}
 
 	if (freenonrefs) {
 		if (obj->prev) {
@@ -36,14 +38,15 @@ void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs)
 	}
 }
 
-Object *object_new(Interp *interp, const struct Type *type, struct ObjData od)
+void *object_new(Interp *interp, const struct Type *type,
+	void (*destroy)(struct Object *, bool, bool),
+	size_t sz)
 {
 	assert(interp);
-	Object *obj = malloc(sizeof(*obj));
-	if (!obj) {
-		if (od.destroy)
-			od.destroy(od.val, true, true);
 
+	assert(sz >= sizeof(struct Object));
+	struct Object *obj = malloc(sz);
+	if (!obj) {
 		// errobj_set_nomem does NOT create an object with object_new for this
 		// ituses a statically allocated no mem error object and does no allocations
 		errobj_set_nomem(interp);
@@ -51,13 +54,14 @@ Object *object_new(Interp *interp, const struct Type *type, struct ObjData od)
 	}
 
 	obj->type = type;
+	obj->destroy = destroy;
 	obj->refcount = 1;
+	// gcflag left uninitialized
 	obj->interp = interp;
-	obj->data = od;
 
 	obj->prev = NULL;
-	obj->next = obj->interp->objliststart;
-	obj->interp->objliststart = obj;
+	obj->next = interp->objliststart;
+	interp->objliststart = obj;
 	if(obj->next)
 		obj->next->prev = obj;
 

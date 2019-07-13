@@ -19,7 +19,7 @@ void assert_cstr_eq_cstr(const char *s1, const char *s2)
 	}
 }
 
-void assert_strobj_eq_cstr(Object *obj, const char *s)
+void assert_strobj_eq_cstr(struct StringObject *obj, const char *s)
 {
 	const char *objstr;
 	size_t junk;
@@ -38,7 +38,7 @@ void assert_error_matches_and_clear(Interp *interp, const struct Type *errtype, 
 	else
 		assert(interp->err->refcount == 1);
 
-	Object *strobj = errobj_getstring(interp->err);
+	struct StringObject *strobj = errobj_getstring(interp->err);
 	assert_strobj_eq_cstr(strobj, cstr);
 	OBJECT_DECREF(strobj);
 

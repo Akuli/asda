@@ -15,14 +15,16 @@ struct ObjData leldata = {
 	.destroy = NULL,
 };
 
+static struct Object *bools = { (struct Object *)&boolobj_true, (struct Object *)&boolobj_false };
+
 static bool compiletime_func_running;
 
-#define BOILERPLATE_ARGS Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result
+#define BOILERPLATE_ARGS Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs, struct Object **result
 #define CHECK do{ \
 	assert(interp); \
 	assert(nargs == 2); \
-	assert(args[0] == &boolobj_true); \
-	assert(args[1] == &boolobj_false); \
+	assert(args[0] == (struct Object *)&boolobj_true); \
+	assert(args[1] == (struct Object *)&boolobj_false); \
 	\
 	if (compiletime_func_running) \
 		assert(data.val == NULL); \
@@ -31,26 +33,24 @@ static bool compiletime_func_running;
 	assert(data.destroy == NULL); \
 } while(0)
 
-static bool ret_cfunc(BOILERPLATE_ARGS) { CHECK; ncalls_ret++; *result = boolobj_c2asda(true); return true; }
+static bool ret_cfunc(BOILERPLATE_ARGS) { CHECK; ncalls_ret++; *result = (struct Object *)boolobj_c2asda(true); return true; }
 static bool noret_cfunc(BOILERPLATE_ARGS) { CHECK; ncalls_noret++; *result = NULL; return true; }
 
-struct FuncObjData compiletime_ret_data   = FUNCOBJDATA_COMPILETIMECREATE(ret_cfunc);
-struct FuncObjData compiletime_noret_data = FUNCOBJDATA_COMPILETIMECREATE(noret_cfunc);
-Object compiletime_ret   = OBJECT_COMPILETIMECREATE(&funcobj_type,   &compiletime_ret_data  );
-Object compiletime_noret = OBJECT_COMPILETIMECREATE(&funcobj_type, &compiletime_noret_data);
+struct FuncObject compiletime_ret   = FUNCOBJ_COMPILETIMECREATE(ret_cfunc);
+struct FuncObject compiletime_noret = FUNCOBJ_COMPILETIMECREATE(noret_cfunc);
 
-static void check_calling(Interp *interp, Object *retf, Object *noretf)
+static void check_calling(Interp *interp, struct FuncObject *retf, struct FuncObject *noretf)
 {
 	ncalls_ret = 0;
-	Object *result;
-	assert(funcobj_call(interp, retf, (Object*[]){ &boolobj_true, &boolobj_false }, 2, &result) == true);
+	struct Object *result;
+	assert(funcobj_call(interp, retf, bools, 2, &result) == true);
 	assert(ncalls_ret == 1);
-	assert(result == &boolobj_true);
+	assert(result == (struct Object *)&boolobj_true);
 	OBJECT_DECREF(result);
 
 	ncalls_noret = 0;
-	Object *result2;
-	bool bres = funcobj_call(interp, noretf, (Object*[]){ &boolobj_true, &boolobj_false }, 2, &result2);
+	struct Object *result2;
+	bool bres = funcobj_call(interp, noretf, bools, 2, &result2);
 	assert(result2 == NULL);
 	assert(ncalls_noret == 1);
 	assert(bres);
@@ -65,8 +65,8 @@ TEST(funcobj_compiletimecreate)
 
 TEST(funcobj_new)
 {
-	Object *ret = funcobj_new(interp, ret_cfunc, leldata);
-	Object *noret = funcobj_new(interp, noret_cfunc, leldata);
+	struct FuncObject *ret = funcobj_new(interp, ret_cfunc, leldata);
+	struct FuncObject *noret = funcobj_new(interp, noret_cfunc, leldata);
 	assert(ret);
 	assert(noret);
 

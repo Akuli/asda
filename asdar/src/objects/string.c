@@ -13,36 +13,30 @@
 #include "../objtyp.h"
 
 
-static void stringdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
+static void destroy_string(struct Object *obj, bool decrefrefs, bool freenonrefs)
 {
-	struct StringObjData *data = vpdata;
+	struct StringObject *str = (struct StringObject *)obj;
 	if (freenonrefs) {
-		free(data->utf8cache);
-		free(data->val);
-		free(data);
+		free(str->utf8cache);
+		free(str->val);
 	}
 }
 
-
-Object *stringobj_new_nocpy(Interp *interp, uint32_t *val, size_t len)
+struct StringObject *stringobj_new_nocpy(Interp *interp, uint32_t *val, size_t len)
 {
-	struct StringObjData *strdat=malloc(sizeof(*strdat));
-	if(!strdat) {
+	struct StringObject *obj = object_new(interp, &stringobj_type, destroy_string, sizeof(*obj));
+	if (!obj) {
 		free(val);
-		errobj_set_nomem(interp);
 		return NULL;
 	}
-	strdat->val = val;
-	strdat->len = len;
-	strdat->utf8cache = NULL;
 
-	return object_new(interp, &stringobj_type, (struct ObjData){
-		.val = strdat,
-		.destroy = stringdata_destroy,
-	});
+	obj->val = val;
+	obj->len = len;
+	obj->utf8cache = NULL;
+	return obj;
 }
 
-Object *stringobj_new(Interp *interp, const uint32_t *val, size_t len)
+struct StringObject *stringobj_new(Interp *interp, const uint32_t *val, size_t len)
 {
 	uint32_t *valcp = malloc(sizeof(uint32_t)*len);
 	if (len && !valcp) {   // malloc(0) is special
@@ -54,7 +48,7 @@ Object *stringobj_new(Interp *interp, const uint32_t *val, size_t len)
 	return stringobj_new_nocpy(interp, valcp, len);
 }
 
-Object *stringobj_new_utf8(Interp *interp, const char *utf, size_t utflen)
+struct StringObject *stringobj_new_utf8(Interp *interp, const char *utf, size_t utflen)
 {
 	uint32_t *uni;
 	size_t unilen;
@@ -83,7 +77,7 @@ static void destroy_part(struct Part part)
 }
 
 // frees the bigmalloc vals of the parts
-static Object *create_new_string_from_parts(Interp *interp, const struct Part *parts, size_t nparts)
+static struct StringObject *create_new_string_from_parts(Interp *interp, const struct Part *parts, size_t nparts)
 {
 	size_t lensum = 0;
 	for (size_t i=0; i < nparts; i++)
@@ -139,7 +133,7 @@ static void short_ascii_to_part(const char *ascii, struct Part *part)
 	part->len = (size_t)(src - ascii);
 }
 
-Object *stringobj_new_vformat(Interp *interp, const char *fmt, va_list ap)
+struct StringObject *stringobj_new_vformat(Interp *interp, const char *fmt, va_list ap)
 {
 	struct Part parts[20];
 	size_t nparts = 0;
@@ -187,11 +181,10 @@ Object *stringobj_new_vformat(Interp *interp, const char *fmt, va_list ap)
 
 		case 'S':
 		{
-			Object *obj = va_arg(ap, Object *);
-			struct StringObjData *dat = obj->data.val;
+			struct StringObject *obj = va_arg(ap, struct StringObject *);
 			parts[nparts].valkind = PVK_BIG_CONST;
-			parts[nparts].val.bigconst = dat->val;
-			parts[nparts].len = dat->len;
+			parts[nparts].val.bigconst = obj->val;
+			parts[nparts].len = obj->len;
 			break;
 		}
 
@@ -237,32 +230,31 @@ error:
 	return NULL;
 }
 
-Object *stringobj_new_format(Interp *interp, const char *fmt, ...)
+struct StringObject *stringobj_new_format(Interp *interp, const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	Object *res = stringobj_new_vformat(interp, fmt, ap);   // may be NULL
+	struct StringObject *res = stringobj_new_vformat(interp, fmt, ap);   // may be NULL
 	va_end(ap);
-	return res;
+	return res;  // may be NULL
 }
 
 
-bool stringobj_toutf8(Object *obj, const char **val, size_t *len)
+bool stringobj_toutf8(struct StringObject *obj, const char **val, size_t *len)
 {
-	struct StringObjData *strdat = obj->data.val;
-	if( !strdat->utf8cache &&
-		!utf8_encode(obj->interp, strdat->val, strdat->len, &strdat->utf8cache, &strdat->utf8cachelen) )
+	if( !obj->utf8cache &&
+		!utf8_encode(obj->interp, obj->val, obj->len, &obj->utf8cache, &obj->utf8cachelen) )
 	{
-		strdat->utf8cache = NULL;
+		obj->utf8cache = NULL;
 		return false;
 	}
 
-	*val = strdat->utf8cache;
-	*len = strdat->utf8cachelen;
+	*val = obj->utf8cache;
+	*len = obj->utf8cachelen;
 	return true;
 }
 
-Object *stringobj_join(Interp *interp, Object *const *strs, size_t nstrs)
+struct StringObject *stringobj_join(Interp *interp, struct StringObject *const *strs, size_t nstrs)
 {
 	if(nstrs == 0)
 		return stringobj_new_nocpy(interp, NULL, 0);
@@ -278,20 +270,19 @@ Object *stringobj_join(Interp *interp, Object *const *strs, size_t nstrs)
 	}
 
 	for (size_t i = 0; i < nstrs; i++) {
-		struct StringObjData *sd = strs[i]->data.val;
 		parts[i].valkind = PVK_BIG_CONST;
-		parts[i].val.bigconst = sd->val;
-		parts[i].len = sd->len;
+		parts[i].val.bigconst = strs[i]->val;
+		parts[i].len = strs[i]->len;
 	}
 
-	Object *res = create_new_string_from_parts(interp, parts, nstrs);
+	struct StringObject *res = create_new_string_from_parts(interp, parts, nstrs);
 	free(parts);
-	return res;
+	return res;   // may be NULL
 }
 
 
 static bool tostring_impl(Interp *interp, struct ObjData data,
-	Object *const *args, size_t nargs, Object **result)
+	struct Object *const *args, size_t nargs, struct Object **result)
 {
 	assert(nargs == 1);
 	assert(args[0]->type == &stringobj_type);
@@ -300,10 +291,9 @@ static bool tostring_impl(Interp *interp, struct ObjData data,
 	return true;
 }
 
-static struct FuncObjData tostringdata = FUNCOBJDATA_COMPILETIMECREATE(tostring_impl);
-static Object tostring = OBJECT_COMPILETIMECREATE(&funcobj_type, &tostringdata);
+static struct FuncObject tostring = FUNCOBJ_COMPILETIMECREATE(tostring_impl);
 
 // TODO: first string method should be uppercase
-static Object *methods[] = { &tostring, &tostring };
+static struct FuncObject *methods[] = { &tostring, &tostring };
 
 const struct Type stringobj_type = { .methods = methods, .nmethods = sizeof(methods)/sizeof(methods[0]) };

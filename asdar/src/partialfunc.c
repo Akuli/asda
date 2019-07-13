@@ -10,8 +10,8 @@
 #include "objects/func.h"
 
 struct PartialFuncData {
-	Object *f;
-	Object **partial;
+	struct FuncObject *f;
+	struct Object **partial;
 	size_t npartial;
 };
 
@@ -30,13 +30,11 @@ static void partialfunc_data_destroy(void *vpdata, bool decrefrefs, bool freenon
 }
 
 static bool
-call_partial_func(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
+call_partial_func(Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs, struct Object **result)
 {
 	const struct PartialFuncData *pfd = data.val;
 
-	assert(pfd->f->type == &funcobj_type);
-
-	Object **allargs;
+	struct Object **allargs;
 	if (nargs == 0) {
 		allargs = pfd->partial;
 	} else {
@@ -54,12 +52,13 @@ call_partial_func(Interp *interp, struct ObjData data, Object *const *args, size
 	return ok;
 }
 
-static bool partialfunc_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
+static bool partialfunc_cfunc(Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs, struct Object **result)
 {
 	return call_partial_func(interp, data, args, nargs, result);
 }
 
-Object *partialfunc_create(Interp *interp, Object *f, Object *const *partial, size_t npartial)
+struct FuncObject *
+partialfunc_create(Interp *interp, struct FuncObject *f, struct Object *const *partial, size_t npartial)
 {
 	if (npartial == 0) {
 		OBJECT_INCREF(f);
@@ -67,7 +66,7 @@ Object *partialfunc_create(Interp *interp, Object *f, Object *const *partial, si
 	}
 
 	struct PartialFuncData *pfd = malloc(sizeof(*pfd));
-	Object **partialcp = malloc(sizeof(partial[0]) * npartial);
+	struct Object **partialcp = malloc(sizeof(partial[0]) * npartial);
 	if(!partialcp || !pfd) {
 		errobj_set_nomem(interp);
 		return NULL;
@@ -83,7 +82,5 @@ Object *partialfunc_create(Interp *interp, Object *f, Object *const *partial, si
 		OBJECT_INCREF(partialcp[i]);
 
 	struct ObjData od = { .val = pfd, .destroy = partialfunc_data_destroy };
-
-	assert(f->type == &funcobj_type);
 	return funcobj_new(interp, partialfunc_cfunc, od);
 }

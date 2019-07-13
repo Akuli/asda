@@ -11,7 +11,7 @@
 
 TEST(stringobj_toutf8)
 {
-	Object *obj = stringobj_new(interp, (uint32_t[]){'h','e','l','l','o'}, 5);
+	struct StringObject *obj = stringobj_new(interp, (uint32_t[]){'h','e','l','l','o'}, 5);
 	assert(obj);
 
 	const char *buf1, *buf2;
@@ -41,7 +41,7 @@ TEST(stringobj_new_different_ways)
 		for (size_t i = 0; cstr[i]; i++)
 			buf[i] = buf2[i] = (unsigned char)cstr[i];
 
-		Object *objs[] = {
+		struct StringObject *objs[] = {
 			stringobj_new_nocpy(interp, buf, strlen(cstr)),
 			stringobj_new(interp, buf2, strlen(cstr)),
 			stringobj_new_utf8(interp, cstr, strlen(cstr)),
@@ -56,9 +56,11 @@ TEST(stringobj_new_different_ways)
 	}
 }
 
+static struct StringObject hello = STRINGOBJ_COMPILETIMECREATE('h','e','l','l','o');
+
 TEST(stringobj_data_compiletimecreate)
 {
-	Object *obj = stringobj_new_format(interp, "hello", sizeof("hello")-1);
+	struct StringObject *obj = stringobj_new_format(interp, "hello", sizeof("hello")-1);
 	assert(obj);
 
 	const char *chjunk;
@@ -66,20 +68,17 @@ TEST(stringobj_data_compiletimecreate)
 	bool ok = stringobj_toutf8(obj, &chjunk, &szjunk);   // adds utf8cache and utf8cachelen to the data
 	assert(ok);
 
-	struct StringObjData sod1 = *(struct StringObjData *) obj->data.val;
-	struct StringObjData sod2 = STRINGOBJDATA_COMPILETIMECREATE('h','e','l','l','o');
-
 	int i = 0;
-	for (struct StringObjData sod = sod1; i++ < 2; sod = sod2) {
-		assert(sod.val[0] == 'h');
-		assert(sod.val[1] == 'e');
-		assert(sod.val[2] == 'l');
-		assert(sod.val[3] == 'l');
-		assert(sod.val[4] == 'o');
-		assert(sod.len == 5);
+	for (struct StringObject *s = obj; i++ < 2; s = &hello) {
+		assert(s->len == 5);
+		assert(s->val[0] == 'h');
+		assert(s->val[1] == 'e');
+		assert(s->val[2] == 'l');
+		assert(s->val[3] == 'l');
+		assert(s->val[4] == 'o');
 
-		assert(strcmp(sod.utf8cache, "hello") == 0);
-		assert(sod.utf8cachelen == 5);
+		assert(strcmp(s->utf8cache, "hello") == 0);
+		assert(s->utf8cachelen == 5);
 	}
 
 	OBJECT_DECREF(obj);
@@ -87,8 +86,8 @@ TEST(stringobj_data_compiletimecreate)
 
 TEST(stringobj_new_format)
 {
-	Object *b = stringobj_new_utf8(interp, "b", 1);
-	Object *str = stringobj_new_format(interp, "hello world, %s, %S, %U, %U, %B, %B, %d, %zu, %%",
+	struct StringObject *b = stringobj_new_utf8(interp, "b", 1);
+	struct StringObject *str = stringobj_new_format(interp, "hello world, %s, %S, %U, %U, %B, %B, %d, %zu, %%",
 		"a", b, (uint32_t)'c', (uint32_t)0xdddL, (unsigned char)'e', (unsigned char)0xf, -123, (size_t)456);
 
 	assert_strobj_eq_cstr(str, "hello world, a, b, U+0063 'c', U+0DDD, 0x65 'e', 0x0f, -123, 456, %");

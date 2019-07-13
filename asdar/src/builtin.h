@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include "objtyp.h"   // IWYU pragma: keep
 
-extern Object* const builtin_objects[];
+extern struct Object* const builtin_objects[];
 extern const size_t builtin_nobjects;
 
 extern const struct Type* const builtin_types[];

@@ -14,44 +14,56 @@ struct ObjData {
 	void (*destroy)(void *val, bool decrefrefs, bool freenonrefs);
 };
 
-/* if you are a typedef hater
-
-then please let this be, just compare this:
-
-	Object *foo(Interp *interp, Object *bar, Object *baz, Object **spam, size_t nspam);
-
-to this:
-
-	struct Object *foo(struct Interp *interp, struct Object *bar, struct Object *baz, struct Object **spam, size_t nspam);
-
-some function declarations actually use this struct many times!
-*/
-typedef struct ObjectStruct Object;
+// also include objects/func.h if you need to do something with methods of types
+struct FuncObject;
 
 struct Type {
-	Object **methods;
+	struct FuncObject **methods;
 	size_t nmethods;
 };
 
-struct ObjectStruct {
-	const struct Type *type;
-	unsigned int refcount;       // TODO: atomic?
-	unsigned int gcflag;         // gc.c uses this for an implementation-detaily thing
-	Interp *interp;       // NULL for statically allocated objects
-	struct ObjData data;
 
-	// runtime created objects go into a doubly linked list
-	// it is doubly linked to make removing objects from the list O(1)
-	Object *prev;
-	Object *next;
-};
+/*
+other objects are created like this:
 
-#define OBJECT_COMPILETIMECREATE(TYPE, DATAVAL) { \
-	/* fields not defined here get set to 0 or NULL by default */ \
+	struct SomeOtherObject {
+		OBJECT_HEAD
+		custom stuff here
+	};
+
+any object can be casted to 'struct Object'
+'struct Object' can be usually casted to some other more specific struct
+that depends on the type
+
+TODO: make the refcount atomic?
+*/
+#define OBJECT_HEAD \
+	const struct Type *type; \
+	void (*destroy)(struct Object *obj, bool decrefrefs, bool freenonrefs); \
+	unsigned int refcount;       /* access this only with OBJECT_INCREF and OBJECT_DECREF */ \
+	unsigned int gcflag;         /* for gc.c, don't use elsewhere */ \
+	Interp *interp;              /* NULL for OBJECT_COMPILETIMECREATE objects */ \
+	struct Object *prev, *next;  /* a doubly-linked list so that removing objects is O(1) */
+
+struct Object { OBJECT_HEAD };
+
+/*
+Usage:
+
+	struct SomeObject obj = OBJECT_COMPILETIMECREATE(&someobj_type,
+		.customfield = 1,
+		.anotherfield = 2,
+	);
+
+if you don't want to set any custom fields, do OBJECT_COMPILETIMECREATE(&someobj_type, 0)
+the 0 is needed because c standard
+*/
+#define OBJECT_COMPILETIMECREATE(TYPE, ...) { \
+	/* OBJECT_HEAD fields not defined here get set to 0 or NULL by default */ \
 	.type = (TYPE), \
 	.refcount = 1, \
 	.interp = NULL, \
-	.data = { .val = (DATAVAL), .destroy = NULL }, \
+	__VA_ARGS__ \
 }
 
 
@@ -60,33 +72,53 @@ struct ObjectStruct {
 #define OBJECT_DECREF(obj) do{  \
 	if (--(obj)->refcount == 0) { \
 		/* this should never happen for statically allocated objects */ \
-		object_destroy((obj), true, true); \
+		object_destroy((struct Object *)(obj), true, true); \
 	} \
 } while(0)
 
-/* returns an object with refcount 1
+/* returns an object with refcount 1, and all fields not in OBJECT_HEAD unset
 
-Destroys od on no mem, so you can do this:
+Example:
 
-	static Object *someobj_new(Interp *interp)
+	struct SomeObject {
+		OBJECT_HEAD
+		char *customthing;
+	};
+
+	static void destroy_someobj(struct Object *obj, bool decrefrefs, bool freenonrefs)
 	{
-		struct ObjData od;
-		fill up od somehow;
-		if (failure with filling) {
-			destroy things that have been filled so far;
-			set message to interp->errstr;
+		struct SomeObject *sobj = obj;
+		free(sobj->customthing);
+	}
+
+	struct SomeObject *someobj_new(Interp *interp)
+	{
+		char *customthing = malloc(123);
+		if (!customthing) {
+			errobj_set_nomem(interp);
+			return NULL;
+		}
+		strcpy(customthing, "hello world");
+
+		struct SomeObject *obj = object_new(interp, &someobj_type, destroy_someobj, sizeof(*obj));
+		if (!obj) {
+			free(customthing);
 			return NULL;
 		}
 
-		return object_new(interp, someobj_type, od);
+		obj->customthing = customthing;
+		return obj;
 	}
 
-Now od is destroyed correctly even if object_new() runs out of memory.
+destroy can be NULL
+return type declared as void* to avoid a cast after calling object_new()
 */
-Object *object_new(Interp *interp, const struct Type *type, struct ObjData od);
+void *object_new(Interp *interp, const struct Type *type,
+	void (*destroy)(struct Object *obj, bool decrefrefs, bool freenonrefs),
+	size_t sz);
 
 // use decref instead of calling this yourself
-void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs);
+void object_destroy(struct Object *obj, bool decrefrefs, bool freenonrefs);
 
 extern const struct Type object_type;
 

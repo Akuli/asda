@@ -13,14 +13,25 @@ implement a handy way to refcount, so that's used here.
 #include "../interp.h"
 #include "../objtyp.h"
 
-Object *scopeobj_newglobal(Interp *interp);
-Object *scopeobj_newsub(Interp *interp, Object *parent, uint16_t nlocals);
+extern const struct Type scopeobj_type;
+
+struct ScopeObject {
+	OBJECT_HEAD
+
+	struct Object **locals;
+	size_t nlocals;
+
+	struct ScopeObject **parents;
+	size_t nparents;
+};
+
+struct ScopeObject *scopeobj_newglobal(Interp *interp);
+struct ScopeObject *scopeobj_newsub(Interp *interp, struct ScopeObject *parent, size_t nlocals);
 
 // does NOT return a new reference
-Object *scopeobj_getforlevel(Object *scope, size_t level);
+struct ScopeObject *scopeobj_getforlevel(struct ScopeObject *scope, size_t level);
 
-Object **scopeobj_getlocalvarsptr(Object *scope);
-
-extern const struct Type scopeobj_type;
+// TODO: delete this and just access ->locals directly
+struct Object **scopeobj_getlocalvarsptr(struct ScopeObject *scope);
 
 #endif   // OBJECTS_SCOPE_H

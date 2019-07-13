@@ -6,19 +6,22 @@
 #include <stdbool.h>
 
 // forward declarations needed because many things need an Interp
-struct ObjectStruct;
+struct Object;
+struct ErrObject;
+struct IntObject;
+struct ScopeObject;
 struct Module;
 
 typedef struct InterpStruct {
 	const char *argv0;
-	struct ObjectStruct *builtinscope;
+	struct ScopeObject *builtinscope;
 
 	// the only object created at runtime that has ->prev == NULL
 	// all (not yet destroyed) runtime created objects can be found from here with ->next
-	struct ObjectStruct *objliststart;
+	struct Object *objliststart;
 
 	// see objects/err.h
-	struct ObjectStruct *err;
+	struct ErrObject *err;
 
 	// don't access this directly, use functions in module.h instead
 	struct Module *firstmod;
@@ -44,7 +47,7 @@ typedef struct InterpStruct {
 	const char *basedir;
 
 	// optimization for Int objects, contains integers 0, 1, 2, ...
-	struct ObjectStruct* intcache[20];
+	struct IntObject* intcache[20];
 } Interp;
 
 // returns false and sets an error to interp->err on no mem

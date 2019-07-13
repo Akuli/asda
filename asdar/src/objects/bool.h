@@ -4,18 +4,23 @@
 #include <stdbool.h>
 #include "../objtyp.h"
 
-extern Object boolobj_true, boolobj_false;
 extern const struct Type boolobj_type;
 
+struct BoolObject {
+	OBJECT_HEAD
+};
+
+extern struct BoolObject boolobj_true, boolobj_false;
+
 // never fails, always returns a new reference
-Object *boolobj_c2asda(bool cbool);
+struct BoolObject *boolobj_c2asda(bool cbool);
 
 // asserts that the object is boolobj_true or boolobj_false
-bool boolobj_asda2c(Object *asdabool);
+bool boolobj_asda2c(struct BoolObject *asdabool);
 
 /** Negate a Boolean
  * Returns a new reference
  */
-Object *boolobj_neg(Object *obj);
+struct BoolObject *boolobj_neg(struct BoolObject *obj);
 
 #endif   // OBJECTS_BOOL_H

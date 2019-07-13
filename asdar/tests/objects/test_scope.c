@@ -7,12 +7,12 @@
 
 TEST(scope_newsub_and_getforlevel)
 {
-	Object *a = scopeobj_newsub(interp, interp->builtinscope, 10);
-	Object *b = scopeobj_newsub(interp, a, 10);
-	Object *c = scopeobj_newsub(interp, b, 10);
+	struct ScopeObject *a = scopeobj_newsub(interp, interp->builtinscope, 10);
+	struct ScopeObject *b = scopeobj_newsub(interp, a, 10);
+	struct ScopeObject *c = scopeobj_newsub(interp, b, 10);
 
-	Object *shouldB[] = { interp->builtinscope, a, b, c };
-	Object *is[4][4] = {
+	struct ScopeObject *shouldB[] = { interp->builtinscope, a, b, c };
+	struct ScopeObject *is[4][4] = {
 		{
 			scopeobj_getforlevel(interp->builtinscope, 0),
 			scopeobj_getforlevel(a, 0),
@@ -35,7 +35,7 @@ TEST(scope_newsub_and_getforlevel)
 
 	for (int level = 0; level < 4; level++) {
 		for (int i = 0; i < 4-level; i++) {
-			Object *scope = is[level][i];
+			struct ScopeObject *scope = is[level][i];
 			assert(scope);
 			assert(scope == shouldB[level]);
 		}
@@ -48,7 +48,7 @@ TEST(scope_newsub_and_getforlevel)
 
 TEST(scope_0_locals)
 {
-	Object *scope = scopeobj_newsub(interp, interp->builtinscope, 0);
+	struct ScopeObject *scope = scopeobj_newsub(interp, interp->builtinscope, 0);
 	assert(scope);
 	OBJECT_DECREF(scope);
 }

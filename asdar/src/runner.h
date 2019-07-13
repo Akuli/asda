@@ -7,20 +7,21 @@
 #include "interp.h"
 #include "objtyp.h"
 
-// think of the content of this struct as an implementation detail
 struct Runner {
+	struct Object *retval;
+
+	// don't access rest of these directly
 	Interp *interp;
-	Object *scope;
-	DynArray(Object*) stack;
+	struct ScopeObject *scope;
+	DynArray(struct Object*) stack;
 	size_t opidx;
 	struct Code code;
-	Object *retval;  // returned value, NOT an implementation detail unlike everything else
 };
 
 // never fails
 // increfs the scope as needed
 // never frees the bc
-void runner_init(struct Runner *rnr, Interp *interp, Object *scope, struct Code code);
+void runner_init(struct Runner *rnr, Interp *interp, struct ScopeObject *scope, struct Code code);
 
 // never fails
 void runner_free(const struct Runner *rnr);

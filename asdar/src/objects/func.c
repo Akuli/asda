@@ -8,35 +8,30 @@
 
 const struct Type funcobj_type = { .methods = NULL, .nmethods = 0 };
 
-bool funcobj_call(Interp *interp, Object *f, Object *const *args, size_t nargs, Object **result)
+bool funcobj_call(
+	Interp *interp, struct FuncObject *f,
+	struct Object *const *args, size_t nargs,
+	struct Object **result)
 {
-	assert(f->type == &funcobj_type);
-	struct FuncObjData *data = f->data.val;
-	return data->cfunc(interp, data->userdata, args, nargs, result);
+	return f->cfunc(interp, f->userdata, args, nargs, result);
 }
 
-static void funcdata_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
+static void destroy_func(struct Object *obj, bool decrefrefs, bool freenonrefs)
 {
-	struct FuncObjData *data = vpdata;
-
-	if (data->userdata.destroy) data->userdata.destroy(data->userdata.val, decrefrefs, freenonrefs);
-
-	if (freenonrefs) free(data);
+	struct FuncObject *f = (struct FuncObject *)obj;
+	if (f->userdata.destroy)
+		f->userdata.destroy(f->userdata.val, decrefrefs, freenonrefs);
 }
 
-Object *funcobj_new(Interp *interp, funcobj_cfunc cfunc, struct ObjData userdata)
+struct FuncObject *funcobj_new(Interp *interp, funcobj_cfunc cfunc, struct ObjData userdata)
 {
-	struct FuncObjData *data = malloc(sizeof *data);
-	if(!data) {
-		errobj_set_nomem(interp);
+	struct FuncObject *f = object_new(interp, &funcobj_type, destroy_func, sizeof(*f));
+	if (!f) {
 		if(userdata.destroy) userdata.destroy(userdata.val, true, true);
 		return NULL;
 	}
-	data->userdata = userdata;
-	data->cfunc = cfunc;
 
-	return object_new(interp, &funcobj_type, (struct ObjData){
-		.val = data,
-		.destroy = funcdata_destroy,
-	});
+	f->userdata = userdata;
+	f->cfunc = cfunc;
+	return f;
 }

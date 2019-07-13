@@ -8,10 +8,10 @@
 
 TEST(intobj_new_long_and_cmp)
 {
-	Object *minusone = intobj_new_long(interp, -1);
-	Object *twentyfour = intobj_new_long(interp, 24);   // https://www.youtube.com/watch?v=RkP_OGDCLY0
-	Object *forty = intobj_new_long(interp, 40);
-	Object *fourty = intobj_new_long(interp, 40);
+	struct IntObject *minusone = intobj_new_long(interp, -1);
+	struct IntObject *twentyfour = intobj_new_long(interp, 24);   // https://www.youtube.com/watch?v=RkP_OGDCLY0
+	struct IntObject *forty = intobj_new_long(interp, 40);
+	struct IntObject *fourty = intobj_new_long(interp, 40);
 
 	assert(intobj_cmp(forty, forty) == 0);
 	assert(intobj_cmp(forty, fourty) == 0);
@@ -38,13 +38,13 @@ TEST(intobj_new_long_and_cmp)
 
 TEST(intobj_addsubmulneg)
 {
-	Object *minustwo = intobj_new_long(interp, -2);
-	Object *seven = intobj_new_long(interp, 7);
+	struct IntObject *minustwo = intobj_new_long(interp, -2);
+	struct IntObject *seven = intobj_new_long(interp, 7);
 
-	Object *add = intobj_add(interp, minustwo, seven);
-	Object *sub = intobj_sub(interp, minustwo, seven);
-	Object *mul = intobj_mul(interp, minustwo, seven);
-	Object *neg = intobj_neg(interp, minustwo);
+	struct IntObject *add = intobj_add(interp, minustwo, seven);
+	struct IntObject *sub = intobj_sub(interp, minustwo, seven);
+	struct IntObject *mul = intobj_mul(interp, minustwo, seven);
+	struct IntObject *neg = intobj_neg(interp, minustwo);
 
 	OBJECT_DECREF(minustwo);
 	OBJECT_DECREF(seven);
@@ -63,8 +63,8 @@ TEST(intobj_addsubmulneg)
 TEST(intobj_new_bebytes)
 {
 	unsigned char byt[] = { 0x7, 0x5b, 0xcd, 0x15 };
-	Object *pos = intobj_new_bebytes(interp, byt, sizeof byt, false);
-	Object *neg = intobj_new_bebytes(interp, byt, sizeof byt, true);
+	struct IntObject *pos = intobj_new_bebytes(interp, byt, sizeof byt, false);
+	struct IntObject *neg = intobj_new_bebytes(interp, byt, sizeof byt, true);
 	assert(intobj_cmp_long(pos, 123456789L) == 0);
 	assert(intobj_cmp_long(neg, -123456789L) == 0);
 	OBJECT_DECREF(pos);
@@ -73,5 +73,5 @@ TEST(intobj_new_bebytes)
 
 TEST(intobj_tostring)
 {
-	
+	// TODO
 }

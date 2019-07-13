@@ -4,6 +4,7 @@
 #include <string.h>
 #include "gc.h"
 #include "objtyp.h"
+#include "objects/int.h"
 #include "objects/scope.h"
 
 
@@ -30,8 +31,8 @@ void interp_destroy(Interp *interp)
 
 	gc_refcountdebug(interp);
 
-	Object *next;
-	for (Object *obj = interp->objliststart; obj; obj = next){
+	struct Object *next;
+	for (struct Object *obj = interp->objliststart; obj; obj = next){
 		//printf("refcount cycling object %p\n", (void*)obj);
 		next = obj->next;
 		object_destroy(obj, false, true);

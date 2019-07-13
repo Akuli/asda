@@ -3,6 +3,7 @@
 
 #include "../interp.h"
 #include "../objtyp.h"
+#include "string.h"
 
 extern const struct Type
 	errobj_type_error,   // base class for other errors
@@ -10,6 +11,15 @@ extern const struct Type
 	errobj_type_variable,
 	errobj_type_value,
 	errobj_type_os;
+
+struct ErrObject {
+	OBJECT_HEAD
+	struct StringObject *msgstr;
+	// TODO: stack trace info
+	// TODO: chained errors
+	//       but maybe not as linked list?
+	//       if linked list then how about multiple NoMemErrors chaining? avoid chaining onto itself
+};
 
 // see string.h for info about the format strings
 
@@ -33,7 +43,8 @@ example:
 void errobj_set_oserr(Interp *interp, const char *fmt, ...);
 
 // returns String object as a new reference, never fails
-Object *errobj_getstring(Object *err);
+// TODO: get rid of this and access msgstr directly instead
+struct StringObject *errobj_getstring(struct ErrObject *err);
 
 
 #endif   // OBJECTS_ERR_H

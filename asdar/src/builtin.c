@@ -11,14 +11,15 @@
 #include "objects/string.h"
 
 
-static bool print_impl(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
+static bool print_impl(Interp *interp, struct ObjData data, struct Object *const *args, size_t nargs, struct Object **result)
 {
 	assert(nargs == 1);
 	assert(args[0]->type == &stringobj_type);
+	struct StringObject *obj = (struct StringObject *)args[0];
 
 	const char *str;
 	size_t len;
-	if(!stringobj_toutf8(args[0], &str, &len))
+	if(!stringobj_toutf8(obj, &str, &len))
 		return false;
 
 	for (const char *p = str; p < str+len; p++)
@@ -28,10 +29,13 @@ static bool print_impl(Interp *interp, struct ObjData data, Object *const *args,
 	return true;
 }
 
-static struct FuncObjData printdata = FUNCOBJDATA_COMPILETIMECREATE(print_impl);
-static Object print = OBJECT_COMPILETIMECREATE(&funcobj_type, &printdata);
+static struct FuncObject print = FUNCOBJ_COMPILETIMECREATE(print_impl);
 
-Object* const builtin_objects[] = { &print, &boolobj_true, &boolobj_false };
+struct Object* const builtin_objects[] = {
+	(struct Object *)&print,
+	(struct Object *)&boolobj_true,
+	(struct Object *)&boolobj_false,
+};
 const size_t builtin_nobjects = sizeof(builtin_objects)/sizeof(builtin_objects[0]);
 
 const struct Type* const builtin_types[] = {
