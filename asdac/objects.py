@@ -18,12 +18,13 @@ class Type:
         # keys are names, values are types
         self.attributes = collections.OrderedDict()
         if parent_type is not None:
-            # FIXME: order breaks here because ChainMap source code has this:
+            # ChainMap won't work because its source code has this:
             #
             #    def __iter__(self):
             #        return iter(set().union(*self.maps))
-            self.attributes = collections.ChainMap(
-                self.attributes, parent_type.attributes)
+            #
+            # I could create an OrderedChainMap but why bother
+            self.attributes.update(parent_type.attributes)
 
     def undo_generics(self, type_dict):
         return self
@@ -45,7 +46,7 @@ class FunctionType(Type):
             'function (%s) -> %s' % (
                 ', '.join(argtype.name for argtype in self.argtypes),
                 'void' if returntype is None else returntype.name,
-            ), OBJECT)
+            ), BUILTIN_TYPES['Object'])
         self.returntype = returntype
 
     def __eq__(self, other):
@@ -62,25 +63,35 @@ class FunctionType(Type):
              self.returntype.undo_generics(type_dict)))
 
 
-OBJECT = Type('Object', None)
-ERROR = Type('Error', OBJECT)
+def _fill_builtin_types_ordered_dict():
+    def create_and_add(name, baseclass):
+        BUILTIN_TYPES[name] = Type(name, baseclass)
 
-BUILTIN_TYPES = collections.OrderedDict([
-    ('Str', Type('Str', OBJECT)),
-    ('Int', Type('Int', OBJECT)),
-    ('Bool', Type('Bool', OBJECT)),
-    ('Object', OBJECT),
-    ('Error', ERROR),
-    ('NoMemError', Type('NoMemError', ERROR)),
-    ('VariableError', Type('VariableError', ERROR)),
-    ('ValueError', Type('ValueError', ERROR)),
-    ('OsError', Type('OsError', ERROR)),
-])
+    objekt = Type('Object', None)
+    create_and_add('Str', objekt)
+    create_and_add('Int', objekt)
+    create_and_add('Bool', objekt)
+    BUILTIN_TYPES['Object'] = objekt
 
-BUILTIN_TYPES['Str'].add_method('uppercase', [], BUILTIN_TYPES['Str'])
-BUILTIN_TYPES['Str'].add_method('to_string', [], BUILTIN_TYPES['Str'])
-BUILTIN_TYPES['Int'].add_method('to_string', [], BUILTIN_TYPES['Str'])
-BUILTIN_TYPES['Error'].add_method('to_string', [], BUILTIN_TYPES['Str'])
+    # Object is needed for creating functions, and that is needed for adding
+    # methods
+    BUILTIN_TYPES['Str'].add_method('uppercase', [], BUILTIN_TYPES['Str'])
+    BUILTIN_TYPES['Str'].add_method('to_string', [], BUILTIN_TYPES['Str'])
+    BUILTIN_TYPES['Int'].add_method('to_string', [], BUILTIN_TYPES['Str'])
+
+    create_and_add('Error', objekt)
+
+    # this must be before error subclasses, because the methods get copied
+    BUILTIN_TYPES['Error'].add_method('to_string', [], BUILTIN_TYPES['Str'])
+
+    create_and_add('NoMemError', BUILTIN_TYPES['Error'])
+    create_and_add('VariableError', BUILTIN_TYPES['Error'])
+    create_and_add('ValueError', BUILTIN_TYPES['Error'])
+    create_and_add('OsError', BUILTIN_TYPES['Error'])
+
+
+BUILTIN_TYPES = collections.OrderedDict()
+_fill_builtin_types_ordered_dict()
 
 BUILTIN_VARS = collections.OrderedDict([
     ('print', FunctionType([BUILTIN_TYPES['Str']], None)),
@@ -92,7 +103,8 @@ BUILTIN_VARS = collections.OrderedDict([
 class GeneratorType(Type):
 
     def __init__(self, item_type):
-        super().__init__('Generator[%s]' % item_type.name, OBJECT)
+        super().__init__('Generator[%s]' % item_type.name,
+                         BUILTIN_TYPES['Object'])
         self.item_type = item_type
 
     def __eq__(self, other):
@@ -107,7 +119,7 @@ class GeneratorType(Type):
 class GenericMarker(Type):
 
     def __init__(self, name):
-        super().__init__(name, OBJECT)
+        super().__init__(name, BUILTIN_TYPES['Object'])
 
     def undo_generics(self, type_dict):
         return type_dict.get(self, self)

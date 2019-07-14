@@ -55,7 +55,7 @@ def _find_yields(node):
 # this is too
 def _replace_generic_markers_with_object(node, markers):
     node = node._replace(type=node.type.undo_generics(
-        dict.fromkeys(markers, objects.OBJECT)))
+        dict.fromkeys(markers, objects.BUILTIN_TYPES['Object'])))
 
     for name, value in node._asdict().items():
         if name in ['location', 'type']:
