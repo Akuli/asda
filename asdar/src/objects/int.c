@@ -15,6 +15,18 @@
 #include "string.h"
 
 /*
+checks that long is 2's complement, i.e. abs(LONG_MIN) == LONG_MAX + 1
+this is needed because the code assumes that if x is a long, then -x
+	- doesn't fit in a long, if x == LONG_MIN
+	- fits in a long, if x != LONG_MIN
+
+suppor for other systems can be added later
+*/
+#if LONG_MIN + LONG_MAX != -1
+# error "your system is unsupported, a two's complement long is needed"
+#endif
+
+/*
 this code assigns mpz_t's to each other like this
 
 	*mpz1 = *mpz2
