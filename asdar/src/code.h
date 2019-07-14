@@ -26,6 +26,7 @@ enum CodeOpKind {
 	CODE_DIDNTRETURNERROR,
 
 	CODE_ERRHND_ADD,
+	CODE_ERRHND_RM,
 
 	CODE_INT_ADD,   // x+y
 	CODE_INT_SUB,   // x-y
@@ -43,7 +44,7 @@ struct Code {
 
 struct CodeVarData { uint8_t level; uint16_t index; };
 struct CodeLookupMethodData { const struct Type *type; uint16_t index; };
-struct CodeErrHndData { uint16_t startidx, endidx, jmpidx, errvar; const struct Type *errtype; };
+struct CodeErrHndData { uint16_t jmpidx; const struct Type *errtype; uint16_t errvar; };
 
 typedef union {
 	struct CodeVarData var;

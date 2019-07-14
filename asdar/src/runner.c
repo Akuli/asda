@@ -299,11 +299,16 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		dynarray_push_itwillfit(&rnr->stack, (Object*)res);
 		OBJECT_DECREF(x);
 		OBJECT_DECREF(y);
+		break;
 	}
 
 	case CODE_ERRHND_ADD:
 		if (!dynarray_push(rnr->interp, &rnr->errhnd, op->data.errhnd))
 			return RUNNER_ERROR;
+		break;
+
+	case CODE_ERRHND_RM:
+		(void) dynarray_pop(&rnr->errhnd);
 		break;
 
 	}   // end of switch
@@ -313,16 +318,6 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 
 skip_opidx_plusplus:
 	return ret;
-}
-
-static void remove_old_error_handlers(struct Runner *rnr)
-{
-	while(rnr->errhnd.len) {
-		struct CodeErrHndData last = rnr->errhnd.ptr[rnr->errhnd.len - 1];
-		if (last.startidx <= rnr->opidx && rnr->opidx < last.endidx)
-			break;
-		(void) dynarray_pop(&rnr->errhnd);
-	}
 }
 
 static void begin_catch_block(struct Runner *rnr)
@@ -346,8 +341,6 @@ enum RunnerResult runner_run(struct Runner *rnr)
 			begin_catch_block(rnr);
 			continue;
 		}
-
-		remove_old_error_handlers(rnr);
 
 		if(res != RUNNER_DIDNTRETURN)
 			return res;

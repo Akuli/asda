@@ -40,6 +40,7 @@ TIMES = b'*'
 EQUAL = b'='
 
 ADD_ERROR_HANDLER = b'h'
+REMOVE_ERROR_HANDLER = b'H'
 
 # these are used when bytecoding a type
 TYPE_BUILTIN = b'b'
@@ -239,8 +240,6 @@ class _BytecodeWriter:
 
         if isinstance(op, opcoder.AddErrorHandler):
             self.bytecode.add_byte(ADD_ERROR_HANDLER)
-            self.bytecode.add_uint16(self.jumpmarker2index[op.start_marker])
-            self.bytecode.add_uint16(self.jumpmarker2index[op.end_marker])
             self.bytecode.add_uint16(self.jumpmarker2index[op.jumpto_marker])
             self.write_type(op.errortype)
             self.bytecode.add_uint16(
@@ -258,6 +257,7 @@ class _BytecodeWriter:
             (opcoder.Times, TIMES),
             # (opcoder.Divide, DIVIDE),
             (opcoder.Equal, EQUAL),
+            (opcoder.RemoveErrorHandler, REMOVE_ERROR_HANDLER),
         ]
 
         for klass, byte in simple_things:

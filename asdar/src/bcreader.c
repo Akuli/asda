@@ -40,6 +40,7 @@
 #define INT_MUL '*'
 #define INT_EQ '='
 #define ADD_ERROR_HANDLER 'h'
+#define REMOVE_ERROR_HANDLER 'H'
 #define CREATE_FUNCTION 'f'
 #define VOID_RETURN 'r'
 #define VALUE_RETURN 'R'
@@ -340,9 +341,7 @@ static bool read_int_constant(struct BcReader *bcr, Object **objptr, bool negate
 static bool read_add_error_handler(struct BcReader *bcr, struct CodeOp *res)
 {
 	res->kind = CODE_ERRHND_ADD;
-	return read_uint16(bcr, &res->data.errhnd.startidx) &&
-			read_uint16(bcr, &res->data.errhnd.endidx) &&
-			read_uint16(bcr, &res->data.errhnd.jmpidx) &&
+	return read_uint16(bcr, &res->data.errhnd.jmpidx) &&
 			read_type(bcr, &res->data.errhnd.errtype, false) &&
 			read_uint16(bcr, &res->data.errhnd.errvar);
 }
@@ -448,8 +447,8 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case INT_MUL: res->kind = CODE_INT_MUL; return true;
 	case INT_EQ: res->kind = CODE_INT_EQ; return true;
 
-	case ADD_ERROR_HANDLER:
-		return read_add_error_handler(bcr, res);
+	case ADD_ERROR_HANDLER: return read_add_error_handler(bcr, res);
+	case REMOVE_ERROR_HANDLER: res->kind = CODE_ERRHND_RM; return true;
 
 	default:
 		errobj_set(bcr->interp, &errobj_type_value, "unknown op byte: %B", opbyte);

@@ -52,8 +52,8 @@ Times = _op_class('Times', [])
 Equal = _op_class('Equal', [])
 
 AddErrorHandler = _op_class('AddErrorHandler', [
-    'start_marker', 'end_marker', 'jumpto_marker',
-    'errortype', 'errorvarlevel', 'errorvar'])
+    'jumpto_marker', 'errortype', 'errorvarlevel', 'errorvar'])
+RemoveErrorHandler = _op_class('RemoveErrorHandler', [])
 
 
 class JumpMarker(common.Marker):
@@ -152,6 +152,45 @@ class _OpCoder:
         for lel in range(level_difference):
             coder = coder.parent_coder
         return coder
+
+    # calls a callback to add more stuff between anything that goes out of the
+    # range between the start and end markers
+    # the callback should return a list of ops
+    # note that you may need to use this together with an error handler
+    def add_more_ops_to_exit_points(self, start, end, callback):
+        start_index = self.output.ops.index(start) + 1
+        end_index = self.output.ops.index(end)
+        index_range = range(start_index, end_index)
+
+        self.output.ops[end_index:end_index] = callback()
+
+        for index in reversed(index_range):
+            op = self.output.ops[index]
+
+            if isinstance(op, Return):
+                self.output.ops[index:index] = callback()
+            elif isinstance(op, JumpIf):
+                if self.output.ops.index(op.marker) in index_range:
+                    continue
+
+                # this is kind of tricky, the added ops must run only when the
+                # jump actually happens
+                jump_didnt_happen = JumpMarker()
+                self.output.ops[index-1:index] = [
+                    BoolNegation(None),
+                    JumpIf(None, jump_didnt_happen),
+                ] + callback() + [
+                    BoolConstant(None, True),
+                    JumpIf(None, op.marker),
+                    jump_didnt_happen,
+                ]
+            else:
+                continue
+
+            # the correct end_index may change when a callback is called
+            # setting the index_range variable does NOT affect the for loop
+            end_index = self.output.ops.index(end)
+            index_range = range(start_index, end_index)
 
     def do_expression(self, expression):
         if isinstance(expression, cooked_ast.StrConstant):
@@ -328,14 +367,17 @@ class _OpCoder:
 
             self.output.ops.append(AddErrorHandler(
                 self._lineno(statement.location),
-                try_start, try_end, catch_start,
-                statement.errortype, self.level,
+                catch_start, statement.errortype, self.level,
                 self.local_vars[statement.caught_varname]))
 
             self.output.ops.append(try_start)
             for substatement in statement.try_body:
                 self.do_statement(substatement)
             self.output.ops.append(try_end)
+
+            self.add_more_ops_to_exit_points(
+                try_start, try_end,
+                lambda: [RemoveErrorHandler(None)])
 
             self.output.ops.append(BoolConstant(None, True))
             self.output.ops.append(JumpIf(None, catch_end))

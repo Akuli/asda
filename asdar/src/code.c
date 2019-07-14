@@ -27,6 +27,7 @@ void codeop_destroy(const struct CodeOp *op)
 	case CODE_VALUERETURN:
 	case CODE_DIDNTRETURNERROR:
 	case CODE_ERRHND_ADD:
+	case CODE_ERRHND_RM:
 	case CODE_INT_ADD:
 	case CODE_INT_SUB:
 	case CODE_INT_NEG:

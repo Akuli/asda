@@ -2,6 +2,11 @@ if FALSE:
     let string = "lol"
 
 try:
+    print("no errors here")
+catch VariableError lol:
+    print("if you see this, something is broken")
+
+try:
     print("before bad print")
     print(string)
     print("after bad print")
