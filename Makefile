@@ -16,4 +16,4 @@ asdar-tests:
 
 .PHONY: asdac-tests
 asdac-tests:
-	python3 -m pytest asdac-tests
+	python3 -m pytest
