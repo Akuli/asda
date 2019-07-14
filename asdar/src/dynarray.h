@@ -72,6 +72,7 @@ to ignore popped value and avoid compiler warning:
 		assert((DAP)->ptr); \
 	} else { \
 		/* for consistency and because why not */ \
+		free((DAP)->ptr);     /* needed for valgrinding cleanly */ \
 		(DAP)->ptr = NULL; \
 	} \
 } while(0)
