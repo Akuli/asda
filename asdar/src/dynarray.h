@@ -66,7 +66,7 @@ to ignore popped value and avoid compiler warning:
 
 // you can use it after filling a DynArray to free up not-needed memory
 #define dynarray_shrink2fit(DAP) do { \
-	(DAP)->ptr = realloc( (DAP)->ptr, sizeof((DAP)->ptr[0]) * (DAP)->alloc ); \
+	(DAP)->ptr = realloc( (DAP)->ptr, sizeof((DAP)->ptr[0]) * (DAP)->len ); \
 	if(( (DAP)->alloc = (DAP)->len )) { \
 		/* this should never allocate more, so it doesn't make sense for it to fail */ \
 		assert((DAP)->ptr); \

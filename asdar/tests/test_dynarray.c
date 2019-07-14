@@ -86,3 +86,15 @@ TEST(dynarray_type_casts_nicely)
 	assert_cstr_eq_cstr(da.ptr, "asda");
 	free(da.ptr);
 }
+
+// the bug has been fixed if this test doesn't leak memory
+TEST(dynarray_old_memory_leaking_bug)
+{
+	DynArray(int) da;
+	dynarray_init(&da);
+	bool ok = dynarray_push(interp, &da, 1);
+	assert(ok);
+	int val = dynarray_pop(&da);
+	assert(val == 1);
+	dynarray_shrink2fit(&da);
+}
