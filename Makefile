@@ -1,6 +1,8 @@
 # this Makefile is meant to be used as a convenient way to compile
 # everything and run all tests, and not much else
 
+PYTHON ?= python3
+
 all: asdar/asdar asdar-tests asdac-tests
 	@echo ""
 	@echo ""
@@ -16,4 +18,4 @@ asdar-tests:
 
 .PHONY: asdac-tests
 asdac-tests:
-	python3 -m pytest
+	$(PYTHON) -m pytest

@@ -30,6 +30,10 @@ $ cd asda
 $ make
 ```
 
+This uses `python3` by default. If your Python executable is named something
+else than `python3`, such as `python3.5` for example, then run
+`export PYTHON=python3.5` before running `make`.
+
 Next, create a file called `hello.asda` with this content:
 
 ```js
