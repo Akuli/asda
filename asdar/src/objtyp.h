@@ -46,7 +46,7 @@ Here is a complete usage example (with includes omitted):
 #ifndef OBJTYP_H
 #define OBJTYP_H
 
-// IWYU pragma: no_forward_declare ObjectStruct
+// IWYU pragma: no_forward_declare Object
 #include <stdbool.h>
 #include <stddef.h>
 #include "interp.h"

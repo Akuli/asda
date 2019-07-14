@@ -3,7 +3,6 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include <string.h>
 #include "func.h"
 #include "string.h"

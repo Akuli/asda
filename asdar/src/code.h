@@ -3,7 +3,6 @@
 #ifndef CODE_H
 #define CODE_H
 
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "objtyp.h"

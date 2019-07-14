@@ -1,7 +1,6 @@
 #include "objtyp.h"
 #include <assert.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include "interp.h"
 #include "objects/err.h"

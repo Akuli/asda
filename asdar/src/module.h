@@ -3,7 +3,6 @@
 
 #include "code.h"
 #include "interp.h"
-#include "objtyp.h"
 #include "objects/scope.h"
 
 struct Module {

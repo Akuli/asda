@@ -9,7 +9,6 @@ implement a handy way to refcount, so that's used here.
 #define OBJECTS_SCOPE_H
 
 #include <stddef.h>
-#include <stdint.h>
 #include "../interp.h"
 #include "../objtyp.h"
 

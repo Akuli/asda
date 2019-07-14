@@ -3,10 +3,8 @@
 #ifndef ASDAFUNC_H
 #define ASDAFUNC_H
 
-#include <stdbool.h>
 #include "code.h"
 #include "interp.h"
-#include "objtyp.h"
 #include "objects/func.h"
 #include "objects/scope.h"
 

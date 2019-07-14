@@ -1,10 +1,7 @@
 #include "func.h"
-#include <assert.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include "../interp.h"
 #include "../objtyp.h"
-#include "err.h"
 
 const struct Type funcobj_type = { .methods = NULL, .nmethods = 0 };
 
