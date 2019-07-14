@@ -76,6 +76,7 @@ def _fill_builtin_types_ordered_dict():
     # Object is needed for creating functions, and that is needed for adding
     # methods
     BUILTIN_TYPES['Str'].add_method('uppercase', [], BUILTIN_TYPES['Str'])
+    BUILTIN_TYPES['Str'].add_method('lowercase', [], BUILTIN_TYPES['Str'])
     BUILTIN_TYPES['Str'].add_method('to_string', [], BUILTIN_TYPES['Str'])
     BUILTIN_TYPES['Int'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 

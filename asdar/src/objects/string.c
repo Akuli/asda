@@ -281,6 +281,46 @@ StringObject *stringobj_join(Interp *interp, StringObject *const *strs, size_t n
 }
 
 
+static StringObject *change_case(Interp *interp, StringObject *src, bool upper)
+{
+	if (src->len == 0) {
+		OBJECT_INCREF(src);
+		return src;
+	}
+
+	uint32_t *val = malloc(sizeof(uint32_t) * src->len);
+	if (!val) {
+		errobj_set_nomem(interp);
+		return NULL;
+	}
+
+	memcpy(val, src->val, sizeof(uint32_t) * src->len);
+	for (size_t i = 0; i < src->len; i++) {
+		// TODO: non-ascii conversions
+		if (upper && 'a' <= val[i] && val[i] <= 'z')
+			val[i] -= 0x20;
+		if (!upper && 'A' <= val[i] && val[i] <= 'Z')
+			val[i] += 0x20;
+	}
+
+	return stringobj_new_nocpy(interp, val, src->len);
+}
+
+static bool uppercase_impl(Interp *interp, struct ObjData data,
+	Object *const *args, size_t nargs, Object **result)
+{
+	assert(nargs == 1);
+	return !!( *result = (Object *)change_case(interp, (StringObject *)args[0], true) );
+}
+
+static bool lowercase_impl(Interp *interp, struct ObjData data,
+	Object *const *args, size_t nargs, Object **result)
+{
+	assert(nargs == 1);
+	return !!( *result = (Object *)change_case(interp, (StringObject *)args[0], false) );
+}
+
+
 static bool tostring_impl(Interp *interp, struct ObjData data,
 	Object *const *args, size_t nargs, Object **result)
 {
@@ -291,9 +331,9 @@ static bool tostring_impl(Interp *interp, struct ObjData data,
 	return true;
 }
 
+static FuncObject uppercase = FUNCOBJ_COMPILETIMECREATE(uppercase_impl);
+static FuncObject lowercase = FUNCOBJ_COMPILETIMECREATE(lowercase_impl);
 static FuncObject tostring = FUNCOBJ_COMPILETIMECREATE(tostring_impl);
 
-// TODO: first string method should be uppercase
-static FuncObject *methods[] = { &tostring, &tostring };
-
+static FuncObject *methods[] = { &uppercase, &lowercase, &tostring };
 const struct Type stringobj_type = { .methods = methods, .nmethods = sizeof(methods)/sizeof(methods[0]) };

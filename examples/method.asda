@@ -1,0 +1,2 @@
+print("Hello World".uppercase())
+print("Hello World".lowercase())
