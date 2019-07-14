@@ -1,9 +1,8 @@
-# this Makefile is meant to be used as a convenient way to compile
-# everything and run all tests, and not much else
+PYTHON ?= python3   # see README
 
-PYTHON ?= python3
+EXAMPLES := $(wildcard examples/*.asda)
 
-all: asdar/asdar asdar-tests asdac-tests
+all: asdar/asdar asdar-tests asdac-tests example-tests
 	@echo ""
 	@echo ""
 	@echo "--------------------"
@@ -19,3 +18,10 @@ asdar-tests:
 .PHONY: asdac-tests
 asdac-tests:
 	$(PYTHON) -m pytest
+
+.PHONY: compile-examples    # the compiler avoids compiling when not necessary
+compile-examples:
+	$(PYTHON) -m asdac $(EXAMPLES)
+
+example-tests: compile-examples asdar/asdar
+	bash test-examples.sh $(EXAMPLES)
