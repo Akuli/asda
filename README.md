@@ -7,21 +7,28 @@ This is my attempt at making a statically typed programming language.
 
 Make sure that you have:
 
-- Python 3.5 or newer with pip
 - git
+- C compiler that supports C99
+- make
+- GMP 2
+- Python 3.5 or newer
+- All the Python dependencies in [asdac-requirements.txt](asdac-requirements.txt)
+- Python's development stuff for some of the Python dependencies
 
-Then you can download the compiler and the interpreter, and install
-their dependencies:
+If you have `apt`, you can install everything needed like this:
+
+```
+$ sudo apt install git gcc make libgmp-dev python3-pip python3-dev
+$ python3 -m pip install --user -r asdac-requirements.txt
+```
+
+Then you can download and compile all the things:
 
 ```
 $ git clone https://github.com/Akuli/asda
 $ cd asda
-$ python3 -m pip install --user -r requirements.txt
+$ make
 ```
-
-If pip can't install the `regex` module, you may need to install a package that
-contains more Python stuff. For example, on Debian-based Linux distributions
-you need `sudo apt install python3-dev`.
 
 Next, create a file called `hello.asda` with this content:
 
@@ -39,63 +46,40 @@ doesn't compile (but the compiler produces a good error message):
 print(123)
 ```
 
-Anyway, run this to compile your `hello.asda`:
+Anyway, compile your `hello.asda` with `asdac`, the asda compiler:
 
 ```
 $ python3 -m asdac hello.asda
 Compiling: hello.asda --> asda-compiled/hello.asdac
 ```
 
-This creates a bytecode file. Run it with `pyasda`:
+This creates a bytecode file. Run it with `asdar`, the asda runner:
 
 ```
-$ python3 -m pyasda asda-compiled/hello.asdac
+$ asdar/asdar asda-compiled/hello.asdac
 Hello World!
 ```
 
 There isn't much [documentation](docs/) yet, but there are many
-[code examples](examples/). All code examples should compile and run nicely.
-
-## C Interpreter
-
-`pyasda` is a "temporary" interpreter for the compiled asda files. There is
-also an interpreter written in C, but it may be lacking some features. Here are
-the instructions for running asda code with it.
-
-Install dependencies:
-
-```
-$ sudo apt install gcc make libgmp-dev
-```
-
-If you don't have apt, I have no idea what you should do to get the
-dependencies installed. Sorry.
-
-Then you can compile the interpreter:
-
-```
-$ cd asdar
-$ make
-$ make test
-$ cd ..
-```
-
-Now you can use it:
-
-```
-$ asdar/asdar asda-compiled/hello.asdac
-```
+[code examples](examples/). At the time of writing this, there is only one
+example program that doesn't work.
 
 
-## FAQ
+## FAQ-ish
+
+Nobody has actually asked these questions, but I think someone might ask them
+if the answers weren't listed here
 
 ### Can I compile and run with just one command?
 
-Not yet, but you can combine the two commands conveniently with `&&`:
+You can combine the two commands conveniently with `&&`:
 
 ```
-$ python3 -m asdac hello.asda && python3 -m pyasda asda-compiled/hello.asdac
+$ python3 -m asdac hello.asda && asdar/asdar asda-compiled/hello.asdac
 ```
+
+I'm planning on combining the compiler and the interpreter so that running with
+just one command is easy.
 
 ### Is the documentation outdated?
 
@@ -103,10 +87,8 @@ Yes. Create an issue if you want me to update it.
 
 ### Is there an interactive REPL, like Python's `>>>` prompt?
 
-Not yet, and I'm not sure whether there will ever be one. I like how the
-compiler and the interpreter are two separate programs that do different things,
-but on the other hand, a REPL would be doable and kind of awesome. It's possible
-and not even very hard to get Python programs and C programs to work together.
+Not yet. I might add an interpreter later, but there are many things that I
+want to get done first.
 
 ### Why is the programming language named asda?
 
@@ -117,19 +99,12 @@ difficult to type for some reason. On the other hand, it's very easy to type
 asda. I also searched for "asda programming language" and I didn't find
 anything relevant.
 
-### How does it work?
-
-I'm sorry, I haven't documented it yet :( If you are actually interested
-in this, you can ask me to document stuff by creating an issue.
-
 
 ## Developing asda
 
-See [the C interpreter's README](asdar/README.md) if you want to work on the C
-interpreter.
+See [asdar/README.md](asdar/README.md) if you want to work on asdar.
 
-This command installs everything you need for developing the compiler and the
-Python interpreter:
+This command installs everything you need for developing `asdac`:
 
 ```
 $ python3 -m pip install --user pytest pytest-cov coverage
@@ -140,7 +115,7 @@ Or if you like virtualenvs:
 ```
 $ python3 -m venv env
 $ . env/bin/activate    # i think this works on windows:  Scripts\activate.bat
-(env) $ pip install -r requirements.txt
+(env) $ pip install -r asdac-requirements.txt
 (env) $ pip install pytest pytest-cov coverage
 ```
 
@@ -157,10 +132,10 @@ to `examples/output`. If that isn't possible (for example, the `while` example
 prints forever, and can't be tested with an output file), add a test to
 `pyasda-tests/test_examples.py`.
 
-You can run all tests like this:
+You can run asdac tests like this:
 
 ```
-$ python3 -m pytest
+$ python3 -m pytest asdac-tests
 ```
 
 If you also want to see coverage (the tests will run slower), run them like
