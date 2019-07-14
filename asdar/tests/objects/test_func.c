@@ -10,7 +10,7 @@
 static unsigned int ncalls_ret, ncalls_noret;
 
 char c_character = 'c';
-ObjData leldata = {
+struct ObjData leldata = {
 	.val = &c_character,
 	.destroy = NULL,
 };
@@ -19,7 +19,7 @@ static Object *bools[] = { (Object *)&boolobj_true, (Object *)&boolobj_false };
 
 static bool compiletime_func_running;
 
-#define BOILERPLATE_ARGS Interp *interp, ObjData data, Object *const *args, size_t nargs, Object **result
+#define BOILERPLATE_ARGS Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result
 #define CHECK do{ \
 	assert(interp); \
 	assert(nargs == 2); \
