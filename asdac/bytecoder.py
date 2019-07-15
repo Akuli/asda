@@ -28,6 +28,7 @@ DIDNT_RETURN_ERROR = b'd'
 YIELD = b'Y'
 BOOL_NEGATION = b'!'
 JUMP_IF = b'J'
+JUMP = b'K'
 END_OF_BODY = b'E'
 IMPORT_SECTION = b'i'
 EXPORT_SECTION = b'e'
@@ -122,6 +123,9 @@ class _BytecodeWriter:
         relative_path = common.relpath(path, relative2)
         # os.path.normcase replaces / with \ on windows, but we actually want /
         # for this to make the compiled bytecodes cross-platform
+        #
+        # TODO: delete normcase and assert that the path is lowercase, because
+        #       it is lowercased elsewhere
         self.bytecode.write_string(
             os.path.normcase(str(relative_path)).replace(os.sep, '/'))
 
@@ -211,8 +215,13 @@ class _BytecodeWriter:
                                    else VOID_RETURN)
             return
 
-        if isinstance(op, opcoder.JumpIf):
-            self.bytecode.add_byte(JUMP_IF)
+        if isinstance(op, (opcoder.Jump, opcoder.JumpIf)):
+            if isinstance(op, opcoder.Jump):
+                self.bytecode.add_byte(JUMP)
+            elif isinstance(op, opcoder.JumpIf):
+                self.bytecode.add_byte(JUMP_IF)
+            else:  # pragma: no cover
+                raise RuntimeError
             self.bytecode.add_uint16(self.jumpmarker2index[op.marker])
             return
 

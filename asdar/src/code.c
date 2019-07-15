@@ -20,6 +20,7 @@ void codeop_destroy(const struct CodeOp *op)
 	case CODE_CALLVOIDFUNC:
 	case CODE_CALLRETFUNC:
 	case CODE_BOOLNEG:
+	case CODE_JUMP:
 	case CODE_JUMPIF:
 	case CODE_STRJOIN:
 	case CODE_POP1:

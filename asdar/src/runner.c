@@ -174,6 +174,10 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		break;
 	}
 
+	case CODE_JUMP:
+		rnr->opidx = op->data.jump_idx;
+		goto skip_opidx_plusplus;
+
 	case CODE_JUMPIF:
 	{
 		DEBUG_PRINTF("jumpif\n");

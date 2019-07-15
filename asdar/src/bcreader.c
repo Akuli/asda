@@ -28,6 +28,7 @@
 #define CALL_RETURNING_FUNCTION ')'
 #define BOOLNEG '!'
 #define POP_ONE 'P'
+#define JUMP 'K'
 #define JUMPIF 'J'
 #define STRING_JOIN 'j'
 #define GET_METHOD '.'   // currently all attributes are methods
@@ -407,9 +408,8 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 		return read_callfunc(bcr, res, CODE_CALLVOIDFUNC);
 	case CALL_RETURNING_FUNCTION:
 		return read_callfunc(bcr, res, CODE_CALLRETFUNC);
-	case JUMPIF:
-		res->kind = CODE_JUMPIF;
-		return read_uint16(bcr, &res->data.jump_idx);
+	case JUMP:   res->kind = CODE_JUMP;   return read_uint16(bcr, &res->data.jump_idx);
+	case JUMPIF: res->kind = CODE_JUMPIF; return read_uint16(bcr, &res->data.jump_idx);
 	case NON_NEGATIVE_INT_CONSTANT:
 	case NEGATIVE_INT_CONSTANT:
 		res->kind = CODE_CONSTANT;

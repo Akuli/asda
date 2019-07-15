@@ -41,6 +41,7 @@ PopOne = _op_class('PopOne', [])
 Return = _op_class('Return', ['returns_a_value'])
 Yield = _op_class('Yield', [])
 BoolNegation = _op_class('BoolNegation', [])
+Jump = _op_class('Jump', ['marker'])
 JumpIf = _op_class('JumpIf', ['marker'])
 DidntReturnError = _op_class('DidntReturnError', [])
 
@@ -169,6 +170,10 @@ class _OpCoder:
 
             if isinstance(op, Return):
                 self.output.ops[index:index] = callback()
+            elif isinstance(op, Jump):
+                if self.output.ops.index(op.marker) in index_range:
+                    continue
+                self.output.ops[index:index] = callback()
             elif isinstance(op, JumpIf):
                 if self.output.ops.index(op.marker) in index_range:
                     continue
@@ -176,12 +181,12 @@ class _OpCoder:
                 # this is kind of tricky, the added ops must run only when the
                 # jump actually happens
                 jump_didnt_happen = JumpMarker()
-                self.output.ops[index-1:index] = [
+                del self.output.ops[index]
+                self.output.ops[index:index] = [
                     BoolNegation(None),
                     JumpIf(None, jump_didnt_happen),
                 ] + callback() + [
-                    BoolConstant(None, True),
-                    JumpIf(None, op.marker),
+                    Jump(None, op.marker),
                     jump_didnt_happen,
                 ]
             else:
@@ -331,8 +336,7 @@ class _OpCoder:
             self.output.ops.append(JumpIf(None, end_of_if_body))
             for substatement in statement.if_body:
                 self.do_statement(substatement)
-            self.output.ops.append(BoolConstant(None, True))
-            self.output.ops.append(JumpIf(None, end_of_else_body))
+            self.output.ops.append(Jump(None, end_of_else_body))
             self.output.ops.append(end_of_if_body)
             for substatement in statement.else_body:
                 self.do_statement(substatement)
@@ -355,8 +359,7 @@ class _OpCoder:
             for substatement in statement.incr:
                 self.do_statement(substatement)
 
-            self.output.ops.append(BoolConstant(None, True))
-            self.output.ops.append(JumpIf(None, beginning))
+            self.output.ops.append(Jump(None, beginning))
             self.output.ops.append(end)
 
         elif isinstance(statement, cooked_ast.TryCatch):
@@ -379,8 +382,7 @@ class _OpCoder:
                 try_start, try_end,
                 lambda: [RemoveErrorHandler(None)])
 
-            self.output.ops.append(BoolConstant(None, True))
-            self.output.ops.append(JumpIf(None, catch_end))
+            self.output.ops.append(Jump(None, catch_end))
 
             self.output.ops.append(catch_start)
             for substatement in statement.catch_body:
