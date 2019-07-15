@@ -1,6 +1,6 @@
 # try,finally
 
-```js
+```python3
 try:
     try_code
 finally:
