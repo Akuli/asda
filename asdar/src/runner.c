@@ -68,9 +68,76 @@ static Object **get_var_pointer(struct Runner *rnr, const struct CodeOp *op)
 	return scope->locals + op->data.var.index;
 }
 
-static bool call_function(struct Runner *rnr, bool ret, size_t nargs)
+
+static enum RunnerResult run_constant(struct Runner *rnr, const struct CodeOp *op)
 {
-	DEBUG_PRINTF("callfunc ret=%s nargs=%zu\n", ret?"true":"false", nargs);
+	if (!push2stack(rnr, op->data.obj))
+		return RUNNER_ERROR;
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_setvar(struct Runner *rnr, const struct CodeOp *op)
+{
+	assert(rnr->stack.len >= 1);
+	Object **ptr = get_var_pointer(rnr, op);
+	if(*ptr)
+		OBJECT_DECREF(*ptr);
+	*ptr = dynarray_pop(&rnr->stack);
+	assert(*ptr);
+
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_getvar(struct Runner *rnr, const struct CodeOp *op)
+{
+	Object **ptr = get_var_pointer(rnr, op);
+	if(!*ptr) {
+		// TODO: include variable name here somehow
+		errobj_set(rnr->interp, &errobj_type_variable, "value of a variable hasn't been set");
+		return RUNNER_ERROR;
+	}
+
+	if(!push2stack(rnr, *ptr))
+		return RUNNER_ERROR;
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_getmethod(struct Runner *rnr, const struct CodeOp *op)
+{
+	assert(rnr->stack.len >= 1);
+	struct CodeLookupMethodData data = op->data.lookupmethod;
+	Object **ptr = &rnr->stack.ptr[rnr->stack.len - 1];
+	FuncObject *parti = partialfunc_create(rnr->interp, data.type->methods[data.index], ptr, 1);
+	if(!parti)
+		return RUNNER_ERROR;
+
+	OBJECT_DECREF(*ptr);
+	*ptr = (Object *)parti;
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_getfrommodule(struct Runner *rnr, const struct CodeOp *op)
+{
+	Object *val = *op->data.modmemberptr;
+	if (!val) {
+		errobj_set(rnr->interp, &errobj_type_variable, "value of an exported variable hasn't been set");
+		return RUNNER_ERROR;
+	}
+
+	if (!push2stack(rnr, val))
+		return RUNNER_ERROR;
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_callfunc(struct Runner *rnr, const struct CodeOp *op)
+{
+	bool ret = (op->kind == CODE_CALLRETFUNC);
+	size_t nargs = op->data.callfunc_nargs;
 	assert(rnr->stack.len >= nargs + 1);
 	rnr->stack.len -= nargs;
 	Object **argptr = rnr->stack.ptr + rnr->stack.len;
@@ -82,14 +149,187 @@ static bool call_function(struct Runner *rnr, bool ret, size_t nargs)
 	OBJECT_DECREF(func);
 	for(size_t i=0; i < nargs; i++) OBJECT_DECREF(argptr[i]);
 
-	if (ok && result)
+	if (!ok)
+		return RUNNER_ERROR;
+	assert(ret == !!result);
+	if (ret)
 		dynarray_push_itwillfit(&rnr->stack, result);
-	return ok;
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
 }
 
-static bool integer_binary_operation(struct Runner *rnr, enum CodeOpKind bok)
+static enum RunnerResult run_boolneg(struct Runner *rnr, const struct CodeOp *op)
 {
-	DEBUG_PRINTF("integer binary op\n");
+	BoolObject **ptr = (BoolObject **)&rnr->stack.ptr[rnr->stack.len - 1];
+	BoolObject *old = *ptr;
+	*ptr = boolobj_c2asda(!boolobj_asda2c(*ptr));
+	OBJECT_DECREF(old);
+
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_jump(struct Runner *rnr, const struct CodeOp *op)
+{
+	rnr->opidx = op->data.jump_idx;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_jumpif(struct Runner *rnr, const struct CodeOp *op)
+{
+	BoolObject *obj = (BoolObject *)dynarray_pop(&rnr->stack);
+	bool b = boolobj_asda2c(obj);
+	OBJECT_DECREF(obj);
+	if (b)
+		rnr->opidx = op->data.jump_idx;
+	else
+		rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_strjoin(struct Runner *rnr, const struct CodeOp *op)
+{
+	DEBUG_PRINTF("string join of %zu strings\n", (size_t)op->data.strjoin_nstrs);
+	assert(rnr->stack.len >= op->data.strjoin_nstrs);
+	Object **ptr = rnr->stack.ptr + rnr->stack.len - op->data.strjoin_nstrs;
+	StringObject *res = stringobj_join(rnr->interp, (StringObject **)ptr, op->data.strjoin_nstrs);
+	if(!res)
+		return RUNNER_ERROR;
+
+	for (; ptr < rnr->stack.ptr + rnr->stack.len; ptr++)
+		OBJECT_DECREF(*ptr);
+
+	rnr->stack.len -= op->data.strjoin_nstrs;
+	bool ok = push2stack(rnr, (Object *)res);   // grows the stack if this was a join of 0 strings (result is empty string)
+	OBJECT_DECREF(res);
+
+	if (!ok)
+		return RUNNER_ERROR;
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_pop1(struct Runner *rnr, const struct CodeOp *op)
+{
+	Object *obj = dynarray_pop(&rnr->stack);
+	OBJECT_DECREF(obj);
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_createfunc(struct Runner *rnr, const struct CodeOp *op)
+{
+	FuncObject *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc_code);
+	if (!f)
+		return RUNNER_ERROR;
+
+	bool ok = push2stack(rnr, (Object *)f);
+	OBJECT_DECREF(f);
+	if(!ok)
+		return RUNNER_ERROR;
+
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_voidreturn(struct Runner *rnr, const struct CodeOp *op)
+{
+	return RUNNER_VOIDRETURN;
+}
+
+static enum RunnerResult run_valuereturn(struct Runner *rnr, const struct CodeOp *op)
+{
+	rnr->retval = dynarray_pop(&rnr->stack);
+	return RUNNER_VALUERETURN;
+}
+
+static enum RunnerResult run_didntreturnerror(struct Runner *rnr, const struct CodeOp *op)
+{
+	// TODO: create a nicer error type for this
+	errobj_set(rnr->interp, &errobj_type_value, "function didn't return");
+	return RUNNER_ERROR;
+}
+
+static enum RunnerResult run_throw(struct Runner *rnr, const struct CodeOp *op)
+{
+	Object *e = dynarray_pop(&rnr->stack);
+	errobj_set_obj(rnr->interp, (ErrObject *)e);
+	OBJECT_DECREF(e);
+	return RUNNER_ERROR;
+}
+
+static enum RunnerResult run_fs_push_something(struct Runner *rnr, const struct CodeOp *op)
+{
+	struct RunnerFinallyState fs;
+	fs.kind = op->kind;
+	if (op->kind == CODE_FS_ERROR || op->kind == CODE_FS_VALUERETURN)
+		fs.val.obj = dynarray_pop(&rnr->stack);
+	if (op->kind == CODE_FS_VALUERETURN)
+		fs.val.jumpidx = op->data.jump_idx;
+
+	if (!dynarray_push(rnr->interp, &rnr->fsstack, fs)) {
+		destroy_finally_state(fs);
+		return RUNNER_ERROR;
+	}
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_fs_apply(struct Runner *rnr, const struct CodeOp *op)
+{
+	struct RunnerFinallyState fs = dynarray_pop(&rnr->fsstack);
+
+	enum RunnerResult r;
+	switch (fs.kind) {
+		case CODE_FS_OK:
+			r = RUNNER_DIDNTRETURN;
+			rnr->opidx++;
+		case CODE_FS_ERROR:
+			r = RUNNER_ERROR;
+			errobj_set_obj(rnr->interp, (ErrObject *)fs.val.obj);
+		case CODE_FS_VOIDRETURN:
+			r = RUNNER_VOIDRETURN;
+		case CODE_FS_VALUERETURN:
+			r = RUNNER_VALUERETURN;
+			rnr->retval = fs.val.obj;
+			OBJECT_INCREF(rnr->retval);
+		case CODE_FS_JUMP:
+			r = RUNNER_DIDNTRETURN;
+			rnr->opidx = fs.val.jumpidx;
+		default:
+			assert(0);
+			break;
+	}
+
+	destroy_finally_state(fs);
+	return r;
+}
+
+static enum RunnerResult run_fs_discard(struct Runner *rnr, const struct CodeOp *op)
+{
+	struct RunnerFinallyState fs = dynarray_pop(&rnr->fsstack);
+	destroy_finally_state(fs);
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_eh_add(struct Runner *rnr, const struct CodeOp *op)
+{
+	if (!dynarray_push(rnr->interp, &rnr->ehstack, op->data.errhnd))
+		return RUNNER_ERROR;
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_eh_rm(struct Runner *rnr, const struct CodeOp *op)
+{
+	(void) dynarray_pop(&rnr->ehstack);
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_integer_binary_operation(struct Runner *rnr, const struct CodeOp *op)
+{
 	assert(rnr->stack.len >= 2);
 	// y before x because the stack is like this:
 	//
@@ -99,7 +339,7 @@ static bool integer_binary_operation(struct Runner *rnr, enum CodeOpKind bok)
 	IntObject *x = (IntObject *)dynarray_pop(&rnr->stack);
 	IntObject *res;
 
-	switch(bok) {
+	switch(op->kind) {
 		case CODE_INT_ADD: res = intobj_add(rnr->interp, x, y); break;
 		case CODE_INT_SUB: res = intobj_sub(rnr->interp, x, y); break;
 		case CODE_INT_MUL: res = intobj_mul(rnr->interp, x, y); break;
@@ -109,295 +349,78 @@ static bool integer_binary_operation(struct Runner *rnr, enum CodeOpKind bok)
 	OBJECT_DECREF(y);
 
 	if(!res)
-		return false;
+		return RUNNER_ERROR;
 	dynarray_push_itwillfit(&rnr->stack, (Object*)res);
-	return true;
-}
-
-static enum RunnerResult apply_finally_state(struct Runner *rnr, struct RunnerFinallyState fs)
-{
-	switch (fs.kind) {
-		case CODE_FS_OK:
-			return RUNNER_DIDNTRETURN;
-		case CODE_FS_ERROR:
-			errobj_set_obj(rnr->interp, (ErrObject *)fs.val.obj);
-			return RUNNER_ERROR;
-		case CODE_FS_VOIDRETURN:
-			return RUNNER_VOIDRETURN;
-		case CODE_FS_VALUERETURN:
-			rnr->retval = fs.val.obj;
-			OBJECT_INCREF(rnr->retval);
-			return RUNNER_DIDNTRETURN;
-		case CODE_FS_JUMP:
-			rnr->opidx = fs.val.jumpidx;
-			return RUNNER_DIDNTRETURN;
-		default:
-			assert(0);
-			break;
-	}
-}
-
-
-// this function is long, but it feels ok because it divides nicely into max 10-ish line chunks
-static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
-{
-	DEBUG_PRINTF("%d: ", op->lineno);
-
-	switch(op->kind) {
-	case CODE_CONSTANT:
-		DEBUG_PRINTF("constant\n");
-		if(!push2stack(rnr, op->data.obj))
-			return RUNNER_ERROR;
-		break;
-
-	case CODE_SETVAR:
-	{
-		DEBUG_PRINTF("setvar level=%d index=%d\n",
-			(int)op->data.var.level, (int)op->data.var.index);
-		assert(rnr->stack.len >= 1);
-		Object **ptr = get_var_pointer(rnr, op);
-		if(*ptr)
-			OBJECT_DECREF(*ptr);
-
-		*ptr = dynarray_pop(&rnr->stack);
-		assert(*ptr);
-		break;
-	}
-
-	case CODE_GETVAR:
-	{
-		DEBUG_PRINTF("getvar level=%d index=%d\n",
-			(int)op->data.var.level, (int)op->data.var.index);
-		Object **ptr = get_var_pointer(rnr, op);
-		if(!*ptr) {
-			// TODO: include variable name here somehow
-			errobj_set(rnr->interp, &errobj_type_variable, "value of a variable hasn't been set");
-			return RUNNER_ERROR;
-		}
-
-		if(!push2stack(rnr, *ptr))
-			return RUNNER_ERROR;
-		break;
-	}
-
-	case CODE_GETFROMMODULE:
-	{
-		DEBUG_PRINTF("getfrommodule: pointer = %p, current value = %p\n",
-			(void*)op->data.modmemberptr, (void*)*op->data.modmemberptr);
-		Object *val = *op->data.modmemberptr;
-		if (!val) {
-			errobj_set(rnr->interp, &errobj_type_variable, "value of an exported variable hasn't been set");
-			return RUNNER_ERROR;
-		}
-
-		if (!push2stack(rnr, val))
-			return RUNNER_ERROR;
-		break;
-	}
-
-	case CODE_BOOLNEG:
-	{
-		DEBUG_PRINTF("boolneg\n");
-		assert(rnr->stack.len >= 1);
-		BoolObject **ptr = (BoolObject **)&rnr->stack.ptr[rnr->stack.len - 1];
-		BoolObject *old = *ptr;
-		*ptr = boolobj_c2asda(!boolobj_asda2c(old));
-		OBJECT_DECREF(old);
-		break;
-	}
-
-	case CODE_JUMP:
-		rnr->opidx = op->data.jump_idx;
-		goto skip_opidx_plusplus;
-
-	case CODE_JUMPIF:
-	{
-		DEBUG_PRINTF("jumpif\n");
-		assert(rnr->stack.len >= 1);
-		BoolObject *obj = (BoolObject *)dynarray_pop(&rnr->stack);
-		bool b = boolobj_asda2c(obj);
-		OBJECT_DECREF(obj);
-
-		if(b) {
-			DEBUG_PRINTF("  jumping...\n");
-			rnr->opidx = op->data.jump_idx;
-			goto skip_opidx_plusplus;
-		}
-		break;
-	}
-
-	case CODE_CALLRETFUNC:
-		if(!call_function(rnr, true, op->data.callfunc_nargs))
-			return RUNNER_ERROR;
-		break;
-	case CODE_CALLVOIDFUNC:
-		if(!call_function(rnr, false, op->data.callfunc_nargs))
-			return RUNNER_ERROR;
-		break;
-
-	case CODE_GETMETHOD:
-	{
-		DEBUG_PRINTF("getmethod\n");
-		assert(rnr->stack.len >= 1);
-		struct CodeLookupMethodData data = op->data.lookupmethod;
-		Object **ptr = &rnr->stack.ptr[rnr->stack.len - 1];
-		FuncObject *parti = partialfunc_create(rnr->interp, data.type->methods[data.index], ptr, 1);
-		if(!parti)
-			return RUNNER_ERROR;
-
-		OBJECT_DECREF(*ptr);
-		*ptr = (Object *)parti;
-		break;
-	}
-
-	// TODO: refactor this into a separate function, is 2 long
-	case CODE_STRJOIN:
-	{
-		DEBUG_PRINTF("string join of %zu strings\n", (size_t)op->data.strjoin_nstrs);
-		assert(rnr->stack.len >= op->data.strjoin_nstrs);
-		Object **ptr = rnr->stack.ptr + rnr->stack.len - op->data.strjoin_nstrs;
-		StringObject *res = stringobj_join(rnr->interp, (StringObject **)ptr, op->data.strjoin_nstrs);
-		if(!res)
-			return RUNNER_ERROR;
-
-		for (; ptr < rnr->stack.ptr + rnr->stack.len; ptr++)
-			OBJECT_DECREF(*ptr);
-
-		rnr->stack.len -= op->data.strjoin_nstrs;
-		bool ok = push2stack(rnr, (Object *)res);   // grows the stack if this was a join of 0 strings (result is empty string)
-		OBJECT_DECREF(res);
-
-		if (!ok)
-			return RUNNER_ERROR;
-		break;
-	}
-
-	case CODE_POP1:
-	{
-		DEBUG_PRINTF("pop 1\n");
-		assert(rnr->stack.len >= 1);
-		Object *obj = dynarray_pop(&rnr->stack);
-		OBJECT_DECREF(obj);
-		break;
-	}
-
-	case CODE_CREATEFUNC:
-	{
-		DEBUG_PRINTF("create func\n");
-		FuncObject *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc_code);
-		bool ok = push2stack(rnr, (Object *)f);
-		OBJECT_DECREF(f);
-		if(!ok)
-			return RUNNER_ERROR;
-		break;
-	}
-
-	case CODE_VOIDRETURN:
-		DEBUG_PRINTF("void return\n");
-		return RUNNER_VOIDRETURN;
-	case CODE_VALUERETURN:
-		DEBUG_PRINTF("value return\n");
-		rnr->retval = dynarray_pop(&rnr->stack);
-		assert(rnr->retval);
-		return RUNNER_VALUERETURN;
-
-	case CODE_DIDNTRETURNERROR:
-		DEBUG_PRINTF("didn't return error\n");
-		// TODO: create a nicer error type for this
-		errobj_set(rnr->interp, &errobj_type_value, "function didn't return");
-		return RUNNER_ERROR;
-
-	case CODE_THROW:
-	{
-		Object *e = dynarray_pop(&rnr->stack);
-		errobj_set_obj(rnr->interp, (ErrObject *)e);
-		OBJECT_DECREF(e);
-		return RUNNER_ERROR;
-	}
-
-	case CODE_FS_OK:
-	case CODE_FS_ERROR:
-	case CODE_FS_VOIDRETURN:
-	case CODE_FS_VALUERETURN:
-	case CODE_FS_JUMP:
-	{
-		struct RunnerFinallyState fs;
-		fs.kind = op->kind;
-		if (op->kind == CODE_FS_ERROR || op->kind == CODE_FS_VALUERETURN)
-			fs.val.obj = dynarray_pop(&rnr->stack);
-		if (op->kind == CODE_FS_VALUERETURN)
-			fs.val.jumpidx = op->data.jump_idx;
-
-		if (!dynarray_push(rnr->interp, &rnr->fsstack, fs)) {
-			destroy_finally_state(fs);
-			return RUNNER_ERROR;
-		}
-		break;
-	}
-
-	case CODE_FS_APPLY:
-	{
-		struct RunnerFinallyState fs = dynarray_pop(&rnr->fsstack);
-		enum RunnerResult r = apply_finally_state(rnr, fs);
-		destroy_finally_state(fs);
-		if (r != RUNNER_DIDNTRETURN)
-			return r;
-		break;
-	}
-
-	case CODE_FS_DISCARD:
-	{
-		assert(rnr->fsstack.len);
-		struct RunnerFinallyState fs = dynarray_pop(&rnr->fsstack);
-		destroy_finally_state(fs);
-		break;
-	}
-
-	case CODE_ERRHND_ADD:
-		if (!dynarray_push(rnr->interp, &rnr->ehstack, op->data.errhnd))
-			return RUNNER_ERROR;
-		break;
-	case CODE_ERRHND_RM:
-		(void) dynarray_pop(&rnr->ehstack);
-		break;
-
-	case CODE_INT_ADD:
-	case CODE_INT_SUB:
-	case CODE_INT_MUL:
-		if(!integer_binary_operation(rnr, op->kind))
-			return RUNNER_ERROR;
-		break;
-
-	case CODE_INT_NEG:
-	{
-		IntObject **ptr = (IntObject **)&rnr->stack.ptr[rnr->stack.len - 1];
-		IntObject *obj = intobj_neg(rnr->interp, *ptr);
-		if(!obj)
-			return RUNNER_ERROR;
-		OBJECT_DECREF(*ptr);
-		*ptr = obj;
-		break;
-	}
-
-	case CODE_INT_EQ:
-	{
-		IntObject *x = (IntObject *)dynarray_pop(&rnr->stack);
-		IntObject *y = (IntObject *)dynarray_pop(&rnr->stack);
-		BoolObject *res = boolobj_c2asda(intobj_cmp(x, y) == 0);
-		dynarray_push_itwillfit(&rnr->stack, (Object*)res);
-		OBJECT_DECREF(x);
-		OBJECT_DECREF(y);
-		break;
-	}
-
-	}   // end of switch
-
 	rnr->opidx++;
-	// "fall through" to return statement
-
-skip_opidx_plusplus:
 	return RUNNER_DIDNTRETURN;
 }
+
+static enum RunnerResult run_int_neg(struct Runner *rnr, const struct CodeOp *op)
+{
+	IntObject **ptr = (IntObject **)&rnr->stack.ptr[rnr->stack.len - 1];
+	IntObject *obj = intobj_neg(rnr->interp, *ptr);
+	if(!obj)
+		return RUNNER_ERROR;
+	OBJECT_DECREF(*ptr);
+	*ptr = obj;
+
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_int_eq(struct Runner *rnr, const struct CodeOp *op)
+{
+	IntObject *x = (IntObject *)dynarray_pop(&rnr->stack);
+	IntObject *y = (IntObject *)dynarray_pop(&rnr->stack);
+	BoolObject *res = boolobj_c2asda(intobj_cmp(x, y) == 0);
+	dynarray_push_itwillfit(&rnr->stack, (Object*)res);
+	OBJECT_DECREF(x);
+	OBJECT_DECREF(y);
+
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+
+static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
+{
+	switch(op->kind) {
+	#define BOILERPLATE(CONSTANT, FUNC) case CONSTANT: return (FUNC)(rnr, op)
+		BOILERPLATE(CODE_CONSTANT, run_constant);
+		BOILERPLATE(CODE_SETVAR, run_setvar);
+		BOILERPLATE(CODE_GETVAR, run_getvar);
+		BOILERPLATE(CODE_GETMETHOD, run_getmethod);
+		BOILERPLATE(CODE_GETFROMMODULE, run_getfrommodule);
+		BOILERPLATE(CODE_CALLVOIDFUNC, run_callfunc);
+		BOILERPLATE(CODE_CALLRETFUNC, run_callfunc);
+		BOILERPLATE(CODE_BOOLNEG, run_boolneg);
+		BOILERPLATE(CODE_JUMP, run_jump);
+		BOILERPLATE(CODE_JUMPIF, run_jumpif);
+		BOILERPLATE(CODE_STRJOIN, run_strjoin);
+		BOILERPLATE(CODE_POP1, run_pop1);
+		BOILERPLATE(CODE_THROW, run_throw);
+		BOILERPLATE(CODE_CREATEFUNC, run_createfunc);
+		BOILERPLATE(CODE_VOIDRETURN, run_voidreturn);
+		BOILERPLATE(CODE_VALUERETURN, run_valuereturn);
+		BOILERPLATE(CODE_DIDNTRETURNERROR, run_didntreturnerror);
+		BOILERPLATE(CODE_EH_ADD, run_eh_add);
+		BOILERPLATE(CODE_EH_RM, run_eh_rm);
+		BOILERPLATE(CODE_FS_OK, run_fs_push_something);
+		BOILERPLATE(CODE_FS_ERROR, run_fs_push_something);
+		BOILERPLATE(CODE_FS_VOIDRETURN, run_fs_push_something);
+		BOILERPLATE(CODE_FS_VALUERETURN, run_fs_push_something);
+		BOILERPLATE(CODE_FS_JUMP, run_fs_push_something);
+		BOILERPLATE(CODE_FS_APPLY, run_fs_apply);
+		BOILERPLATE(CODE_FS_DISCARD, run_fs_discard);
+		BOILERPLATE(CODE_INT_ADD, run_integer_binary_operation);
+		BOILERPLATE(CODE_INT_SUB, run_integer_binary_operation);
+		BOILERPLATE(CODE_INT_MUL, run_integer_binary_operation);
+		BOILERPLATE(CODE_INT_NEG, run_int_neg);
+		BOILERPLATE(CODE_INT_EQ, run_int_eq);
+	#undef BOILERPLATE
+	}
+}
+
 
 static void run_error_handler(struct Runner *rnr)
 {

@@ -27,8 +27,9 @@ enum CodeOpKind {
 	CODE_VALUERETURN,
 	CODE_DIDNTRETURNERROR,
 
-	CODE_ERRHND_ADD,
-	CODE_ERRHND_RM,
+	// EH = Error Handler, see finally.md
+	CODE_EH_ADD,
+	CODE_EH_RM,
 
 	// FS = Finally State, see finally.md
 	CODE_FS_OK,
@@ -42,8 +43,8 @@ enum CodeOpKind {
 
 	CODE_INT_ADD,   // x+y
 	CODE_INT_SUB,   // x-y
-	CODE_INT_NEG,   // -x
 	CODE_INT_MUL,   // x*y
+	CODE_INT_NEG,   // -x
 	CODE_INT_EQ,    // x == y
 };
 

@@ -349,7 +349,7 @@ static bool read_int_constant(struct BcReader *bcr, Object **objptr, bool negate
 
 static bool read_add_error_handler(struct BcReader *bcr, struct CodeOp *res)
 {
-	res->kind = CODE_ERRHND_ADD;
+	res->kind = CODE_EH_ADD;
 	return read_uint16(bcr, &res->data.errhnd.jmpidx) &&
 			read_type(bcr, &res->data.errhnd.errtype, false) &&
 			read_uint16(bcr, &res->data.errhnd.errvar);
@@ -458,7 +458,7 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case INT_EQ: res->kind = CODE_INT_EQ; return true;
 
 	case ADD_ERROR_HANDLER: return read_add_error_handler(bcr, res);
-	case REMOVE_ERROR_HANDLER: res->kind = CODE_ERRHND_RM; return true;
+	case REMOVE_ERROR_HANDLER: res->kind = CODE_EH_RM; return true;
 
 	case PUSH_FINALLY_STATE_JUMP:
 		if (!read_uint16(bcr, &res->data.jump_idx))
