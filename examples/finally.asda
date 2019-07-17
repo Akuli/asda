@@ -1,0 +1,41 @@
+if FALSE:
+    let string = "lol"
+
+try:
+    print("succeeding try")
+finally:
+    print("succeeding finally")
+
+print("---------")
+
+try:
+    try:
+        print("failing try")
+        print(string)
+    finally:
+        print("succeeding finally")
+catch VariableError e1:
+    print("got error {e1}")
+
+print("---------")
+
+try:
+    try:
+        print("succeeding try")
+    finally:
+        print("failing finally")
+        print(string)
+catch VariableError e2:
+    print("got error {e2}")
+
+print("---------")
+
+try:
+    try:
+        print("failing try")
+        print(string)
+    finally:
+        print("failing finally")
+        print(string)
+catch VariableError e3:
+    print("got error {e3}")

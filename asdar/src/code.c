@@ -13,27 +13,7 @@ void codeop_destroy(const struct CodeOp *op)
 		code_destroy(&op->data.createfunc_code);
 		break;
 
-	case CODE_SETVAR:
-	case CODE_GETVAR:
-	case CODE_GETMETHOD:
-	case CODE_GETFROMMODULE:
-	case CODE_CALLVOIDFUNC:
-	case CODE_CALLRETFUNC:
-	case CODE_BOOLNEG:
-	case CODE_JUMP:
-	case CODE_JUMPIF:
-	case CODE_STRJOIN:
-	case CODE_POP1:
-	case CODE_VOIDRETURN:
-	case CODE_VALUERETURN:
-	case CODE_DIDNTRETURNERROR:
-	case CODE_ERRHND_ADD:
-	case CODE_ERRHND_RM:
-	case CODE_INT_ADD:
-	case CODE_INT_SUB:
-	case CODE_INT_NEG:
-	case CODE_INT_MUL:
-	case CODE_INT_EQ:
+	default:
 		break;
 	}
 }

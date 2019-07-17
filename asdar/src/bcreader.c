@@ -35,6 +35,7 @@
 #define GET_FROM_MODULE 'm'
 #define NON_NEGATIVE_INT_CONSTANT '1'
 #define NEGATIVE_INT_CONSTANT '2'
+#define THROW 't'
 #define INT_ADD '+'
 #define INT_SUB '-'
 #define INT_NEG '_'
@@ -47,6 +48,13 @@
 #define VALUE_RETURN 'R'
 #define DIDNT_RETURN_ERROR 'd'
 #define END_OF_BODY 'E'
+#define PUSH_FINALLY_STATE_OK '3'
+#define PUSH_FINALLY_STATE_ERROR '4'
+#define PUSH_FINALLY_STATE_VOID_RETURN '5'
+#define PUSH_FINALLY_STATE_VALUE_RETURN '6'
+#define PUSH_FINALLY_STATE_JUMP '7'
+#define APPLY_FINALLY_STATE 'A'
+#define DISCARD_FINALLY_STATE 'D'
 
 #define TYPEBYTE_BUILTIN 'b'
 #define TYPEBYTE_FUNC 'f'
@@ -437,6 +445,8 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case BOOLNEG: res->kind = CODE_BOOLNEG; return true;
 	case POP_ONE: res->kind = CODE_POP1; return true;
 
+	case THROW: res->kind = CODE_THROW; return true;
+
 	case VOID_RETURN: res->kind = CODE_VOIDRETURN; return true;
 	case VALUE_RETURN: res->kind = CODE_VALUERETURN; return true;
 	case DIDNT_RETURN_ERROR: res->kind = CODE_DIDNTRETURNERROR; return true;
@@ -449,6 +459,20 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 
 	case ADD_ERROR_HANDLER: return read_add_error_handler(bcr, res);
 	case REMOVE_ERROR_HANDLER: res->kind = CODE_ERRHND_RM; return true;
+
+	case PUSH_FINALLY_STATE_JUMP:
+		if (!read_uint16(bcr, &res->data.jump_idx))
+			return false;
+		res->kind = CODE_FS_JUMP;
+		return true;
+
+	case PUSH_FINALLY_STATE_OK:           res->kind = CODE_FS_OK;          return true;
+	case PUSH_FINALLY_STATE_ERROR:        res->kind = CODE_FS_ERROR;       return true;
+	case PUSH_FINALLY_STATE_VOID_RETURN:  res->kind = CODE_FS_VOIDRETURN;  return true;
+	case PUSH_FINALLY_STATE_VALUE_RETURN: res->kind = CODE_FS_VALUERETURN; return true;
+
+	case APPLY_FINALLY_STATE:   res->kind = CODE_FS_APPLY;   return true;
+	case DISCARD_FINALLY_STATE: res->kind = CODE_FS_DISCARD; return true;
 
 	default:
 		errobj_set(bcr->interp, &errobj_type_value, "unknown op byte: %B", opbyte);

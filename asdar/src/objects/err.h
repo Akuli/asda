@@ -21,6 +21,10 @@ typedef struct ErrObject {
 	//       if linked list then how about multiple NoMemErrors chaining? avoid chaining onto itself
 } ErrObject;
 
+// use this if you don't want to create a new error object
+void errobj_set_obj(Interp *interp, ErrObject *err);
+
+
 // see string.h for info about the format strings
 
 // use this when other error setting functions aren't suitable

@@ -27,11 +27,16 @@ static ErrObject nomemerr = OBJECT_COMPILETIMECREATE(&errobj_type_nomem,
 );
 
 
-void errobj_set_nomem(Interp *interp)
+void errobj_set_obj(Interp *interp, ErrObject *err)
 {
 	assert(!interp->err);
-	interp->err = &nomemerr;
-	OBJECT_INCREF(&nomemerr);
+	interp->err = err;
+	OBJECT_INCREF(err);
+}
+
+void errobj_set_nomem(Interp *interp)
+{
+	errobj_set_obj(interp, &nomemerr);
 }
 
 
@@ -43,12 +48,11 @@ static void set_from_string_obj(Interp *interp, const struct Type *errtype, Stri
 	ErrObject *obj = object_new(interp, errtype, destroy_error, sizeof(*obj));
 	if (!obj)     // refactoring note: MAKE SURE that errobj_set_nomem() doesn't recurse here
 		return;
-
 	obj->msgstr = str;
 	OBJECT_INCREF(str);
 
-	assert(!interp->err);
-	interp->err = obj;
+	errobj_set_obj(interp, obj);
+	OBJECT_DECREF(obj);
 }
 
 void errobj_set(Interp *interp, const struct Type *errtype, const char *fmt, ...)

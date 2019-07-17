@@ -1,0 +1,35 @@
+# assumes that x and y are positive, and something else that i'm not sure about
+let divisible = (Int x, Int y) -> Bool:
+    let x_copy = x    # this is a bug in asdac, this shouldn't be required
+
+    #       x divisible by y
+    # <=>   there exists an integer n so that x = n*y
+    # <=>   if x = n*y + r, where 0 <= r < y, then r=0
+    #
+    # trying to find the r
+    while TRUE:
+        for let r = 0; r != y; r = r+1:
+            if x_copy == y + r:
+                return (r == 0)
+
+        # exists n so that x = n*y  <=>  exists m so that x-y = m*y
+        x_copy = x_copy - y
+
+let and = (Bool a, Bool b) -> Bool:
+    if a:
+        if b:
+            return TRUE
+    return FALSE
+
+let fizzbuzz = (Int n) -> Str:
+    if (n `divisible` 3) `and` (n `divisible` 5):
+        return "Fizzbuzz"
+    if n `divisible` 3:
+        return "Fizz"
+    if n `divisible` 5:
+        return "Buzz"
+    return n.to_string()
+
+# loop starts at 5 because my stupid divisible func breaks otherwise
+for let n = 5; n != 2000; n = n+1:
+    print(fizzbuzz(n))

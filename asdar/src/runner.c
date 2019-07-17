@@ -27,18 +27,29 @@ void runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, struct 
 	rnr->scope = scope;
 	OBJECT_INCREF(scope);
 	dynarray_init(&rnr->stack);
-	dynarray_init(&rnr->errhnd);
+	dynarray_init(&rnr->ehstack);
+	dynarray_init(&rnr->fsstack);
 	rnr->code = code;
 	rnr->opidx = 0;
 	// leave rnr->retval uninitialized for better valgrinding
 }
 
+static void destroy_finally_state(struct RunnerFinallyState fs)
+{
+	if (fs.kind == CODE_FS_ERROR || fs.kind == CODE_FS_VALUERETURN)
+		OBJECT_DECREF(fs.val.obj);
+}
+
 void runner_free(const struct Runner *rnr)
 {
-	for (size_t i = 0; i < rnr->stack.len; i++)
-		OBJECT_DECREF(rnr->stack.ptr[i]);
+	assert(rnr->stack.len == 0);
+	assert(rnr->ehstack.len == 0);
+	assert(rnr->fsstack.len == 0);
+
 	free(rnr->stack.ptr);
-	free(rnr->errhnd.ptr);
+	free(rnr->ehstack.ptr);
+	free(rnr->fsstack.ptr);
+
 	OBJECT_DECREF(rnr->scope);
 	// leave rnr->retval untouched, caller of runner_run() should handle its decreffing
 }
@@ -103,13 +114,34 @@ static bool integer_binary_operation(struct Runner *rnr, enum CodeOpKind bok)
 	return true;
 }
 
+static enum RunnerResult apply_finally_state(struct Runner *rnr, struct RunnerFinallyState fs)
+{
+	switch (fs.kind) {
+		case CODE_FS_OK:
+			return RUNNER_DIDNTRETURN;
+		case CODE_FS_ERROR:
+			errobj_set_obj(rnr->interp, (ErrObject *)fs.val.obj);
+			return RUNNER_ERROR;
+		case CODE_FS_VOIDRETURN:
+			return RUNNER_VOIDRETURN;
+		case CODE_FS_VALUERETURN:
+			rnr->retval = fs.val.obj;
+			OBJECT_INCREF(rnr->retval);
+			return RUNNER_DIDNTRETURN;
+		case CODE_FS_JUMP:
+			rnr->opidx = fs.val.jumpidx;
+			return RUNNER_DIDNTRETURN;
+		default:
+			assert(0);
+			break;
+	}
+}
+
 
 // this function is long, but it feels ok because it divides nicely into max 10-ish line chunks
 static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 {
 	DEBUG_PRINTF("%d: ", op->lineno);
-
-	enum RunnerResult ret = RUNNER_DIDNTRETURN;
 
 	switch(op->kind) {
 	case CODE_CONSTANT:
@@ -262,20 +294,72 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 
 	case CODE_VOIDRETURN:
 		DEBUG_PRINTF("void return\n");
-		ret = RUNNER_VOIDRETURN;
-		break;
+		return RUNNER_VOIDRETURN;
 	case CODE_VALUERETURN:
 		DEBUG_PRINTF("value return\n");
 		rnr->retval = dynarray_pop(&rnr->stack);
 		assert(rnr->retval);
-		ret = RUNNER_VALUERETURN;
-		break;
+		return RUNNER_VALUERETURN;
 
 	case CODE_DIDNTRETURNERROR:
 		DEBUG_PRINTF("didn't return error\n");
 		// TODO: create a nicer error type for this
 		errobj_set(rnr->interp, &errobj_type_value, "function didn't return");
 		return RUNNER_ERROR;
+
+	case CODE_THROW:
+	{
+		Object *e = dynarray_pop(&rnr->stack);
+		errobj_set_obj(rnr->interp, (ErrObject *)e);
+		OBJECT_DECREF(e);
+		return RUNNER_ERROR;
+	}
+
+	case CODE_FS_OK:
+	case CODE_FS_ERROR:
+	case CODE_FS_VOIDRETURN:
+	case CODE_FS_VALUERETURN:
+	case CODE_FS_JUMP:
+	{
+		struct RunnerFinallyState fs;
+		fs.kind = op->kind;
+		if (op->kind == CODE_FS_ERROR || op->kind == CODE_FS_VALUERETURN)
+			fs.val.obj = dynarray_pop(&rnr->stack);
+		if (op->kind == CODE_FS_VALUERETURN)
+			fs.val.jumpidx = op->data.jump_idx;
+
+		if (!dynarray_push(rnr->interp, &rnr->fsstack, fs)) {
+			destroy_finally_state(fs);
+			return RUNNER_ERROR;
+		}
+		break;
+	}
+
+	case CODE_FS_APPLY:
+	{
+		struct RunnerFinallyState fs = dynarray_pop(&rnr->fsstack);
+		enum RunnerResult r = apply_finally_state(rnr, fs);
+		destroy_finally_state(fs);
+		if (r != RUNNER_DIDNTRETURN)
+			return r;
+		break;
+	}
+
+	case CODE_FS_DISCARD:
+	{
+		assert(rnr->fsstack.len);
+		struct RunnerFinallyState fs = dynarray_pop(&rnr->fsstack);
+		destroy_finally_state(fs);
+		break;
+	}
+
+	case CODE_ERRHND_ADD:
+		if (!dynarray_push(rnr->interp, &rnr->ehstack, op->data.errhnd))
+			return RUNNER_ERROR;
+		break;
+	case CODE_ERRHND_RM:
+		(void) dynarray_pop(&rnr->ehstack);
+		break;
 
 	case CODE_INT_ADD:
 	case CODE_INT_SUB:
@@ -306,27 +390,18 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		break;
 	}
 
-	case CODE_ERRHND_ADD:
-		if (!dynarray_push(rnr->interp, &rnr->errhnd, op->data.errhnd))
-			return RUNNER_ERROR;
-		break;
-
-	case CODE_ERRHND_RM:
-		(void) dynarray_pop(&rnr->errhnd);
-		break;
-
 	}   // end of switch
 
 	rnr->opidx++;
 	// "fall through" to return statement
 
 skip_opidx_plusplus:
-	return ret;
+	return RUNNER_DIDNTRETURN;
 }
 
-static void begin_catch_block(struct Runner *rnr)
+static void run_error_handler(struct Runner *rnr)
 {
-	struct CodeErrHndData eh = dynarray_pop(&rnr->errhnd);
+	struct CodeErrHndData eh = dynarray_pop(&rnr->ehstack);
 	rnr->opidx = eh.jmpidx;
 
 	assert(rnr->interp->err);
@@ -336,14 +411,23 @@ static void begin_catch_block(struct Runner *rnr)
 	rnr->interp->err = NULL;
 }
 
+static void clear_stack(struct Runner *rnr)
+{
+	for (size_t i = 0; i < rnr->stack.len; i++)
+		OBJECT_DECREF(rnr->stack.ptr[i]);
+	rnr->stack.len = 0;
+}
+
 enum RunnerResult runner_run(struct Runner *rnr)
 {
 	while (rnr->opidx < rnr->code.nops) {
 		enum RunnerResult res = run_one_op(rnr, &rnr->code.ops[rnr->opidx]);
-
-		if (res == RUNNER_ERROR && rnr->errhnd.len) {
-			begin_catch_block(rnr);
-			continue;
+		if (res == RUNNER_ERROR) {
+			clear_stack(rnr);
+			if (rnr->ehstack.len) {
+				run_error_handler(rnr);
+				continue;
+			}
 		}
 
 		if(res != RUNNER_DIDNTRETURN)

@@ -1,0 +1,14 @@
+succeeding try
+succeeding finally
+---------
+failing try
+succeeding finally
+got error value of a variable hasn't been set
+---------
+succeeding try
+failing finally
+got error value of a variable hasn't been set
+---------
+failing try
+failing finally
+got error value of a variable hasn't been set

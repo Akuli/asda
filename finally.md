@@ -18,6 +18,7 @@ Some words that I came up with:
     - Returning from a function without a return value
     - Returning from a function with a return value
     - Throwing an error
+    - Jumping to a different location
 
     The associated error or return value is included in the FS.
 

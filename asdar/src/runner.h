@@ -6,7 +6,18 @@
 #include "code.h"
 #include "interp.h"
 #include "objtyp.h"
+#include "objects/err.h"
 #include "objects/scope.h"
+
+// see finally.md
+// don't use this outside runner.c
+struct RunnerFinallyState {
+	enum CodeOpKind kind;   // one of CODE_FS_* things, but not CODE_FS_APPLY or CODE_FS_DISCARD
+	union {
+		Object *obj;       // error or return value, for CODE_FS_VALUERETURN and CODE_FS_ERROR
+		size_t jumpidx;    // for CODE_FS_JUMP
+	} val;
+};
 
 struct Runner {
 	Object *retval;
@@ -15,7 +26,8 @@ struct Runner {
 	Interp *interp;
 	ScopeObject *scope;
 	DynArray(Object*) stack;
-	DynArray(struct CodeErrHndData) errhnd;
+	DynArray(struct CodeErrHndData) ehstack;        // see finally.md
+	DynArray(struct RunnerFinallyState) fsstack;    // see finally.md
 	size_t opidx;
 	struct Code code;
 };

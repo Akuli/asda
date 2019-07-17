@@ -1,5 +1,4 @@
 import collections
-import enum
 import itertools
 import os
 
@@ -33,8 +32,10 @@ PrefixOperator = _astclass('PrefixOperator', ['operator', 'expression'])
 BinaryOperator = _astclass('BinaryOperator', ['operator', 'lhs', 'rhs'])
 TernaryOperator = _astclass('TernaryOperator', ['operator', 'lhs', 'mid',
                                                 'rhs'])
-TryCatch = _astclass('TryCatch', ['try_body', 'catch_body',
-                                  'errortype', 'varname', 'varname_location'])
+# catches is a list of tuples:
+#   (catch_location, errortype, varname, varname_location, body) tuples
+Try = _astclass('TryCatch', ['try_body', 'catches',
+                             'finally_location', 'finally_body'])
 
 
 def _duplicate_check(iterable, what_are_they):
@@ -699,28 +700,43 @@ class _AsdaParser:
 
         if self.tokens.peek().value == 'try':
             try_location = self.tokens.next_token().location
-            try_block = self.parse_block(consume_newline=True)
+            try_body = self.parse_block(consume_newline=True)
 
-            catch = self.tokens.next_token()
-            if catch.value != 'catch':
-                raise common.CompileError("should be 'catch'", catch.location)
+            catches = []
+            while ((not self.tokens.eof()) and
+                   self.tokens.peek().value == 'catch'):
+                catch = self.tokens.next_token()
 
-            tybe = self.parse_type()
-            if self.tokens.peek().type == 'ID':
-                varname_token = self.tokens.next_token()
-                if varname_token.type != 'ID':
-                    raise common.Compilation("should be a variable name",
-                                             varname.location)
-                varname = varname_token.value
-                varname_location = varname_token.location
+                tybe = self.parse_type()
+                if self.tokens.peek().type == 'ID':
+                    varname_token = self.tokens.next_token()
+                    if varname_token.type != 'ID':
+                        raise common.Compilation("should be a variable name",
+                                                 varname_token.location)
+                    varname = varname_token.value
+                    varname_location = varname_token.location
+                else:
+                    varname = None
+                    varname_location = None
+
+                catch_body = self.parse_block(consume_newline=True)
+                catches.append((catch.location, tybe, varname,
+                                varname_location, catch_body))
+
+            if ((not self.tokens.eof()) and
+                    self.tokens.peek().value == 'finally'):
+                finally_location = self.tokens.next_token().location
+                finally_body = self.parse_block(consume_newline=True)
+            elif catches:
+                finally_location = None
+                finally_body = []
             else:
-                varname = None
-                varname_location = None
+                raise common.CompileError(
+                    "you need to use 'catch' or 'finally' after a 'try'",
+                    try_location)
 
-            catch_block = self.parse_block(consume_newline=True)
-
-            return TryCatch(try_location, try_block, catch_block,
-                            tybe, varname, varname_location)
+            return Try(try_location, try_body, catches,
+                       finally_location, finally_body)
 
         result = self.parse_1line_statement(it_should_be='a statement')
 

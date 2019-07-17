@@ -25,6 +25,7 @@ POP_ONE = b'P'
 VOID_RETURN = b'r'
 VALUE_RETURN = b'R'
 DIDNT_RETURN_ERROR = b'd'
+THROW = b't'
 YIELD = b'Y'
 BOOL_NEGATION = b'!'
 JUMP_IF = b'J'
@@ -42,6 +43,16 @@ EQUAL = b'='
 
 ADD_ERROR_HANDLER = b'h'
 REMOVE_ERROR_HANDLER = b'H'
+
+PUSH_FINALLY_STATE_OK = b'3'
+PUSH_FINALLY_STATE_ERROR = b'4'
+PUSH_FINALLY_STATE_VOID_RETURN = b'5'
+PUSH_FINALLY_STATE_VALUE_RETURN = b'6'
+PUSH_FINALLY_STATE_JUMP = b'7'
+
+APPLY_FINALLY_STATE = b'A'
+DISCARD_FINALLY_STATE = b'D'
+
 
 # these are used when bytecoding a type
 TYPE_BUILTIN = b'b'
@@ -255,6 +266,17 @@ class _BytecodeWriter:
                 varlists[op.errorvarlevel].index(op.errorvar))
             return
 
+        if isinstance(op, opcoder.PushFinallyStateReturn):
+            self.bytecode.add_byte(PUSH_FINALLY_STATE_VALUE_RETURN
+                                   if op.returns_a_value else
+                                   PUSH_FINALLY_STATE_VOID_RETURN)
+            return
+
+        if isinstance(op, opcoder.PushFinallyStateJump):
+            self.bytecode.add_byte(PUSH_FINALLY_STATE_JUMP)
+            self.bytecode.add_uint16(self.jumpmarker2index[op.index])
+            return
+
         simple_things = [
             (opcoder.PopOne, POP_ONE),
             (opcoder.Yield, YIELD),
@@ -267,6 +289,11 @@ class _BytecodeWriter:
             # (opcoder.Divide, DIVIDE),
             (opcoder.Equal, EQUAL),
             (opcoder.RemoveErrorHandler, REMOVE_ERROR_HANDLER),
+            (opcoder.PushFinallyStateOk, PUSH_FINALLY_STATE_OK),
+            (opcoder.PushFinallyStateError, PUSH_FINALLY_STATE_ERROR),
+            (opcoder.DiscardFinallyState, DISCARD_FINALLY_STATE),
+            (opcoder.ApplyFinallyState, APPLY_FINALLY_STATE),
+            (opcoder.Throw, THROW),
         ]
 
         for klass, byte in simple_things:

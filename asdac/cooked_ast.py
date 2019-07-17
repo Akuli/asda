@@ -29,6 +29,7 @@ If = _astclass('If', ['condition', 'if_body', 'else_body'])
 Loop = _astclass('Loop', ['init', 'cond', 'incr', 'body'])    # while or for
 TryCatch = _astclass('TryCatch', ['try_body', 'errortype', 'caught_varname',
                                   'catch_body'])
+TryFinally = _astclass('TryFinally', ['try_body', 'finally_body'])
 
 Plus = _astclass('Plus', ['lhs', 'rhs'])
 Minus = _astclass('Minus', ['lhs', 'rhs'])
@@ -559,19 +560,70 @@ class _Chef:
         body = self.cook_body(raw.body)
         return Loop(raw.location, None, init, cond, incr, body)
 
-    def cook_try_catch(self, raw):
-        try_body = self.cook_body(raw.try_body)
-
-        self._check_name_not_exist(raw.varname, raw.varname_location)
-        errortype = self.cook_type(raw.errortype)
-        self.vars[raw.varname] = errortype
-        catch_body = self.cook_body(raw.catch_body)
+    def cook_try_catch(self, cooked_try_body, catch_location, errortype,
+                       varname, varname_location, catch_body):
+        self._check_name_not_exist(varname, varname_location)
+        cooked_errortype = self.cook_type(errortype)
+        self.vars[varname] = cooked_errortype
+        cooked_catch_body = self.cook_body(catch_body)
 
         return [
-            CreateLocalVar(raw.location, None, raw.varname),
-            TryCatch(raw.location, None, try_body, errortype, raw.varname,
-                     catch_body),
+            CreateLocalVar(varname_location, None, varname),
+            TryCatch(catch_location, None, cooked_try_body, cooked_errortype,
+                     varname, cooked_catch_body),
         ]
+
+    def cook_try_finally(self, cooked_try_body, finally_location,
+                         finally_body):
+        cooked_finally_body = self.cook_body(finally_body)
+        return [
+            TryFinally(finally_location, None,
+                       cooked_try_body, cooked_finally_body),
+        ]
+
+    # turns this:
+    #
+    #    try:
+    #        A
+    #    catch Error1 e1:
+    #        B
+    #    catch Error2 e2:
+    #        C
+    #    finally:
+    #        D
+    #
+    # into this:
+    #
+    #    try:
+    #        try:
+    #            try:
+    #                A
+    #            catch Error1 e1:
+    #                B
+    #        catch Error2 e2:
+    #            C
+    #    finally:
+    #        D
+    def cook_try(self, raw_try):
+        if raw_try.finally_body:
+            if raw_try.catches:
+                cooked_try_body = self.cook_try(
+                    raw_try._replace(finally_body=[]))
+            else:
+                cooked_try_body = self.cook_body(raw_try.try_body)
+
+            return self.cook_try_finally(
+                cooked_try_body,
+                raw_try.finally_location, raw_try.finally_body)
+
+        if raw_try.catches:
+            assert raw_try.catches
+            less_catches_cooked = self.cook_try(
+                raw_try._replace(catches=raw_try.catches[:-1]))
+            return self.cook_try_catch(
+                less_catches_cooked, *raw_try.catches[-1])
+
+        return self.cook_body(raw_try.try_body)
 
     def _check_can_export(self, location):
         # 0 = global chef, 1 = file chef, 2 = function chef, etc
@@ -600,8 +652,8 @@ class _Chef:
             return [self.cook_while(raw_statement)]
         if isinstance(raw_statement, raw_ast.For):
             return [self.cook_for(raw_statement)]
-        if isinstance(raw_statement, raw_ast.TryCatch):
-            return self.cook_try_catch(raw_statement)
+        if isinstance(raw_statement, raw_ast.Try):
+            return self.cook_try(raw_statement)
 
         assert False, raw_statement     # pragma: no cover
 

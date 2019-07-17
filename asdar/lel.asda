@@ -1,0 +1,7 @@
+if FALSE:
+    let x = "a"
+
+try:
+    print(x)
+catch:
+    print("oh no")
