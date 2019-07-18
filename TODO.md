@@ -2,14 +2,16 @@
 - generic types in nested functions bug
     is this fixed now? it could be
 - docs for Str, Int, Bool and friends
-- runtime errors
 - ternary operator: if cond then a else b
-- optimizations: maybe someone else can do this?
 - array objects
 - union types (may be hard to implement):
 
         func debug_print(Union[Str, Int] obj):
             print(obj.to_debug_string())
+
+- 'new' and constructors
+
+        throw new ValueError("should be 123 or 456, not {value}")
 
 - to_debug_string method to all objects
 - oopy subclassy stuff:
@@ -19,6 +21,62 @@
 
 - reference objects: (&some_variable).set("Hello")
 - defining classes
+- some way to refer to the type of a function, e.g.
+  `functype[(Str, Int) -> Bool]` (`functype` can be a keyword)
+- interfaces kinda like they are done in rust, e.g. if you are writing a
+  JSON lib you could do something like
+
+        interface JsonObject for T:
+            functype[(T) -> Str] to_json
+
+        implement JsonObject for Int:
+            toJson = (Int i) -> Str:
+                return i.to_string()
+
+        implement JsonObject for Str:
+            toJson = (Str s) -> Str:
+                return "\"" + json_escape(s) + "\""
+
+        implement JsonObject for List[JsonObject]:
+            toJson = (List[JsonObject] list) -> Str:
+                return "[" + list.map((JsonObject jo) -> Str:
+                    return jo.to_json()
+                ).join(",") + "]"
+
+    this would not pollute namespace, so `"hello".to_json()` would not
+    work, but `cast[JsonObject]("hello").to_json()` or similar would be
+    allowed
+
+- pipe syntax: `"hello"|cast[jsonObject].to_json()`
+- specifying base class of generics: `lol[T inherits SomeBaseClass]`
+- getters and setters for attributes
+- named function arguments like kwargs in python
+- automatic types: if `List[T]` was a class, then `List` and
+  `List[auto]` would both mean the same thing, detect type from first
+  usage of the variable. E.g. if `List[T]`'s constructor takes three
+  `T`s as arguments, then each of these lines does the same thing:
+
+        let thing = new List[Str]("a", "b", "c")
+        let thing = new List[auto]("a", "b", "c")
+        let thing = new List("a", "b", "c")
+
+- one-liner lambdas: if `run_callback` wants an argument of type
+  `functype[(Int) -> Str]`, then `run_callback(x => x.to_string())`
+  should be same as
+
+        run_callback((auto x) -> auto:
+            return x.to_string()
+        )
+
+    which is then same as
+
+        run_callback((Int x) -> Str:
+            return x.to_string()
+        )
+
+    Feels weird to use `->` and `=>` for different things, but I don't
+    have better ideas
+
 - relpath and different drives
 - case-insensitive vs case-sensitive paths
 
