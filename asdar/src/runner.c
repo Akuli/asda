@@ -421,6 +421,9 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_INT_EQ, run_int_eq);
 	#undef BOILERPLATE
 	}
+
+	// never runs, silences compiler warning
+	return RUNNER_DIDNTRETURN;
 }
 
 

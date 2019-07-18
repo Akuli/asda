@@ -97,7 +97,7 @@ static StringObject *create_new_string_from_parts(Interp *interp, const struct P
 
 	uint32_t *p = buf;
 	for (size_t i=0; i < nparts; i++) {
-		const uint32_t *val;
+		const uint32_t *val = NULL;   // initial value never used, silences warning
 		switch(parts[i].valkind) {
 			case PVK_BIG_MALLOC: val = parts[i].val.bigmalloc; break;
 			case PVK_BIG_CONST:  val = parts[i].val.bigconst;  break;

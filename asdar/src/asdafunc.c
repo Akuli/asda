@@ -65,6 +65,10 @@ static bool asda_function_cfunc(Interp *interp, struct ObjData data, Object *con
 			// compiler adds a didn't return error to end of returning functions
 			assert(0);
 	}
+
+	// never runs, silences compiler warning
+	assert(0);
+	return false;
 }
 
 FuncObject *asdafunc_create(Interp *interp, ScopeObject *defscope, struct Code code)
