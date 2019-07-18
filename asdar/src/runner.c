@@ -284,18 +284,23 @@ static enum RunnerResult run_fs_apply(struct Runner *rnr, const struct CodeOp *o
 		case CODE_FS_OK:
 			r = RUNNER_DIDNTRETURN;
 			rnr->opidx++;
+			break;
 		case CODE_FS_ERROR:
 			r = RUNNER_ERROR;
 			errobj_set_obj(rnr->interp, (ErrObject *)fs.val.obj);
+			break;
 		case CODE_FS_VOIDRETURN:
 			r = RUNNER_VOIDRETURN;
+			break;
 		case CODE_FS_VALUERETURN:
 			r = RUNNER_VALUERETURN;
 			rnr->retval = fs.val.obj;
 			OBJECT_INCREF(rnr->retval);
+			break;
 		case CODE_FS_JUMP:
 			r = RUNNER_DIDNTRETURN;
 			rnr->opidx = fs.val.jumpidx;
+			break;
 		default:
 			assert(0);
 			break;
