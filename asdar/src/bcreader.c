@@ -24,8 +24,7 @@
 #define STR_CONSTANT '"'
 #define TRUE_CONSTANT 'T'
 #define FALSE_CONSTANT 'F'
-#define CALL_VOID_FUNCTION '('
-#define CALL_RETURNING_FUNCTION ')'
+#define CALL_FUNCTION '('
 #define BOOLNEG '!'
 #define POP_ONE 'P'
 #define JUMP 'K'
@@ -306,12 +305,6 @@ static bool read_vardata(struct BcReader *bcr, struct CodeOp *res, enum CodeOpKi
 	return true;
 }
 
-static bool read_callfunc(struct BcReader *bcr, struct CodeOp *res, enum CodeOpKind kind)
-{
-	res->kind = kind;
-	return read_bytes(bcr, &res->data.callfunc_nargs, 1);
-}
-
 static bool read_string_constant(struct BcReader *bcr, Object **objptr)
 {
 	char *str;
@@ -412,10 +405,9 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 		return read_vardata(bcr, res, CODE_SETVAR);
 	case GET_VAR:
 		return read_vardata(bcr, res, CODE_GETVAR);
-	case CALL_VOID_FUNCTION:
-		return read_callfunc(bcr, res, CODE_CALLVOIDFUNC);
-	case CALL_RETURNING_FUNCTION:
-		return read_callfunc(bcr, res, CODE_CALLRETFUNC);
+	case CALL_FUNCTION:
+		res->kind = CODE_CALLFUNC;
+		return read_bytes(bcr, &res->data.callfunc_nargs, 1);
 	case JUMP:   res->kind = CODE_JUMP;   return read_uint16(bcr, &res->data.jump_idx);
 	case JUMPIF: res->kind = CODE_JUMPIF; return read_uint16(bcr, &res->data.jump_idx);
 	case NON_NEGATIVE_INT_CONSTANT:

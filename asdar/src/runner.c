@@ -136,7 +136,6 @@ static enum RunnerResult run_getfrommodule(struct Runner *rnr, const struct Code
 
 static enum RunnerResult run_callfunc(struct Runner *rnr, const struct CodeOp *op)
 {
-	bool ret = (op->kind == CODE_CALLRETFUNC);
 	size_t nargs = op->data.callfunc_nargs;
 	assert(rnr->stack.len >= nargs + 1);
 	rnr->stack.len -= nargs;
@@ -148,11 +147,10 @@ static enum RunnerResult run_callfunc(struct Runner *rnr, const struct CodeOp *o
 
 	OBJECT_DECREF(func);
 	for(size_t i=0; i < nargs; i++) OBJECT_DECREF(argptr[i]);
-
 	if (!ok)
 		return RUNNER_ERROR;
-	assert(ret == !!result);
-	if (ret)
+
+	if (result)
 		dynarray_push_itwillfit(&rnr->stack, result);
 	rnr->opidx++;
 	return RUNNER_DIDNTRETURN;
@@ -396,8 +394,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_GETVAR, run_getvar);
 		BOILERPLATE(CODE_GETMETHOD, run_getmethod);
 		BOILERPLATE(CODE_GETFROMMODULE, run_getfrommodule);
-		BOILERPLATE(CODE_CALLVOIDFUNC, run_callfunc);
-		BOILERPLATE(CODE_CALLRETFUNC, run_callfunc);
+		BOILERPLATE(CODE_CALLFUNC, run_callfunc);
 		BOILERPLATE(CODE_BOOLNEG, run_boolneg);
 		BOILERPLATE(CODE_JUMP, run_jump);
 		BOILERPLATE(CODE_JUMPIF, run_jumpif);

@@ -35,7 +35,7 @@ LookupVar = _op_class('LookupVar', ['level', 'var'])
 LookupFromModule = _op_class('LookupFromModule', ['compilation', 'indeks'])
 LookupAttribute = _op_class('LookupAttribute', ['type', 'indeks'])
 SetVar = _op_class('SetVar', ['level', 'var'])
-CallFunction = _op_class('CallFunction', ['nargs', 'returns_a_value'])
+CallFunction = _op_class('CallFunction', ['nargs'])
 StrJoin = _op_class('StrJoin', ['how_many_parts'])
 PopOne = _op_class('PopOne', [])
 Return = _op_class('Return', ['returns_a_value'])
@@ -151,8 +151,7 @@ class _OpCoder:
         for arg in call.args:
             self.do_expression(arg)
         self.output.ops.append(CallFunction(
-            self._lineno(call.location), len(call.args),
-            call.type is not None))
+            self._lineno(call.location), len(call.args)))
 
     def _get_coder_for_level(self, level):
         level_difference = self.level - level
