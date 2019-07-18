@@ -1,2 +1,0 @@
-for let b = TRUE; b; b = FALSE:
-    print("This should get printed exactly once")
