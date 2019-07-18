@@ -26,7 +26,7 @@ VoidReturn = _astclass('VoidReturn', [])
 ValueReturn = _astclass('ValueReturn', ['value'])
 Yield = _astclass('Yield', ['value'])
 If = _astclass('If', ['condition', 'if_body', 'else_body'])
-Loop = _astclass('Loop', ['init', 'cond', 'incr', 'body'])    # while or for
+Loop = _astclass('Loop', ['pre_cond', 'post_cond', 'incr', 'body'])
 TryCatch = _astclass('TryCatch', ['try_body', 'errortype', 'caught_varname',
                                   'catch_body'])
 TryFinally = _astclass('TryFinally', ['try_body', 'finally_body'])
@@ -548,8 +548,17 @@ class _Chef:
                 "expected Bool, got " + cond.type.name, cond.location)
 
         body = self.cook_body(raw.body)
-        return Loop(raw.location, None, [], cond, [], body)
+        return Loop(raw.location, None, cond, None, [], body)
 
+    def cook_do_while(self, raw):
+        body = self.cook_body(raw.body)
+        cond = self.cook_expression(raw.condition)
+        if cond.type != objects.BUILTIN_TYPES['Bool']:
+            raise common.CompileError(
+                "expected Bool, got " + cond.type.name, cond.location)
+        return Loop(raw.location, None, None, cond, [], body)
+
+    # returns a list, unlike most other things
     def cook_for(self, raw):
         init = self.cook_statement(raw.init)
         cond = self.cook_expression(raw.cond)
@@ -558,7 +567,7 @@ class _Chef:
                 "expected Bool, got " + cond.type.name, cond.location)
         incr = self.cook_statement(raw.incr)
         body = self.cook_body(raw.body)
-        return Loop(raw.location, None, init, cond, incr, body)
+        return init + [Loop(raw.location, None, cond, None, incr, body)]
 
     def cook_try_catch(self, cooked_try_body, catch_location, errortype,
                        varname, varname_location, catch_body):
@@ -650,8 +659,10 @@ class _Chef:
             return [self.cook_if(raw_statement)]
         if isinstance(raw_statement, raw_ast.While):
             return [self.cook_while(raw_statement)]
+        if isinstance(raw_statement, raw_ast.DoWhile):
+            return [self.cook_do_while(raw_statement)]
         if isinstance(raw_statement, raw_ast.For):
-            return [self.cook_for(raw_statement)]
+            return self.cook_for(raw_statement)
         if isinstance(raw_statement, raw_ast.Try):
             return self.cook_try(raw_statement)
 

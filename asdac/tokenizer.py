@@ -25,8 +25,15 @@ _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
 
 # keep this up to date! this is what prevents these from being valid
 # variable names
-_KEYWORDS = {'let', 'if', 'elif', 'else', 'while', 'for', 'void', 'return',
-             'yield', 'import', 'export', 'as', 'try', 'catch', 'finally'}
+_KEYWORDS = {
+    'let',
+    'if', 'elif', 'else',
+    'while', 'for', 'do',
+    'void',
+    'return', 'yield',
+    'import', 'export', 'as',
+    'try', 'catch', 'finally',
+}
 
 
 Token = collections.namedtuple('Token', ['type', 'value', 'location'])

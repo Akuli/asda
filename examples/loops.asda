@@ -1,0 +1,22 @@
+let i = 0
+while i != 3:
+    print("i = {i}")
+    i = i+1
+
+for let j = 0; j != 3; j = j+1:
+    print("j = {j}")
+
+let k = 0
+do:
+    print("k = {k}")
+    k = k+1
+while k != 3
+
+
+# this shows the difference between while and do...while
+while FALSE:
+    print("This should NOT get printed")
+
+do:
+    print("This should get printed once")
+while FALSE

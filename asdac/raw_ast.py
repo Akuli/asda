@@ -27,6 +27,7 @@ VoidStatement = _astclass('VoidStatement', [])
 # If's ifs is a list of (condition, body) pairs, where body is a list
 If = _astclass('If', ['ifs', 'else_body'])
 While = _astclass('While', ['condition', 'body'])
+DoWhile = _astclass('DoWhile', ['body', 'condition'])
 For = _astclass('For', ['init', 'cond', 'incr', 'body'])
 PrefixOperator = _astclass('PrefixOperator', ['operator', 'expression'])
 BinaryOperator = _astclass('BinaryOperator', ['operator', 'lhs', 'rhs'])
@@ -668,6 +669,22 @@ class _AsdaParser:
             condition = self.parse_expression()
             body = self.parse_block(consume_newline=True)
             return While(while_location, condition, body)
+
+        if self.tokens.peek().value == 'do':
+            do = self.tokens.next_token()
+            body = self.parse_block(consume_newline=True)
+
+            whale = self.tokens.next_token()
+            if whale.value != 'while':
+                raise common.CompileError("should be 'while'", whale.location)
+            condition = self.parse_expression()
+
+            newline = self.tokens.next_token()
+            if newline.type != 'NEWLINE':
+                raise common.CompileError(
+                    "should be a newline", newline.location)
+
+            return DoWhile(do.location, body, condition)
 
         if self.tokens.peek().value == 'if':
             if_location = self.tokens.next_token().location

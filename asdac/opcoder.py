@@ -356,20 +356,23 @@ class _OpCoder:
             beginning = JumpMarker()
             end = JumpMarker()
 
-            for substatement in statement.init:
-                self.do_statement(substatement)
-
             self.output.ops.append(beginning)
-            self.do_expression(statement.cond)
-            self.output.ops.append(BoolNegation(None))
-            self.output.ops.append(JumpIf(None, end))
+            if statement.pre_cond is not None:
+                self.do_expression(statement.pre_cond)
+                self.output.ops.append(BoolNegation(None))
+                self.output.ops.append(JumpIf(None, end))
 
             for substatement in statement.body:
                 self.do_statement(substatement)
             for substatement in statement.incr:
                 self.do_statement(substatement)
 
-            self.output.ops.append(Jump(None, beginning))
+            if statement.post_cond is None:
+                self.output.ops.append(Jump(None, beginning))
+            else:
+                self.do_expression(statement.post_cond)
+                self.output.ops.append(JumpIf(None, beginning))
+
             self.output.ops.append(end)
 
         elif isinstance(statement, cooked_ast.TryCatch):
