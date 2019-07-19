@@ -24,10 +24,11 @@ FuncDefinition = _astclass('FuncDefinition', ['args', 'returntype', 'body'])
 Return = _astclass('Return', ['value'])
 Yield = _astclass('Yield', ['value'])
 VoidStatement = _astclass('VoidStatement', [])
-# If's ifs is a list of (condition, body) pairs, where body is a list
-If = _astclass('If', ['ifs', 'else_body'])
-While = _astclass('While', ['condition', 'body'])
-DoWhile = _astclass('DoWhile', ['body', 'condition'])
+# IfStatement's ifs is a list of (cond, body) pairs, where body is a list
+IfStatement = _astclass('IfStatement', ['ifs', 'else_body'])
+IfExpression = _astclass('IfExpression', ['cond', 'true_expr', 'false_expr'])
+While = _astclass('While', ['cond', 'body'])
+DoWhile = _astclass('DoWhile', ['body', 'cond'])
 For = _astclass('For', ['init', 'cond', 'incr', 'body'])
 PrefixOperator = _astclass('PrefixOperator', ['operator', 'expression'])
 BinaryOperator = _astclass('BinaryOperator', ['operator', 'lhs', 'rhs'])
@@ -87,7 +88,7 @@ class _TokenIterator:
             return True
 
 
-# the values can be used as bit flags, e.g. PREFIX | BINARY_WITH_CHAINING
+# the values can be used as bit flags, e.g. OP_BINARY | OP_BINARY_CHAINING
 #
 # i would use enum.IntFlag but it's new in python 3.6, and other stuff works
 # on python works 3.5
@@ -230,9 +231,9 @@ class _AsdaParser:
         return (tybe, name.value, location)
 
     def expression_without_operators_coming_up(self):
-        if self.tokens.peek().value == '(':
-            # could be a function or parentheses for predecence, both are
-            # expressions
+        # '(' could be a function or parentheses for predecence
+        # both are expressions
+        if self.tokens.peek().value in {'(', 'if'}:
             return True
 
         if self.tokens.peek().type in {'INTEGER', 'STRING', 'ID',
@@ -340,6 +341,23 @@ class _AsdaParser:
                 name = token.value
 
             return GetVar(location, module_path, name, generics)
+
+        if self.tokens.peek().value == 'if':
+            # if cond then true_expr else false_expr
+            if_ = self.tokens.next_token()
+            cond = self.parse_expression()
+
+            then = self.tokens.next_token()
+            if then.value != 'then':
+                raise common.CompileError("should be 'then'", then.location)
+            true_expr = self.parse_expression()
+
+            elze = self.tokens.next_token()
+            if elze.value != 'else':
+                raise common.CompileError("should be 'else'", elze.location)
+            false_expr = self.parse_expression()
+
+            return IfExpression(if_.location, cond, true_expr, false_expr)
 
         raise common.CompileError(
             "invalid syntax", self.tokens.next_token().location)
@@ -605,6 +623,7 @@ class _AsdaParser:
                 "cannot import here, only at beginning of file",
                 self.tokens.peek().location)
 
+        # TODO: not all expressions should be valid statements, fix this
         result = self.parse_expression(it_should_be=it_should_be)
 
         if self.tokens.eof() or self.tokens.peek().value != '=':
@@ -663,12 +682,14 @@ class _AsdaParser:
         if token.value != ';':
             raise common.CompileError("should be ';'", token.location)
 
+    # note that 'if x then y else z' is not a valid statement even though it
+    # is a valid expression
     def parse_statement(self):
         if self.tokens.peek().value == 'while':
             while_location = self.tokens.next_token().location
-            condition = self.parse_expression()
+            cond = self.parse_expression()
             body = self.parse_block(consume_newline=True)
-            return While(while_location, condition, body)
+            return While(while_location, cond, body)
 
         if self.tokens.peek().value == 'do':
             do = self.tokens.next_token()
@@ -677,14 +698,14 @@ class _AsdaParser:
             whale = self.tokens.next_token()
             if whale.value != 'while':
                 raise common.CompileError("should be 'while'", whale.location)
-            condition = self.parse_expression()
+            cond = self.parse_expression()
 
             newline = self.tokens.next_token()
             if newline.type != 'NEWLINE':
                 raise common.CompileError(
                     "should be a newline", newline.location)
 
-            return DoWhile(do.location, body, condition)
+            return DoWhile(do.location, body, cond)
 
         if self.tokens.peek().value == 'if':
             if_location = self.tokens.next_token().location
@@ -703,7 +724,7 @@ class _AsdaParser:
             else:
                 else_body = []
 
-            return If(if_location, ifs, else_body)
+            return IfStatement(if_location, ifs, else_body)
 
         if self.tokens.peek().value == 'for':
             for_location = self.tokens.next_token().location

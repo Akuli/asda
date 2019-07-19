@@ -2,7 +2,7 @@ import functools
 import itertools
 
 from asdac import raw_ast
-from asdac.raw_ast import (For, FuncCall, GetAttr, Integer, If,
+from asdac.raw_ast import (For, FuncCall, GetAttr, Integer, IfStatement,
                            GetType, GetVar, Let, SetVar, String)
 from asdac.common import CompileError, Location
 
@@ -94,10 +94,10 @@ def test_braces_errors(compiler):
     assert error.value.message == text
     assert error.value.location == location(len('print("{'), 0)
 
-    compiler.doesnt_raw_parse('import "{x}" as y',
-                              "cannot use {...} strings here", 'x')
-
-    compiler.doesnt_raw_parse('"{123 if blah}"', "invalid syntax", 'if blah')
+    compiler.doesnt_raw_parse(
+        'import "{x}" as y', "cannot use {...} strings here", 'x')
+    compiler.doesnt_raw_parse(
+        '"{123 then blah}"', "invalid syntax", 'then blah')
 
 
 def test_statement_in_braces(compiler):
@@ -295,11 +295,12 @@ def test_import_errors(compiler):
 
 
 def test_for_semicolon_error(compiler):
-    compiler.doesnt_raw_parse('for let x = 1 if', "should be ';'", 'if')
+    compiler.doesnt_raw_parse('for let x = 1 else', "should be ';'", 'else')
 
 
 def test_1line_statement_newline_thingy(compiler):
-    compiler.doesnt_raw_parse('print("hi") if', "should be a newline", 'if')
+    compiler.doesnt_raw_parse(
+        'print("hi") else', "should be a newline", 'else')
 
 
 def test_if_elif_else(compiler):
@@ -323,7 +324,7 @@ def test_if_elif_else(compiler):
             else:
                 els = []
 
-            assert compiler.raw_parse(code) == [If(
+            assert compiler.raw_parse(code) == [IfStatement(
                 location=Any(),
                 ifs=ifs,
                 else_body=els

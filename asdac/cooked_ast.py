@@ -25,7 +25,8 @@ CallFunction = _astclass('CallFunction', ['function', 'args'])
 VoidReturn = _astclass('VoidReturn', [])
 ValueReturn = _astclass('ValueReturn', ['value'])
 Yield = _astclass('Yield', ['value'])
-If = _astclass('If', ['condition', 'if_body', 'else_body'])
+IfStatement = _astclass('IfStatement', ['cond', 'if_body', 'else_body'])
+IfExpression = _astclass('IfExpression', ['cond', 'true_expr', 'false_expr'])
 Loop = _astclass('Loop', ['pre_cond', 'post_cond', 'incr', 'body'])
 TryCatch = _astclass('TryCatch', ['try_body', 'errortype', 'caught_varname',
                                   'catch_body'])
@@ -316,6 +317,21 @@ class _Chef:
             }[raw_expression.operator]
             return klass(raw_expression.location, tybe, lhs, rhs)
 
+        if isinstance(raw_expression, raw_ast.IfExpression):
+            cond = self.cook_expression(raw_expression.cond)
+            if cond.type != objects.BUILTIN_TYPES['Bool']:
+                raise common.CompileError(
+                    "expected Bool, got " + cond.type.name, cond.location)
+            true_expr = self.cook_expression(raw_expression.true_expr)
+            false_expr = self.cook_expression(raw_expression.false_expr)
+            if true_expr.type != false_expr.type:
+                raise common.CompileError(
+                    "'then' value has type %s, but 'else' value has type %s"
+                    % (true_expr.type.name, false_expr.type.name),
+                    raw_expression.location)
+            return IfExpression(raw_expression.location, true_expr.type,
+                                cond, true_expr, false_expr)
+
         raise NotImplementedError(      # pragma: no cover
             "oh no: " + str(type(raw_expression)))
 
@@ -524,7 +540,7 @@ class _Chef:
     #               body4
     #
     # TODO: use functools.reduce
-    def cook_if(self, raw):
+    def cook_if_statement(self, raw):
         raw_cond, raw_if_body = raw.ifs[0]
         cond = self.cook_expression(raw_cond)
         if cond.type != objects.BUILTIN_TYPES['Bool']:
@@ -539,10 +555,10 @@ class _Chef:
             # allow creating a namedtuple with an attribute named 'replace'
             else_body = [self.cook_if(raw._replace(ifs=raw.ifs[1:]))]
 
-        return If(cond.location, None, cond, if_body, else_body)
+        return IfStatement(cond.location, None, cond, if_body, else_body)
 
     def cook_while(self, raw):
-        cond = self.cook_expression(raw.condition)
+        cond = self.cook_expression(raw.cond)
         if cond.type != objects.BUILTIN_TYPES['Bool']:
             raise common.CompileError(
                 "expected Bool, got " + cond.type.name, cond.location)
@@ -552,7 +568,7 @@ class _Chef:
 
     def cook_do_while(self, raw):
         body = self.cook_body(raw.body)
-        cond = self.cook_expression(raw.condition)
+        cond = self.cook_expression(raw.cond)
         if cond.type != objects.BUILTIN_TYPES['Bool']:
             raise common.CompileError(
                 "expected Bool, got " + cond.type.name, cond.location)
@@ -655,8 +671,8 @@ class _Chef:
             return [self.cook_yield(raw_statement)]
         if isinstance(raw_statement, raw_ast.VoidStatement):
             return []
-        if isinstance(raw_statement, raw_ast.If):
-            return [self.cook_if(raw_statement)]
+        if isinstance(raw_statement, raw_ast.IfStatement):
+            return [self.cook_if_statement(raw_statement)]
         if isinstance(raw_statement, raw_ast.While):
             return [self.cook_while(raw_statement)]
         if isinstance(raw_statement, raw_ast.DoWhile):

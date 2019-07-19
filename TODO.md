@@ -2,7 +2,7 @@
 - generic types in nested functions bug
     is this fixed now? it could be
 - docs for Str, Int, Bool and friends
-- ternary operator: if cond then a else b
+- update tests
 - array objects
 - union types (may be hard to implement):
 

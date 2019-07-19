@@ -1,2 +1,5 @@
 This should get printed
 This should also get printed
+b is set to TRUE
+b is set to FALSE
+Three

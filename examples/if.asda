@@ -1,3 +1,4 @@
+# if statement
 let b = TRUE
 if b:
     print("This should get printed")
@@ -8,3 +9,18 @@ if b:
         print("This should also get printed")
 else:
     print("This should NOT get printed")
+
+# if expression
+b = TRUE
+print(if b then "b is set to TRUE" else "b is set to FALSE")
+b = FALSE
+print(if b then "b is set to TRUE" else "b is set to FALSE")
+
+let number = 3
+print(
+    if number == 1 then "One" else
+    if number == 2 then "Two" else
+    if number == 3 then "Three" else
+    if number == 4 then "Four" else
+    "wat something else"
+)

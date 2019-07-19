@@ -189,14 +189,21 @@ let lol2 = () -> Generator[Str]:
 
 
 def test_non_bool_cond(compiler):
-    first_lines = [
-        'if "lol":',
-        'while "lol":',
-        'for let x = "wat"; "lol"; x = "boo":',
+    body = '\n' + ' '*4 + 'print("wat")'
+    codes = [
+        'if "lol":' + body,
+        'while "lol":' + body,
+        'for let x = "wat"; "lol"; x = "boo":' + body,
+        'print(if "lol" then "a" else "b")',
     ]
-    for first_line in first_lines:
-        compiler.doesnt_cooked_parse('%s\n    print("boo")' % first_line,
-                                     "expected Bool, got Str", '"lol"')
+    for code in codes:
+        compiler.doesnt_cooked_parse(code, "expected Bool, got Str", '"lol"')
+
+
+def test_if_expression_wrong_types(compiler):
+    compiler.doesnt_cooked_parse(
+        'print(if TRUE then "a" else 123)',
+        "'then' value has type Str, but 'else' value has type Int", 'if')
 
 
 def test_joined_string_location_corner_case(compiler):

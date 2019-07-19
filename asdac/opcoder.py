@@ -261,6 +261,18 @@ class _OpCoder:
                 self._lineno(expression.location), expression.level,
                 coder.local_vars[name]))
 
+        elif isinstance(expression, cooked_ast.IfExpression):
+            if_expr_begins = JumpMarker()
+            done = JumpMarker()
+
+            self.do_expression(expression.cond)
+            self.output.ops.append(JumpIf(None, if_expr_begins))
+            self.do_expression(expression.false_expr)
+            self.output.ops.append(Jump(None, done))
+            self.output.ops.append(if_expr_begins)
+            self.do_expression(expression.true_expr)
+            self.output.ops.append(done)
+
         elif isinstance(expression, cooked_ast.LookupFromModule):
             exported_names = list(expression.compilation.exports.keys())
             self.output.ops.append(LookupFromModule(
@@ -334,22 +346,21 @@ class _OpCoder:
             self.do_expression(statement.value)
             self.output.ops.append(Yield(self._lineno(statement.location)))
 
-        elif isinstance(statement, cooked_ast.If):
-            end_of_if_body = JumpMarker()
-            end_of_else_body = JumpMarker()
+        elif isinstance(statement, cooked_ast.IfStatement):
+            if_body_begins = JumpMarker()
+            done = JumpMarker()
 
             # this is why goto is bad style :D it's quite hard to understand
             # even a basic if,else
-            self.do_expression(statement.condition)
-            self.output.ops.append(BoolNegation(None))
-            self.output.ops.append(JumpIf(None, end_of_if_body))
-            for substatement in statement.if_body:
-                self.do_statement(substatement)
-            self.output.ops.append(Jump(None, end_of_else_body))
-            self.output.ops.append(end_of_if_body)
+            self.do_expression(statement.cond)
+            self.output.ops.append(JumpIf(None, if_body_begins))
             for substatement in statement.else_body:
                 self.do_statement(substatement)
-            self.output.ops.append(end_of_else_body)
+            self.output.ops.append(Jump(None, done))
+            self.output.ops.append(if_body_begins)
+            for substatement in statement.if_body:
+                self.do_statement(substatement)
+            self.output.ops.append(done)
 
         elif isinstance(statement, cooked_ast.Loop):
             beginning = JumpMarker()

@@ -27,7 +27,7 @@ _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
 # variable names
 _KEYWORDS = {
     'let',
-    'if', 'elif', 'else',
+    'if', 'then', 'elif', 'else',
     'while', 'for', 'do',
     'void',
     'return', 'yield',
