@@ -553,7 +553,7 @@ class _Chef:
         else:
             # _replace is a documented namedtuple method, it has _ in front to
             # allow creating a namedtuple with an attribute named 'replace'
-            else_body = [self.cook_if(raw._replace(ifs=raw.ifs[1:]))]
+            else_body = [self.cook_if_statement(raw._replace(ifs=raw.ifs[1:]))]
 
         return IfStatement(cond.location, None, cond, if_body, else_body)
 
