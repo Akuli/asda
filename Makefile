@@ -20,9 +20,9 @@ asdar-tests: asdar/asdar
 asdac-tests:
 	$(PYTHON) -m pytest
 
-.PHONY: compile-examples   # because the compiler avoids unnecessary recompiling
+.PHONY: compile-examples   # compiling is fast and i want it to recompile after changing asdac's code
 compile-examples:
-	$(PYTHON) -m asdac $(EXAMPLES)
+	$(PYTHON) -m asdac --always-recompile $(EXAMPLES)
 
 example-tests: compile-examples asdar/asdar
 	bash test-examples.sh $(EXAMPLES)

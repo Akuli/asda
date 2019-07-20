@@ -12,15 +12,15 @@ def _astclass(name, fields):
 StrConstant = _astclass('StrConstant', ['python_string'])
 StrJoin = _astclass('StrJoin', ['parts'])  # there are always >=2 parts
 IntConstant = _astclass('IntConstant', ['python_int'])
-SetVar = _astclass('SetVar', ['varname', 'level', 'value'])
-LookupVar = _astclass('LookupVar', ['varname', 'level'])
+SetVar = _astclass('SetVar', ['var', 'level', 'value'])
+LookupVar = _astclass('LookupVar', ['var', 'level'])
 LookupFromModule = _astclass('LookupFromModule', ['compilation', 'name'])
 LookupAttr = _astclass('LookupAttr', ['obj', 'attrname'])
 LookupGenericFunction = _astclass('LookupGenericFunction',
                                   ['funcname', 'types', 'level'])
 LookupModule = _astclass('LookupModule', [])
-CreateFunction = _astclass('CreateFunction', ['argnames', 'body', 'yields'])
-CreateLocalVar = _astclass('CreateLocalVar', ['varname'])
+CreateFunction = _astclass('CreateFunction', ['argvars', 'body', 'yields'])
+CreateLocalVar = _astclass('CreateLocalVar', ['var'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
 VoidReturn = _astclass('VoidReturn', [])
 ValueReturn = _astclass('ValueReturn', ['value'])
@@ -28,8 +28,7 @@ Yield = _astclass('Yield', ['value'])
 IfStatement = _astclass('IfStatement', ['cond', 'if_body', 'else_body'])
 IfExpression = _astclass('IfExpression', ['cond', 'true_expr', 'false_expr'])
 Loop = _astclass('Loop', ['pre_cond', 'post_cond', 'incr', 'body'])
-TryCatch = _astclass('TryCatch', ['try_body', 'errortype', 'caught_varname',
-                                  'catch_body'])
+TryCatch = _astclass('TryCatch', ['try_body', 'caught_var', 'catch_body'])
 TryFinally = _astclass('TryFinally', ['try_body', 'finally_body'])
 
 Plus = _astclass('Plus', ['lhs', 'rhs'])
@@ -82,6 +81,33 @@ def _create_chainmap(fallback_chainmap):
         collections.OrderedDict(), *fallback_chainmap.maps)
 
 
+class Variable:
+
+    def __init__(self, name, tybe, definition_location):
+        self.name = name
+        self.type = tybe
+        self.definition_location = definition_location    # None for builtins
+
+
+class GenericVariable:
+
+    def __init__(self, name, generic, definition_location):
+        self.name = name
+        self.generic = generic
+        self.definition_location = definition_location    # None for builtins
+
+
+BUILTIN_VARS = collections.OrderedDict([
+    (name, Variable(name, tybe, None))
+    for name, tybe in objects.BUILTIN_VARS.items()
+])
+
+BUILTIN_GENERIC_VARS = collections.OrderedDict([
+    (name, GenericVariable(name, generic, None))
+    for name, generic in objects.BUILTIN_GENERIC_VARS.items()
+])
+
+
 class _Chef:
 
     def __init__(self, parent_chef, is_function=False, yields=False,
@@ -110,14 +136,14 @@ class _Chef:
             self.import_name_mapping = None
 
             # these are ChainMaps to make any_chef.vars.maps[0] always work
-            self.vars = collections.ChainMap(objects.BUILTIN_VARS)
+            self.vars = collections.ChainMap(BUILTIN_VARS)
             self.types = collections.ChainMap(objects.BUILTIN_TYPES)
-            self.generic_vars = collections.ChainMap(
-                objects.BUILTIN_GENERIC_VARS)
+            self.generic_vars = collections.ChainMap(BUILTIN_GENERIC_VARS)
             self.generic_types = collections.ChainMap(
                 objects.BUILTIN_GENERIC_TYPES)
         else:
-            self.level = parent_chef.level + 1
+            # the level can be incremented after creating a new Chef
+            self.level = parent_chef.level
 
             # keys are paths, values are Compilation objects
             self.import_compilations = parent_chef.import_compilations
@@ -134,16 +160,16 @@ class _Chef:
             self.generic_types = _create_chainmap(parent_chef.generic_types)
 
         # keys are strings, values are types
-        # TODO: why are export vars "local"? what does it mean?
-        self.local_export_vars = collections.OrderedDict()
+        self.export_types = collections.OrderedDict()
 
     # there are multiple different kind of names:
     #   * types
-    #   * generic types (TODO)
+    #   * generic types (FIXME: doesn't seem to check for those?)
     #   * variables
     #   * generic variables
     #
     # all can come from any scope
+    # TODO: display definition location in error message
     def _check_name_not_exist(self, name, location):
         if name in self.types:
             raise common.CompileError(
@@ -239,16 +265,17 @@ class _Chef:
                     raw_expression.location)
 
                 if raw_expression.generics is None:
-                    tybe = chef.vars[raw_expression.varname]
+                    var = chef.vars[raw_expression.varname]
+                    tybe = var.type
                 else:
                     name = raw_expression.varname   # pep8 line length
-                    tybe = chef.generic_vars[name].get_real_type(
+                    var = chef.generic_vars[name]
+                    tybe = var.generic.get_real_type(
                         list(map(self.cook_type, raw_expression.generics)),
                         raw_expression.location)
 
                 return LookupVar(
-                    raw_expression.location, tybe,
-                    raw_expression.varname, chef.level)
+                    raw_expression.location, tybe, var, chef.level)
 
             assert raw_expression.generics is None, (
                 "sorry, import and generics don't work together yet")
@@ -372,15 +399,15 @@ class _Chef:
 
         while True:
             if varname in chef.vars.maps[0]:
-                if cooked_value.type != chef.vars.maps[0][varname]:
+                var = chef.vars.maps[0][varname]
+                if cooked_value.type != var.type:
                     raise common.CompileError(
                         ("'%s' is of type %s, can't assign %s to it"
-                         % (varname, chef.vars[varname].name,
+                         % (varname, var.type.name,
                             cooked_value.type.name)),
                         raw.location)
                 return SetVar(
-                    raw.location, None,
-                    varname, chef.level, cooked_value)
+                    raw.location, None, var, chef.level, cooked_value)
 
             if chef.parent_chef is None:
                 raise common.CompileError(
@@ -396,23 +423,6 @@ class _Chef:
             chef = self
         else:
             chef = _Chef(self)
-
-            # the level is used in later steps only, but before those steps,
-            # this file actually replaces all generics types with Object, so
-            # that this...
-            #
-            #   let do_nothing[T] = (T value) -> T:
-            #       return value
-            #
-            # ...produces the same cooked ast as this:
-            #
-            #   let do_nothing = (Object value) -> Object:
-            #       return value
-            #
-            # this needs 1 more chef in the top code than in the bottom code,
-            # but that must not be visible outside this file
-            chef.level -= 1
-
             generic_markers = collections.OrderedDict(
                 (name, objects.GenericMarker(name))
                 for name, location in raw.generics
@@ -424,24 +434,26 @@ class _Chef:
         if raw.generics is None:
             if raw.export:
                 self._check_can_export(raw.location)
-                self.local_export_vars[raw.varname] = value.type
+                self.export_types[raw.varname] = value.type
                 return [SetVar(raw.location, None, raw.varname,
                                self.level, value)]
 
-            self.vars[raw.varname] = value.type
+            var = Variable(raw.varname, value.type, raw.location)
+            self.vars[raw.varname] = var
             return [
-                CreateLocalVar(raw.location, None, raw.varname),
-                SetVar(raw.location, None, raw.varname, self.level, value),
+                CreateLocalVar(raw.location, None, var),
+                SetVar(raw.location, None, var, self.level, value),
             ]
 
         assert not raw.export, "sorry, cannot export generic variables yet :("
 
         generic = objects.Generic(
             list(generic_markers.values()), value.type)
-        self.generic_vars[raw.varname] = generic
+        var = GenericVariable(raw.varname, generic, raw.location)
+        self.generic_vars[raw.varname] = var
         return [
-            CreateLocalVar(raw.location, None, raw.varname),
-            SetVar(raw.location, None, raw.varname, self.level,
+            CreateLocalVar(raw.location, None, var),
+            SetVar(raw.location, None, var, self.level,
                    _replace_generic_markers_with_object(
                         value, list(generic_markers.values()))),
         ]
@@ -450,11 +462,14 @@ class _Chef:
     def cook_function_definition(self, raw):
         argnames = []
         argtypes = []
+        argvars = []
+
         for raw_argtype, argname, argnameloc in raw.args:
             argtype = self.cook_type(raw_argtype)
             self._check_name_not_exist(argname, argnameloc)
             argnames.append(argname)
             argtypes.append(argtype)
+            argvars.append(Variable(argname, argtype, argnameloc))
 
         if raw.returntype is None:
             returntype = None
@@ -469,12 +484,13 @@ class _Chef:
                 "Generator[something]", yield_location)
 
         subchef = _Chef(self, True, yield_location is not None, returntype)
-        subchef.vars.update(dict(zip(argnames, argtypes)))
+        subchef.level += 1
+        subchef.vars.update(dict(zip(argnames, argvars)))
         functype = objects.FunctionType(argtypes, returntype)
         body = subchef.cook_body(raw.body)
 
         return CreateFunction(raw.location, functype,
-                              argnames, body, yield_location is not None)
+                              argvars, body, (yield_location is not None))
 
     def cook_return(self, raw):
         if not self.can_return:
@@ -589,13 +605,14 @@ class _Chef:
                        varname, varname_location, catch_body):
         self._check_name_not_exist(varname, varname_location)
         cooked_errortype = self.cook_type(errortype)
-        self.vars[varname] = cooked_errortype
+        errorvar = Variable(varname, cooked_errortype, catch_location)
+        self.vars[varname] = errorvar
         cooked_catch_body = self.cook_body(catch_body)
 
         return [
-            CreateLocalVar(varname_location, None, varname),
-            TryCatch(catch_location, None, cooked_try_body, cooked_errortype,
-                     varname, cooked_catch_body),
+            CreateLocalVar(varname_location, None, errorvar),
+            TryCatch(catch_location, None, cooked_try_body,
+                     errorvar, cooked_catch_body),
         ]
 
     def cook_try_finally(self, cooked_try_body, finally_location,
@@ -693,6 +710,7 @@ def cook(compilation, raw_ast_statements, import_compilation_dict):
     builtin_chef = _Chef(None)
 
     file_chef = _Chef(builtin_chef)
+    file_chef.level += 1
     file_chef.import_compilations = import_compilation_dict
     cooked_statements = file_chef.cook_body(raw_ast_statements)
-    return (cooked_statements, file_chef.local_export_vars)
+    return (cooked_statements, file_chef.export_types)

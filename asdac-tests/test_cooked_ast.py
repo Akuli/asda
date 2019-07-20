@@ -46,8 +46,8 @@ def test_function_calling_errors(compiler):
 def test_nested_generic_types(compiler):
     [createlocalvar, setvar] = compiler.cooked_parse(
         'let lol = () -> Generator[Generator[Str]]:\n    print("Lol")')
-    assert createlocalvar.varname == 'lol'
-    assert setvar.varname == 'lol'
+    assert createlocalvar.var.name == 'lol'
+    assert createlocalvar.var is setvar.var
     assert setvar.value.type == objects.FunctionType(
         [],
         objects.GeneratorType(objects.GeneratorType(
@@ -221,6 +221,8 @@ def test_string_formatting_with_bad_type(compiler):
 
 def test_void_statement(monkeypatch, compiler):
     monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
+    monkeypatch.setattr(cooked_ast.Variable, '__eq__',
+                        lambda self, other: (self.name == other.name))
     code = '''
 let f = () -> void:
     print("a")

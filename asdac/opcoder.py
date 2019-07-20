@@ -118,7 +118,8 @@ class _OpCoder:
         self.compilation = compilation
         self.line_start_offsets = line_start_offsets
 
-        # {varname: VarMarker or ArgMarker}
+        # keys are cooked_ast.Variable or cooked_ast.GenericVariable
+        # values are VarMarker or ArgMarker
         self.local_vars = {}
 
     def create_subcoder(self, output_opcode):
@@ -236,10 +237,10 @@ class _OpCoder:
         # enough information for the interpreter to tell what the type of the
         # object should be
         elif isinstance(expression, cooked_ast.CreateFunction):
-            function_opcode = OpCode(len(expression.argnames))
+            function_opcode = OpCode(len(expression.argvars))
             opcoder = self.create_subcoder(function_opcode)
-            for index, argname in enumerate(expression.argnames):
-                opcoder.local_vars[argname] = ArgMarker(index)
+            for index, var in enumerate(expression.argvars):
+                opcoder.local_vars[var] = ArgMarker(index)
 
             opcoder.do_body(expression.body)
             if expression.type.returntype is None or expression.yields:
@@ -253,13 +254,9 @@ class _OpCoder:
 
         elif isinstance(expression, cooked_ast.LookupVar):
             coder = self._get_coder_for_level(expression.level)
-            if isinstance(expression, cooked_ast.LookupVar):
-                name = expression.varname
-            else:
-                name = expression.funcname
             self.output.ops.append(LookupVar(
                 self._lineno(expression.location), expression.level,
-                coder.local_vars[name]))
+                coder.local_vars[expression.var]))
 
         elif isinstance(expression, cooked_ast.IfExpression):
             if_expr_begins = JumpMarker()
@@ -316,8 +313,8 @@ class _OpCoder:
     def do_statement(self, statement):
         if isinstance(statement, cooked_ast.CreateLocalVar):
             var = self.output.add_local_var()
-            assert statement.varname not in self.local_vars
-            self.local_vars[statement.varname] = var
+            assert statement.var not in self.local_vars
+            self.local_vars[statement.var] = var
 
         elif isinstance(statement, cooked_ast.CallFunction):
             self.do_function_call(statement)
@@ -331,7 +328,7 @@ class _OpCoder:
             coder = self._get_coder_for_level(statement.level)
             self.output.ops.append(SetVar(
                 self._lineno(statement.location), statement.level,
-                coder.local_vars[statement.varname]))
+                coder.local_vars[statement.var]))
 
         elif isinstance(statement, cooked_ast.VoidReturn):
             self.output.ops.append(Return(
@@ -393,8 +390,8 @@ class _OpCoder:
 
             self.output.ops.append(AddErrorHandler(
                 self._lineno(statement.location),
-                catch_start, statement.errortype, self.level,
-                self.local_vars[statement.caught_varname]))
+                catch_start, statement.caught_var.type, self.level,
+                self.local_vars[statement.caught_var]))
 
             self.output.ops.append(try_start)
             for substatement in statement.try_body:
@@ -516,10 +513,10 @@ def create_opcode(compilation, cooked_statements, source_code):
     builtin_opcoder = _OpCoder(None, compilation, line_start_offsets)
     builtin_opcoder.line_start_offsets.extend(line_start_offsets)
     builtin_opcoder.local_vars.update({
-        name: ArgMarker(index)
-        for index, name in enumerate(itertools.chain(
-            objects.BUILTIN_VARS.keys(),
-            objects.BUILTIN_GENERIC_VARS.keys()
+        var: ArgMarker(index)
+        for index, var in enumerate(itertools.chain(
+            cooked_ast.BUILTIN_VARS.values(),
+            cooked_ast.BUILTIN_GENERIC_VARS.values(),
         ))
     })
 
