@@ -1,13 +1,26 @@
-- cyclic import
+- add yields back, were removed in b0e0fbb because they hadn't been
+  maintained in a while and would have made the code more complicated
+- fix scan-build bugs in asdac, install clang and stuff then run
+
+        $ scan-build make
+
+    also should mention this in asdac/README.md
+
+- cyclic import, must choose one:
+    - disallow? (add error message to compiler)
+    - allow (design semantics and implement)
 - generic types in nested functions bug
     is this fixed now? it could be
 - docs for Str, Int, Bool and friends
-- update tests
+- update asdac tests, go for 100% coverage
+- update asdar tests, check coverages with printf or find better coverage tool
 - array objects
 - union types (may be hard to implement):
 
         func debug_print(Union[Str, Int] obj):
             print(obj.to_debug_string())
+
+    are they even necessary though?
 
 - 'new' and constructors
 
@@ -51,6 +64,12 @@
 - specifying base class of generics: `lol[T inherits SomeBaseClass]`
 - getters and setters for attributes
 - named function arguments like kwargs in python
+- add i/o and stuff enough for rewriting the compiler in asda
+- combine compiler and interpreter:
+
+        $ asda examples/hello.asda
+        hello world
+
 - automatic types: if `List[T]` was a class, then `List` and
   `List[auto]` would both mean the same thing, detect type from first
   usage of the variable. E.g. if `List[T]`'s constructor takes three
@@ -59,6 +78,17 @@
         let thing = new List[Str]("a", "b", "c")
         let thing = new List[auto]("a", "b", "c")
         let thing = new List("a", "b", "c")
+
+    easier to implement in a language with reference objects, so should
+    wait until compiler is written in asda
+
+- array literals: `["a", "b"]`, type of `[]` could be `Array[auto]`
+
+- design a concept of "common baseclass" or similar, useful for e.g.
+  `[x, y]` when `x` and `y` have different types. Should never fall back
+  to `Object`, e.g. `[1, "a"]` is compile error and not array of
+  `Object`. For the object array you could do
+  `[cast[Object](1), cast[Object]("a")]` (but why?)
 
 - one-liner lambdas: if `run_callback` wants an argument of type
   `functype[(Int) -> Str]`, then `run_callback(x => x.to_string())`
