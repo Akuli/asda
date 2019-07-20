@@ -109,24 +109,6 @@ def test_return_errors(compiler):
         "should return Str, not function (Str) -> void", 'print')
 
 
-def test_yield_errors(compiler):
-    compiler.doesnt_cooked_parse(
-        'yield "lol"', "yield outside function", 'yield "lol"')
-    compiler.doesnt_cooked_parse(
-        'let lol = () -> Generator[Str]:\n    yield print',
-        "should yield Str, not function (Str) -> void", 'print')
-
-    for returntype in ['void', 'Str']:
-        compiler.doesnt_cooked_parse(
-            'let lol = () -> %s:\n    yield "hi"' % returntype,
-            ("cannot yield in a function that doesn't return "
-             "Generator[something]"), 'yield "hi"')
-
-    compiler.doesnt_cooked_parse(
-        'let lol = () -> Generator[Str]:\n    yield "lol"\n    return "Boo"',
-        "cannot return a value from a function that yields", 'return "Boo"')
-
-
 def test_operator_errors(compiler):
     # the '/' doesn't even tokenize
     compiler.doesnt_cooked_parse('let x = 1 / 2', "unexpected '/'", '/')
@@ -147,45 +129,6 @@ def test_assign_asd_to_asd(compiler):
 
     # this one is fine, 'asd = asd' simply does nothing
     assert len(compiler.cooked_parse('let asd = "key"\nasd = asd')) == 3
-
-
-def test_yield_finding_bugs(compiler):
-    compiler.doesnt_cooked_parse(
-        'let lol = () -> void:\n  for yield x; y; z():\n    xyz()',
-        "cannot yield in a function that doesn't return Generator[something]",
-        'yield x')
-
-    # the yield is in a nested function, should work!
-    compiler.cooked_parse('''
-let f = () -> void:
-    let g = () -> Generator[Str]:
-        yield "Lol"
-''')
-
-    # allowing this would create a lot of funny corner cases
-    compiler.doesnt_cooked_parse(
-        '''
-let g = () -> Generator[Str]:
-    let f = () -> void:
-        yield "Lol"
-''',
-        "cannot yield in a function that doesn't return Generator[something]",
-        'yield "Lol"')
-
-
-# not all Generator[Str] functions yield, it's also allowed to return
-# a generator
-def test_different_generator_creating_functions(compiler):
-    create_lol, set_lol, create_lol2, set_lol2 = compiler.cooked_parse('''
-let lol = () -> Generator[Str]:
-    yield "Hi"
-    yield "There"
-
-let lol2 = () -> Generator[Str]:
-    return lol()
-''')
-
-    assert set_lol.value.type == set_lol2.value.type
 
 
 def test_non_bool_cond(compiler):
@@ -237,7 +180,7 @@ let f = () -> void:
 
 def test_exporting(compiler):
     cooked, exports = compiler.cooked_parse('let x = 1\nexport let y = 2',
-                                            want_exports=True)
+                                            want_export_types=True)
     assert exports == {'y': objects.BUILTIN_TYPES['Int']}
     x_create, x_set, y_set = cooked
     assert isinstance(x_create, cooked_ast.CreateLocalVar)

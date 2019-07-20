@@ -192,7 +192,7 @@ class _BytecodeWriter:
         if isinstance(op, opcoder.CreateFunction):
             assert isinstance(op.functype, objects.FunctionType)
             self.write_type(op.functype)    # includes CREATE_FUNCTION
-            self.bytecode.add_byte(1 if op.yields else 0)
+            self.bytecode.add_byte(0)   # TODO: implement yields some day?
 
             self._create_subwriter().run(op.body_opcode, varlists)
             return
@@ -368,7 +368,7 @@ def create_bytecode(compilation, opcode):
 
     writer.write_end_import_export_sections(
         [impcomp.source_path for impcomp in compilation.imports],
-        compilation.exports)
+        compilation.export_types)
     return output.byte_array
 
 

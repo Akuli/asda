@@ -26,20 +26,13 @@ def test_too_many_arguments(compiler):
         'let omfg = (%s) -> void:\n    print("boo")' % ', '.join(args[1:]))
 
 
-def test_implicit_return(compiler):
-    codes = [
-        'let lol = () -> void:\n    print("Boo")',
-        'let lol = () -> Generator[Str]:\n    yield "Boo"',
-    ]
+def test_implicit_and_missing_return(compiler):
+    [createfunc, setvar] = compiler.opcode(
+        'let lol = () -> void:\n    print("Boo")').ops
+    implicit_return = createfunc.body_opcode.ops[-1]
+    assert isinstance(implicit_return, Return)
+    assert not implicit_return.returns_a_value
 
-    for code in codes:
-        [createfunc, setvar] = compiler.opcode(code).ops
-        implicit_return = createfunc.body_opcode.ops[-1]
-        assert isinstance(implicit_return, Return)
-        assert not implicit_return.returns_a_value
-
-
-def test_missing_return(compiler):
     create_func, setvar = compiler.opcode(
         'let lol = () -> Str:\n    print("Boo")').ops
     didnt_return_error = create_func.body_opcode.ops[-1]

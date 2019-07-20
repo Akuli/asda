@@ -38,12 +38,12 @@ def source2bytecode(compilation: common.Compilation):
 
     # TODO: better message for cooking?
     compilation.messager(3, "Processing the parsed AST...")
-    cooked, exports = cooked_ast.cook(compilation, raw,
-                                      import_compilation_dict)
-    compilation.set_exports(exports)
+    cooked, export_vars, export_types = cooked_ast.cook(
+        compilation, raw, import_compilation_dict)
+    compilation.set_export_types(export_types)
 
     compilation.messager(3, "Creating opcode...")
-    opcode = opcoder.create_opcode(compilation, cooked, source)
+    opcode = opcoder.create_opcode(compilation, cooked, export_vars, source)
 
     compilation.messager(3, "Creating bytecode...")
     bytecode = bytecoder.create_bytecode(compilation, opcode)
@@ -60,7 +60,7 @@ def source2bytecode(compilation: common.Compilation):
         outfile.write(bytecode)
 
     compilation.set_done()
-    yield exports
+    yield export_types
 
 
 class CompileManager:
@@ -142,7 +142,7 @@ class CompileManager:
                 if self._compiled_is_up2date_with_source(compilation):
                     # there is a chance that nothing needs to be compiled
                     # but can't be sure yet
-                    imports, exports = bytecoder.read_imports_and_exports(
+                    imports, export_types = bytecoder.read_imports_and_exports(
                         compilation)
                     self._compile_imports(compilation, imports)
                     import_compilations = [self.source_path_2_compilation[path]
@@ -153,7 +153,7 @@ class CompileManager:
                             compilation, import_compilations):
                         compilation.messager(1, "No need to recompile.")
                         compilation.set_imports(import_compilations)
-                        compilation.set_exports(exports)
+                        compilation.set_export_types(export_types)
                         compilation.set_done()
                         self.source_path_2_compilation[source_path] = (
                             compilation)

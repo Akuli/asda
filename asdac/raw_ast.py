@@ -22,7 +22,6 @@ GetType = _astclass('GetType', ['name', 'generics'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
 FuncDefinition = _astclass('FuncDefinition', ['args', 'returntype', 'body'])
 Return = _astclass('Return', ['value'])
-Yield = _astclass('Yield', ['value'])
 VoidStatement = _astclass('VoidStatement', [])
 # IfStatement's ifs is a list of (cond, body) pairs, where body is a list
 IfStatement = _astclass('IfStatement', ['ifs', 'else_body'])
@@ -577,11 +576,6 @@ class _AsdaParser:
                 location = return_keyword.location + value.location
 
             return Return(location, value)
-
-        if self.tokens.peek().value == 'yield':
-            yield_keyword = self.tokens.next_token()
-            value = self.parse_expression()
-            return Yield(yield_keyword.location + value.location, value)
 
         if self.tokens.peek().value == 'let':
             let = self.tokens.next_token()

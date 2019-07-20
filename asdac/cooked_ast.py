@@ -19,7 +19,7 @@ LookupAttr = _astclass('LookupAttr', ['obj', 'attrname'])
 LookupGenericFunction = _astclass('LookupGenericFunction',
                                   ['funcname', 'types', 'level'])
 LookupModule = _astclass('LookupModule', [])
-CreateFunction = _astclass('CreateFunction', ['argvars', 'body', 'yields'])
+CreateFunction = _astclass('CreateFunction', ['argvars', 'body'])
 CreateLocalVar = _astclass('CreateLocalVar', ['var'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
 VoidReturn = _astclass('VoidReturn', [])
@@ -41,19 +41,6 @@ NotEqual = _astclass('NotEqual', ['lhs', 'rhs'])
 
 
 # this is a somewhat evil function
-def _find_yields(node):
-    if isinstance(node, list):
-        for sub in node:
-            yield from _find_yields(sub)
-    elif isinstance(node, raw_ast.Yield):
-        yield node.location
-    # namedtuples are tuples >:D MUHAHAHAAAA!!
-    elif (isinstance(node, tuple) and
-          not isinstance(node, raw_ast.FuncDefinition)):
-        yield from _find_yields(list(node))
-
-
-# this is too
 def _replace_generic_markers_with_object(node, markers):
     node = node._replace(type=node.type.undo_generics(
         dict.fromkeys(markers, objects.BUILTIN_TYPES['Object'])))
@@ -110,23 +97,13 @@ BUILTIN_GENERIC_VARS = collections.OrderedDict([
 
 class _Chef:
 
-    def __init__(self, parent_chef, is_function=False, yields=False,
-                 returntype=None):
-        # there's no self.can_yield, just check whether yield_type is not None
+    def __init__(self, parent_chef, is_function=False, returntype=None):
         if is_function:
-            self.can_return = True
-            if yields:
-                assert isinstance(returntype, objects.GeneratorType)
-                self.yield_type = returntype.item_type
-                self.return_type = None
-            else:
-                self.yield_type = None
-                self.return_type = returntype
+            self.is_function = True
+            self.return_type = returntype
         else:
             assert returntype is None
-            assert not yields
-            self.can_return = False
-            self.yield_type = None
+            self.is_function = False
             self.return_type = None
 
         self.parent_chef = parent_chef
@@ -159,8 +136,8 @@ class _Chef:
             self.generic_vars = _create_chainmap(parent_chef.generic_vars)
             self.generic_types = _create_chainmap(parent_chef.generic_types)
 
-        # keys are strings, values are types
-        self.export_types = collections.OrderedDict()
+        # keys are strings, values are Variable objects
+        self.export_vars = collections.OrderedDict()
 
     # there are multiple different kind of names:
     #   * types
@@ -282,7 +259,7 @@ class _Chef:
             compilation = self.import_compilations[raw_expression.module_path]
 
             try:
-                tybe = compilation.exports[raw_expression.varname]
+                tybe = compilation.export_types[raw_expression.varname]
             except KeyError:
                 raise common.CompileError(
                     "\"%s\" doesn't export anything called '%s'",
@@ -400,6 +377,7 @@ class _Chef:
         while True:
             if varname in chef.vars.maps[0]:
                 var = chef.vars.maps[0][varname]
+                assert not isinstance(var, str)
                 if cooked_value.type != var.type:
                     raise common.CompileError(
                         ("'%s' is of type %s, can't assign %s to it"
@@ -434,9 +412,9 @@ class _Chef:
         if raw.generics is None:
             if raw.export:
                 self._check_can_export(raw.location)
-                self.export_types[raw.varname] = value.type
-                return [SetVar(raw.location, None, raw.varname,
-                               self.level, value)]
+                var = Variable(raw.varname, value.type, raw.location)
+                self.export_vars[raw.varname] = var
+                return [SetVar(raw.location, None, var, self.level, value)]
 
             var = Variable(raw.varname, value.type, raw.location)
             self.vars[raw.varname] = var
@@ -476,35 +454,23 @@ class _Chef:
         else:
             returntype = self.cook_type(raw.returntype)
 
-        yield_location = next(_find_yields(raw.body), None)
-        if (yield_location is not None and
-                not isinstance(returntype, objects.GeneratorType)):
-            raise common.CompileError(
-                "cannot yield in a function that doesn't return "
-                "Generator[something]", yield_location)
-
-        subchef = _Chef(self, True, yield_location is not None, returntype)
+        subchef = _Chef(self, True, returntype)
         subchef.level += 1
         subchef.vars.update(dict(zip(argnames, argvars)))
         functype = objects.FunctionType(argtypes, returntype)
-        body = subchef.cook_body(raw.body)
+        body = subchef.cook_body(raw.body, new_subchef=False)
 
-        return CreateFunction(raw.location, functype,
-                              argvars, body, (yield_location is not None))
+        return CreateFunction(raw.location, functype, argvars, body)
 
     def cook_return(self, raw):
-        if not self.can_return:
+        if not self.is_function:
             raise common.CompileError("return outside function", raw.location)
 
         if self.return_type is None:
             if raw.value is not None:
-                if self.yield_type is None:
-                    raise common.CompileError(
-                        "cannot return a value from a void function",
-                        raw.value.location)
                 raise common.CompileError(
-                    "cannot return a value from a function that yields",
-                    raw.location)
+                    "cannot return a value from a void function",
+                    raw.value.location)
             return VoidReturn(raw.location, None)
         if raw.value is None:
             raise common.CompileError("missing return value", raw.location)
@@ -516,20 +482,6 @@ class _Chef:
                  % (self.return_type.name, value.type.name)),
                 value.location)
         return ValueReturn(raw.location, None, value)
-
-    def cook_yield(self, raw):
-        if self.yield_type is None:
-            # the only way how we can get here is that this is not a function
-            # see cook_function_definition()
-            raise common.CompileError("yield outside function", raw.location)
-
-        value = self.cook_expression(raw.value)
-        if value.type != self.yield_type:
-            raise common.CompileError(
-                ("should yield %s, not %s"
-                 % (self.yield_type.name, value.type.name)),
-                value.location)
-        return Yield(raw.location, None, value)
 
     # this turns this...
     #
@@ -684,8 +636,6 @@ class _Chef:
             return [self.cook_function_call(raw_statement)]
         if isinstance(raw_statement, raw_ast.Return):
             return [self.cook_return(raw_statement)]
-        if isinstance(raw_statement, raw_ast.Yield):
-            return [self.cook_yield(raw_statement)]
         if isinstance(raw_statement, raw_ast.VoidStatement):
             return []
         if isinstance(raw_statement, raw_ast.IfStatement):
@@ -701,7 +651,12 @@ class _Chef:
 
         assert False, raw_statement     # pragma: no cover
 
-    def cook_body(self, raw_statements):
+    def cook_body(self, raw_statements, *, new_subchef=True):
+        if new_subchef:
+            return _Chef(
+                self, self.is_function, self.return_type,
+            ).cook_body(raw_statements, new_subchef=False)
+
         flatten = itertools.chain.from_iterable
         return list(flatten(map(self.cook_statement, raw_statements)))
 
@@ -712,5 +667,9 @@ def cook(compilation, raw_ast_statements, import_compilation_dict):
     file_chef = _Chef(builtin_chef)
     file_chef.level += 1
     file_chef.import_compilations = import_compilation_dict
-    cooked_statements = file_chef.cook_body(raw_ast_statements)
-    return (cooked_statements, file_chef.export_types)
+    cooked_statements = file_chef.cook_body(
+        raw_ast_statements, new_subchef=False)
+
+    export_types = collections.OrderedDict([
+        (name, var.type) for name, var in file_chef.export_vars.items()])
+    return (cooked_statements, file_chef.export_vars, export_types)

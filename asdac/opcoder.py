@@ -28,8 +28,7 @@ def _op_class(name, fields):
 StrConstant = _op_class('StrConstant', ['python_string'])
 IntConstant = _op_class('IntConstant', ['python_int'])
 BoolConstant = _op_class('BoolConstant', ['python_bool'])
-CreateFunction = _op_class('CreateFunction', [
-    'functype', 'yields', 'body_opcode'])
+CreateFunction = _op_class('CreateFunction', ['functype', 'body_opcode'])
 LookupVar = _op_class('LookupVar', ['level', 'var'])
 # tuples have an index() method, avoid name clash with misspelling
 LookupFromModule = _op_class('LookupFromModule', ['compilation', 'indeks'])
@@ -243,14 +242,14 @@ class _OpCoder:
                 opcoder.local_vars[var] = ArgMarker(index)
 
             opcoder.do_body(expression.body)
-            if expression.type.returntype is None or expression.yields:
+            if expression.type.returntype is None:
                 function_opcode.ops.append(Return(None, False))
             else:
                 function_opcode.ops.append(DidntReturnError(None))
 
             self.output.ops.append(CreateFunction(
                 self._lineno(expression.location),
-                expression.type, expression.yields, function_opcode))
+                expression.type, function_opcode))
 
         elif isinstance(expression, cooked_ast.LookupVar):
             coder = self._get_coder_for_level(expression.level)
@@ -271,7 +270,7 @@ class _OpCoder:
             self.output.ops.append(done)
 
         elif isinstance(expression, cooked_ast.LookupFromModule):
-            exported_names = list(expression.compilation.exports.keys())
+            exported_names = list(expression.compilation.export_types.keys())
             self.output.ops.append(LookupFromModule(
                 self._lineno(expression.location),
                 expression.compilation,
@@ -503,7 +502,7 @@ class _OpCoder:
             self.do_statement(statement)
 
 
-def create_opcode(compilation, cooked_statements, source_code):
+def create_opcode(compilation, cooked_statements, export_vars, source_code):
     line_start_offsets = []
     offset = 0
     for line in io.StringIO(source_code):
@@ -521,10 +520,10 @@ def create_opcode(compilation, cooked_statements, source_code):
     })
 
     # exported symbols are kinda like arguments
-    output = OpCode(len(compilation.exports))
+    output = OpCode(len(export_vars))
     file_opcoder = builtin_opcoder.create_subcoder(output)
-    for arg_marker, name in zip(output.local_vars, compilation.exports.keys()):
-        file_opcoder.local_vars[name] = arg_marker
+    for arg_marker, var in zip(output.local_vars, export_vars.values()):
+        file_opcoder.local_vars[var] = arg_marker
 
     file_opcoder.do_body(cooked_statements)
     output.fix_none_linenos()

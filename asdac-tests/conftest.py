@@ -51,7 +51,7 @@ def compiler():
         assert not imports
         return raw_statements
 
-    def cooked_parse(code, want_exports=False):
+    def cooked_parse(code, want_export_types=False):
         new_compilation()
         raw_statements, imports = raw_ast.parse(compilation, code)
 
@@ -60,23 +60,25 @@ def compiler():
             import_compilations[path] = common.Compilation(
                 pathlib.Path(path), pathlib.Path('.'), compilation.messager)
             import_compilations[path].set_imports([])
-            import_compilations[path].set_exports(collections.OrderedDict())
+            import_compilations[path].set_export_types(
+                collections.OrderedDict())
         compilation.set_imports(list(import_compilations.values()))
 
-        cooked, exports = cooked_ast.cook(compilation, raw_statements,
-                                          import_compilations)
+        cooked, export_vars, export_types = cooked_ast.cook(
+            compilation, raw_statements, import_compilations)
         assert isinstance(cooked, list)
 
-        if want_exports:
-            return (cooked, exports)
+        if want_export_types:
+            return (cooked, export_types)
 
-        assert not exports
+        assert not export_types
         return cooked
 
     def opcode(code):
         cooked = cooked_parse(code)     # changes compilation
-        compilation.set_exports(collections.OrderedDict())
-        return opcoder.create_opcode(compilation, cooked, code)
+        compilation.set_export_types(collections.OrderedDict())
+        return opcoder.create_opcode(compilation, cooked,
+                                     collections.OrderedDict(), code)
 
     def bytecode(code):
         opcodee = opcode(code)      # changes compilation

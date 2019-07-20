@@ -30,7 +30,7 @@ _KEYWORDS = {
     'if', 'then', 'elif', 'else',
     'while', 'for', 'do',
     'void',
-    'return', 'yield',
+    'return',
     'import', 'export', 'as',
     'try', 'catch', 'finally',
 }

@@ -95,8 +95,8 @@ class Compilation:
         self.compiled_path = self._get_bytecode_path(compiled_dir)
 
         self.state = CompilationState.NOTHING_DONE
-        self.imports = None     # list of other Compilation objects
-        self.exports = None     # ordered dict like {name: type}
+        self.imports = None         # list of other Compilation objects
+        self.export_types = None    # ordered dict like {name: type}
 
     def _get_bytecode_path(self, compiled_dir):
         relative = relpath(self.source_path, compiled_dir.parent)
@@ -126,11 +126,11 @@ class Compilation:
         self.state = CompilationState.IMPORTS_KNOWN
         self.imports = import_compilations
 
-    def set_exports(self, exports):
+    def set_export_types(self, export_types):
         assert self.state == CompilationState.IMPORTS_KNOWN
-        assert isinstance(exports, collections.OrderedDict)
+        assert isinstance(export_types, collections.OrderedDict)
         self.state = CompilationState.EXPORTS_KNOWN
-        self.exports = exports
+        self.export_types = export_types
 
     def set_done(self):
         assert self.state == CompilationState.EXPORTS_KNOWN
