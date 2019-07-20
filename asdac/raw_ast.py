@@ -13,7 +13,7 @@ Integer = _astclass('Integer', ['python_int'])
 String = _astclass('String', ['python_string'])
 StrJoin = _astclass('StrJoin', ['parts'])
 # Let's generics is a list of (name, location) tuples, or None
-Let = _astclass('Let', ['varname', 'generics', 'value', 'export'])
+Let = _astclass('Let', ['varname', 'generics', 'value', 'outer', 'export'])
 SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['module_path', 'varname', 'generics'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
@@ -600,17 +600,17 @@ class _AsdaParser:
             value = self.parse_expression()
 
             return Let(let.location, varname_token.value, generics, value,
-                       export=False)
+                       outer=False, export=False)
 
-        if self.tokens.peek().value == 'export':
-            self.tokens.next_token()
+        if self.tokens.peek().value in {'outer', 'export'}:
+            prefix_word = self.tokens.next_token().value
             if self.tokens.peek().value != 'let':
                 raise common.CompileError(
                     "should be 'let'", self.tokens.peek().location)
 
             let = self.parse_1line_statement()
             assert isinstance(let, Let)
-            return let._replace(export=True)
+            return let._replace(**{prefix_word: True})
 
         if self.tokens.peek().value == 'import':
             raise common.CompileError(

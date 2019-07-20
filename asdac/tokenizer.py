@@ -26,12 +26,12 @@ _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
 # keep this up to date! this is what prevents these from being valid
 # variable names
 _KEYWORDS = {
-    'let',
     'if', 'then', 'elif', 'else',
     'while', 'for', 'do',
     'void',
     'return',
-    'import', 'export', 'as',
+    'outer', 'export', 'let',
+    'import', 'as',
     'try', 'catch', 'finally',
 }
 

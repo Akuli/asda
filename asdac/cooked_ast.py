@@ -100,11 +100,11 @@ class _Chef:
     def __init__(self, parent_chef, is_function=False, returntype=None):
         if is_function:
             self.is_function = True
-            self.return_type = returntype
+            self.returntype = returntype
         else:
             assert returntype is None
             self.is_function = False
-            self.return_type = None
+            self.returntype = None
 
         self.parent_chef = parent_chef
         if parent_chef is None:
@@ -119,7 +119,7 @@ class _Chef:
             self.generic_types = collections.ChainMap(
                 objects.BUILTIN_GENERIC_TYPES)
         else:
-            # the level can be incremented after creating a new Chef
+            # the level can be incremented immediately after creating a Chef
             self.level = parent_chef.level
 
             # keys are paths, values are Compilation objects
@@ -138,6 +138,9 @@ class _Chef:
 
         # keys are strings, values are Variable objects
         self.export_vars = collections.OrderedDict()
+
+    def _create_subchef(self):
+        return _Chef(self, self.is_function, self.returntype)
 
     # there are multiple different kind of names:
     #   * types
@@ -398,29 +401,34 @@ class _Chef:
     def cook_let(self, raw):
         self._check_name_not_exist(raw.varname, raw.location)
         if raw.generics is None:
-            chef = self
+            value_chef = self
         else:
-            chef = _Chef(self)
+            # TODO: figure out whether this should use self._create_subchef
+            value_chef = _Chef(self)
             generic_markers = collections.OrderedDict(
                 (name, objects.GenericMarker(name))
                 for name, location in raw.generics
             )
-            chef.types.update(generic_markers)
+            value_chef.types.update(generic_markers)
 
-        value = chef.cook_expression(raw.value)
+        target_chef = self.parent_chef if raw.outer else self
+        assert target_chef is not None
+
+        value = value_chef.cook_expression(raw.value)
 
         if raw.generics is None:
             if raw.export:
-                self._check_can_export(raw.location)
+                target_chef._check_can_export(raw.location)
                 var = Variable(raw.varname, value.type, raw.location)
-                self.export_vars[raw.varname] = var
-                return [SetVar(raw.location, None, var, self.level, value)]
+                target_chef.export_vars[raw.varname] = var
+                return [
+                    SetVar(raw.location, None, var, target_chef.level, value)]
 
             var = Variable(raw.varname, value.type, raw.location)
-            self.vars[raw.varname] = var
+            target_chef.vars[raw.varname] = var
             return [
                 CreateLocalVar(raw.location, None, var),
-                SetVar(raw.location, None, var, self.level, value),
+                SetVar(raw.location, None, var, target_chef.level, value),
             ]
 
         assert not raw.export, "sorry, cannot export generic variables yet :("
@@ -428,10 +436,10 @@ class _Chef:
         generic = objects.Generic(
             list(generic_markers.values()), value.type)
         var = GenericVariable(raw.varname, generic, raw.location)
-        self.generic_vars[raw.varname] = var
+        target_chef.generic_vars[raw.varname] = var
         return [
             CreateLocalVar(raw.location, None, var),
-            SetVar(raw.location, None, var, self.level,
+            SetVar(raw.location, None, var, target_chef.level,
                    _replace_generic_markers_with_object(
                         value, list(generic_markers.values()))),
         ]
@@ -466,7 +474,7 @@ class _Chef:
         if not self.is_function:
             raise common.CompileError("return outside function", raw.location)
 
-        if self.return_type is None:
+        if self.returntype is None:
             if raw.value is not None:
                 raise common.CompileError(
                     "cannot return a value from a void function",
@@ -476,10 +484,10 @@ class _Chef:
             raise common.CompileError("missing return value", raw.location)
 
         value = self.cook_expression(raw.value)
-        if value.type != self.return_type:
+        if value.type != self.returntype:
             raise common.CompileError(
                 ("should return %s, not %s"
-                 % (self.return_type.name, value.type.name)),
+                 % (self.returntype.name, value.type.name)),
                 value.location)
         return ValueReturn(raw.location, None, value)
 
@@ -557,9 +565,11 @@ class _Chef:
                        varname, varname_location, catch_body):
         self._check_name_not_exist(varname, varname_location)
         cooked_errortype = self.cook_type(errortype)
+
+        catch_chef = self._create_subchef()
         errorvar = Variable(varname, cooked_errortype, catch_location)
-        self.vars[varname] = errorvar
-        cooked_catch_body = self.cook_body(catch_body)
+        catch_chef.vars[varname] = errorvar
+        cooked_catch_body = catch_chef.cook_body(catch_body, new_subchef=False)
 
         return [
             CreateLocalVar(varname_location, None, errorvar),
@@ -653,9 +663,7 @@ class _Chef:
 
     def cook_body(self, raw_statements, *, new_subchef=True):
         if new_subchef:
-            return _Chef(
-                self, self.is_function, self.return_type,
-            ).cook_body(raw_statements, new_subchef=False)
+            return self._create_subchef().cook_body(raw_statements, new_subchef=False)
 
         flatten = itertools.chain.from_iterable
         return list(flatten(map(self.cook_statement, raw_statements)))

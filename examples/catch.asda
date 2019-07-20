@@ -1,9 +1,9 @@
 if FALSE:
-    let string = "lol"
+    outer let string = "lol"
 
 try:
     print("no errors here")
-catch VariableError lol:
+catch VariableError e:
     print("if you see this, something is broken")
 
 try:

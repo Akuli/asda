@@ -202,6 +202,7 @@ def test_for(compiler):
                 generics=None,
             ),
             export=False,
+            outer=False,
         ),
         cond=GetVar(
             module_path=None,

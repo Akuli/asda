@@ -1,5 +1,5 @@
 if FALSE:
-    let string = "lol"
+    outer let string = "lol"
 
 try:
     print("succeeding try")
@@ -14,8 +14,8 @@ try:
         print(string)
     finally:
         print("succeeding finally")
-catch VariableError e1:
-    print("got error {e1}")
+catch VariableError e:
+    print("got error {e}")
 
 print("---------")
 
@@ -25,8 +25,8 @@ try:
     finally:
         print("failing finally")
         print(string)
-catch VariableError e2:
-    print("got error {e2}")
+catch VariableError e:
+    print("got error {e}")
 
 print("---------")
 
@@ -37,5 +37,5 @@ try:
     finally:
         print("failing finally")
         print(string)
-catch VariableError e3:
-    print("got error {e3}")
+catch VariableError e:
+    print("got error {e}")
