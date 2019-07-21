@@ -11,10 +11,8 @@
 #include "objects/string.h"
 
 
-static bool print_impl(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
+static bool print_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
-	assert(nargs == 1);
-	assert(args[0]->type == &stringobj_type);
 	StringObject *obj = (StringObject *)args[0];
 
 	const char *str;
@@ -28,11 +26,7 @@ static bool print_impl(Interp *interp, struct ObjData data, Object *const *args,
 	*result = NULL;
 	return true;
 }
-
-// FIXME: this is ugly
-static const struct Type *s = &stringobj_type;
-static const struct TypeFunc print_type = TYPE_FUNC_COMPILETIMECREATE(&s, 1, NULL);
-static FuncObject print = FUNCOBJ_COMPILETIMECREATE(&print_type, print_impl);
+FUNCOBJ_COMPILETIMECREATE(print, print_cfunc, NULL, { &stringobj_type });
 
 Object* const builtin_objects[] = {
 	(Object *)&print,

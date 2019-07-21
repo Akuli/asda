@@ -1,4 +1,5 @@
 #include "partialfunc.h"
+#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -12,6 +13,7 @@ struct PartialFuncData {
 	FuncObject *f;
 	Object **partial;
 	size_t npartial;
+	struct TypeFunc type;   // a convenient way to allocate a TypeFunc every time
 };
 
 static void partialfunc_data_destroy(void *vpdata, bool decrefrefs, bool freenonrefs)
@@ -77,10 +79,16 @@ FuncObject *partialfunc_create(Interp *interp, FuncObject *f, Object *const *par
 	pfd->f = f;
 	OBJECT_INCREF(f);
 
+	assert(f->type->kind == TYPE_FUNC);
+	pfd->type = *(const struct TypeFunc *)f->type;
+	assert(pfd->type.nargtypes >= npartial);
+	pfd->type.nargtypes -= npartial;
+	pfd->type.argtypes += npartial;
+
 	memcpy(partialcp, partial, sizeof(partial[0]) * npartial);
 	for (size_t i = 0; i < npartial; i++)
 		OBJECT_INCREF(partialcp[i]);
 
 	struct ObjData od = { .val = pfd, .destroy = partialfunc_data_destroy };
-	return funcobj_new(interp, partialfunc_cfunc, od);
+	return funcobj_new(interp, &pfd->type, partialfunc_cfunc, od);
 }

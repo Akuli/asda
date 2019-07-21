@@ -36,11 +36,11 @@ static bool compiletime_func_running;
 static bool ret_cfunc(BOILERPLATE_ARGS) { CHECK; ncalls_ret++; *result = (Object *)boolobj_c2asda(true); return true; }
 static bool noret_cfunc(BOILERPLATE_ARGS) { CHECK; ncalls_noret++; *result = NULL; return true; }
 
-// FIXME
-/*
-FuncObject compiletime_ret   = FUNCOBJ_COMPILETIMECREATE(ret_cfunc);
-FuncObject compiletime_noret = FUNCOBJ_COMPILETIMECREATE(noret_cfunc);
-*/
+TYPE_FUNC_COMPILETIMECREATE(ret_tfc, &boolobj_type, { &boolobj_type, &boolobj_type });
+TYPE_FUNC_COMPILETIMECREATE(noret_tfc, &boolobj_type, { &boolobj_type, &boolobj_type });
+
+FUNCOBJ_COMPILETIMECREATE(ret, ret_cfunc, &boolobj_type, { &boolobj_type, &boolobj_type });
+FUNCOBJ_COMPILETIMECREATE(noret, noret_cfunc, &boolobj_type, { &boolobj_type, &boolobj_type });
 
 static void check_calling(Interp *interp, FuncObject *retf, FuncObject *noretf)
 {
@@ -60,18 +60,16 @@ static void check_calling(Interp *interp, FuncObject *retf, FuncObject *noretf)
 }
 
 
-// FIXME
-/* TEST(funcobj_compiletimecreate)
+TEST(funcobj_compiletimecreate)
 {
 	compiletime_func_running = true;
-	check_calling(interp, &compiletime_ret, &compiletime_noret);
+	check_calling(interp, &ret, &noret);
 }
-*/
 
 TEST(funcobj_new)
 {
-	FuncObject *ret = funcobj_new(interp, ret_cfunc, leldata);
-	FuncObject *noret = funcobj_new(interp, noret_cfunc, leldata);
+	FuncObject *ret = funcobj_new(interp, &ret_tfc, ret_cfunc, leldata);
+	FuncObject *noret = funcobj_new(interp, &noret_tfc, noret_cfunc, leldata);
 	assert(ret);
 	assert(noret);
 

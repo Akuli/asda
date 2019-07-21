@@ -10,7 +10,7 @@ void codeop_destroy(const struct CodeOp *op)
 		break;
 
 	case CODE_CREATEFUNC:
-		code_destroy(&op->data.createfunc_code);
+		code_destroy(&op->data.createfunc.code);
 		break;
 
 	default:

@@ -19,13 +19,28 @@ typedef struct FuncObject {
 	struct ObjData userdata;   // for passing data to cfunc
 } FuncObject;
 
-#define FUNCOBJ_COMPILETIMECREATE(TYPE, CFUNC) OBJECT_COMPILETIMECREATE((const struct Type *)(TYPE), .cfunc = (CFUNC))
+/*
+usage:
+
+	static bool lol_cfunc(Interp *interp, struct ObjData userdata, Object *const *args, size_t nargs, Object **result)
+	{
+		...
+	}
+
+	FUNCOBJ_COMPILETIMECREATE(lol, lol_cfunc, &intobj_type, { &intobj_type });
+
+the "..." is argument types, in braces
+currently it is not possible to compiletimecreate a function that takes 0 args :(
+*/
+#define FUNCOBJ_COMPILETIMECREATE(NAME, CFUNC, RETTYPE, ...) \
+	TYPE_FUNC_COMPILETIMECREATE(NAME##_type, RETTYPE, __VA_ARGS__); \
+	static FuncObject NAME = OBJECT_COMPILETIMECREATE((const struct Type *) &NAME##_type, .cfunc = (CFUNC))
 
 /* Create a new FuncObj
  * userdata is destroyed on FuncObj destruction or on creation error
  * cfunc must set *result to NULL if it does not return anything.
  */
-FuncObject *funcobj_new(Interp *interp, funcobj_cfunc cfunc, struct ObjData userdata);
+FuncObject *funcobj_new(Interp *interp, const struct TypeFunc *type, funcobj_cfunc cfunc, struct ObjData userdata);
 
 /** Call a FuncObj
  * Returns a boolean indicating success.

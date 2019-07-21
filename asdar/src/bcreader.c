@@ -410,13 +410,14 @@ static bool read_create_function(struct BcReader *bcr, struct CodeOp *res)
 {
 	res->kind = CODE_CREATEFUNC;
 
-	const struct Type *functyp;
-	if(!read_type(bcr, &functyp, false))
+	const struct Type *typ;
+	if(!read_type(bcr, &typ, false))
 		return false;
 
-	assert(functyp->kind == TYPE_FUNC);
+	assert(typ->kind == TYPE_FUNC);
+	res->data.createfunc.type = (const struct TypeFunc *)typ;
 
-	return read_body(bcr, &res->data.createfunc_code);
+	return read_body(bcr, &res->data.createfunc.code);
 }
 
 static Object **get_module_member_pointer(struct BcReader *bcr)

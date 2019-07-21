@@ -306,37 +306,28 @@ static StringObject *change_case(Interp *interp, StringObject *src, bool upper)
 	return stringobj_new_nocpy(interp, val, src->len);
 }
 
-static bool uppercase_impl(Interp *interp, struct ObjData data,
+static bool uppercase_cfunc(Interp *interp, struct ObjData data,
 	Object *const *args, size_t nargs, Object **result)
 {
-	assert(nargs == 1);
 	return !!( *result = (Object *)change_case(interp, (StringObject *)args[0], true) );
 }
+FUNCOBJ_COMPILETIMECREATE(uppercase, uppercase_cfunc, &stringobj_type, { &stringobj_type });
 
-static bool lowercase_impl(Interp *interp, struct ObjData data,
+static bool lowercase_cfunc(Interp *interp, struct ObjData data,
 	Object *const *args, size_t nargs, Object **result)
 {
-	assert(nargs == 1);
 	return !!( *result = (Object *)change_case(interp, (StringObject *)args[0], false) );
 }
+FUNCOBJ_COMPILETIMECREATE(lowercase, lowercase_cfunc, &stringobj_type, { &stringobj_type });
 
-
-static bool tostring_impl(Interp *interp, struct ObjData data,
+static bool tostring_cfunc(Interp *interp, struct ObjData data,
 	Object *const *args, size_t nargs, Object **result)
 {
-	assert(nargs == 1);
-	assert(args[0]->type == &stringobj_type);
 	OBJECT_INCREF(args[0]);
 	*result = args[0];
 	return true;
 }
-
-// FIXME: this is ugly
-static const struct Type *s = &stringobj_type;
-static const struct TypeFunc string_string_type = TYPE_FUNC_COMPILETIMECREATE(&s, 1, &stringobj_type);
-static FuncObject uppercase = FUNCOBJ_COMPILETIMECREATE(&string_string_type, uppercase_impl);
-static FuncObject lowercase = FUNCOBJ_COMPILETIMECREATE(&string_string_type, lowercase_impl);
-static FuncObject tostring = FUNCOBJ_COMPILETIMECREATE(&string_string_type, tostring_impl);
+FUNCOBJ_COMPILETIMECREATE(tostring, tostring_cfunc, &stringobj_type, { &stringobj_type });
 
 static FuncObject *methods[] = { &uppercase, &lowercase, &tostring };
 const struct Type stringobj_type = TYPE_BASIC_COMPILETIMECREATE(methods, sizeof(methods)/sizeof(methods[0]));

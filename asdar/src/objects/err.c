@@ -87,19 +87,14 @@ void errobj_set_oserr(Interp *interp, const char *fmt, ...)
 }
 
 
-static bool tostring_impl(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
+static bool tostring_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
-	assert(nargs == 1);
 	StringObject *s = ((ErrObject *) args[0])->msgstr;
 	OBJECT_INCREF(s);
 	*result = (Object *)s;
 	return true;
 }
-
-// FIXME: this is ugly
-static const struct Type *e = &errobj_type_error;
-static const struct TypeFunc tostring_type = TYPE_FUNC_COMPILETIMECREATE(&e, 1, &stringobj_type);
-static FuncObject tostring = FUNCOBJ_COMPILETIMECREATE(&tostring_type, tostring_impl);
+FUNCOBJ_COMPILETIMECREATE(tostring, tostring_cfunc, &stringobj_type, { &errobj_type_error });
 
 static FuncObject *methods[] = { &tostring };
 

@@ -3,6 +3,7 @@
 
 #include "interp.h"
 #include <stddef.h>
+#include <stdio.h>
 
 enum TypeKind {
 	TYPE_BASIC,
@@ -42,14 +43,17 @@ void type_destroy(struct Type *t);
 	.nmethods = (NMETHODS), \
 }
 
-#define TYPE_FUNC_COMPILETIMECREATE(ARGT, NARGT, RETT) { \
-	.kind = TYPE_FUNC, \
-	.methods = NULL, \
-	.nmethods = 0, \
-	.argtypes = (ARGT), \
-	.nargtypes = (NARGT), \
-	.rettype = (RETT), \
-}
+// the "..." is argument types, in braces
+#define TYPE_FUNC_COMPILETIMECREATE(VARNAME, RETTYPE, ...) \
+	static const struct Type *VARNAME##_argtypes[] = __VA_ARGS__; \
+	static const struct TypeFunc VARNAME = { \
+		.kind = TYPE_FUNC, \
+		.methods = NULL, \
+		.nmethods = 0, \
+		.argtypes = VARNAME##_argtypes, \
+		.nargtypes = sizeof(VARNAME##_argtypes)/sizeof(VARNAME##_argtypes[0]), \
+		.rettype = (RETTYPE), \
+	}
 
 // does NOT destroy each argtype, but will free argtypes eventually (immediately on error, later on success)
 struct TypeFunc *type_func_new(Interp *interp, const struct Type **argtypes, size_t nargtypes, const struct Type *rettype);

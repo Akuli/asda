@@ -217,7 +217,7 @@ static enum RunnerResult run_pop1(struct Runner *rnr, const struct CodeOp *op)
 
 static enum RunnerResult run_createfunc(struct Runner *rnr, const struct CodeOp *op)
 {
-	FuncObject *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc_code);
+	FuncObject *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc.type, op->data.createfunc.code);
 	if (!f)
 		return RUNNER_ERROR;
 

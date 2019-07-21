@@ -71,7 +71,7 @@ static bool asda_function_cfunc(Interp *interp, struct ObjData data, Object *con
 	return false;
 }
 
-FuncObject *asdafunc_create(Interp *interp, ScopeObject *defscope, struct Code code)
+FuncObject *asdafunc_create(Interp *interp, ScopeObject *defscope, const struct TypeFunc *type, struct Code code)
 {
 	struct AsdaFunctionData *afd = malloc(sizeof(*afd));
 	if(!afd) {
@@ -84,5 +84,5 @@ FuncObject *asdafunc_create(Interp *interp, ScopeObject *defscope, struct Code c
 	afd->code = code;
 
 	struct ObjData od = { .val = afd, .destroy = destroy_asdafunc_data };
-	return funcobj_new(interp, asda_function_cfunc, od);
+	return funcobj_new(interp, type, asda_function_cfunc, od);
 }
