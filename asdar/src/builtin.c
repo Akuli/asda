@@ -26,7 +26,7 @@ static bool print_cfunc(Interp *interp, struct ObjData data, Object *const *args
 	*result = NULL;
 	return true;
 }
-FUNCOBJ_COMPILETIMECREATE(print, print_cfunc, NULL, { &stringobj_type });
+FUNCOBJ_COMPILETIMECREATE(print, NULL, { &stringobj_type });
 
 Object* const builtin_objects[] = {
 	(Object *)&print,

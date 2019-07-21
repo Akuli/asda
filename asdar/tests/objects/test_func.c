@@ -36,11 +36,12 @@ static bool compiletime_func_running;
 static bool ret_cfunc(BOILERPLATE_ARGS) { CHECK; ncalls_ret++; *result = (Object *)boolobj_c2asda(true); return true; }
 static bool noret_cfunc(BOILERPLATE_ARGS) { CHECK; ncalls_noret++; *result = NULL; return true; }
 
+// tfc = type func compiletimecreate
 TYPE_FUNC_COMPILETIMECREATE(ret_tfc, &boolobj_type, { &boolobj_type, &boolobj_type });
 TYPE_FUNC_COMPILETIMECREATE(noret_tfc, &boolobj_type, { &boolobj_type, &boolobj_type });
 
-FUNCOBJ_COMPILETIMECREATE(ret, ret_cfunc, &boolobj_type, { &boolobj_type, &boolobj_type });
-FUNCOBJ_COMPILETIMECREATE(noret, noret_cfunc, &boolobj_type, { &boolobj_type, &boolobj_type });
+FUNCOBJ_COMPILETIMECREATE(ret, &boolobj_type, { &boolobj_type, &boolobj_type });
+FUNCOBJ_COMPILETIMECREATE(noret, &boolobj_type, { &boolobj_type, &boolobj_type });
 
 static void check_calling(Interp *interp, FuncObject *retf, FuncObject *noretf)
 {

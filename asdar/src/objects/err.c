@@ -94,7 +94,7 @@ static bool tostring_cfunc(Interp *interp, struct ObjData data, Object *const *a
 	*result = (Object *)s;
 	return true;
 }
-FUNCOBJ_COMPILETIMECREATE(tostring, tostring_cfunc, &stringobj_type, { &errobj_type_error });
+FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &errobj_type_error });
 
 static FuncObject *methods[] = { &tostring };
 

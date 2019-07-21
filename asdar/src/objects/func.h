@@ -27,14 +27,15 @@ usage:
 		...
 	}
 
-	FUNCOBJ_COMPILETIMECREATE(lol, lol_cfunc, &intobj_type, { &intobj_type });
+	FUNCOBJ_COMPILETIMECREATE(lol, &intobj_type, { &intobj_type });
+	// now lol is a FuncObject
 
 the "..." is argument types, in braces
 currently it is not possible to compiletimecreate a function that takes 0 args :(
 */
-#define FUNCOBJ_COMPILETIMECREATE(NAME, CFUNC, RETTYPE, ...) \
+#define FUNCOBJ_COMPILETIMECREATE(NAME, RETTYPE, ...) \
 	TYPE_FUNC_COMPILETIMECREATE(NAME##_type, RETTYPE, __VA_ARGS__); \
-	static FuncObject NAME = OBJECT_COMPILETIMECREATE((const struct Type *) &NAME##_type, .cfunc = (CFUNC))
+	static FuncObject NAME = OBJECT_COMPILETIMECREATE((const struct Type *) &NAME##_type, .cfunc = NAME##_cfunc)
 
 /* Create a new FuncObj
  * userdata is destroyed on FuncObj destruction or on creation error

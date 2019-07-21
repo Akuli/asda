@@ -311,14 +311,14 @@ static bool uppercase_cfunc(Interp *interp, struct ObjData data,
 {
 	return !!( *result = (Object *)change_case(interp, (StringObject *)args[0], true) );
 }
-FUNCOBJ_COMPILETIMECREATE(uppercase, uppercase_cfunc, &stringobj_type, { &stringobj_type });
+FUNCOBJ_COMPILETIMECREATE(uppercase, &stringobj_type, { &stringobj_type });
 
 static bool lowercase_cfunc(Interp *interp, struct ObjData data,
 	Object *const *args, size_t nargs, Object **result)
 {
 	return !!( *result = (Object *)change_case(interp, (StringObject *)args[0], false) );
 }
-FUNCOBJ_COMPILETIMECREATE(lowercase, lowercase_cfunc, &stringobj_type, { &stringobj_type });
+FUNCOBJ_COMPILETIMECREATE(lowercase, &stringobj_type, { &stringobj_type });
 
 static bool tostring_cfunc(Interp *interp, struct ObjData data,
 	Object *const *args, size_t nargs, Object **result)
@@ -327,7 +327,7 @@ static bool tostring_cfunc(Interp *interp, struct ObjData data,
 	*result = args[0];
 	return true;
 }
-FUNCOBJ_COMPILETIMECREATE(tostring, tostring_cfunc, &stringobj_type, { &stringobj_type });
+FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &stringobj_type });
 
 static FuncObject *methods[] = { &uppercase, &lowercase, &tostring };
 const struct Type stringobj_type = TYPE_BASIC_COMPILETIMECREATE(methods, sizeof(methods)/sizeof(methods[0]));
