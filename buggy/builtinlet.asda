@@ -1,0 +1,2 @@
+# this should give a descriptive compile error instead of crashing asdac
+outer let asdf = "lol"

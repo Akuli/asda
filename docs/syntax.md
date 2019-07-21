@@ -47,12 +47,28 @@ tokens, and `" hello world "` contains more spaces than `"hello world"`. Those
 extra spaces are not ignored because they are not *between* tokens; they are a
 part of the [string token].
 
-Some of the different kinds of tokens are documented in more detail below. The
-tokens that aren't documented in more detail are mentioned in other parts of
-this documentation. For example, `123` is a valid token, because the
-[expression] documentation mentions it, and so are e.g. `(` and `-`. Note that
-the operators `==`, `!=` and `->` are treated as one token, so `==` and `= =`
-are tokenized differently.
+Some of the different kinds of tokens are documented in more detail below.
+
+
+### Operator Tokens
+
+Here is a list of the operator tokens. The uses of each token are described in other sections of this spec.
+
+```
+== != -> + - * = ` ; : . , [ ] ( )
+```
+
+Note that `==` and `= =` are tokenized differently; `==` is one token but `= =` is two tokens.
+
+
+### Integer Tokens
+
+An integer token is e.g. `123` or `0`.
+It consists of a digit 1-9 followed by zero or more 0-9 digits.
+As a special case, `0` is also a valid integer literal, even though it doesn't start with a 1-9 digit like all other integer literals do.
+
+Note that `-123` is *not* an integer literal;
+it is the `-` [operator] applied to the integer literal `123`.
 
 
 ### Identifier Tokens
@@ -62,9 +78,18 @@ In this section, a "letter" means a Unicode character whose category is `Lu`,
 characters from categories `Lm` and `Lt` (modifier letters and titlecase
 letters) are not considered "letters" in this section.
 
-An identifier token is e.g. `greeting`, `Str` or `uppercase`. It consists of a
+An identifier token is e.g. `greeting`, `Str`, `uppercase`. It consists of a
 letter or `_` followed by zero or more letters or any one of the characters
 `_1234567890`.
+
+
+### Moduleful Identifier Tokens
+
+These are like two identifier tokens with a `:` token between them, except that
+whitespace is not allowed, and the result is one token, not three separate tokens.
+For example, `module:symbol` is a moduleful identifier token that looks up an
+`export`ed `symbol` from an `import`ed `module` (see [imports]), but `module :symbol` and
+`module: symbol` get tokenized as three separate tokens: `module`, `:` and `symbol`.
 
 
 ### String Tokens
@@ -107,6 +132,43 @@ A comment is `#` followed by some text that is ignored by the compiler. If there
 is code before the `#` on the same line, the code will be compiled as if the
 comment wasn't there. Note that `"#"` is a [string token] that contains the `#`
 character, and it has nothing to do with comments.
+
+
+## Imports
+
+Imports are not [statements] in asda;
+imports (zero or more) need to appear in the file *before* all the statements.
+The usage is `import "filename" as importname`.
+
+The `importname` is **not** a variable name; it is fine to create a variable with the same name.
+This way you don't need to worry about module names when you are creating variables.
+For example, the following Python code contains a bug (can you spot it?), but the equivalent asda code wouldn't compile.
+
+```python3
+import os
+
+if something:
+    os = 'windows'
+elif something_else:
+    os = 'linux'
+else:
+    ...display error message...
+
+with open(os.path.join('my_files', os, 'file.txt'), 'r') as file:
+    ...
+```
+
+Use [moduleful identifiers] to access the variables that the imported file has defined with `export let`.
+
+The `"filename"` can be any [string token] that does not contain unescaped
+`{` or `}`, and it's treated as a name of an asda source file, relative to the
+directory of the file that the `import` statement is in. Always use `/` as the
+path separators with `import`; the `/` characters will be replaced with
+whatever is appropriate for the operating system, such as `\` on Windows.
+
+If the same module is imported multiple times (possibly from different files),
+then the imported file is executed only once,
+and every `import` gives access to the same objects.
 
 
 ## Indentation
@@ -161,6 +223,17 @@ if a:
     d()
 ```
 
+The indented parts are called **blocks**.
+For example, in the above example, `c()` is a block, and so is the following part:
+
+```js
+if b:
+    c()
+d()
+```
+
+As you can see, blocks can be nested.
+
 If a line contains nothing but indentation, it's treated as a blank line. For
 example, this code doesn't compile because there should be something coming
 after `if a:`, but there isn't (because [comments] are ignored):
@@ -181,16 +254,84 @@ else:
     print("a is FALSE")
 ```
 
+Unless mentioned otherwise, variables defined in a block are not visible outside the block.
+
+
+## Space-Ignoring Mode
+
+Some tokens need to be extracted from the code in **space-ignoring mode**. It
+means that all newlines and indentation characters are ignored.
+
+The space-ignoring mode is turned off by default. It gets turned **on**
+whenever an opening paren occurs, and the state before the opening paren is
+restored whenever a closing paren occurs. Here "opening paren" means one of
+the tokens `(`, `[` and `{`, and you can guess what a "closing paren" is.
+
+The space-ignoring mode is turned **off** whenever the beginning of an indented [block] is encountered,
+and the mode before the block is restored at the end of the block.
+
+For example, this is valid asda code:
+
+```js
+do_something(
+        (Int
+            x)
+                -> Str:
+    return x.to_string()
+, more,
+arguments, here)
+```
+
+Whitespaces between parentheses get ignored here, except for the [block] that
+begins at `:` and ends before the first `,`.
+The block begins with an indent before `return`; there is an indent,
+because the first line has 0 spaces of indentation and the `return` has 4 spaces of indentation.
+The block ends at the `,`,
+because there is a dedent there (back to 0 spaces of indentation).
+
+Here are more details about how the space-ignoring mode works:
+
+1. `do_something` is parsed without space-ignoring mode.
+2. `(` turns on space-ignoring mode, which permits the following newline charater.
+3. `(Int x)` turns on the space-ignoring mode, parses `Int x` and then restores
+    it to the state set by the first `(`; that is, the space-ignoring mode
+    remains turned on.
+4. The newline and `-> Str` get parsed with the space-ignoring mode from the
+    first `(`.
+5. The block is parsed **without** space-ignoring mode. It ends with a dedent,
+    and the space-ignoring mode is restored after that (it is turned on).
+    Space-ignoring mode is also turned on and immediately off again for the
+    parentheses of `x.to_string()`. The `,` in the beginning of the last line
+    ends the block.
+6. Space-ignoring mode is still turned on from the first `(`, and it gets
+    turned off by the `)` on the last line.
+
+Of course, the above code example is bad style, and you should write it like this instead:
+
+```js
+do_something((Int x) -> Str:
+    return x.to_string()
+, more, arguments, here)
+```
+
+Applying these rules to code written with good style is quite straight-forward,
+and IMO this is much better than lacking the ability to define multi-line lambdas (like in Python).
+
+
+## Types
+
+There are two different kinds of syntax for specifying types:
+
+- Type names that are [identifier] tokens, like `Str`.
+- A [generic] type name (an [identifier]) followed by `[`, one or more types and
+  another `]`. For example, `SomeType[Str]` or `SomeType[Othertype[Str], Int]`.
+
+Types are not objects in asda, so the above syntaxes are not expressions.
+
 
 ## Expressions
 
-In this section, "comma-separated" means that there are commas between the
-items (if there are two or more items), but not elsewhere. For example, `a,b,c`
-is comma-separated properly, but `,a,b,c` and `a,b,c,` aren't. As special
-cases, a single item and no items at all are also considered comma-separated.
-In general, "X-separated" means a similar thing with X instead of a comma.
-
-An expression is a piece of code that produces a value, like `"Hello"` or `123`.
+An expression is a piece of code that evaluates to an object, like `"Hello"` or `123`.
 Expressions may contain other expressions; for example, `"Hello".uppercase()` is
 an expression, and the `"Hello"` in it is also an expression. In fact,
 `"Hello".uppercase` is also an expression, so you can do this:
@@ -200,81 +341,169 @@ let get_upper_hello = "Hello".uppercase
 print(get_upper_hello())
 ```
 
-Some expressions are called "simple expressions", while other expressions
-consists of operators and simple expressions. Here's a list of all the
-different kinds of simple expressions:
+To define what an expression is, I'll first define some other terms:
 
-- **Integer literal**, like `123` or `0`. Integer literals consist of a digit
-  1-9 followed by zero or more 0-9 digits. As a special case, `0` is also a
-  valid integer literal, even though it doesn't start with a 1-9 digit like all
-  other integer literals do. Note that `-123` is *not* an integer literal; it
-  is the prefix operator `-` applied to the integer literal `123` (see below).
+- An **expression without operators or calls**.
+- An **expression without operators** is like an
+    [expression without operators or calls], but it contains function calls.
+- An **expression** contains expressions without operators and the operators,
+    such as `+` or `*`.
+
+Note that method calls are also function calls in asda; `"Hello".uppercase()`
+first evaluates `"Hello".uppercase`, which is an
+[expression without operators or calls] that evaluates to a function, and
+finally `()` calls the result of evaluating `"Hello".uppercase`, which is a
+function.
+
+In this section, "comma-separated" means that there are commas between the
+items (if there are two or more items), but not elsewhere. For example, `a,b,c`
+is comma-separated properly, but `,a,b,c` and `a,b,c,` aren't. As special
+cases, a single item and no items at all are also considered comma-separated.
+In general, "X-separated" means a similar thing with X instead of a comma.
+
+Other details follow.
+
+
+### Expressions without operators or calls
+
+Here is the list of all valid expressions without operators or calls:
+
+- **Function definitions** consist of `(` and `)` with zero or more
+    comma-separated argument specifications between them, followed by `->`, a
+    return type and a [block]. The return type can be a [type] or the
+    keyword `void`. Each argument specification consists of a type and an
+    [identifier].
+
+    In the block, the arguments are local variables. Setting a local
+    variable that came from a function argument has no effects outside
+    the function, which is how local variables behave in general.
+- **Parenthesized expressions** consist of `(`, an expression (it can be any
+    expression, not necessarily an [expression without operators or calls]) and `)`.
+- **Integer literals** consist of an [integer token].
 - **String literals** consist of a [string token].
-- **Variable lookups** consist of an [identifier].
-- **Generic function lookups** that consist of the name of a [generic] function,
-  which is an identifier, and `[ ]` with one or more comma-separated [types] in
-  between.
-- **Parenthesized expressions** consist of `(`, an expression (it doesn't have
-  to be a simple expression) and `)`.
+- **Variable lookups** consist of an [identifier] or a [moduleful identifier].
+- **Generic variable lookups** are like variable lookups, but followed by `[ ]` with one
+  or more comma-separated [types] in between.
+- **If expressions** are like `if A then B else C`, where `if`, `then` and
+  `else` are keywords, and `A`, `B` and `C` can be any expressions. It is an
+  error if the type of `A` is not `Bool` or `B` and `C` have different types.
+  The if expression first evaluates `A`, and then `B` or `C` (not both) depending
+  on the value of `A`. The result of the if expression is then the result of
+  `B` or `C`.
 
-Simple expressions can have zero or more of the following things at the end,
-and they are considered a part of the simple expression:
 
-- **Attribute lookups** consist of `.` and an [identifier].
-- **Function calls** consist of `( )` with zero or more comma-separated
-  expressions in between.
+### Expressions without operators
 
-An expression consists of one or more operator-separated or `-` prefixed simple
-expressions. For example, `-a + b + c` is valid syntax, and so are `-a` and
-`a + -b`.
+An expression without operators is like an [expression without operators or calls],
+but it may have zero or more pairs of `(` and `)` tokens at the end. Between
+each `( )`, there is a comma-separated list of zero or more [expressions].
 
-Here is an operator precedence list. It works so that operators higher on the
-list are applied first. Operators of the same precedence are applied
-left-to-right. For example, `- a + b + c` does `((- a) + b) + c`, and
-`a * b + c / d` does `(a * b) + (c / d)`. As a special case, `==` and `!=`
-don't work this way; using them like that as in `a == b == c` is a syntax
-error.
 
-In the list, "prefix `-`" means `-` so that it's used like `- something`, not
-like `something - something`.
+### Expressions (with operators)
 
-1. `*`, `/`
-2. `+`, `-`, prefix `-`
-3. `==`, `!=`
-4. `` `some_function` ``
+An expression consists of operator tokens from the below table, and [expressions without operators].
+The table works so that operators higher on the table are applied first.
+For example, `a+b*c` calculates `a + (b*c)`, because `*` is higher on the list than `+`.
+It's good style to use whitespace to make the precedence easier to see.
+For example, `a + b*c` is good style and `a+b * c` is horribly misleading.
 
-The `some_function` can be any expression, and ``a `some_function` b`` does the
-same thing as `some_function(a, b)`. Repeated backticks work so that
-``a`b`c`d`e`` is treated as ``(a `b` c) `d` e``, not as ``a `(b `c` d)` e``.
+| Operator Tokens   | Names                     | Kind                              | Notes                                     |
+| ----------------- | ------------------------- | --------------------------------- | ----------------------------------------- |
+| `*`               | multiplication            | binary                            | chaining (no division yet, sorry)         |
+| `+`, `-`          | addition and substraction | `+` binary, `-` binary or unary   | chaining (when used as a binary operator) |
+| `==`, `!=`        | equality and non-equality | binary                            | trying to use chaining is compile error   |
+| `.`               | attribute lookups         | binary                            | right side must be an [identifier] token  |
+| `` ` ``           | infix function call       | ternary                           | chaining                                  |
 
-It's good style to use whitespace to make the precedence easier to see. For
-example, `- a*b + c/d` is good, `- a * b + c / d` is bad, and `-a * b+c / d` is
-horribly misleading.
+An unary operator is used by putting it before an [expression without operators], as in `-123`.
+A binary operator goes between two [expressions without operators], e.g. `1 + 2`.
+A ternary operator goes between *three* [expressions without operators], e.g. ``a ` b ` c``.
 
-Note that the `/` operator doesn't actually work yet. I added it here just so
-that I wouldn't forget to add it later. If it's been a while since I wrote
-this, it might actually work. Try it and see:
+Chaining means that if the operator is used between multiple things, as in `a + b + c + d`, it evaluates `((a + b) + c) + d`.
 
-```js
-let x = 1 / 2
-print(x.to_string())
-```
+The infix function call operator works so that ``a ` f ` b`` or ``a `f` b`` (better style) is same as the function call `f(a, b)`.
+It is intended to be used when it is natural to read the function name between the two arguments.
+For example, if you create an `and` function that takes two bools as arguments and does the obvious thing,
+it's better to write ``if thing1 `and` thing2:`` than ``if and(thing1, thing2):``.
+Note that the backtick `` ` `` and the single quote `'` are different characters.
+The infix operator also chains, so ``a `and` b `and` c`` is same as `and(and(a, b), c)`
+
+It is an error to do e.g. `--x`,
+because `-` is an unary operator so you need to put an [expression without operators] after it.
+On the other hand, `-(-x)` is valid,
+because `(-x)` is an [expression without operators or calls],
+so it is also an [expression without operators].
 
 
 ## Statements
 
-A statement is often a line of code, like `print("Hello")`, but not always;
-there are also statements that take up more than one line. Here a "body" means
-`:`, a newline, and one or more [indented](#indentation) statements.
+A statement is usually a line of code, like `print("Hello")`, but not always;
+there are also statements that take up more than one line.
+To define exactly what a statement is, I do a similar thing as with [expressions]:
+first I define what **one-line-ish statements** are, and then I define what a statement is.
 
+### One-line-ish statements
 
-### Single-line Statements
+Due to [space-ignoring mode], the `print("Hello")` from the above example can also be written like this:
 
+```js
+print(
+    "Hello"
+)
+```
+
+This is not one line, even though it does exactly what `print("Hello")` does.
+For this reason, I call these things one-line-ish statements instead of one-line statements.
+
+Here is the list of one-line-ish statements:
+- **Void statements** consist of the keyword `void` and do nothing.
+    See the [indentation] section.
+    The `void` keyword also has a different use in the context of defining functions;
+    defining a function with `-> void` means that the function does not return a value,
+    and this has nothing to do with void statements.
+- **Return statements** consist of the keyword `return`, sometimes followed by an [expression].
+    Return statements are allowed only inside functions.
+    If the function is defined with `-> void`, there must be no expression after the `return` keyword,
+    and otherwise the expression is required.
 - **Let statements** are like `let varname = value`, where `varname` is an
   [identifier] and `value` is an [expression]. This creates a local variable. It
   is an error if a variable with the given name exists already (regardless of
   whether it is a local variable or some other variable, like a built-in
   variable).
+
+    You can also add the `outer` keyword in front of `let`, as in `outer let varname = value`.
+    This adds the variable to an outer scope than where the `let` is.
+    For example, this code doesn't compile, because the `if` and `else` [blocks] run in different scopes than the `print`:
+
+    ```js
+    if something:
+        let string = "a"
+    else:
+        let string = "b"
+    print(string)
+    ```
+
+    This works, but is ugly:
+
+    ```js
+    let string = "dummy"
+    if something:
+        string = "a"
+    else:
+        string = "b"
+    print(string)
+    ```
+
+    This is the nicest way:
+
+    ```js
+    if something:
+        outer let string = "a"
+    else:
+        string = "b"
+    ```
+
+    Don't put another `let` statement to the `else` block, because you have already created the variable in the `if` block.
 
     If there is an `export` keyword in front of the `let`, the variable is
     exported so that other asda files can import the exporting asda file and
@@ -294,117 +523,27 @@ there are also statements that take up more than one line. Here a "body" means
     ...then compiling `b.asda` will also compile `a.asda` automatically, and
     running `b.asda` will print `lol`.
 
-    `export let` statements can't be in functions.
+    Between the variable name and the `=`, there may be `[` and `]` with one or
+    more [identifiers] between them. This creates a [generic] variable, and the
+    identifiers can be used as types in the value after `=`.
 
-    Note that if you have some code like this...
-
-    ```js
-    if something:
-        let x = 123
-    ```
-
-    ...the compiler will think that the `x` exist in the rest of the code, even
-    if `something` is [FALSE]; in that case, a runtime error occurs if the `x`
-    is actually used. This means that this doesn't compile...
-
-    ```js
-    if something:
-        let x = 123
-    else:
-        let x = 456
-    ```
-
-    ...but this compiles, and works as expected:
-
-    ```js
-    if something:
-        let x = 123
-    else:
-        x = 456
-    ```
-
-- **Import statements** allow you to use the exports of another asda file as
-  shown above. They can be anywhere in the code, even in functions. They are
-  like `import "filename" as varname`.
-
-  The `"filename"` can be any [string token] that does not contain unescaped
-  `{` or `}`, and it's treated as a name of an asda source file, relative to the
-  directory of the file that the `import` statement is in. Always use `/` as the
-  path separators with `import`; the `/` characters will be replaced with
-  whatever is appropriate for the operating system, such as `\` on Windows.
-
-  `import` creates a variable named `varname` just like `let`. The variable is
-  set to a module object. The module object has attributes whose names and
-  values are what was exported in the file that's being imported.
-
-  If the same is imported multiple times (possibly from different files), then
-  every `import` gives the same module object, and the file is executed only
-  once.
+    `export` statements can be used only when creating file-level variables.
+    Currently it is not possible to `export` a generic variable, but I'm planning on fixing that.
+    Also, combining `outer` and `export` is not allowed.
 
 - **Assignment statements** are like `varname = value` without a `let`, but
   otherwise similar to let statements. They change the value of a variable. The
   new value has to be of the same type as the value that was given to the
   variable with `let`.
 
-- **Void statements** consist of the keyword `void`, and they do nothing. See
-  the [indentation] section for example usage.
-
-- **Return statements** consist of `return`, or `return value` where `value` is
-  an [expression]. Return statements can only be used in a function definition.
-  Returning stops running the function.
-
-    If the function's return type is `void`, `return` must be called without the
-    value. Otherwise, `return` must be called with a value, and the type of the
-    value must match the function's return type.
-
-    If the function does not call `return`, the function returns implicitly if
-    its return type is `void`, but a runtime error occurs otherwise.
-
-    If there is a function definition in the body of another function
-    definition, the return type of the innermost function is used.
-
-- **Yield statements** consist of `yield` and an expression. They are only valid
-  inside bodies of functions that return `Generator[some type]` (see [Generator]
-  docs).
-
-    `yield` works so that this...
-
-    ```js
-    func generate_hellos() -> Generator[Str]:
-        yield "Hello"
-        yield "Hello"
-        yield "Hello"
-
-    let helloer = generate_hellos()
-    print(next[Str](helloer))
-    print(next[Str](helloer))
-    print(next[Str](helloer))
-    ```
-
-    ...prints `"hello"` 3 times.
-
-    If a function contains a `yield` (but if the function contains a definition
-    of another function, the yields of the innermost function don't count), it
-    must not contain `return` with a value, but it may contain `return` without
-    a value; this works as usual. However, a function that returns
-    `Generator[some type]` doesn't need to yield; instead of yielding, it can
-    also return a generator object just like functions return values in general.
-    Like this:
-
-    ```js
-    func generate_more_hellos() -> Generator[Str]:
-        return generate_hellos()
-    ```
-
-    Now `generate_hellos()` and `generate_more_hellos()` work the same way.
-
-- **Expression statements** consist of an [expression]. They evaluate the
-  expression, and ignore the resulting value.
+- **Function calls** are documented in the [expressions without operators] section.
+    When a call to a function that returns something (e.g. the function definition does not use `-> void`) is used as a statement,
+    the return value of the function is ignored.
 
 
 ### Multiline Statements
 
-- **If statements** consist of `if` followed by a condition and a body. The
+- **If statements** consist of `if` followed by a condition and a block. The
   condition must be an [expression] with type [Bool]. After the `if`, there may
   be zero or more `elif` parts; each `elif` parts has the same syntax as the
   `if` part, but with `elif` instead of `if`. After the `if` and the `elif`
@@ -415,83 +554,71 @@ there are also statements that take up more than one line. Here a "body" means
 
     ```js
     if cond1:
-        body1
+        block1
     elif cond2:
-        body2
+        block2
     elif cond3:
-        body3
+        block3
     else:
-        body4
+        block4
     ```
 
     ...does the same thing as this:
 
     ```js
     if cond1:
-        body1
+        block1
     else:
         if cond2:
-            body2
+            block2
         else:
             if cond3:
-                body3
+                block3
             else:
-                body4
+                block4
     ```
 
-- **For statements** consist of `for init; cond; incr` followed by a body.
+- **For statements** consist of `for init; cond; incr` followed by a block.
   `init` and `incr` must be single-line statements, and `cond` must be an
   [expression] with type [Bool].
 
     The for loop first runs `init`. Then it evaluates `cond`. If `cond` is
-    [TRUE], it runs the body and `incr`; if `cond` is `FALSE`, it terminates.
-    Checking `cond` and running the body is repeated until `cond` is `FALSE`.
+    [TRUE], it runs the block and `incr`; if `cond` is `FALSE`, it terminates.
+    Checking `cond` and running the block is repeated until `cond` is `FALSE`.
 
-- **While statements** consist of `while` followed by a condition and a body.
+- **While statements** consist of `while` followed by a condition and a block.
   The condition must be an [expression] with type [Bool]. You can think of
   `while cond` as syntactic sugar for `for void; cond; void`.
 
-- **Function definitions** consist of `func` followed by a function name, and
-  `(` and `)` with zero or more comma-separated argument specifications between
-  them, then `->` (it's an operator token), then a return [type] or the keyword
-  `void`, and then a body. Each argument specification consists of a type and an
-  [identifier]. If there is an `export` keyword in front of `func`, the variable
-  that is created is also exported (see `let` documentation in
-  [single-line statements]).
-
-    Between the function name and the `(`, there may be `[` and `]` with one or
-    more [identifiers] between them. This creates a [generic] function, and the
-    identifiers can be used as types in the argument specifications, the return
-    type and in the body.
-
-    In the body, the arguments can be used as if they were local variables. When
-    the function is called, the corresponding local variables are created, and
-    the body is then ran.
-
-
-## Types
-
-There are two kinds of types:
-
-- Types that are [identifier] tokens, like `Str`.
-- A generic type name (an [identifier]) followed by `[`, one or more types and
-  another `]`, like `Generator[Str]` or `Generator[Generator[Str]]`.
-
 
 [comments]: #comments
-[expression]: #expression
+[block]: #indentation
+[blocks]: #indentation
 [statement]: #statements
 [single-line statements]: #single-line-statements
 [indentation]: #indentation
+[indented]: #indentation
 [identifier]: #identifier-tokens
 [identifiers]: #identifier-tokens
+[moduleful identifier]: #moduleful-identifier-tokens
+[moduleful identifiers]: #moduleful-identifier-tokens
 [string token]: #string-tokens
 [string tokens]: #string-tokens
+[integer token]: #integer-tokens
 [type]: #types
 [types]: #types
+[imports]: #types
 [Bool]: undocumented.md
 [TRUE]: undocumented.md
 [FALSE]: undocumented.md
 [to_string]: undocumented.md
 [generic]: undocumented.md
 [Generator]: undocumented.md
+[operators]: #expressions-with-operators
+
+[expression without operators or calls]: #expression-without-operators-or-calls
+[expressions without operators or calls]: #expression-without-operators-or-calls
+[expression without operators]: #expression-without-operators
+[expressions without operators]: #expression-without-operators
+[expression]: #expression
+[expressions]: #expression

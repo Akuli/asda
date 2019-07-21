@@ -20,8 +20,8 @@ class Any:
 location = functools.partial(Location, Any())
 
 
-def test_dumb_statement(compiler):
-    assert compiler.raw_parse('"lol"') == [String(location(0, 5), 'lol')]
+def test_invalid_statement(compiler):
+    compiler.doesnt_raw_parse('"lol"', "invalid statement", '"lol"')
 
 
 def test_parentheses_do_nothing(compiler, monkeypatch):
@@ -48,19 +48,24 @@ def test_backtick_function_call(compiler, monkeypatch):
 
 def test_precedence_and_chaining(compiler, monkeypatch):
     monkeypatch.setattr(Location, '__eq__', (lambda self, other: True))
-    assert compiler.raw_parse('x == -1') == compiler.raw_parse('x == (-1)')
-    assert (compiler.raw_parse('1 - 2 + 3 - 4') ==
-            compiler.raw_parse('((1 - 2) + 3) - 4'))
-    assert (compiler.raw_parse('1 - 2 + 3 - 4') !=
-            compiler.raw_parse('(1 - 2) + (3 - 4)'))
-    assert (compiler.raw_parse('1 - 2 + 3 - 4') !=
-            compiler.raw_parse('1 - (2 + (3 - 4))'))
 
-    compiler.raw_parse('-(-x)')
+    # raw_parse wants statements, not just expressions
+    # wrapping everything in f() creates statements
+
+    assert (compiler.raw_parse('f(x == -1)') ==
+            compiler.raw_parse('f(x == (-1))'))
+    assert (compiler.raw_parse('f(1 - 2 + 3 - 4)') ==
+            compiler.raw_parse('f( ((1 - 2) + 3) - 4 )'))
+    assert (compiler.raw_parse('f(1 - 2 + 3 - 4)') !=
+            compiler.raw_parse('f((1 - 2) + (3 - 4))'))
+    assert (compiler.raw_parse('f(1 - 2 + 3 - 4)') !=
+            compiler.raw_parse('f( 1 - (2 + (3 - 4)) )'))
+
+    compiler.raw_parse('f(-(-x))')
     compiler.doesnt_raw_parse(
-        '--x', "'-' cannot be used like this", '-', rindex=False)
+        'f(--x)', "'-' cannot be used like this", '-', rindex=False)
 
-    compiler.raw_parse('(x == y) == z')
+    compiler.raw_parse('f((x == y) == z)')
 
 
 def test_confusing_operator_chaining_disallowed(compiler):
@@ -305,30 +310,27 @@ def test_1line_statement_newline_thingy(compiler):
 
 
 def test_if_elif_else(compiler):
+    def calling_body(varname):
+        return [FuncCall(Any(), GetVar(Any(), None, varname, None), [])]
+
     for elifs in [[], ['a'], ['a', 'b']]:
         for got_else in [True, False]:
             code = (
-                'if x:\n    xx\n'
-                + ''.join('elif %s:\n    %s%s\n' % (e, e, e) for e in elifs)
-                + int(got_else) * 'else:\n    wat'
+                'if x:\n    xx()\n'
+                + ''.join('elif %s:\n    %s%s()\n' % (e, e, e) for e in elifs)
+                + int(got_else) * 'else:\n    wat()'
             )
 
-            ifs = [(GetVar(Any(), None, 'x', None),
-                    [GetVar(Any(), None, 'xx', None)])]
+            ifs = [(GetVar(Any(), None, 'x', None), calling_body('xx'))]
             for e in elifs:
-                ifs.append(
-                    (GetVar(Any(), None, e, None),
-                     [GetVar(Any(), None, e+e, None)]))
+                ifs.append((GetVar(Any(), None, e, None), calling_body(e+e)))
 
-            if got_else:
-                els = [GetVar(Any(), None, 'wat', None)]
-            else:
-                els = []
+            els3 = calling_body('wat') if got_else else []
 
             assert compiler.raw_parse(code) == [IfStatement(
                 location=Any(),
                 ifs=ifs,
-                else_body=els
+                else_body=els3
             )]
 
 

@@ -229,6 +229,16 @@ class _AsdaParser:
         location = tybe.location + name.location
         return (tybe, name.value, location)
 
+    def operator_from_precedence_list_coming_up(self):
+        if self.tokens.eof():
+            return False
+
+        for ops in _PRECEDENCE_LIST:
+            for op, precedence in ops:
+                if self.tokens.peek().value == op:
+                    return True
+        return False
+
     def expression_without_operators_coming_up(self):
         # '(' could be a function or parentheses for predecence
         # both are expressions
@@ -241,17 +251,7 @@ class _AsdaParser:
 
         return False
 
-    def operator_from_precedence_list_coming_up(self):
-        if self.tokens.eof():
-            return False
-
-        for ops in _PRECEDENCE_LIST:
-            for op, precedence in ops:
-                if self.tokens.peek().value == op:
-                    return True
-        return False
-
-    # remember to update operator_or_expression_without_operators_coming_up()
+    # remember to update expression_without_operators_coming_up()
     # whenever you change this method!
     def parse_expression_without_operators_or_calls(self):
         if self.tokens.peek().value == '(':
@@ -617,20 +617,23 @@ class _AsdaParser:
                 "cannot import here, only at beginning of file",
                 self.tokens.peek().location)
 
-        # TODO: not all expressions should be valid statements, fix this
         result = self.parse_expression(it_should_be=it_should_be)
 
-        if self.tokens.eof() or self.tokens.peek().value != '=':
+        if (not self.tokens.eof()) and self.tokens.peek().value == '=':
+            if not isinstance(result, GetVar):
+                raise common.CompileError(
+                    "invalid assignment", self.tokens.peek().location)
+            assert result.module_path is None, (
+                "can't assign to other modules yet")
+
+            equal_sign = self.tokens.next_token()
+            value = self.parse_expression()
+            return SetVar(equal_sign.location, result.varname, value)
+
+        if isinstance(result, FuncCall):
             return result
 
-        if not isinstance(result, GetVar):
-            raise common.CompileError(
-                "invalid assignment", self.tokens.peek().location)
-        assert result.module_path is None, "can't assign to other modules yet"
-
-        equal_sign = self.tokens.next_token()
-        value = self.parse_expression()
-        return SetVar(equal_sign.location, result.varname, value)
+        raise common.CompileError("invalid statement", result.location)
 
     def parse_imports(self):
         while (not self.tokens.eof()) and self.tokens.peek().value == 'import':
