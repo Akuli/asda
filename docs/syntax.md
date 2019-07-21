@@ -625,6 +625,7 @@ Here is the list of one-line-ish statements:
 [single-line statements]: #single-line-statements
 [indentation]: #indentation
 [indented]: #indentation
+[indent]: #indentation
 [identifier]: #identifier-tokens
 [identifiers]: #identifier-tokens
 [moduleful identifier]: #moduleful-identifier-tokens
