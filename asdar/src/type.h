@@ -3,7 +3,6 @@
 
 #include "interp.h"
 #include <stddef.h>
-#include <stdio.h>
 
 enum TypeKind {
 	TYPE_BASIC,

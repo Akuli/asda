@@ -1,6 +1,8 @@
 #include "bool.h"
+#include <stdbool.h>
 #include <stddef.h>
 #include "../object.h"
+#include "../type.h"
 
 BoolObject boolobj_true = OBJECT_COMPILETIMECREATE(&boolobj_type, 0);
 BoolObject boolobj_false = OBJECT_COMPILETIMECREATE(&boolobj_type, 0);

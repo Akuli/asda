@@ -1,10 +1,8 @@
 #ifndef MODULE_H
 #define MODULE_H
 
-#include <stddef.h>
 #include "code.h"
 #include "interp.h"
-#include "type.h"
 #include "objects/scope.h"
 
 struct Module {

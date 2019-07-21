@@ -6,6 +6,7 @@
 #include <string.h>
 #include "interp.h"
 #include "object.h"
+#include "type.h"
 #include "objects/err.h"
 #include "objects/func.h"
 

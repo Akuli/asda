@@ -4,6 +4,7 @@
 #include <src/code.h>
 #include <src/interp.h>
 #include <src/module.h>
+#include <src/type.h>
 #include <src/objects/scope.h>
 #include "util.h"
 

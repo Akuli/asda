@@ -6,7 +6,6 @@
 #include "code.h"
 #include "interp.h"
 #include "object.h"
-#include "objects/err.h"
 #include "objects/scope.h"
 
 // see finally.md

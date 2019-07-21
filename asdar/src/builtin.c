@@ -1,9 +1,9 @@
 #include "builtin.h"
-#include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include "interp.h"
 #include "object.h"
+#include "type.h"
 #include "objects/bool.h"
 #include "objects/err.h"
 #include "objects/func.h"

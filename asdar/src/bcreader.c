@@ -13,7 +13,6 @@
 #include "type.h"
 #include "objects/bool.h"
 #include "objects/err.h"
-#include "objects/func.h"
 #include "objects/int.h"
 #include "objects/scope.h"
 #include "objects/string.h"

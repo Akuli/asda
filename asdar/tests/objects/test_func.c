@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <src/interp.h>
 #include <src/object.h>
+#include <src/type.h>
 #include <src/objects/bool.h>
 #include <src/objects/func.h>
 #include "../util.h"

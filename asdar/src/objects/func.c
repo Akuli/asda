@@ -1,8 +1,8 @@
 #include "func.h"
-#include <assert.h>
 #include <stdbool.h>
 #include "../interp.h"
 #include "../object.h"
+#include "../type.h"
 
 bool funcobj_call(Interp *interp, FuncObject *f, Object *const *args, size_t nargs, Object **result)
 {

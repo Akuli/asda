@@ -9,6 +9,7 @@
 
 #include "../interp.h"
 #include "../object.h"
+#include "../type.h"
 #include "err.h"
 #include "func.h"
 #include "int.h"

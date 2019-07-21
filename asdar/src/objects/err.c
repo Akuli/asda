@@ -8,6 +8,7 @@
 #include "string.h"
 #include "../interp.h"
 #include "../object.h"
+#include "../type.h"
 
 
 static void destroy_error(Object *obj, bool decrefrefs, bool freenonrefs)

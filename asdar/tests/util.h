@@ -4,7 +4,7 @@
 // stdio.h is here to allow debugging tests by adding printf
 #include <stdio.h>   // IWYU pragma: keep
 #include <src/interp.h>
-#include <src/object.h>
+#include <src/type.h>
 #include <src/objects/string.h>
 
 #define TEST(NAME) void test_##NAME(Interp *interp)

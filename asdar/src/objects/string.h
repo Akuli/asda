@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include "../interp.h"
 #include "../object.h"
+#include "../type.h"
 
 extern const struct Type stringobj_type;
 

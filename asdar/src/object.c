@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include "interp.h"
+#include "type.h"
 #include "objects/err.h"
 
 

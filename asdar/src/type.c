@@ -1,6 +1,5 @@
 #include "type.h"
 #include <stdlib.h>
-#include <string.h>
 #include "interp.h"
 #include "object.h"
 #include "objects/err.h"

@@ -11,6 +11,7 @@
 #include "../utf8.h"
 #include "../interp.h"
 #include "../object.h"
+#include "../type.h"
 
 
 static void destroy_string(Object *obj, bool decrefrefs, bool freenonrefs)

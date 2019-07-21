@@ -1,5 +1,6 @@
 #include "module.h"
 #include <assert.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include "code.h"

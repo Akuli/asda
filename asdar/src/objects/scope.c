@@ -6,6 +6,7 @@
 #include "../builtin.h"
 #include "../interp.h"
 #include "../object.h"
+#include "../type.h"
 #include "err.h"
 
 static void destroy_scope(Object *obj, bool decrefrefs, bool freenonrefs)

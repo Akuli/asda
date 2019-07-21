@@ -11,6 +11,7 @@
 #include "object.h"
 #include "path.h"
 #include "runner.h"
+#include "type.h"
 #include "objects/err.h"
 #include "objects/scope.h"
 

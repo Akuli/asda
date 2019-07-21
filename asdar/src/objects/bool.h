@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include "../object.h"
+#include "../type.h"
 
 extern const struct Type boolobj_type;
 

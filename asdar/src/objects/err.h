@@ -3,6 +3,7 @@
 
 #include "../interp.h"
 #include "../object.h"
+#include "../type.h"
 #include "string.h"
 
 extern const struct Type

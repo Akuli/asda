@@ -8,6 +8,7 @@
 #include "module.h"
 #include "object.h"
 #include "path.h"
+#include "type.h"
 #include "objects/err.h"
 #include "objects/int.h"
 #include "objects/string.h"

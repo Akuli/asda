@@ -5,6 +5,7 @@
 
 #include "code.h"
 #include "interp.h"
+#include "type.h"
 #include "objects/func.h"
 #include "objects/scope.h"
 

@@ -8,6 +8,7 @@
 #include "interp.h"
 #include "object.h"
 #include "partialfunc.h"
+#include "type.h"
 #include "objects/bool.h"
 #include "objects/err.h"
 #include "objects/func.h"
