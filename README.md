@@ -123,30 +123,20 @@ $ . env/bin/activate    # i think this works on windows:  Scripts\activate.bat
 (env) $ pip install pytest pytest-cov coverage
 ```
 
-Tests are in `asdac-tests/` and `pyasda-tests/`. `asdac-tests/` is for tests
-that don't actually run the code, and `pyasda-tests` compile and run stuff.
-There are no tests that run anything without invoking the compiler, because that
-would mean writing opcode by hand; the compiler is good at generating opcode and
-well tested anyway, so it's much easier to use that for testing the interpreter.
+Run `make` to run **all** tests, including `asdac` tests, `asdar` tests and
+testing [examples](examples/). The examples are tested by compiling and running
+them, and then comparing the output against a file in [examples/output/](examples/output/).
 
-The [examples](examples/) are also tested, and the tests will fail if there are
-any examples that aren't getting tested. If the example prints something, the
-easiest way to get it tested is to add a text file with the output as contents
-to `examples/output`. If that isn't possible (for example, the `while` example
-prints forever, and can't be tested with an output file), add a test to
-`pyasda-tests/test_examples.py`.
-
-You can run asdac tests like this:
+asdac's tests are in `asdac-tests`. This runs them without running other tests:
 
 ```
-$ python3 -m pytest asdac-tests
+$ python3 -m pytest
 ```
 
-If you also want to see coverage (the tests will run slower), run them like
-this instead:
+If you also want to see coverage (the tests will run slower), run this:
 
 ```
-$ python3 -m pytest --cov=asdac --cov=pyasda && python3 -m coverage html
+$ python3 -m pytest --cov=asdac && python3 -m coverage html
 ```
 
 Then open `htmlcov/index.html` in your favorite browser to view the results.
