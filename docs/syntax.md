@@ -532,7 +532,7 @@ Here is the list of one-line-ish statements:
   variable with `let`.
 
 - **Function calls** are documented in the [expressions without operators] section.
-    When a call to a function that returns something (e.g. the function definition does not use `-> void`) is used as a statement,
+    When a call to a function that returns something (the function definition does not use `-> void`) is used as a statement,
     the return value of the function is ignored.
 
 
