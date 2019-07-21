@@ -649,9 +649,9 @@ Here is the list of one-line-ish statements:
 [one-line-ish statements]: #one-line-ish-statements
 [error]: undocumented.md
 
-[expression without operators or calls]: #expression-without-operators-or-calls
-[expressions without operators or calls]: #expression-without-operators-or-calls
-[expression without operators]: #expression-without-operators
-[expressions without operators]: #expression-without-operators
-[expression]: #expression
-[expressions]: #expression
+[expression without operators or calls]: #expressions-without-operators-or-calls
+[expressions without operators or calls]: #expressions-without-operators-or-calls
+[expression without operators]: #expressions-without-operators
+[expressions without operators]: #expressions-without-operators
+[expression]: #expressions
+[expressions]: #expressions
