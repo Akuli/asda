@@ -15,22 +15,22 @@ Make sure that you have:
 - All the Python dependencies in [asdac-requirements.txt](asdac-requirements.txt)
 - Python's development stuff for some of the Python dependencies
 
-If you have `apt`, you can install everything needed like this:
+If you have `apt`, you can install all the dependencies except the [asdac-requirements.txt](asdac-requirements.txt) stuff like this:
 
 ```
 $ sudo apt install git gcc make libgmp-dev python3-pip python3-dev
-$ python3 -m pip install --user -r asdac-requirements.txt
 ```
 
-Then you can download and compile all the things:
+Then you can download asda, install the asdac-requirements and compile all the things:
 
 ```
 $ git clone https://github.com/Akuli/asda
 $ cd asda
+$ python3 -m pip install --user -r asdac-requirements.txt
 $ make
 ```
 
-This uses `python3` by default. If your Python executable is named something
+The `make` command uses `python3` by default. If your Python executable is named something
 else than `python3`, such as `python3.5` for example, then run
 `export PYTHON=python3.5` before running `make`.
 
