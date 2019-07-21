@@ -27,14 +27,11 @@ static void destroy_scope(Object *obj, bool decrefrefs, bool freenonrefs)
 
 ScopeObject *scopeobj_newsub(Interp *interp, ScopeObject *parent, size_t nlocals)
 {
-	Object **locals;
-	if (nlocals) {
-		if (!( locals = calloc(nlocals, sizeof(locals[0])) )) {
-			errobj_set_nomem(interp);
-			return NULL;
-		}
-	} else
-		locals = NULL;
+	Object **locals = calloc(nlocals, sizeof(locals[0]));
+	if (nlocals && !locals) {
+		errobj_set_nomem(interp);
+		return NULL;
+	}
 
 	ScopeObject **parents;
 	size_t nparents;

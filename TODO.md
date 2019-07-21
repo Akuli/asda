@@ -1,11 +1,5 @@
 - add yields back, were removed in b0e0fbb because they hadn't been
   maintained in a while and would have made the code more complicated
-- fix scan-build bugs in asdac, install clang and stuff then run
-
-        $ scan-build make
-
-    also should mention this in asdac/README.md
-
 - cyclic import, must choose one:
     - disallow? (add error message to compiler)
     - allow (design semantics and implement)

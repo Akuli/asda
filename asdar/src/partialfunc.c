@@ -66,6 +66,8 @@ FuncObject *partialfunc_create(Interp *interp, FuncObject *f, Object *const *par
 	struct PartialFuncData *pfd = malloc(sizeof(*pfd));
 	Object **partialcp = malloc(sizeof(partial[0]) * npartial);
 	if(!partialcp || !pfd) {
+		free(pfd);
+		free(partialcp);
 		errobj_set_nomem(interp);
 		return NULL;
 	}

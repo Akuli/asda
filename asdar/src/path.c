@@ -42,6 +42,7 @@ char *path_getcwd(void)
 		if (!getcwd(buf, bufsize)) {
 			if (errno == ERANGE)     // buffer was too small
 				continue;
+			free(buf);
 			return NULL;
 		}
 

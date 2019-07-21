@@ -167,12 +167,10 @@ static bool read_path(struct BcReader *bcr, char **resptr)
 	}
 
 	*resptr = path_concat_dotdot(bcr->indirname, path);
-	free(path);
-	if (!*resptr) {
+	if (!*resptr)
 		errobj_set_oserr(bcr->interp, "cannot create absolute path of '%s'", path);
-		return false;
-	}
-	return true;
+	free(path);
+	return !!*resptr;
 }
 
 
