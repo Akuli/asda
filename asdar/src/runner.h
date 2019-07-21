@@ -5,7 +5,7 @@
 #include "dynarray.h"
 #include "code.h"
 #include "interp.h"
-#include "objtyp.h"
+#include "object.h"
 #include "objects/err.h"
 #include "objects/scope.h"
 

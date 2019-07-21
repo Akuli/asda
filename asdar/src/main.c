@@ -6,7 +6,7 @@
 #include "import.h"
 #include "interp.h"
 #include "module.h"
-#include "objtyp.h"
+#include "object.h"
 #include "path.h"
 #include "objects/err.h"
 #include "objects/int.h"

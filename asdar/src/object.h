@@ -1,4 +1,4 @@
-/* objects and types
+/* objects
 
 Here is a complete usage example (with includes omitted):
 
@@ -40,16 +40,17 @@ Here is a complete usage example (with includes omitted):
 		return obj;
 	}
 
-	const struct Type exampleobj_type = { .methods = NULL, .nmethods = 0 };
+	const struct Type exampleobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, 0);
 */
 
-#ifndef OBJTYP_H
-#define OBJTYP_H
+#ifndef OBJECT_H
+#define OBJECT_H
 
 // IWYU pragma: no_forward_declare Object
 #include <stdbool.h>
 #include <stddef.h>
 #include "interp.h"
+#include "type.h"
 
 // destroy function can be NULL
 struct ObjData {
@@ -59,11 +60,6 @@ struct ObjData {
 
 // also include objects/func.h if you need to do something with methods of types
 struct FuncObject;
-
-struct Type {
-	struct FuncObject **methods;
-	size_t nmethods;
-};
 
 
 /*
@@ -127,4 +123,4 @@ void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs);
 extern const struct Type object_type;
 
 
-#endif   // OBJTYP_H
+#endif   // OBJECT_H

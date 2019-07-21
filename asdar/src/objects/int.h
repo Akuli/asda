@@ -7,7 +7,7 @@
 #include <gmp.h>
 
 #include "../interp.h"
-#include "../objtyp.h"
+#include "../object.h"
 #include "string.h"
 
 extern const struct Type intobj_type;

@@ -30,8 +30,6 @@ BOOL_NEGATION = b'!'
 JUMP_IF = b'J'
 JUMP = b'K'
 END_OF_BODY = b'E'
-IMPORT_SECTION = b'i'
-EXPORT_SECTION = b'e'
 
 PLUS = b'+'
 MINUS = b'-'
@@ -55,8 +53,13 @@ DISCARD_FINALLY_STATE = b'D'
 
 # these are used when bytecoding a type
 TYPE_BUILTIN = b'b'
-TYPE_GENERATOR = b'G'  # not to be confused with generator functions
+TYPE_FUNCTION = b'f'
 TYPE_VOID = b'v'
+TYPE_FROM_LIST = b'l'
+
+IMPORT_SECTION = b'i'
+EXPORT_SECTION = b'e'
+TYPE_LIST_SECTION = b'y'
 
 
 class _ByteCode:
@@ -64,6 +67,12 @@ class _ByteCode:
     def __init__(self):
         self.byte_array = bytearray()
         self.current_lineno = 1
+
+    # clears the byte array
+    def get_bytes(self):
+        result = bytes(self.byte_array)
+        self.byte_array.clear()
+        return result
 
     # writes an unsigned little-endian integer
     def _add_uint(self, size, number):
@@ -125,6 +134,10 @@ class _BytecodeWriter:
         # beforehand
         self.jumpmarker2index = {}
 
+        # when the interpreter imports the bytecode file, it creates things
+        # that represent these types, and looks up these types by index
+        self.type_list = []
+
     def _create_subwriter(self):
         return _BytecodeWriter(self.bytecode, self.compilation)
 
@@ -139,25 +152,23 @@ class _BytecodeWriter:
         self.bytecode.write_string(
             os.path.normcase(str(relative_path)).replace(os.sep, '/'))
 
-    def write_type(self, tybe):
-        if tybe in objects.BUILTIN_TYPES.values():
+    def write_type(self, tybe, *, allow_void=False):
+        if tybe in self.type_list:
+            self.bytecode.add_byte(TYPE_FROM_LIST)
+            self.bytecode.add_uint16(self.type_list.index(tybe))
+
+        elif tybe in objects.BUILTIN_TYPES.values():
             names = list(objects.BUILTIN_TYPES)
             self.bytecode.add_byte(TYPE_BUILTIN)
             self.bytecode.add_uint8(names.index(tybe.name))
 
         elif isinstance(tybe, objects.FunctionType):
-            self.bytecode.add_byte(CREATE_FUNCTION)
-            self.write_type(tybe.returntype)
-
-            self.bytecode.add_uint8(len(tybe.argtypes))
-            for argtype in tybe.argtypes:
-                self.write_type(argtype)
-
-        elif isinstance(tybe, objects.GeneratorType):
-            self.bytecode.add_byte(TYPE_GENERATOR)
-            self.write_type(tybe.item_type)
+            self.bytecode.add_byte(TYPE_FROM_LIST)
+            self.bytecode.add_uint16(len(self.type_list))
+            self.type_list.append(tybe)
 
         elif tybe is None:
+            assert allow_void
             self.bytecode.add_byte(TYPE_VOID)
 
         else:
@@ -191,9 +202,8 @@ class _BytecodeWriter:
 
         if isinstance(op, opcoder.CreateFunction):
             assert isinstance(op.functype, objects.FunctionType)
-            self.write_type(op.functype)    # includes CREATE_FUNCTION
-            self.bytecode.add_byte(0)   # TODO: implement yields some day?
-
+            self.bytecode.add_byte(CREATE_FUNCTION)
+            self.write_type(op.functype)
             self._create_subwriter().run(op.body_opcode, varlists)
             return
 
@@ -318,6 +328,22 @@ class _BytecodeWriter:
             self.write_op(op, varlists)
         self.bytecode.add_byte(END_OF_BODY)
 
+    # use this after run()
+    def write_type_list(self):
+        self.bytecode.add_byte(TYPE_LIST_SECTION)
+        self.bytecode.add_uint16(len(self.type_list))
+        for tybe in self.type_list:
+            if isinstance(tybe, objects.FunctionType):
+                self.bytecode.add_byte(CREATE_FUNCTION)
+                self.write_type(tybe.returntype, allow_void=True)
+
+                self.bytecode.add_uint8(len(tybe.argtypes))
+                for argtype in tybe.argtypes:
+                    self.write_type(argtype)
+
+            else:   # pragma: no cover
+                raise NotImplementedError(repr(tybe))
+
     # this can be used to write either one of the two import sections
     def write_import_section(self, paths):
         self.bytecode.add_byte(IMPORT_SECTION)
@@ -333,43 +359,44 @@ class _BytecodeWriter:
             self.bytecode.write_string(name)
             self.write_type(tybe)
 
-    # imports is a list of source file paths
-    # exports is a dict with names as keys and types as values
-    def write_end_import_export_sections(self, imports, exports):
-        # _BytecodeReader reads this with seek
-        seek_index = len(self.bytecode.byte_array)
-        self.write_import_section(imports)
-        self.write_export_section(exports)
-        self.bytecode.add_uint32(seek_index)
-
 
 # structure of a bytecode file:
 #   1.  the bytes b'asda'
 #   2.  first import section: compiled file paths for the interpreter
-#   3.  opcode
-#   4.  list of imports, source file paths, for the compiler
-#   5.  list of exports, names and types, for the compiler
-#   6.  number of bytes before part 4, as an uint32.
+#   3.  list of types used in the opcode
+#   4.  opcode
+#   5.  list of imports, source file paths, for the compiler
+#   6.  list of exports, names and types, for the compiler
+#   7.  number of bytes before part 4, as an uint32.
 #       The compiler uses this to efficiently read imports and exports.
 #
 # all paths are relative to the bytecode file's directory and have '/' as
 # the separator
 def create_bytecode(compilation, opcode):
     output = _ByteCode()
-    output.byte_array.extend(b'asda')
 
     writer = _BytecodeWriter(output, compilation)
     writer.write_import_section(
         [impcomp.compiled_path for impcomp in compilation.imports])
+    import_section_bytes = output.get_bytes()
 
     # the built-in varlist is None because all builtins are implemented
     # as ArgMarkers, so they don't need a varlist
     writer.run(opcode, [None])
+    opcode_bytes = output.get_bytes()
 
-    writer.write_end_import_export_sections(
-        [impcomp.source_path for impcomp in compilation.imports],
-        compilation.export_types)
-    return output.byte_array
+    writer.write_type_list()
+    type_list_bytes = output.get_bytes()
+
+    result = b'asda' + import_section_bytes + type_list_bytes + opcode_bytes
+    seek_index = len(result)   # _BytecodeReader reads this with seek
+    output.add_uint32(seek_index)
+    seek_index_u32 = output.get_bytes()
+
+    writer.write_import_section(
+        [impcomp.source_path for impcomp in compilation.imports])
+    writer.write_export_section(compilation.export_types)
+    return result + output.get_bytes() + seek_index_u32
 
 
 class RecompileFixableError(Exception):

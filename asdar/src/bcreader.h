@@ -1,4 +1,4 @@
-// bc reader
+// bytecode reader
 
 #ifndef BCREADER_H
 #define BCREADER_H
@@ -17,6 +17,7 @@ struct BcReader {
 	uint32_t lineno;
 	char **imports;
 	size_t nimports;
+	struct Type **typelist;  // the return value of bcreader_readtypelist
 };
 
 // never fails
@@ -27,10 +28,14 @@ void bcreader_destroy(const struct BcReader *bcr);
 
 bool bcreader_readasdabytes(struct BcReader *bcr);
 
-// puts a mallocced array of mallocced strings to paths
-// sets paths to NULL and npaths to 0 on error
+// puts a mallocced array of mallocced strings to bcr->imports
 bool bcreader_readimports(struct BcReader *bcr);
 
+// if this returns non-NULL, the return value is a NULL-terminated array
+// each item must be type_destroy()ed and the array must be free()d
+struct Type **bcreader_readtypelist(struct BcReader *bcr);
+
+// call bcreader_readtypelist and don't free the stuff it returns before calling this
 // if this succeeds (returns true), the res should be bc_destroy()ed
 bool bcreader_readcodepart(struct BcReader *bcr, struct Code *res);
 

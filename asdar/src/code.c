@@ -1,6 +1,6 @@
 #include "code.h"
 #include <stdlib.h>
-#include "objtyp.h"
+#include "object.h"
 
 void codeop_destroy(const struct CodeOp *op)
 {

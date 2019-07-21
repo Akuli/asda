@@ -7,7 +7,7 @@
 #include "func.h"
 #include "string.h"
 #include "../interp.h"
-#include "../objtyp.h"
+#include "../object.h"
 
 
 static void destroy_error(Object *obj, bool decrefrefs, bool freenonrefs)
@@ -96,10 +96,14 @@ static bool tostring_impl(Interp *interp, struct ObjData data, Object *const *ar
 	return true;
 }
 
-static FuncObject tostring = FUNCOBJ_COMPILETIMECREATE(tostring_impl);
+// FIXME: this is ugly
+static const struct Type *e = &errobj_type_error;
+static const struct TypeFunc tostring_type = TYPE_FUNC_COMPILETIMECREATE(&e, 1, &stringobj_type);
+static FuncObject tostring = FUNCOBJ_COMPILETIMECREATE(&tostring_type, tostring_impl);
+
 static FuncObject *methods[] = { &tostring };
 
-#define BOILERPLATE { .methods = methods, .nmethods = sizeof(methods)/sizeof(methods[0]) }
+#define BOILERPLATE TYPE_BASIC_COMPILETIMECREATE(methods, sizeof(methods)/sizeof(methods[0]))
 const struct Type errobj_type_error = BOILERPLATE;
 const struct Type errobj_type_nomem = BOILERPLATE;
 const struct Type errobj_type_variable = BOILERPLATE;

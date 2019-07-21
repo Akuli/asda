@@ -4,9 +4,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "../interp.h"
-#include "../objtyp.h"
-
-extern const struct Type funcobj_type;
+#include "../object.h"
+#include "../type.h"
 
 // returning functions set *result to their return value on success
 // non-returning functions set it to NULL on success
@@ -20,7 +19,7 @@ typedef struct FuncObject {
 	struct ObjData userdata;   // for passing data to cfunc
 } FuncObject;
 
-#define FUNCOBJ_COMPILETIMECREATE(f) OBJECT_COMPILETIMECREATE(&funcobj_type, .cfunc = f)
+#define FUNCOBJ_COMPILETIMECREATE(TYPE, CFUNC) OBJECT_COMPILETIMECREATE((const struct Type *)(TYPE), .cfunc = (CFUNC))
 
 /* Create a new FuncObj
  * userdata is destroyed on FuncObj destruction or on creation error

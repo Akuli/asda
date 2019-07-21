@@ -6,7 +6,7 @@
 #include "dynarray.h"
 #include "code.h"
 #include "interp.h"
-#include "objtyp.h"
+#include "object.h"
 #include "partialfunc.h"
 #include "objects/bool.h"
 #include "objects/err.h"

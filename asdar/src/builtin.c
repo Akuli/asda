@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include "interp.h"
-#include "objtyp.h"
+#include "object.h"
 #include "objects/bool.h"
 #include "objects/err.h"
 #include "objects/func.h"
@@ -29,7 +29,10 @@ static bool print_impl(Interp *interp, struct ObjData data, Object *const *args,
 	return true;
 }
 
-static FuncObject print = FUNCOBJ_COMPILETIMECREATE(print_impl);
+// FIXME: this is ugly
+static const struct Type *s = &stringobj_type;
+static const struct TypeFunc print_type = TYPE_FUNC_COMPILETIMECREATE(&s, 1, NULL);
+static FuncObject print = FUNCOBJ_COMPILETIMECREATE(&print_type, print_impl);
 
 Object* const builtin_objects[] = {
 	(Object *)&print,

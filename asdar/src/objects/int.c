@@ -8,7 +8,7 @@
 #include <gmp.h>
 
 #include "../interp.h"
-#include "../objtyp.h"
+#include "../object.h"
 #include "err.h"
 #include "func.h"
 #include "int.h"
@@ -318,8 +318,10 @@ static bool tostring_impl(Interp *interp, struct ObjData data, Object *const *ar
 	return true;
 }
 
-static FuncObject tostring = FUNCOBJ_COMPILETIMECREATE(tostring_impl);
+// FIXME: this is ugly
+static const struct Type *i = &intobj_type;
+static const struct TypeFunc tostring_type = TYPE_FUNC_COMPILETIMECREATE(&i, 1, &stringobj_type);
+static FuncObject tostring = FUNCOBJ_COMPILETIMECREATE(&tostring_type, tostring_impl);
 
 static FuncObject *methods[] = { &tostring };
-
-const struct Type intobj_type = { .methods = methods, .nmethods = sizeof(methods)/sizeof(methods[0]) };
+const struct Type intobj_type = TYPE_BASIC_COMPILETIMECREATE(methods, sizeof(methods)/sizeof(methods[0]));

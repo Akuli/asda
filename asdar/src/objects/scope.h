@@ -10,7 +10,7 @@ implement a handy way to refcount, so that's used here.
 
 #include <stddef.h>
 #include "../interp.h"
-#include "../objtyp.h"
+#include "../object.h"
 
 extern const struct Type scopeobj_type;
 

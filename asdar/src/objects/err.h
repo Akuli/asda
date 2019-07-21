@@ -2,7 +2,7 @@
 #define OBJECTS_ERR_H
 
 #include "../interp.h"
-#include "../objtyp.h"
+#include "../object.h"
 #include "string.h"
 
 extern const struct Type

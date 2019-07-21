@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <src/interp.h>
-#include <src/objtyp.h>
+#include <src/object.h>
 #include <src/objects/err.h>
 #include <src/objects/string.h>
 

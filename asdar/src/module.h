@@ -1,8 +1,10 @@
 #ifndef MODULE_H
 #define MODULE_H
 
+#include <stddef.h>
 #include "code.h"
 #include "interp.h"
+#include "type.h"
 #include "objects/scope.h"
 
 struct Module {
@@ -10,6 +12,7 @@ struct Module {
 	char *path;          // path of the compiled bytecode file relative to interp->basedir
 	ScopeObject *scope;  // a subscope of the built-in scope
 	struct Code code;    // loaded from the path
+	struct Type **types; // type_destroy()ed when the module is destroyed, NULL terminated
 
 	// binary search tree for looking up modules by path quickly
 	// don't rely on these outside module.c
@@ -26,6 +29,8 @@ const struct Module *module_get(Interp *interp, const char *path);
 //   - mod->scope will be decreffed
 //   - mod->code will be destroyed
 //   - mod->path will be freed
+//   - each type of mod->types will be type_destroy()ed
+//   - mod->types will be freed
 //   - mod will be freed
 void module_add(Interp *interp, struct Module *mod);
 

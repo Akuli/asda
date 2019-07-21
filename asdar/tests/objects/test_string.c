@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <src/objtyp.h>
+#include <src/object.h>
 #include <src/objects/string.h>
 #include "../util.h"
 

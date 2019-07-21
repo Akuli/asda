@@ -3,7 +3,7 @@
 
 #include <assert.h>
 #include <stdbool.h>
-#include "../objtyp.h"
+#include "../object.h"
 
 extern const struct Type boolobj_type;
 

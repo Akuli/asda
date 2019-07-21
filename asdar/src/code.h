@@ -5,7 +5,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "objtyp.h"
+#include "object.h"
 
 enum CodeOpKind {
 	CODE_CONSTANT,

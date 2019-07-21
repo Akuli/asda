@@ -8,13 +8,20 @@
 #include "code.h"
 #include "interp.h"
 #include "module.h"
-#include "objtyp.h"
+#include "object.h"
 #include "path.h"
 #include "runner.h"
 #include "objects/err.h"
 #include "objects/scope.h"
 
-static bool read_bytecode_file(Interp *interp, const char *path, struct Code *code)
+static void destroy_types(struct Type **types)
+{
+	for (size_t i = 0; types[i]; i++)
+		type_destroy(types[i]);
+	free(types);
+}
+
+static bool read_bytecode_file(Interp *interp, const char *path, struct Code *code, struct Type ***types)
 {
 	assert(path[0]);
 
@@ -54,8 +61,13 @@ static bool read_bytecode_file(Interp *interp, const char *path, struct Code *co
 		if (!module_get(interp, bcr.imports[i]) && !import(interp, bcr.imports[i]))
 			goto error;
 
-	if (!bcreader_readcodepart(&bcr, code))
+	if (!( *types = bcreader_readtypelist(&bcr) ))
 		goto error;
+
+	if (!bcreader_readcodepart(&bcr, code)) {
+		destroy_types(*types);
+		goto error;
+	}
 
 	bcreader_destroy(&bcr);
 	free(dir);
@@ -99,7 +111,7 @@ bool import(Interp *interp, const char *path)
 	}
 	strcpy(mod->path, path);
 
-	if (!read_bytecode_file(interp, path, &mod->code)) {
+	if (!read_bytecode_file(interp, path, &mod->code, &mod->types)) {
 		free(mod->path);
 		free(mod);
 		return false;
@@ -107,6 +119,7 @@ bool import(Interp *interp, const char *path)
 
 	if (!( mod->scope = scopeobj_newsub(interp, interp->builtinscope, mod->code.nlocalvars) )) {
 		code_destroy(&mod->code);
+		destroy_types(mod->types);
 		free(mod->path);
 		free(mod);
 		return false;
@@ -115,6 +128,7 @@ bool import(Interp *interp, const char *path)
 	if (!run(interp, mod->scope, mod->code)) {
 		OBJECT_DECREF(mod->scope);
 		code_destroy(&mod->code);
+		destroy_types(mod->types);
 		free(mod->path);
 		free(mod);
 		return false;

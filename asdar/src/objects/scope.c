@@ -5,7 +5,7 @@
 #include <string.h>
 #include "../builtin.h"
 #include "../interp.h"
-#include "../objtyp.h"
+#include "../object.h"
 #include "err.h"
 
 static void destroy_scope(Object *obj, bool decrefrefs, bool freenonrefs)
@@ -85,4 +85,4 @@ ScopeObject *scopeobj_getforlevel(ScopeObject *scope, size_t level)
 	return (level == scope->nparents) ? scope : scope->parents[level];
 }
 
-const struct Type scopeobj_type = { .methods = NULL, .nmethods = 0 };
+const struct Type scopeobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, 0);

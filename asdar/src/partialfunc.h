@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 #include "interp.h"
-#include "objtyp.h"
+#include "object.h"
 #include "objects/func.h"
 
 FuncObject *partialfunc_create(Interp *interp, FuncObject *f, Object *const *partial, size_t npartial);

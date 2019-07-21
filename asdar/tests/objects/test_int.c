@@ -1,6 +1,6 @@
 #include <assert.h>
 #include <stdbool.h>
-#include <src/objtyp.h>
+#include <src/object.h>
 #include <src/objects/int.h>
 #include "../util.h"
 

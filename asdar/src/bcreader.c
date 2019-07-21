@@ -8,8 +8,9 @@
 #include "dynarray.h"
 #include "interp.h"
 #include "module.h"
-#include "objtyp.h"
+#include "object.h"
 #include "path.h"
+#include "type.h"
 #include "objects/bool.h"
 #include "objects/err.h"
 #include "objects/func.h"
@@ -18,6 +19,8 @@
 #include "objects/string.h"
 
 #define IMPORT_SECTION 'i'
+#define TYPE_LIST_SECTION 'y'
+
 #define SET_VAR 'V'
 #define GET_VAR 'v'
 #define SET_LINENO 'L'
@@ -56,22 +59,18 @@
 #define DISCARD_FINALLY_STATE 'D'
 
 #define TYPEBYTE_BUILTIN 'b'
+#define TYPEBYTE_TYPE_LIST 'l'
 #define TYPEBYTE_FUNC 'f'
 #define TYPEBYTE_VOID 'v'
 
 
 struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname)
 {
-	struct BcReader res;
+	struct BcReader res = {0};  // most things to 0 for bcreader_destroy() and stuff
 	res.interp = interp;
 	res.in = in;
 	res.indirname = indirname;
 	res.lineno = 1;
-
-	// for bcreader_destroy
-	res.imports = NULL;
-	res.nimports = 0;
-
 	return res;
 }
 
@@ -226,20 +225,6 @@ error:
 }
 
 
-static bool read_opbyte(struct BcReader *bcr, unsigned char *ob)
-{
-	if (!read_bytes(bcr, ob, 1)) return false;
-	if (*ob == SET_LINENO) {
-		if (!read_uint32(bcr, &bcr->lineno)) return false;
-		if (!read_bytes(bcr, ob, 1)) return false;
-		if (*ob == SET_LINENO) {
-			errobj_set(bcr->interp, &errobj_type_value, "repeated lineno byte: %B", SET_LINENO);
-			return false;
-		}
-	}
-	return true;
-}
-
 static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowvoid)
 {
 	unsigned char byte;
@@ -266,23 +251,12 @@ static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowv
 		errobj_set(bcr->interp, &errobj_type_value, "unexpected void type byte: %B", byte);
 		return false;
 
-	case TYPEBYTE_FUNC:
+	case TYPEBYTE_TYPE_LIST:
 	{
-		// TODO: this throws away most of the information, should it be used somewhere instead?
-		const struct Type *rettyp;
-		if(!read_type(bcr, &rettyp, true))
+		uint16_t i;
+		if (!read_uint16(bcr, &i))
 			return false;
-
-		uint8_t nargs;
-		if(!read_bytes(bcr, &nargs, 1))
-			return false;
-		for (uint8_t i = 0; i < nargs; i++) {
-			const struct Type *ignored;
-			if(!read_type(bcr, &ignored, false))
-				return false;
-		}
-
-		*typ = &funcobj_type;
+		*typ = bcr->typelist[i];
 		return true;
 	}
 
@@ -290,6 +264,90 @@ static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowv
 		errobj_set(bcr->interp, &errobj_type_value, "unknown type byte: %B", byte);
 		return false;
 	}
+}
+
+static struct TypeFunc *read_func_type(struct BcReader *bcr)
+{
+	const struct Type *rettyp;
+	if(!read_type(bcr, &rettyp, true))
+		return NULL;
+
+	uint8_t nargs;
+	if(!read_bytes(bcr, &nargs, 1))
+		return NULL;
+
+	const struct Type **argtypes = malloc(sizeof(argtypes[0]) * nargs);
+	if (nargs && !argtypes) {
+		errobj_set_nomem(bcr->interp);
+		return NULL;
+	}
+
+	for (uint8_t i = 0; i < nargs; i++)
+		if (!read_type(bcr, &argtypes[i], false)) {
+			free(argtypes);
+			return NULL;
+		}
+
+	return type_func_new(bcr->interp, argtypes, nargs, rettyp);
+}
+
+static struct Type *read_typelist_item(struct BcReader *bcr)
+{
+	unsigned char byte;
+	if(!read_bytes(bcr, &byte, 1))
+		return NULL;
+
+	switch(byte) {
+	case TYPEBYTE_FUNC:
+		return (struct Type *) read_func_type(bcr);
+	default:
+		errobj_set(bcr->interp, &errobj_type_value, "unknown typelist type byte: %B", byte);
+		return NULL;
+	}
+}
+
+struct Type **bcreader_readtypelist(struct BcReader *bcr)
+{
+	unsigned char b;
+	if (!read_bytes(bcr, &b, 1))
+		return NULL;
+	if (b != (unsigned char)TYPE_LIST_SECTION) {
+		errobj_set(bcr->interp, &errobj_type_value, "expected type list section, got wrong byte: %B", b);
+		return NULL;
+	}
+
+	uint16_t n;
+	if (!read_uint16(bcr, &n))
+		return NULL;
+
+	if (!( bcr->typelist = malloc(sizeof(bcr->typelist[0]) * ( (size_t)(n) + 1 )) ))
+		return NULL;
+
+	for (uint16_t i = 0; i < n; i++)
+		if (!( bcr->typelist[i] = read_typelist_item(bcr) )) {
+			for (uint16_t k = 0; k < i; k++)
+				type_destroy(bcr->typelist[k]);
+			free(bcr->typelist);
+			return NULL;
+		}
+
+	bcr->typelist[n] = NULL;
+	return bcr->typelist;
+}
+
+
+static bool read_opbyte(struct BcReader *bcr, unsigned char *ob)
+{
+	if (!read_bytes(bcr, ob, 1)) return false;
+	if (*ob == SET_LINENO) {
+		if (!read_uint32(bcr, &bcr->lineno)) return false;
+		if (!read_bytes(bcr, ob, 1)) return false;
+		if (*ob == SET_LINENO) {
+			errobj_set(bcr->interp, &errobj_type_value, "repeated lineno byte: %B", SET_LINENO);
+			return false;
+		}
+	}
+	return true;
 }
 
 static bool read_vardata(struct BcReader *bcr, struct CodeOp *res, enum CodeOpKind kind)
@@ -352,21 +410,11 @@ static bool read_create_function(struct BcReader *bcr, struct CodeOp *res)
 {
 	res->kind = CODE_CREATEFUNC;
 
-	if (ungetc(TYPEBYTE_FUNC, bcr->in) == EOF) {
-		errobj_set_oserr(bcr->interp, "ungetc() failed");
-		return false;
-	}
-
 	const struct Type *functyp;
 	if(!read_type(bcr, &functyp, false))
 		return false;
 
-	assert(functyp == &funcobj_type);
-
-	unsigned char yieldbyt;
-	if(!read_bytes(bcr, &yieldbyt, 1))
-		return false;
-	assert(yieldbyt == 0);   // TODO: support yielding
+	assert(functyp->kind == TYPE_FUNC);
 
 	return read_body(bcr, &res->data.createfunc_code);
 }

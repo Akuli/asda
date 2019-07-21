@@ -1,10 +1,10 @@
 #ifndef BUILTINS_H
 #define BUILTINS_H
 
-// I have no idea why iwyu wants to remove objtyp.h, even though this
+// I have no idea why iwyu wants to remove object.h, even though this
 // uses Object
 #include <stddef.h>
-#include "objtyp.h"   // IWYU pragma: keep
+#include "object.h"   // IWYU pragma: keep
 
 extern Object* const builtin_objects[];
 extern const size_t builtin_nobjects;

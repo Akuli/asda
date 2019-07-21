@@ -25,6 +25,10 @@ static struct Module *create_test_module(Interp *interp, const char *name)
 		.nlocalvars = 24,
 	};
 
+	mod->types = malloc(1 * sizeof(mod->types[0]));
+	assert(mod->types);
+	mod->types[0] = NULL;
+
 	return mod;
 }
 

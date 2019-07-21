@@ -4,7 +4,8 @@
 #include <string.h>
 #include "code.h"
 #include "interp.h"
-#include "objtyp.h"
+#include "object.h"
+#include "type.h"
 
 const struct Module *module_get(Interp *interp, const char *path)
 {
@@ -40,8 +41,7 @@ void module_add(Interp *interp, struct Module *mod)
 }
 
 
-// feel free to do this differently if this recurses too bad
-static void destroy_a_module(struct Module *mod)
+static void destroy_path_scope_code(const struct Module *mod)
 {
 	if (!mod)
 		return;
@@ -49,13 +49,28 @@ static void destroy_a_module(struct Module *mod)
 	free(mod->path);
 	OBJECT_DECREF(mod->scope);
 	code_destroy(&mod->code);
-	destroy_a_module(mod->left);
-	destroy_a_module(mod->right);
+	destroy_path_scope_code(mod->left);
+	destroy_path_scope_code(mod->right);
+}
+
+// feels good to destroy types last because other stuff may depend on them
+static void destroy_types_and_free(struct Module *mod)
+{
+	if (!mod)
+		return;
+
+	for (size_t i = 0; mod->types[i]; i++)
+		type_destroy(mod->types[i]);
+	free(mod->types);
+	destroy_types_and_free(mod->left);
+	destroy_types_and_free(mod->right);
 	free(mod);
 }
 
 void module_destroyall(Interp *interp)
 {
-	destroy_a_module(interp->firstmod);   // does the right thing if interp->firstmod is NULL
+	// this does nothing if interp->firstmod is NULL
+	destroy_path_scope_code(interp->firstmod);
+	destroy_types_and_free(interp->firstmod);
 	interp->firstmod = NULL;
 }

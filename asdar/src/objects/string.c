@@ -10,7 +10,7 @@
 #include "func.h"
 #include "../utf8.h"
 #include "../interp.h"
-#include "../objtyp.h"
+#include "../object.h"
 
 
 static void destroy_string(Object *obj, bool decrefrefs, bool freenonrefs)
@@ -331,9 +331,12 @@ static bool tostring_impl(Interp *interp, struct ObjData data,
 	return true;
 }
 
-static FuncObject uppercase = FUNCOBJ_COMPILETIMECREATE(uppercase_impl);
-static FuncObject lowercase = FUNCOBJ_COMPILETIMECREATE(lowercase_impl);
-static FuncObject tostring = FUNCOBJ_COMPILETIMECREATE(tostring_impl);
+// FIXME: this is ugly
+static const struct Type *s = &stringobj_type;
+static const struct TypeFunc string_string_type = TYPE_FUNC_COMPILETIMECREATE(&s, 1, &stringobj_type);
+static FuncObject uppercase = FUNCOBJ_COMPILETIMECREATE(&string_string_type, uppercase_impl);
+static FuncObject lowercase = FUNCOBJ_COMPILETIMECREATE(&string_string_type, lowercase_impl);
+static FuncObject tostring = FUNCOBJ_COMPILETIMECREATE(&string_string_type, tostring_impl);
 
 static FuncObject *methods[] = { &uppercase, &lowercase, &tostring };
-const struct Type stringobj_type = { .methods = methods, .nmethods = sizeof(methods)/sizeof(methods[0]) };
+const struct Type stringobj_type = TYPE_BASIC_COMPILETIMECREATE(methods, sizeof(methods)/sizeof(methods[0]));

@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include "interp.h"
-#include "objtyp.h"
+#include "object.h"
 #include "objects/string.h"
 
 static void refcount_debug_object(Object *obj, unsigned int is, unsigned int shouldB)

@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include "gc.h"
-#include "objtyp.h"
+#include "object.h"
 #include "objects/int.h"
 #include "objects/scope.h"
 

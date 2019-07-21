@@ -1,9 +1,10 @@
 #include "func.h"
 #include <stdbool.h>
 #include "../interp.h"
-#include "../objtyp.h"
+#include "../object.h"
 
-const struct Type funcobj_type = { .methods = NULL, .nmethods = 0 };
+// FIXME
+const struct Type funcobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, 0);
 
 bool funcobj_call(Interp *interp, FuncObject *f, Object *const *args, size_t nargs, Object **result)
 {
