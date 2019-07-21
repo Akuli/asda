@@ -3,6 +3,12 @@
 This page documents asda's syntax. You may find it useful if you want to develop
 `asdac` or if you just want to know how the language works in detail.
 
+In this spec, "comma-separated" means that there are comma [tokens] between the
+items (if there are two or more items), but not elsewhere. For example, `a,b,c`
+is comma-separated properly, but `,a,b,c` and `a,b,c,` aren't. As special
+cases, a single item and no items at all are also considered comma-separated.
+In general, "X-separated" means a similar thing with X instead of a comma.
+
 
 ## Source Files
 
@@ -106,8 +112,7 @@ there can be:
 - `\\` to create a backslash character.
 - `\{` to create a `{` character.
 - `\}` to create a `}` character.
-- `{` and `}` with asda code in between to run the code and put the result into
-  the string.
+- `{` and `}` with code (an [expression]) in between to run the code and put the result into the string.
 - Any non-special character.
 
 The code between `{` and `}` consists of 1 or more non-special characters. The
@@ -142,7 +147,8 @@ The usage is `import "filename" as importname`.
 
 The `importname` is **not** a variable name; it is fine to create a variable with the same name.
 This way you don't need to worry about module names when you are creating variables.
-For example, the following Python code contains a bug (can you spot it?), but the equivalent asda code wouldn't compile.
+For example, the following Python code contains a bug (can you spot it?),
+but the equivalent asda code would compile and run and do the right thing:
 
 ```python3
 import os
@@ -168,13 +174,13 @@ whatever is appropriate for the operating system, such as `\` on Windows.
 
 If the same module is imported multiple times (possibly from different files),
 then the imported file is executed only once,
-and every `import` gives access to the same objects.
+and every `import` gives access to the same `export`ed things.
 
 
 ## Indentation
 
 The indentation characters must be spaces, but the number of spaces used for
-indentation technically doesn't matter. However, 4 spaces is good style. For
+indentation technically doesn't matter. 4 spaces is good style. For
 example, this code...
 
 ```js
@@ -263,7 +269,7 @@ Some tokens need to be extracted from the code in **space-ignoring mode**. It
 means that all newlines and indentation characters are ignored.
 
 The space-ignoring mode is turned off by default. It gets turned **on**
-whenever an opening paren occurs, and the state before the opening paren is
+whenever an opening paren occurs, and the mode before the opening paren is
 restored whenever a closing paren occurs. Here "opening paren" means one of
 the tokens `(`, `[` and `{`, and you can guess what a "closing paren" is.
 
@@ -279,7 +285,7 @@ do_something(
                 -> Str:
     return x.to_string()
 , more,
-arguments, here)
+args, here)
 ```
 
 Whitespaces between parentheses get ignored here, except for the [block] that
@@ -298,11 +304,12 @@ Here are more details about how the space-ignoring mode works:
     remains turned on.
 4. The newline and `-> Str` get parsed with the space-ignoring mode from the
     first `(`.
-5. The block is parsed **without** space-ignoring mode. It ends with a dedent,
-    and the space-ignoring mode is restored after that (it is turned on).
-    Space-ignoring mode is also turned on and immediately off again for the
-    parentheses of `x.to_string()`. The `,` in the beginning of the last line
-    ends the block.
+5. The block is parsed **without** space-ignoring mode.
+    It begins with an [indent],
+    because the previous non-space-ignoring-mode part was `do_something`,
+    and the `return` is indented more than `do_something`.
+    It ends with a dedent, because the first `,` is indented by the same level as `do_something`.
+    Space-ignoring mode is turned on and immediately off again for the parentheses of `x.to_string()`.
 6. Space-ignoring mode is still turned on from the first `(`, and it gets
     turned off by the `)` on the last line.
 
@@ -311,10 +318,10 @@ Of course, the above code example is bad style, and you should write it like thi
 ```js
 do_something((Int x) -> Str:
     return x.to_string()
-, more, arguments, here)
+, more, args, here)
 ```
 
-Applying these rules to code written with good style is quite straight-forward,
+The indentations and stuff in this better-style code are quite straight-forward to understand,
 and IMO this is much better than lacking the ability to define multi-line lambdas (like in Python).
 
 
@@ -348,20 +355,6 @@ To define what an expression is, I'll first define some other terms:
     [expression without operators or calls], but it contains function calls.
 - An **expression** contains expressions without operators and the operators,
     such as `+` or `*`.
-
-Note that method calls are also function calls in asda; `"Hello".uppercase()`
-first evaluates `"Hello".uppercase`, which is an
-[expression without operators or calls] that evaluates to a function, and
-finally `()` calls the result of evaluating `"Hello".uppercase`, which is a
-function.
-
-In this section, "comma-separated" means that there are commas between the
-items (if there are two or more items), but not elsewhere. For example, `a,b,c`
-is comma-separated properly, but `,a,b,c` and `a,b,c,` aren't. As special
-cases, a single item and no items at all are also considered comma-separated.
-In general, "X-separated" means a similar thing with X instead of a comma.
-
-Other details follow.
 
 
 ### Expressions without operators or calls
@@ -407,13 +400,15 @@ For example, `a+b*c` calculates `a + (b*c)`, because `*` is higher on the list t
 It's good style to use whitespace to make the precedence easier to see.
 For example, `a + b*c` is good style and `a+b * c` is horribly misleading.
 
-| Operator Tokens   | Names                     | Kind                              | Notes                                     |
+| Operator Tokens   | Name                      | Kind                              | Notes                                     |
 | ----------------- | ------------------------- | --------------------------------- | ----------------------------------------- |
-| `*`               | multiplication            | binary                            | chaining (no division yet, sorry)         |
-| `+`, `-`          | addition and substraction | `+` binary, `-` binary or unary   | chaining (when used as a binary operator) |
-| `==`, `!=`        | equality and non-equality | binary                            | trying to use chaining is compile error   |
-| `.`               | attribute lookups         | binary                            | right side must be an [identifier] token  |
+| `*`               | multiplication            | binary                            | chaining, no division yet (sorry)         |
+| `+`, `-`          | addition, substraction    | `+` binary, `-` binary or unary   | chaining when used as a binary operator   |
+| `==`, `!=`        | equality, non-equality    | binary                            | trying to use chaining is compile error   |
+| `.`               | attribute lookup          | binary                            | right side must be an [identifier] token  |
 | `` ` ``           | infix function call       | ternary                           | chaining                                  |
+
+Note that the backtick `` ` `` and the single quote `'` are different characters.
 
 An unary operator is used by putting it before an [expression without operators], as in `-123`.
 A binary operator goes between two [expressions without operators], e.g. `1 + 2`.
@@ -425,11 +420,11 @@ The infix function call operator works so that ``a ` f ` b`` or ``a `f` b`` (bet
 It is intended to be used when it is natural to read the function name between the two arguments.
 For example, if you create an `and` function that takes two bools as arguments and does the obvious thing,
 it's better to write ``if thing1 `and` thing2:`` than ``if and(thing1, thing2):``.
-Note that the backtick `` ` `` and the single quote `'` are different characters.
 The infix operator also chains, so ``a `and` b `and` c`` is same as `and(and(a, b), c)`
 
 It is an error to do e.g. `--x`,
-because `-` is an unary operator so you need to put an [expression without operators] after it.
+because `-` is an unary operator so you need to put an [expression without operators] after it,
+which hasn't been done for the first `-`.
 On the other hand, `-(-x)` is valid,
 because `(-x)` is an [expression without operators or calls],
 so it is also an [expression without operators].
@@ -444,7 +439,7 @@ first I define what **one-line-ish statements** are, and then I define what a st
 
 ### One-line-ish statements
 
-Due to [space-ignoring mode], the `print("Hello")` from the above example can also be written like this:
+Due to [space-ignoring mode], `print("Hello")` can also be written like this:
 
 ```js
 print(
@@ -532,7 +527,7 @@ Here is the list of one-line-ish statements:
     Also, combining `outer` and `export` is not allowed.
 
 - **Assignment statements** are like `varname = value` without a `let`, but
-  otherwise similar to let statements. They change the value of a variable. The
+  otherwise similar to let statements without `export` or `outer`. They change the value of a variable. The
   new value has to be of the same type as the value that was given to the
   variable with `let`.
 
@@ -543,11 +538,33 @@ Here is the list of one-line-ish statements:
 
 ### Multiline Statements
 
+- **While statements** consist of `while` followed by a condition and a block.
+  The condition must be an [expression] with type [Bool]. This does the same
+  thing as in most other programming languages.
+
+- **Do,while statements** have syntax like this:
+
+    ```js
+    do:
+        block
+    while condition
+    ```
+
+    This does the same thing as this code...
+
+    ```js
+    block
+    while condition:
+        block
+    ```
+
+    ...except that you don't need to write the `block` code twice.
+
 - **If statements** consist of `if` followed by a condition and a block. The
   condition must be an [expression] with type [Bool]. After the `if`, there may
-  be zero or more `elif` parts; each `elif` parts has the same syntax as the
+  be zero or more `elif` parts; each `elif` part has the same syntax as the
   `if` part, but with `elif` instead of `if`. After the `if` and the `elif`
-  parts (if there are any), there may be an `else` part, which has the same
+  parts, there may be an `else` part, which has the same
   syntax but without a condition expression.
 
     `elif` works so that this...
@@ -579,22 +596,32 @@ Here is the list of one-line-ish statements:
     ```
 
 - **For statements** consist of `for init; cond; incr` followed by a block.
-  `init` and `incr` must be single-line statements, and `cond` must be an
+  `init` and `incr` must be [one-line-ish statements], and `cond` must be an
   [expression] with type [Bool].
 
     The for loop first runs `init`. Then it evaluates `cond`. If `cond` is
     [TRUE], it runs the block and `incr`; if `cond` is `FALSE`, it terminates.
     Checking `cond` and running the block is repeated until `cond` is `FALSE`.
 
-- **While statements** consist of `while` followed by a condition and a block.
-  The condition must be an [expression] with type [Bool]. You can think of
-  `while cond` as syntactic sugar for `for void; cond; void`.
+- **Try statements** consist of `try` and a block, followed by zero more catch parts and an optional finally part.
+    There must be at least one catch part or a finally part.
+
+    Catch parts consist of the keyword `catch` followed by an exception [type] and a variable name for the exception, and then a [block].
+    When the [error] specified by the type occurs, the catch block runs,
+    with an error set to a local variable in the block.
+    The variable is not accessible anymore after the block.
+
+    The finally part consists of the keyword `finally` followed by a block.
+    It works like in most other programming lanuages.
+
+- All [one-line-ish statements] are also statements.
 
 
 [comments]: #comments
 [block]: #indentation
 [blocks]: #indentation
 [statement]: #statements
+[statements]: #statements
 [single-line statements]: #single-line-statements
 [indentation]: #indentation
 [indented]: #indentation
@@ -602,19 +629,24 @@ Here is the list of one-line-ish statements:
 [identifiers]: #identifier-tokens
 [moduleful identifier]: #moduleful-identifier-tokens
 [moduleful identifiers]: #moduleful-identifier-tokens
+[tokens]: #tokens
 [string token]: #string-tokens
 [string tokens]: #string-tokens
 [integer token]: #integer-tokens
 [type]: #types
 [types]: #types
-[imports]: #types
+[imports]: #imports
 [Bool]: undocumented.md
 [TRUE]: undocumented.md
 [FALSE]: undocumented.md
 [to_string]: undocumented.md
 [generic]: undocumented.md
 [Generator]: undocumented.md
+[operator]: #expressions-with-operators
 [operators]: #expressions-with-operators
+[space-ignoring mode]: #space-ignoring-mode
+[one-line-ish statements]: #one-line-ish-statements
+[error]: undocumented.md
 
 [expression without operators or calls]: #expression-without-operators-or-calls
 [expressions without operators or calls]: #expression-without-operators-or-calls
