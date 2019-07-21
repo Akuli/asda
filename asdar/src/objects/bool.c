@@ -20,8 +20,4 @@ bool boolobj_asda2c(BoolObject *asdabool)
 	return (asdabool == &boolobj_true);
 }
 
-BoolObject *boolobj_neg(BoolObject *obj) {
-	return boolobj_c2asda(!boolobj_asda2c(obj));
-}
-
 const struct Type boolobj_type = { .methods = NULL, .nmethods = 0 };
