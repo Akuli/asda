@@ -102,14 +102,14 @@ static IntObject *new_from_mpzt(Interp *interp, mpz_t mpz)
 	return obj;
 }
 
-IntObject *intobj_new_bebytes(Interp *interp, const unsigned char *seq, size_t len, bool negate)
+IntObject *intobj_new_lebytes(Interp *interp, const unsigned char *seq, size_t len, bool negate)
 {
 	mpz_t mpz;
 	mpz_init(mpz);
 	mpz_import(
 		mpz,
 		len,
-		1, // order; whole-array endianness
+		-1, // order; whole-array endianness
 		1, // size; Size of `seq` element in bytes
 		0, // endian; per-element endianness
 		0, // nails; bits-per-element to skip

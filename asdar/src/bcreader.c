@@ -390,7 +390,7 @@ static bool read_int_constant(struct BcReader *bcr, Object **objptr, bool negate
 		return false;
 	}
 
-	*objptr = (Object *)intobj_new_bebytes(bcr->interp, buf, len, negate);
+	*objptr = (Object *)intobj_new_lebytes(bcr->interp, buf, len, negate);
 	free(buf);
 	return !!*objptr;
 }

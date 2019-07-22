@@ -30,8 +30,8 @@ typedef struct IntObject {
 	StringObject *str;   // string object, in base 10, NULL for not computed yet
 } IntObject;
 
-// returns a new integer from an arbitrarily long sequence of bytes (big-endian)
-IntObject *intobj_new_bebytes(Interp *interp, const unsigned char *seq, size_t len, bool negate);
+// returns a new integer from an arbitrarily long sequence of bytes (little-endian)
+IntObject *intobj_new_lebytes(Interp *interp, const unsigned char *seq, size_t len, bool negate);
 
 IntObject *intobj_new_long(Interp *interp, long l);
 

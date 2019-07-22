@@ -62,6 +62,17 @@ EXPORT_SECTION = b'e'
 TYPE_LIST_SECTION = b'y'
 
 
+def _bit_storing_size(n):
+    """Returns the number of bytes needed for storing n bits.
+
+    >>> _bit_storing_size(16)
+    2
+    >>> _bit_storing_size(17)
+    3
+    """
+    return -((-n) // 8)
+
+
 class _ByteCode:
 
     def __init__(self):
@@ -75,34 +86,30 @@ class _ByteCode:
         return result
 
     # writes an unsigned little-endian integer
-    def _add_uint(self, size, number):
-        assert size % 8 == 0 and 0 < size <= 64, size
-        assert number >= 0
-        if number >= 2**size:
+    def _add_uint(self, bits, number):
+        r"""
+        >>> bc = _ByteCode()
+        >>> bc.add_uint16(1)
+        >>> bc.get_bytes()
+        b'\x01\x00'
+        """
+        assert bits % 8 == 0 and 0 < bits <= 64, bits
+        try:
+            self.byte_array.extend(number.to_bytes(bits // 8, 'little'))
+        except OverflowError:
             raise common.CompileError(
                 "this number does not fit in an unsigned %d-bit integer: %d"
-                % (size, number))
-
-        self.byte_array.extend((number >> offset) & 0xff
-                               for offset in range(0, size, 8))
+                % (bits, number))
 
     add_uint8 = functools.partialmethod(_add_uint, 8)
     add_uint16 = functools.partialmethod(_add_uint, 16)
     add_uint32 = functools.partialmethod(_add_uint, 32)
 
-    # writes an unsigned, arbitrarily big integer in a funny format where least
-    # significant byte is last
     def add_big_uint(self, abs_value):
         assert abs_value >= 0
-
-        result = bytearray()
-        while abs_value != 0:
-            result.append(abs_value & 0xff)
-            abs_value >>= 8
-        result.reverse()
-
-        self.add_uint32(len(result))
-        self.byte_array.extend(result)
+        size = _bit_storing_size(abs_value.bit_length())
+        self.add_uint32(size)
+        self.byte_array.extend(abs_value.to_bytes(size, 'little'))
 
     def add_byte(self, byte):
         if isinstance(byte, int):
@@ -431,10 +438,7 @@ class _BytecodeReader:
 
     def _read_uint(self, size):
         assert size % 8 == 0 and 0 < size <= 64, size
-        result = 0
-        for offset in range(0, size, 8):
-            result |= self._read(1)[0] << offset
-        return result
+        return int.from_bytes(self._read(size // 8), 'little')
 
     read_uint8 = functools.partialmethod(_read_uint, 8)
     read_uint16 = functools.partialmethod(_read_uint, 16)

@@ -60,13 +60,13 @@ TEST(intobj_addsubmulneg)
 	OBJECT_DECREF(neg);
 }
 
-TEST(intobj_new_bebytes)
+TEST(intobj_new_lebytes)
 {
-	unsigned char byt[] = { 0x7, 0x5b, 0xcd, 0x15 };
-	IntObject *pos = intobj_new_bebytes(interp, byt, sizeof byt, false);
-	IntObject *neg = intobj_new_bebytes(interp, byt, sizeof byt, true);
-	assert(intobj_cmp_long(pos, 123456789L) == 0);
-	assert(intobj_cmp_long(neg, -123456789L) == 0);
+	unsigned char byt[] = { 0xDA, 0xA5 };
+	IntObject *pos = intobj_new_lebytes(interp, byt, sizeof byt, false);
+	IntObject *neg = intobj_new_lebytes(interp, byt, sizeof byt, true);
+	assert(intobj_cmp_long(pos, 0xA5DAL) == 0);
+	assert(intobj_cmp_long(neg, -0xA5DAL) == 0);
 	OBJECT_DECREF(pos);
 	OBJECT_DECREF(neg);
 }
