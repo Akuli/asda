@@ -331,4 +331,4 @@ static bool tostring_cfunc(Interp *interp, struct ObjData data,
 FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &stringobj_type });
 
 static FuncObject *methods[] = { &uppercase, &lowercase, &tostring };
-const struct Type stringobj_type = TYPE_BASIC_COMPILETIMECREATE(methods, sizeof(methods)/sizeof(methods[0]));
+const struct Type stringobj_type = TYPE_BASIC_COMPILETIMECREATE(methods, sizeof(methods)/sizeof(methods[0]), NULL);

@@ -27,6 +27,7 @@
 #define TRUE_CONSTANT 'T'
 #define FALSE_CONSTANT 'F'
 #define CALL_FUNCTION '('
+#define CALL_CONSTRUCTOR ')'
 #define BOOLNEG '!'
 #define POP_ONE 'P'
 #define JUMP 'K'
@@ -399,6 +400,20 @@ static bool read_add_error_handler(struct BcReader *bcr, struct CodeOp *res)
 			read_uint16(bcr, &res->data.errhnd.errvar);
 }
 
+static bool read_construction(struct BcReader *bcr, struct CodeOp *res)
+{
+	res->kind = CODE_CALLCONSTRUCTOR;
+	if (!read_type(bcr, &res->data.constructor.type, false))
+		return false;
+
+	uint8_t tmp;
+	if (!read_bytes(bcr, &tmp, 1))
+		return false;
+	res->data.constructor.nargs = tmp;
+
+	return true;
+}
+
 
 static bool read_body(struct BcReader *bcr, struct Code *code);  // forward declare
 static bool read_create_function(struct BcReader *bcr, struct CodeOp *res)
@@ -450,6 +465,7 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case CALL_FUNCTION:
 		res->kind = CODE_CALLFUNC;
 		return read_bytes(bcr, &res->data.callfunc_nargs, 1);
+	case CALL_CONSTRUCTOR: return read_construction(bcr, res);
 	case JUMP:   res->kind = CODE_JUMP;   return read_uint16(bcr, &res->data.jump_idx);
 	case JUMPIF: res->kind = CODE_JUMPIF; return read_uint16(bcr, &res->data.jump_idx);
 	case NON_NEGATIVE_INT_CONSTANT:

@@ -44,14 +44,22 @@ void errobj_set_nomem(Interp *interp)
 // error setting functions don't do error handling with different return values, because who
 // cares if they fail to set the requested error and instead set NoMemError or something :D
 
-static void set_from_string_obj(Interp *interp, const struct Type *errtype, StringObject *str)
+static ErrObject *create_error_from_string(Interp *interp, const struct Type *errtype, StringObject *str)
 {
 	ErrObject *obj = object_new(interp, errtype, destroy_error, sizeof(*obj));
 	if (!obj)     // refactoring note: MAKE SURE that errobj_set_nomem() doesn't recurse here
-		return;
+		return NULL;
+
 	obj->msgstr = str;
 	OBJECT_INCREF(str);
+	return obj;
+}
 
+static void set_from_string_obj(Interp *interp, const struct Type *errtype, StringObject *str)
+{
+	ErrObject *obj = create_error_from_string(interp, errtype, str);
+	if (!obj)
+		return;
 	errobj_set_obj(interp, obj);
 	OBJECT_DECREF(obj);
 }
@@ -99,10 +107,17 @@ FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &errobj_type_error });
 
 static FuncObject *methods[] = { &tostring };
 
-#define BOILERPLATE TYPE_BASIC_COMPILETIMECREATE(methods, sizeof(methods)/sizeof(methods[0]))
-const struct Type errobj_type_error = BOILERPLATE;
-const struct Type errobj_type_nomem = BOILERPLATE;
-const struct Type errobj_type_variable = BOILERPLATE;
-const struct Type errobj_type_value = BOILERPLATE;
-const struct Type errobj_type_os = BOILERPLATE;
+static Object *error_string_constructor(Interp *interp, const struct Type *errtype, struct Object *const *args, size_t nargs)
+{
+	assert(nargs == 1);
+	return (Object *) create_error_from_string(interp, errtype, (StringObject *) args[0]);
+}
+
+
+#define BOILERPLATE(CONSTRUCTOR) TYPE_BASIC_COMPILETIMECREATE(methods, sizeof(methods)/sizeof(methods[0]), (CONSTRUCTOR))
+const struct Type errobj_type_error = BOILERPLATE(NULL);
+const struct Type errobj_type_nomem = BOILERPLATE(NULL);
+const struct Type errobj_type_variable = BOILERPLATE(error_string_constructor);
+const struct Type errobj_type_value = BOILERPLATE(error_string_constructor);
+const struct Type errobj_type_os = BOILERPLATE(error_string_constructor);
 #undef BOILERPLATE

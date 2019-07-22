@@ -33,6 +33,7 @@ _KEYWORDS = {
     'outer', 'export', 'let',
     'import', 'as',
     'try', 'catch', 'finally',
+    'new',
 }
 
 

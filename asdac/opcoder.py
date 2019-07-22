@@ -35,6 +35,7 @@ LookupFromModule = _op_class('LookupFromModule', ['compilation', 'indeks'])
 LookupAttribute = _op_class('LookupAttribute', ['type', 'indeks'])
 SetVar = _op_class('SetVar', ['level', 'var'])
 CallFunction = _op_class('CallFunction', ['nargs'])
+CallConstructor = _op_class('CallConstructor', ['tybe', 'nargs'])
 StrJoin = _op_class('StrJoin', ['how_many_parts'])
 PopOne = _op_class('PopOne', [])
 Return = _op_class('Return', ['returns_a_value'])
@@ -217,6 +218,13 @@ class _OpCoder:
 
         elif isinstance(expression, cooked_ast.CallFunction):
             self.do_function_call(expression)
+
+        elif isinstance(expression, cooked_ast.New):
+            for arg in expression.args:
+                self.do_expression(arg)
+            self.output.ops.append(CallConstructor(
+                self._lineno(expression.location),
+                expression.type, len(expression.args)))
 
         elif isinstance(expression, cooked_ast.StrJoin):
             for part in expression.parts:

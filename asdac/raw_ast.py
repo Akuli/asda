@@ -37,6 +37,7 @@ TernaryOperator = _astclass('TernaryOperator', ['operator', 'lhs', 'mid',
 #   (catch_location, errortype, varname, varname_location, body) tuples
 Try = _astclass('TryCatch', ['try_body', 'catches',
                              'finally_location', 'finally_body'])
+New = _astclass('New', ['tybe', 'args'])
 
 
 def _duplicate_check(iterable, what_are_they):
@@ -242,7 +243,7 @@ class _AsdaParser:
     def expression_without_operators_coming_up(self):
         # '(' could be a function or parentheses for predecence
         # both are expressions
-        if self.tokens.peek().value in {'(', 'if'}:
+        if self.tokens.peek().value in {'(', 'if', 'new'}:
             return True
 
         if self.tokens.peek().type in {'INTEGER', 'STRING', 'ID',
@@ -357,6 +358,13 @@ class _AsdaParser:
             false_expr = self.parse_expression()
 
             return IfExpression(if_.location, cond, true_expr, false_expr)
+
+        if self.tokens.peek().value == 'new':
+            new = self.tokens.next_token()
+            tybe = self.parse_type()
+            lparen, args, rparen = self.parse_commasep_in_parens(
+                self.parse_expression)
+            return New(new.location, tybe, args)
 
         raise common.CompileError(
             "invalid syntax", self.tokens.next_token().location)

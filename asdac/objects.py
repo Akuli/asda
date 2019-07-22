@@ -15,16 +15,20 @@ class Type:
         self.name = name
         self.parent_type = parent_type      # OBJECT's parent_type is None
 
-        # keys are names, values are types
+        # the following things don't work well with inheritance
+        # for now, create the subclasses in a for loop
+        #
+        # refactoring note: collections.ChainMap can't be used for ordered
+        # things, because its source code has this:
+        #
+        #    def __iter__(self):
+        #        return iter(set().union(*self.maps))
+
+        # keys are strings, values are types
         self.attributes = collections.OrderedDict()
-        if parent_type is not None:
-            # ChainMap won't work because its source code has this:
-            #
-            #    def __iter__(self):
-            #        return iter(set().union(*self.maps))
-            #
-            # I could create an OrderedChainMap but why bother
-            self.attributes.update(parent_type.attributes)
+
+        # you can set this to a list of types
+        self.constructor_argtypes = None
 
     def undo_generics(self, type_dict):
         return self
@@ -81,14 +85,14 @@ def _fill_builtin_types_ordered_dict():
     BUILTIN_TYPES['Int'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 
     create_and_add('Error', objekt)
+    for name in ['NoMemError', 'VariableError', 'ValueError', 'OsError']:
+        create_and_add(name, BUILTIN_TYPES['Error'])
+        BUILTIN_TYPES[name].add_method('to_string', [], BUILTIN_TYPES['Str'])
 
-    # this must be before error subclasses, because the methods get copied
-    BUILTIN_TYPES['Error'].add_method('to_string', [], BUILTIN_TYPES['Str'])
-
-    create_and_add('NoMemError', BUILTIN_TYPES['Error'])
-    create_and_add('VariableError', BUILTIN_TYPES['Error'])
-    create_and_add('ValueError', BUILTIN_TYPES['Error'])
-    create_and_add('OsError', BUILTIN_TYPES['Error'])
+        # TODO: OsError should take errno as constructor argument
+        #       or on windows, whatever it has instead of errno
+        if name != 'NoMemError':
+            BUILTIN_TYPES[name].constructor_argtypes = [BUILTIN_TYPES['Str']]
 
 
 BUILTIN_TYPES = collections.OrderedDict()

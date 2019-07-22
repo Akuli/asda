@@ -1,0 +1,1 @@
+Here is the error object's to_string method called: oh shit

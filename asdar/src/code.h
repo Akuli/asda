@@ -14,6 +14,7 @@ enum CodeOpKind {
 	CODE_GETMETHOD,
 	CODE_GETFROMMODULE,
 	CODE_CALLFUNC,
+	CODE_CALLCONSTRUCTOR,
 	CODE_BOOLNEG,
 	CODE_JUMP,
 	CODE_JUMPIF,
@@ -58,6 +59,7 @@ struct CodeVarData { uint8_t level; uint16_t index; };
 struct CodeLookupMethodData { const struct Type *type; uint16_t index; };
 struct CodeErrHndData { uint16_t jmpidx; const struct Type *errtype; uint16_t errvar; };
 struct CodeCreateFuncData { const struct TypeFunc *type; struct Code code; };
+struct CodeConstructorData { const struct Type *type; size_t nargs; };
 
 typedef union {
 	struct CodeVarData var;
@@ -67,6 +69,7 @@ typedef union {
 	struct CodeLookupMethodData lookupmethod;
 	struct CodeErrHndData errhnd;
 	struct CodeCreateFuncData createfunc;
+	struct CodeConstructorData constructor;
 	Object *obj;
 	Object **modmemberptr;
 } CodeData;

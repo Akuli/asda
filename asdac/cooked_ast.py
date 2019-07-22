@@ -30,6 +30,7 @@ IfExpression = _astclass('IfExpression', ['cond', 'true_expr', 'false_expr'])
 Loop = _astclass('Loop', ['pre_cond', 'post_cond', 'incr', 'body'])
 TryCatch = _astclass('TryCatch', ['try_body', 'caught_var', 'catch_body'])
 TryFinally = _astclass('TryFinally', ['try_body', 'finally_body'])
+New = _astclass('New', ['args'])
 
 Plus = _astclass('Plus', ['lhs', 'rhs'])
 Minus = _astclass('Minus', ['lhs', 'rhs'])
@@ -161,6 +162,29 @@ class _Chef:
             raise common.CompileError(
                 "there's already a generic '%s' variable" % name, location)
 
+    def _get_arguments_message(self, types):
+        if len(types) >= 2:
+            return "arguments of types (%s)" % ', '.join(t.name for t in types)
+        if len(types) == 1:
+            return "one argument of type %s" % types[0].name
+        assert not types
+        return "no arguments"
+
+    def _cook_arguments(self, raw_args, expected_types,
+                        cannot_do_something, error_location):
+        args = [self.cook_expression(arg) for arg in raw_args]
+        actual_types = [arg.type for arg in args]
+        if actual_types != expected_types:
+            raise common.CompileError(
+                "%s with %s, because %s %s needed" % (
+                    cannot_do_something,
+                    self._get_arguments_message(actual_types),
+                    self._get_arguments_message(expected_types),
+                    'is' if len(expected_types) == 1 else 'are',
+                ), error_location)
+
+        return args
+
     def cook_function_call(self, raw_func_call: raw_ast.FuncCall):
         function = self.cook_expression(raw_func_call.function)
         if not isinstance(function.type, objects.FunctionType):
@@ -168,21 +192,9 @@ class _Chef:
                 "expected a function, got %s" % function.type.name,
                 function.location)
 
-        args = [self.cook_expression(arg) for arg in raw_func_call.args]
-        if [arg.type for arg in args] != function.type.argtypes:
-            if len(args) >= 2:
-                message_end = "arguments of types (%s)" % ', '.join(
-                    arg.type.name for arg in args)
-            elif len(args) == 1:
-                message_end = "an argument of type %s" % args[0].type.name
-            elif not args:
-                message_end = "no arguments"
-            else:
-                raise RuntimeError("wuut")
-            raise common.CompileError(
-                "cannot call %s with %s" % (function.type.name, message_end),
-                raw_func_call.location)
-
+        args = self._cook_arguments(
+            raw_func_call.args, function.type.argtypes,
+            "cannot call " + function.type.name, raw_func_call.location)
         return CallFunction(raw_func_call.location, function.type.returntype,
                             function, args)
 
@@ -233,6 +245,19 @@ class _Chef:
                     "%s doesn't return a value" % call.function.type.name,
                     raw_expression.location)
             return call
+
+        if isinstance(raw_expression, raw_ast.New):
+            tybe = self.cook_type(raw_expression.tybe)
+            if tybe.constructor_argtypes is None:
+                raise common.CompileError(
+                    ("cannot create {0} objects with 'new {0}(...)'"
+                     .format(tybe.name)),
+                    raw_expression.location)
+
+            args = self._cook_arguments(
+                raw_expression.args, tybe.constructor_argtypes,
+                "cannot do 'new %s(...)'" % tybe.name, raw_expression.location)
+            return New(raw_expression.location, tybe, args)
 
         if isinstance(raw_expression, raw_ast.FuncDefinition):
             return self.cook_function_definition(raw_expression)

@@ -6,7 +6,7 @@
 
 BoolObject boolobj_true = OBJECT_COMPILETIMECREATE(&boolobj_type, 0);
 BoolObject boolobj_false = OBJECT_COMPILETIMECREATE(&boolobj_type, 0);
-const struct Type boolobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, 0);
+const struct Type boolobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, 0, NULL);
 
 // https://stackoverflow.com/a/18636323
 extern inline BoolObject *boolobj_c2asda(bool cbool);

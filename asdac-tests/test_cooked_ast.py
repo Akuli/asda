@@ -29,18 +29,16 @@ def test_reusing_names(compiler):
 def test_function_calling_errors(compiler):
     compiler.doesnt_cooked_parse(
         'let x = "lol"\nx("boo")', "expected a function, got Str", 'x')
+
+    template = ("cannot call function (Str) -> void with %s, "
+                "because one argument of type Str is needed")
     compiler.doesnt_cooked_parse(
-        'print("a", "b")',
-        "cannot call function (Str) -> void with arguments of types (Str, Str)\
-",
+        'print("a", "b")', template % "arguments of types (Str, Str)",
         'print("a", "b")')
     compiler.doesnt_cooked_parse(
-        'print(123)',
-        "cannot call function (Str) -> void with an argument of type Int",
-        'print(123)')
+        'print(123)', template % "one argument of type Int", 'print(123)')
     compiler.doesnt_cooked_parse(
-        'print()',
-        "cannot call function (Str) -> void with no arguments", 'print()')
+        'print()', template % "no arguments", 'print()')
 
 
 def test_nested_generic_types(compiler):
@@ -217,3 +215,15 @@ def test_module_name_same_as_var_name(compiler, tmp_path, monkeypatch):
     subprocess.check_call(
         [sys.executable, '-m', 'asdac', 'emptiness.asda'], env=env)
     compiler.cooked_parse('import "emptiness.asda" as lol\nlet lol = 1')
+
+
+def test_constructor_errors(compiler):
+    compiler.doesnt_cooked_parse(
+        'let x = new Bool(1, 2, 3)',
+        "cannot create Bool objects with 'new Bool(...)'", 'new')
+    compiler.doesnt_cooked_parse(
+        'let y = new VariableError(1, 2, 3)',
+        ("cannot do 'new VariableError(...)' "
+         "with arguments of types (Int, Int, Int), "
+         "because one argument of type Str is needed"),
+        'new')

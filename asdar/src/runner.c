@@ -157,6 +157,28 @@ static enum RunnerResult run_callfunc(struct Runner *rnr, const struct CodeOp *o
 	return RUNNER_DIDNTRETURN;
 }
 
+static enum RunnerResult run_callconstructor(struct Runner *rnr, const struct CodeOp *op)
+{
+	const struct Type *t = op->data.constructor.type;
+	size_t nargs = op->data.constructor.nargs;
+
+	assert(rnr->stack.len >= nargs);
+	rnr->stack.len -= nargs;
+	Object **argptr = rnr->stack.ptr + rnr->stack.len;
+
+	assert(t->constructor);
+	Object *obj = t->constructor(rnr->interp, t, argptr, nargs);
+	for(size_t i=0; i < nargs; i++)
+		OBJECT_DECREF(argptr[i]);
+	if (!obj)
+		return RUNNER_ERROR;
+
+	assert(obj->type == t);
+	dynarray_push_itwillfit(&rnr->stack, obj);
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
 static enum RunnerResult run_boolneg(struct Runner *rnr, const struct CodeOp *op)
 {
 	BoolObject **ptr = (BoolObject **)&rnr->stack.ptr[rnr->stack.len - 1];
@@ -396,6 +418,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_GETMETHOD, run_getmethod);
 		BOILERPLATE(CODE_GETFROMMODULE, run_getfrommodule);
 		BOILERPLATE(CODE_CALLFUNC, run_callfunc);
+		BOILERPLATE(CODE_CALLCONSTRUCTOR, run_callconstructor);
 		BOILERPLATE(CODE_BOOLNEG, run_boolneg);
 		BOILERPLATE(CODE_JUMP, run_jump);
 		BOILERPLATE(CODE_JUMPIF, run_jumpif);

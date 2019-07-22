@@ -383,6 +383,8 @@ Here is the list of all valid expressions without operators or calls:
   The if expression first evaluates `A`, and then `B` or `C` (not both) depending
   on the value of `A`. The result of the if expression is then the result of
   `B` or `C`.
+- **`new` expressions** consist of the keyword `new` followed by a [type],
+    and then zero or more comma-separated expressions between `(` and `)`.
 
 
 ### Expressions without operators

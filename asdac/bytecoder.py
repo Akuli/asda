@@ -19,6 +19,7 @@ FALSE_CONSTANT = b'F'
 LOOKUP_ATTRIBUTE = b'.'
 LOOKUP_FROM_MODULE = b'm'
 CALL_FUNCTION = b'('
+CALL_CONSTRUCTOR = b')'
 STR_JOIN = b'j'
 POP_ONE = b'P'
 VOID_RETURN = b'r'
@@ -232,7 +233,13 @@ class _BytecodeWriter:
 
         if isinstance(op, opcoder.CallFunction):
             self.bytecode.add_byte(CALL_FUNCTION)
-            self.bytecode.add_uint8(op.nargs)
+            self.bytecode.add_uint8(op.nargs)       # TODO: bigger than uint8
+            return
+
+        if isinstance(op, opcoder.CallConstructor):
+            self.bytecode.add_byte(CALL_CONSTRUCTOR)
+            self.write_type(op.tybe)
+            self.bytecode.add_uint8(op.nargs)   # TODO: bigger than uint8
             return
 
         if isinstance(op, opcoder.Return):
