@@ -58,7 +58,7 @@ static bool read_bytecode_file(Interp *interp, const char *path, struct Code *co
 		goto error;
 
 	// TODO: handle import cycles
-	for (size_t i = 0; i < bcr.nimports; i++)
+	for (size_t i = 0; bcr.imports[i]; i++)
 		if (!module_get(interp, bcr.imports[i]) && !import(interp, bcr.imports[i]))
 			goto error;
 

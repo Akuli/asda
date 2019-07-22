@@ -150,7 +150,7 @@ int intobj_cmp_long(IntObject *x, long y)
 
 // -LONG_MIN fits in unsigned long
 // -LONG_MIN doesn't fit in a long, but -(LONG_MIN+1) does
-#define NEGATIVE_LONG_TO_ULONG(x) ( ((unsigned long) -((x)+1)) + 1 )
+#define NEGATIVE_LONG_TO_ULONG(x) ( ((unsigned long) -((x)+1L)) + 1UL )
 
 
 /* https://stackoverflow.com/a/2633929 */

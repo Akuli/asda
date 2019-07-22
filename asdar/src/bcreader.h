@@ -15,8 +15,7 @@ struct BcReader {
 	FILE *in;
 	const char *indirname;   // relative to interp->basedir, must NOT free() until bc reader no longer needed
 	uint32_t lineno;
-	char **imports;
-	size_t nimports;
+	char **imports;          // NULL terminated
 	struct Type **typelist;  // the return value of bcreader_readtypelist
 };
 

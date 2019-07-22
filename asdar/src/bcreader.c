@@ -75,7 +75,7 @@ struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname)
 
 void bcreader_destroy(const struct BcReader *bcr)
 {
-	for (size_t i = 0; i < bcr->nimports; i++)
+	for (size_t i = 0; bcr->imports[i]; i++)
 		free(bcr->imports[i]);
 	free(bcr->imports);
 }
@@ -194,32 +194,28 @@ bool bcreader_readimports(struct BcReader *bcr)
 		goto error;
 	}
 
-	uint16_t tmp;
-	if (!read_uint16(bcr, &tmp))
+	uint16_t nimports;
+	if (!read_uint16(bcr, &nimports))
 		goto error;
-	bcr->nimports = tmp;
 
-	if (bcr->nimports == 0)
-		return true;
-
-	if (!( bcr->imports = malloc(sizeof(char*) * bcr->nimports) )) {
+	if (!( bcr->imports = malloc(sizeof(char*) * (nimports+1U)) )) {
 		errobj_set_nomem(bcr->interp);
 		goto error;
 	}
 
-	for (size_t i=0; i < bcr->nimports; i++)
+	for (size_t i=0; i < nimports; i++)
 		if (!read_path(bcr, bcr->imports + i)) {
-			for (size_t j=0; j<i; j++)
-				free(bcr->imports[j]);
+			for (size_t k=0; k<i; k++)
+				free(bcr->imports[k]);
 			free(bcr->imports);
 			goto error;
 		}
 
+	bcr->imports[nimports] = NULL;
 	return true;
 
 error:
 	bcr->imports = NULL;
-	bcr->nimports = 0;
 	return false;
 }
 
@@ -319,7 +315,7 @@ struct Type **bcreader_readtypelist(struct BcReader *bcr)
 	if (!read_uint16(bcr, &n))
 		return NULL;
 
-	if (!( bcr->typelist = malloc(sizeof(bcr->typelist[0]) * ( (size_t)(n) + 1 )) ))
+	if (!( bcr->typelist = malloc(sizeof(bcr->typelist[0]) * ( n + 1U )) ))
 		return NULL;
 
 	for (uint16_t i = 0; i < n; i++)
