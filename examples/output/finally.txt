@@ -3,12 +3,12 @@ succeeding finally
 ---------
 failing try
 succeeding finally
-got error value of a variable hasn't been set
+got error: try error
 ---------
 succeeding try
 failing finally
-got error value of a variable hasn't been set
+got error: finally error
 ---------
 failing try
 failing finally
-got error value of a variable hasn't been set
+got error: finally error

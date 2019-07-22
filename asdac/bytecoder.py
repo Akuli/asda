@@ -300,7 +300,6 @@ class _BytecodeWriter:
 
         simple_things = [
             (opcoder.PopOne, POP_ONE),
-            (opcoder.Yield, YIELD),
             (opcoder.BoolNegation, BOOL_NEGATION),
             (opcoder.DidntReturnError, DIDNT_RETURN_ERROR),
             (opcoder.Plus, PLUS),

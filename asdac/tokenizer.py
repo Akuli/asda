@@ -32,7 +32,7 @@ _KEYWORDS = {
     'return',
     'outer', 'export', 'let',
     'import', 'as',
-    'try', 'catch', 'finally',
+    'throw', 'catch', 'try', 'finally',
     'new',
 }
 

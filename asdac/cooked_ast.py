@@ -24,7 +24,7 @@ CreateLocalVar = _astclass('CreateLocalVar', ['var'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
 VoidReturn = _astclass('VoidReturn', [])
 ValueReturn = _astclass('ValueReturn', ['value'])
-Yield = _astclass('Yield', ['value'])
+Throw = _astclass('Throw', ['value'])
 IfStatement = _astclass('IfStatement', ['cond', 'if_body', 'else_body'])
 IfExpression = _astclass('IfExpression', ['cond', 'true_expr', 'false_expr'])
 Loop = _astclass('Loop', ['pre_cond', 'post_cond', 'incr', 'body'])
@@ -516,6 +516,23 @@ class _Chef:
                 value.location)
         return ValueReturn(raw.location, None, value)
 
+    def cook_throw(self, raw):
+        value = self.cook_expression(raw.value)
+
+        # TODO: rewrite 'isinstance' into a separate thing
+        parent_types = []
+        tybe = value.type
+        while tybe is not None:
+            assert len(parent_types) < 12345    # safety to prevent insanities
+            parent_types.append(tybe)
+            tybe = tybe.parent_type
+        is_error = objects.BUILTIN_TYPES['Error'] in parent_types
+
+        if not is_error:
+            raise common.CompileError(
+                "should be an Error object", raw.value.location)
+        return Throw(raw.location, None, value)
+
     # this turns this...
     #
     #   if cond1:
@@ -671,6 +688,8 @@ class _Chef:
             return [self.cook_function_call(raw_statement)]
         if isinstance(raw_statement, raw_ast.Return):
             return [self.cook_return(raw_statement)]
+        if isinstance(raw_statement, raw_ast.Throw):
+            return [self.cook_throw(raw_statement)]
         if isinstance(raw_statement, raw_ast.VoidStatement):
             return []
         if isinstance(raw_statement, raw_ast.IfStatement):

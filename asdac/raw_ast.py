@@ -22,6 +22,7 @@ GetType = _astclass('GetType', ['name', 'generics'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
 FuncDefinition = _astclass('FuncDefinition', ['args', 'returntype', 'body'])
 Return = _astclass('Return', ['value'])
+Throw = _astclass('Throw', ['value'])
 VoidStatement = _astclass('VoidStatement', [])
 # IfStatement's ifs is a list of (cond, body) pairs, where body is a list
 IfStatement = _astclass('IfStatement', ['ifs', 'else_body'])
@@ -578,12 +579,15 @@ class _AsdaParser:
             return_keyword = self.tokens.next_token()
             if self.tokens.eof() or self.tokens.peek().type == 'NEWLINE':
                 value = None
-                location = return_keyword.location
             else:
                 value = self.parse_expression()
-                location = return_keyword.location + value.location
 
-            return Return(location, value)
+            return Return(return_keyword.location, value)
+
+        if self.tokens.peek().value == 'throw':
+            throw = self.tokens.next_token()
+            value = self.parse_expression()
+            return Throw(throw.location, value)
 
         if self.tokens.peek().value == 'let':
             let = self.tokens.next_token()

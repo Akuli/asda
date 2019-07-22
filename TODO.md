@@ -1,5 +1,6 @@
 - add yields back, were removed in b0e0fbb because they hadn't been
   maintained in a while and would have made the code more complicated
+- variables defined in for loop init should not be visible outside the loop
 - cyclic import, must choose one:
     - disallow? (add error message to compiler)
     - allow (design semantics and implement)
@@ -16,10 +17,9 @@
 
     are they even necessary though?
 
-- 'new' and constructors
-
-        throw new ValueError("should be 123 or 456, not {value}")
-
+- optimizations: for non-trivial (read: non-shitty) optimizations, probably need to
+  add a new compile step, a directed graph of possible code
+  paths that could run
 - to_debug_string method to all objects
 - oopy subclassy stuff:
 

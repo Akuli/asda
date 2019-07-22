@@ -94,8 +94,7 @@ def test_return_errors(compiler):
     # a runtime error is created if a non-void function doesn't return
     for suffix in [' "lol"', '']:
         compiler.doesnt_cooked_parse('return' + suffix,
-                                     "return outside function",
-                                     'return' + suffix)
+                                     "return outside function", 'return')
 
     compiler.doesnt_cooked_parse('let lol = () -> void:\n    return "blah"',
                                  "cannot return a value from a void function",
@@ -227,3 +226,8 @@ def test_constructor_errors(compiler):
          "with arguments of types (Int, Int, Int), "
          "because one argument of type Str is needed"),
         'new')
+
+
+def test_bad_throw(compiler):
+    compiler.doesnt_cooked_parse(
+        'throw "lol"', "should be an Error object", '"lol"')

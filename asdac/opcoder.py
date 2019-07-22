@@ -39,12 +39,11 @@ CallConstructor = _op_class('CallConstructor', ['tybe', 'nargs'])
 StrJoin = _op_class('StrJoin', ['how_many_parts'])
 PopOne = _op_class('PopOne', [])
 Return = _op_class('Return', ['returns_a_value'])
-Yield = _op_class('Yield', [])
+Throw = _op_class('Throw', [])
 BoolNegation = _op_class('BoolNegation', [])
 Jump = _op_class('Jump', ['marker'])
 JumpIf = _op_class('JumpIf', ['marker'])
 DidntReturnError = _op_class('DidntReturnError', [])
-Throw = _op_class('Throw', [])
 
 Plus = _op_class('Plus', [])
 Minus = _op_class('Minus', [])
@@ -346,9 +345,9 @@ class _OpCoder:
             self.output.ops.append(Return(
                 self._lineno(statement.location), True))
 
-        elif isinstance(statement, cooked_ast.Yield):
+        elif isinstance(statement, cooked_ast.Throw):
             self.do_expression(statement.value)
-            self.output.ops.append(Yield(self._lineno(statement.location)))
+            self.output.ops.append(Throw(self._lineno(statement.location)))
 
         elif isinstance(statement, cooked_ast.IfStatement):
             if_body_begins = JumpMarker()

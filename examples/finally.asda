@@ -1,6 +1,3 @@
-if FALSE:
-    outer let string = "lol"
-
 try:
     print("succeeding try")
 finally:
@@ -11,11 +8,11 @@ print("---------")
 try:
     try:
         print("failing try")
-        print(string)
+        throw new VariableError("try error")
     finally:
         print("succeeding finally")
 catch VariableError e:
-    print("got error {e}")
+    print("got error: {e}")
 
 print("---------")
 
@@ -24,18 +21,19 @@ try:
         print("succeeding try")
     finally:
         print("failing finally")
-        print(string)
+        throw new VariableError("finally error")
 catch VariableError e:
-    print("got error {e}")
+    print("got error: {e}")
 
 print("---------")
 
 try:
     try:
         print("failing try")
-        print(string)
+        # Currently this error gets discarded, will hopefully be fixed some day
+        throw new VariableError("try error")
     finally:
         print("failing finally")
-        print(string)
+        throw new VariableError("finally error")
 catch VariableError e:
-    print("got error {e}")
+    print("got error: {e}")
