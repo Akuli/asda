@@ -124,6 +124,8 @@ IntObject *intobj_new_lebytes(Interp *interp, const unsigned char *seq, size_t l
 
 int intobj_cmp(IntObject *x, IntObject *y)
 {
+	if (x == y)
+		return 0;
 	if (!x->spilled && !y->spilled) {
 		/* https://stackoverflow.com/a/10997428 */
 		return (x->val.lon > y->val.lon) - (x->val.lon < y->val.lon);
