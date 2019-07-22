@@ -605,6 +605,10 @@ Here is the list of one-line-ish statements:
     [TRUE], it runs the block and `incr`; if `cond` is `FALSE`, it terminates.
     Checking `cond` and running the block is repeated until `cond` is `FALSE`.
 
+    Variables created in any part of the loop (`init`, `cond`, `incr` and the block)
+    are visible in all other parts of the loop, too,
+    but not outside the loop.
+
 - **Try statements** consist of `try` and a block, followed by zero more catch parts and an optional finally part.
     There must be at least one catch part or a finally part.
 

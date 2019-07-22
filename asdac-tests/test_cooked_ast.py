@@ -140,6 +140,14 @@ def test_non_bool_cond(compiler):
         compiler.doesnt_cooked_parse(code, "expected Bool, got Str", '"lol"')
 
 
+def test_for_loop_scoping(compiler):
+    compiler.doesnt_cooked_parse(
+        ('for let i = 0; i != 10; i = i+1:\n'
+         '    void\n'
+         'print(i)\n'),
+        "variable not found: i", 'i')
+
+
 def test_if_expression_wrong_types(compiler):
     compiler.doesnt_cooked_parse(
         'print(if TRUE then "a" else 123)',

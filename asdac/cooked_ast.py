@@ -594,13 +594,15 @@ class _Chef:
 
     # returns a list, unlike most other things
     def cook_for(self, raw):
-        init = self.cook_statement(raw.init)
-        cond = self.cook_expression(raw.cond)
+        subchef = self._create_subchef()
+        init = subchef.cook_statement(raw.init)
+        cond = subchef.cook_expression(raw.cond)
         if cond.type != objects.BUILTIN_TYPES['Bool']:
             raise common.CompileError(
                 "expected Bool, got " + cond.type.name, cond.location)
-        incr = self.cook_statement(raw.incr)
-        body = self.cook_body(raw.body)
+
+        incr = subchef.cook_statement(raw.incr)
+        body = subchef.cook_body(raw.body, new_subchef=False)
         return init + [Loop(raw.location, None, cond, None, incr, body)]
 
     def cook_try_catch(self, cooked_try_body, catch_location, errortype,
