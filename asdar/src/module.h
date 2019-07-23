@@ -7,7 +7,7 @@
 
 struct Module {
 	// see interp->basedir comments for more details about the path
-	// srcpath and compath are relative to interp->basedir
+	// srcpath and bcpath are relative to interp->basedir
 	char *srcpath;       // path of source file
 	char *bcpath;        // path of compiled bytecode file
 	ScopeObject *scope;  // a subscope of the built-in scope

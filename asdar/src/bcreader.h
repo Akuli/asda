@@ -29,7 +29,8 @@ void bcreader_destroy(const struct BcReader *bcr);
 bool bcreader_readasdabytes(struct BcReader *bcr);
 
 // on error, returns NULL
-// on success, return value must be free()d unless bcreader_readcodepart() succeeds too
+// on success, returns a path relative to interp->basedir
+// return value must be free()d unless bcreader_readcodepart() succeeds too
 char *bcreader_readsourcepath(struct BcReader *bcr);
 
 // puts a mallocced array of mallocced strings to bcr->imports

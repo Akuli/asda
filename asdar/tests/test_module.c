@@ -24,6 +24,7 @@ static struct Module *create_test_module(Interp *interp, const char *name)
 	assert(mod->scope);
 
 	mod->code = (struct Code){
+		.srcpath = mod->srcpath,
 		.ops = NULL,
 		.nops = 0,
 		.nlocalvars = 24,

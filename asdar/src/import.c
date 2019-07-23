@@ -74,6 +74,7 @@ static bool read_bytecode_file(Interp *interp, const char *bcpath, char **srcpat
 		goto error;
 	}
 
+	// srcpath not freed here, the code needs it
 	bcreader_destroy(&bcr);
 	free(dir);
 	fclose(f);
