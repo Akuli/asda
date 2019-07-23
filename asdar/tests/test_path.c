@@ -64,34 +64,46 @@ TEST(path_toabsolute)
 TEST(path_concat)
 {
 	char *s = path_concat("a", "b");
-	assert(strcmp(s, "a" PATH_SLASHSTR "b") == 0);
+	assert_cstr_eq_cstr(s, "a" PATH_SLASHSTR "b");
 	free(s);
 
 	s = path_concat("a", "");
-	assert(strcmp(s, "a" PATH_SLASHSTR) == 0);
+	assert_cstr_eq_cstr(s, "a" PATH_SLASHSTR);
 	free(s);
 
 	s = path_concat("", "b");
-	assert(strcmp(s, "b") == 0);
+	assert_cstr_eq_cstr(s, "b");
 	free(s);
 
 	s = path_concat("a", ".." PATH_SLASHSTR "b");
-	assert(strcmp(s, "a" PATH_SLASHSTR ".." PATH_SLASHSTR "b") == 0);
+	assert_cstr_eq_cstr(s, "a" PATH_SLASHSTR ".." PATH_SLASHSTR "b");
+	free(s);
+
+	s = path_concat("a" PATH_SLASHSTR "..", "b");
+	assert_cstr_eq_cstr(s, "a" PATH_SLASHSTR ".." PATH_SLASHSTR "b");
 	free(s);
 }
 
 TEST(path_concat_dotdot)
 {
 	char *s = path_concat_dotdot("a" PATH_SLASHSTR "b", ".." PATH_SLASHSTR "c");
-	assert(strcmp(s, "a" PATH_SLASHSTR "c") == 0);
+	assert_cstr_eq_cstr(s, "a" PATH_SLASHSTR "c");
 	free(s);
 
 	s = path_concat_dotdot("a", ".." PATH_SLASHSTR "b");
-	assert(strcmp(s, "b") == 0);
+	assert_cstr_eq_cstr(s, "b");
 	free(s);
 
-	s = path_concat("a", "b");
-	assert(strcmp(s, "a" PATH_SLASHSTR "b") == 0);
+	s = path_concat_dotdot("a", "b");
+	assert_cstr_eq_cstr(s, "a" PATH_SLASHSTR "b");
+	free(s);
+
+	s = path_concat_dotdot("a", ".." PATH_SLASHSTR "b");
+	assert_cstr_eq_cstr(s, "b");
+	free(s);
+
+	s = path_concat_dotdot("a", ".." PATH_SLASHSTR ".." PATH_SLASHSTR "b");
+	assert_cstr_eq_cstr(s, ".." PATH_SLASHSTR "b");
 	free(s);
 }
 

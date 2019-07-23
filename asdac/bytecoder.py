@@ -374,21 +374,25 @@ class _BytecodeWriter:
 
 
 # structure of a bytecode file:
-#   1.  the bytes b'asda'
-#   2.  first import section: compiled file paths for the interpreter
-#   3.  list of types used in the opcode
-#   4.  opcode
-#   5.  list of imports, source file paths, for the compiler
-#   6.  list of exports, names and types, for the compiler
-#   7.  number of bytes before part 4, as an uint32.
+#   1.  the bytes b'asda\xA5\xDA'  (note how 5 looks like S, lol)
+#   2.  source path string, relative to the dirname of the compiled path
+#   3.  first import section: compiled file paths for the interpreter
+#   4.  list of types used in the opcode
+#   5.  opcode
+#   6.  list of imports, source file paths, for the compiler
+#   7.  list of exports, names and types, for the compiler
+#   8.  number of bytes before part 4, as an uint32.
 #       The compiler uses this to efficiently read imports and exports.
 #
 # all paths are relative to the bytecode file's directory and have '/' as
 # the separator
 def create_bytecode(compilation, opcode):
     output = _ByteCode()
-
     writer = _BytecodeWriter(output, compilation)
+
+    writer.write_path(compilation.source_path)
+    source_path_bytes = output.get_bytes()
+
     writer.write_import_section(
         [impcomp.compiled_path for impcomp in compilation.imports])
     import_section_bytes = output.get_bytes()
@@ -401,7 +405,8 @@ def create_bytecode(compilation, opcode):
     writer.write_type_list()
     type_list_bytes = output.get_bytes()
 
-    result = b'asda' + import_section_bytes + type_list_bytes + opcode_bytes
+    result = (b'asda\xA5\xDA' + source_path_bytes + import_section_bytes +
+              type_list_bytes + opcode_bytes)
     seek_index = len(result)   # _BytecodeReader reads this with seek
     output.add_uint32(seek_index)
     seek_index_u32 = output.get_bytes()

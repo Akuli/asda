@@ -15,6 +15,7 @@ struct BcReader {
 	FILE *in;
 	const char *indirname;   // relative to interp->basedir, must NOT free() until bc reader no longer needed
 	uint32_t lineno;
+	char *srcpath;
 	char **imports;          // NULL terminated
 	struct Type **typelist;  // the return value of bcreader_readtypelist
 };
@@ -26,6 +27,9 @@ struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname);
 void bcreader_destroy(const struct BcReader *bcr);
 
 bool bcreader_readasdabytes(struct BcReader *bcr);
+
+// returns NULL on error, return value must be free()d on success
+char *bcreader_readsourcepath(struct BcReader *bcr);
 
 // puts a mallocced array of mallocced strings to bcr->imports
 bool bcreader_readimports(struct BcReader *bcr);

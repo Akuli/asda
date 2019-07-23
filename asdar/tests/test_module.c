@@ -13,9 +13,12 @@ static struct Module *create_test_module(Interp *interp, const char *name)
 	struct Module *mod = malloc(sizeof *mod);
 	assert(mod);
 
-	mod->path = malloc(strlen(name) + 1);
-	assert(mod->path);
-	strcpy(mod->path, name);
+	mod->srcpath = malloc(strlen(name) + 1);
+	mod->bcpath = malloc(strlen(name) + 1);
+	assert(mod->srcpath);
+	assert(mod->bcpath);
+	strcpy(mod->srcpath, name);
+	strcpy(mod->bcpath, name);
 
 	mod->scope = scopeobj_newsub(interp, interp->builtinscope, 24);
 	assert(mod->scope);

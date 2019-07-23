@@ -175,16 +175,26 @@ static bool read_path(struct BcReader *bcr, char **resptr)
 }
 
 
+static const unsigned char asda[6] = { 'a', 's', 'd', 'a', 0xA5, 0xDA };
+
 bool bcreader_readasdabytes(struct BcReader *bcr)
 {
-	unsigned char buf[sizeof("asda")-1];
+	unsigned char buf[sizeof asda];
 	if (!read_bytes(bcr, buf, sizeof buf))
 		return false;
 
-	if (memcmp(buf, "asda", sizeof(buf)) == 0)
+	if (memcmp(buf, asda, sizeof asda) == 0)
 		return true;
 	errobj_set(bcr->interp, &errobj_type_value, "the file doesn't seem to be a compiled asda file");
 	return false;
+}
+
+char *bcreader_readsourcepath(struct BcReader *bcr)
+{
+	char *res;
+	if (!read_path(bcr, &res))
+		return NULL;
+	return res;
 }
 
 bool bcreader_readimports(struct BcReader *bcr)

@@ -22,37 +22,41 @@ static void destroy_types(struct Type **types)
 	free(types);
 }
 
-static bool read_bytecode_file(Interp *interp, const char *path, struct Code *code, struct Type ***types)
+static bool read_bytecode_file(Interp *interp, const char *bcpath, char **srcpath, struct Code *code, struct Type ***types)
 {
-	assert(path[0]);
+	assert(bcpath[0]);
 
-	char *fullpath = path_concat(interp->basedir, path);
-	if (!fullpath) {
-		errobj_set_oserr(interp, "getting the full path to '%s' failed", path);
+	char *fullbcpath = path_concat(interp->basedir, bcpath);
+	if (!fullbcpath) {
+		errobj_set_oserr(interp, "getting the full path to '%s' failed", bcpath);
 		return false;
 	}
 
-	size_t i = path_findlastslash(path);
+	size_t i = path_findlastslash(bcpath);
 	char *dir = malloc(i+1);
 	if (!dir) {
-		free(fullpath);
+		free(fullbcpath);
 		errobj_set_nomem(interp);
 		return false;
 	}
-	memcpy(dir, path, i);
+	memcpy(dir, bcpath, i);
 	dir[i] = 0;
 
-	FILE *f = fopen(fullpath, "rb");
+	FILE *f = fopen(fullbcpath, "rb");
 	if (!f) {
-		errobj_set_oserr(interp, "cannot open '%s'", fullpath);
+		errobj_set_oserr(interp, "cannot open '%s'", fullbcpath);
 		free(dir);
-		free(fullpath);
+		free(fullbcpath);
 		return false;
 	}
-	free(fullpath);
+	free(fullbcpath);
 
 	struct BcReader bcr = bcreader_new(interp, f, dir);
+	*srcpath = NULL;
+
 	if (!bcreader_readasdabytes(&bcr))
+		goto error;
+	if (!( *srcpath = bcreader_readsourcepath(&bcr) ))
 		goto error;
 	if (!bcreader_readimports(&bcr))
 		goto error;
@@ -77,6 +81,7 @@ static bool read_bytecode_file(Interp *interp, const char *path, struct Code *co
 
 error:
 	bcreader_destroy(&bcr);
+	free(*srcpath);
 	free(dir);
 	fclose(f);
 	return false;
@@ -105,15 +110,15 @@ bool import(Interp *interp, const char *path)
 	if (!mod)
 		return false;
 
-	mod->path = malloc(strlen(path) + 1);
-	if (!mod->path) {
+	mod->bcpath = malloc(strlen(path) + 1);
+	if (!mod->bcpath) {
 		free(mod);
 		return false;
 	}
-	strcpy(mod->path, path);
+	strcpy(mod->bcpath, path);
 
-	if (!read_bytecode_file(interp, path, &mod->code, &mod->types)) {
-		free(mod->path);
+	if (!read_bytecode_file(interp, path, &mod->srcpath, &mod->code, &mod->types)) {
+		free(mod->bcpath);
 		free(mod);
 		return false;
 	}
@@ -121,7 +126,8 @@ bool import(Interp *interp, const char *path)
 	if (!( mod->scope = scopeobj_newsub(interp, interp->builtinscope, mod->code.nlocalvars) )) {
 		code_destroy(&mod->code);
 		destroy_types(mod->types);
-		free(mod->path);
+		free(mod->srcpath);
+		free(mod->bcpath);
 		free(mod);
 		return false;
 	}
@@ -130,7 +136,8 @@ bool import(Interp *interp, const char *path)
 		OBJECT_DECREF(mod->scope);
 		code_destroy(&mod->code);
 		destroy_types(mod->types);
-		free(mod->path);
+		free(mod->srcpath);
+		free(mod->bcpath);
 		free(mod);
 		return false;
 	}

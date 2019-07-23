@@ -7,9 +7,11 @@
 
 struct Module {
 	// see interp->basedir comments for more details about the path
-	char *path;          // path of the compiled bytecode file relative to interp->basedir
+	// srcpath and compath are relative to interp->basedir
+	char *srcpath;       // path of source file
+	char *bcpath;        // path of compiled bytecode file
 	ScopeObject *scope;  // a subscope of the built-in scope
-	struct Code code;    // loaded from the path
+	struct Code code;    // loaded from bcpath
 	struct Type **types; // type_destroy()ed when the module is destroyed, NULL terminated
 
 	// binary search tree for looking up modules by path quickly
@@ -26,7 +28,8 @@ const struct Module *module_get(Interp *interp, const char *path);
 // these will be done eventually:
 //   - mod->scope will be decreffed
 //   - mod->code will be destroyed
-//   - mod->path will be freed
+//   - mod->srcpath will be freed
+//   - mod->bcpath will be freed
 //   - each type of mod->types will be type_destroy()ed
 //   - mod->types will be freed
 //   - mod will be freed

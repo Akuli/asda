@@ -12,7 +12,7 @@ const struct Module *module_get(Interp *interp, const char *path)
 {
 	struct Module *mod = interp->firstmod;
 	while(mod) {
-		int c = strcmp(path, mod->path);
+		int c = strcmp(path, mod->bcpath);
 		if (c < 0)
 			mod = mod->left;
 		else if (c > 0)
@@ -27,7 +27,7 @@ void module_add(Interp *interp, struct Module *mod)
 {
 	struct Module **dest = &interp->firstmod;
 	while (*dest) {
-		int c = strcmp(mod->path, (*dest)->path);
+		int c = strcmp(mod->bcpath, (*dest)->bcpath);
 		if (c < 0)
 			dest = &( (*dest)->left );
 		else if (c > 0)
@@ -47,7 +47,8 @@ static void destroy_path_scope_code(const struct Module *mod)
 	if (!mod)
 		return;
 
-	free(mod->path);
+	free(mod->srcpath);
+	free(mod->bcpath);
 	OBJECT_DECREF(mod->scope);
 	code_destroy(&mod->code);
 	destroy_path_scope_code(mod->left);

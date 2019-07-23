@@ -127,28 +127,29 @@ char *path_concat(const char *path1, const char *path2)
 	return res;
 }
 
+static inline bool starts_with_dotdotslash(const char *s)
+{
+	return s[0] == '.' && s[1] == '.' && s[2] == '/';
+}
+
 char *path_concat_dotdot(const char *path1, const char *path2)
 {
-	// dd = dot dot = ".."
-	size_t ndd = 0;
-	while (path2[0] == '.' && path2[1] == '.' && path2[2] == '/') {
-		ndd++;
-		path2 += 3;
-	}
-
-	if (ndd == 0)
+	if (!starts_with_dotdotslash(path2))
 		return path_concat(path1, path2);
 
 	char *prefix = duplicate_string(path1);
 	if (!prefix)
 		return NULL;
 
-	for (size_t i = 0; i < ndd; i++)
+	// must stop when prefix is empty string, otherwise "a" joined with "../../b" becomes "b"
+	while (prefix[0] && starts_with_dotdotslash(path2)) {
+		path2 += 3;    // 3 = length of "../"
 		prefix[path_findlastslash(prefix)] = 0;
+	}
 
 	char *res = path_concat(prefix, path2);
 	free(prefix);
-	return res;
+	return res;   // may be NULL
 }
 
 size_t path_findlastslash(const char *path)
@@ -156,8 +157,8 @@ size_t path_findlastslash(const char *path)
 	if (path[0] == 0)
 		return 0;
 
-	// if the path ends with a slash, it must be ignored
-	// this is also the reason why strrchr() isn't useful here
+	// ignore trailing slashes
+	// they are also the reason why strrchr() isn't useful here
 	size_t i = strlen(path)-1;
 	while (i >= 1 && path[i] == PATH_SLASH)
 		i--;
