@@ -194,6 +194,7 @@ char *bcreader_readsourcepath(struct BcReader *bcr)
 	char *res;
 	if (!read_path(bcr, &res))
 		return NULL;
+	bcr->srcpath = res;
 	return res;
 }
 
@@ -572,6 +573,7 @@ static bool read_body(struct BcReader *bcr, struct Code *code)
 	dynarray_shrink2fit(&ops);
 	code->ops = ops.ptr;
 	code->nops = ops.len;
+	code->srcpath = bcr->srcpath;
 	return true;
 
 error:

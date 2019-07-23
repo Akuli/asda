@@ -14,7 +14,7 @@
 
 struct AsdaFunctionData {
 	ScopeObject *defscope;
-	struct Code code;
+	const struct Code *code;
 };
 
 static void destroy_asdafunc_data(void *vpdata, bool decrefrefs, bool freenonrefs)
@@ -29,11 +29,11 @@ static void destroy_asdafunc_data(void *vpdata, bool decrefrefs, bool freenonref
 static enum RunnerResult
 run(Interp *interp, const struct AsdaFunctionData *afd, struct Runner *rnr, Object *const *args, size_t nargs)
 {
-	ScopeObject *sco = scopeobj_newsub(interp, afd->defscope, afd->code.nlocalvars);
+	ScopeObject *sco = scopeobj_newsub(interp, afd->defscope, afd->code->nlocalvars);
 	if(!sco)
 		return RUNNER_ERROR;
 
-	assert(nargs <= afd->code.nlocalvars);
+	assert(nargs <= afd->code->nlocalvars);
 	memcpy(sco->locals, args, sizeof(args[0]) * nargs);
 	for (size_t i = 0; i < nargs; i++)
 		OBJECT_INCREF(args[i]);
@@ -72,7 +72,7 @@ static bool asda_function_cfunc(Interp *interp, struct ObjData data, Object *con
 	return false;
 }
 
-FuncObject *asdafunc_create(Interp *interp, ScopeObject *defscope, const struct TypeFunc *type, struct Code code)
+FuncObject *asdafunc_create(Interp *interp, ScopeObject *defscope, const struct TypeFunc *type, const struct Code *code)
 {
 	struct AsdaFunctionData *afd = malloc(sizeof(*afd));
 	if(!afd) {

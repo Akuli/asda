@@ -50,6 +50,7 @@ enum CodeOpKind {
 
 struct CodeOp;
 struct Code {
+	const char *srcpath;   // relative to interp->basedir
 	struct CodeOp *ops;
 	size_t nops;
 	uint16_t nlocalvars;

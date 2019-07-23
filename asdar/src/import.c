@@ -87,7 +87,7 @@ error:
 	return false;
 }
 
-static bool run(Interp *interp, ScopeObject *scope, struct Code code)
+static bool run(Interp *interp, ScopeObject *scope, const struct Code *code)
 {
 	struct Runner rnr;
 	runner_init(&rnr, interp, scope, code);
@@ -132,7 +132,7 @@ bool import(Interp *interp, const char *path)
 		return false;
 	}
 
-	if (!run(interp, mod->scope, mod->code)) {
+	if (!run(interp, mod->scope, &mod->code)) {
 		OBJECT_DECREF(mod->scope);
 		code_destroy(&mod->code);
 		destroy_types(mod->types);

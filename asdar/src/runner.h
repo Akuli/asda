@@ -28,13 +28,13 @@ struct Runner {
 	DynArray(struct CodeErrHndData) ehstack;        // see finally.md
 	DynArray(struct RunnerFinallyState) fsstack;    // see finally.md
 	size_t opidx;
-	struct Code code;
+	const struct Code *code;
 };
 
 // never fails
 // increfs the scope as needed
 // never frees the bc
-void runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, struct Code code);
+void runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, const struct Code *code);
 
 // never fails
 void runner_free(const struct Runner *rnr);

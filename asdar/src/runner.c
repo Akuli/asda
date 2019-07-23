@@ -22,7 +22,7 @@
 */
 #define DEBUG_PRINTF(...) ((void)0)
 
-void runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, struct Code code)
+void runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, const struct Code *code)
 {
 	rnr->interp = interp;
 	rnr->scope = scope;
@@ -240,7 +240,7 @@ static enum RunnerResult run_pop1(struct Runner *rnr, const struct CodeOp *op)
 
 static enum RunnerResult run_createfunc(struct Runner *rnr, const struct CodeOp *op)
 {
-	FuncObject *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc.type, op->data.createfunc.code);
+	FuncObject *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc.type, &op->data.createfunc.code);
 	if (!f)
 		return RUNNER_ERROR;
 
@@ -472,8 +472,8 @@ static void clear_stack(struct Runner *rnr)
 
 enum RunnerResult runner_run(struct Runner *rnr)
 {
-	while (rnr->opidx < rnr->code.nops) {
-		enum RunnerResult res = run_one_op(rnr, &rnr->code.ops[rnr->opidx]);
+	while (rnr->opidx < rnr->code->nops) {
+		enum RunnerResult res = run_one_op(rnr, &rnr->code->ops[rnr->opidx]);
 		if (res == RUNNER_ERROR) {
 			clear_stack(rnr);
 			if (rnr->ehstack.len) {
@@ -486,6 +486,6 @@ enum RunnerResult runner_run(struct Runner *rnr)
 			return res;
 	}
 
-	assert(rnr->opidx == rnr->code.nops);
+	assert(rnr->opidx == rnr->code->nops);
 	return RUNNER_DIDNTRETURN;
 }
