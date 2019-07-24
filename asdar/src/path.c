@@ -95,7 +95,8 @@ char *path_toabsolute(const char *path)
 	if (!cwd)
 		return NULL;
 
-	char *res = path_concat(cwd, path);
+	// TODO: figure out how to do this without symlink issues and ".."
+	char *res = path_concat_dotdot(cwd, path);
 	free(cwd);
 	if (!res)
 		errno = ENOMEM;

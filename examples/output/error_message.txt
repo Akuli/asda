@@ -1,0 +1,11 @@
+asda error: shit
+  in file "EXAMPLESSLASHerror_message.asda", line 2
+    throw new ValueError("shit")
+  by file "EXAMPLESSLASHerror_message.asda", line 5
+    f()
+  by file "EXAMPLESSLASHerror_message.asda", line 8
+    g()
+  by file "EXAMPLESSLASHerror_message.asda", line 11
+    h()
+  by file "EXAMPLESSLASHerror_message.asda", line 13
+    i()

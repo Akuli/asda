@@ -1,3 +1,4 @@
+- check that try,catch,catch doesn't nest shittily
 - add yields back, were removed in b0e0fbb because they hadn't been
   maintained in a while and would have made the code more complicated
 - cyclic import, must choose one:

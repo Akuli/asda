@@ -3,8 +3,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include "asdafunc.h"
-#include "dynarray.h"
 #include "code.h"
+#include "dynarray.h"
 #include "interp.h"
 #include "object.h"
 #include "partialfunc.h"
@@ -451,16 +451,20 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 }
 
 
-static void run_error_handler(struct Runner *rnr)
+static bool jump_to_error_handler(struct Runner *rnr)
 {
 	struct CodeErrHndData eh = dynarray_pop(&rnr->ehstack);
 	rnr->opidx = eh.jmpidx;
 
-	assert(rnr->interp->err);
+	struct ErrObject *e = rnr->interp->err;
+	assert(e);
+
 	if (rnr->scope->locals[eh.errvar])
 		OBJECT_DECREF(rnr->scope->locals[eh.errvar]);
-	rnr->scope->locals[eh.errvar] = (Object *)rnr->interp->err;
+	rnr->scope->locals[eh.errvar] = (Object *)e;
 	rnr->interp->err = NULL;
+
+	return errobj_beginhandling(rnr->interp, e);
 }
 
 static void clear_stack(struct Runner *rnr)
@@ -472,20 +476,41 @@ static void clear_stack(struct Runner *rnr)
 
 enum RunnerResult runner_run(struct Runner *rnr)
 {
+	struct InterpStackItem tmp;
+	tmp.srcpath = rnr->code->srcpath;
+	// lineno set soon
+
+	if (!dynarray_push(rnr->interp, &rnr->interp->stack, tmp))
+		return RUNNER_ERROR;
+
+	size_t stackidx = rnr->interp->stack.len - 1;
+	enum RunnerResult res;
+
 	while (rnr->opidx < rnr->code->nops) {
-		enum RunnerResult res = run_one_op(rnr, &rnr->code->ops[rnr->opidx]);
+		const struct CodeOp *op = &rnr->code->ops[rnr->opidx];
+		rnr->interp->stack.ptr[stackidx].lineno = op->lineno;
+
+		res = run_one_op(rnr, op);
 		if (res == RUNNER_ERROR) {
 			clear_stack(rnr);
 			if (rnr->ehstack.len) {
-				run_error_handler(rnr);
+				if (!jump_to_error_handler(rnr))   // FIXME shouldn't errors from this get caught by other error handlers
+					goto out;
 				continue;
 			}
 		}
 
 		if(res != RUNNER_DIDNTRETURN)
-			return res;
+			goto out;
 	}
 
 	assert(rnr->opidx == rnr->code->nops);
-	return RUNNER_DIDNTRETURN;
+	res = RUNNER_DIDNTRETURN;
+	// "fall through"
+
+out:
+	assert(stackidx == rnr->interp->stack.len - 1);
+	struct InterpStackItem pop = dynarray_pop(&rnr->interp->stack);
+	assert(pop.srcpath == rnr->code->srcpath);
+	return res;
 }

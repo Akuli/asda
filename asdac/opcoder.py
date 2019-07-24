@@ -517,7 +517,6 @@ def create_opcode(compilation, cooked_statements, export_vars, source_code):
         offset += len(line)
 
     builtin_opcoder = _OpCoder(None, compilation, line_start_offsets)
-    builtin_opcoder.line_start_offsets.extend(line_start_offsets)
     builtin_opcoder.local_vars.update({
         var: ArgMarker(index)
         for index, var in enumerate(itertools.chain(

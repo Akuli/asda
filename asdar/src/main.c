@@ -14,30 +14,6 @@
 #include "objects/string.h"
 
 
-static void print_error(Interp *interp)
-{
-	StringObject *strobj = interp->err->msgstr;
-	OBJECT_INCREF(strobj);
-	OBJECT_DECREF(interp->err);
-	interp->err = NULL;
-
-	const char *str;
-	size_t len;
-	if (stringobj_toutf8(strobj, &str, &len)) {
-		fprintf(stderr, "%s: error: %s\n", interp->argv0, str);
-		OBJECT_DECREF(strobj);
-		return;
-	}
-
-	OBJECT_DECREF(strobj);
-	assert(interp->err);
-	OBJECT_DECREF(interp->err);
-	interp->err = NULL;
-	fprintf(stderr, "%s: an error occurred, and another error occurred while printing the error. "
-		"The errors cannot be printed. Sorry. :(\n", interp->argv0);
-}
-
-
 int main(int argc, char **argv)
 {
 	char *basedir = NULL;
@@ -71,7 +47,12 @@ int main(int argc, char **argv)
 	return 0;
 
 error:
-	print_error(&interp);
+	assert(1);   // because c syntax
+	ErrObject *e = interp.err;
+	interp.err = NULL;
+	errobj_printstack(&interp, e);
+	OBJECT_DECREF(e);
+
 	module_destroyall(&interp);
 	interp_destroy(&interp);
 	free(basedir);

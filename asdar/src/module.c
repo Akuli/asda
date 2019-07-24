@@ -17,8 +17,10 @@ const struct Module *module_get(Interp *interp, const char *path)
 			mod = mod->left;
 		else if (c > 0)
 			mod = mod->right;
-		else
+		else {
+			assert(mod->runok);
 			return mod;
+		}
 	}
 	return NULL;
 }

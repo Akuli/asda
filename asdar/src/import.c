@@ -133,16 +133,7 @@ bool import(Interp *interp, const char *path)
 		return false;
 	}
 
-	if (!run(interp, mod->scope, &mod->code)) {
-		OBJECT_DECREF(mod->scope);
-		code_destroy(&mod->code);
-		destroy_types(mod->types);
-		free(mod->srcpath);
-		free(mod->bcpath);
-		free(mod);
-		return false;
-	}
-
+	mod->runok = run(interp, mod->scope, &mod->code);
 	module_add(interp, mod);
-	return true;
+	return mod->runok;
 }

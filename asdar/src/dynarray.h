@@ -4,7 +4,6 @@
 #include <assert.h>   // IWYU pragma: keep
 #include <stdbool.h>
 #include <string.h>   // IWYU pragma: keep
-#include "interp.h"
 
 // don't access alloc outside this file and dynarray.c
 #define DynArray(T) struct { \
@@ -77,7 +76,10 @@ to ignore popped value and avoid compiler warning:
 	} \
 } while(0)
 
+// forward declare because interp.h includes this file
+struct Interp;
+
 // like the name says, don't use this outside this h file and the related c file
-bool dynarray_alloc_internal(Interp *interp, void **ptr, size_t *alloc, size_t itemsz, size_t enough);
+bool dynarray_alloc_internal(struct Interp *interp, void **ptr, size_t *alloc, size_t itemsz, size_t enough);
 
 #endif    // DYNARRAY_H

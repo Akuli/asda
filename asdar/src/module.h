@@ -18,6 +18,15 @@ struct Module {
 	// don't rely on these outside module.c
 	struct Module *left;
 	struct Module *right;
+
+	/*
+	There are situations when the code of a module gets read fine, but running the code fails.
+	Then the resulting error object typically needs srcpath for displaying the error message.
+	The error must be displayed BEFORE the module gets destroyed and srcpath gets free()d.
+	A simple way to do that is to let the module be in the interp and wait for module_destroyall().
+	The module is doing that if this is false.
+	*/
+	bool runok;
 };
 
 // returns NULL if there is no module with the given path yet (that is NOT an error! this never errors)

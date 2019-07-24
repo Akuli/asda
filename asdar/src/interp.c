@@ -1,6 +1,7 @@
 #include "interp.h"
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 #include "gc.h"
 #include "object.h"
@@ -11,12 +12,13 @@
 bool interp_init(Interp *interp, const char *argv0)
 {
 	interp->argv0 = argv0;
-	interp->err = NULL;
 	interp->objliststart = NULL;
+	interp->err = NULL;
 	interp->firstmod = NULL;
+	interp->basedir = NULL;
 
-	// not strictly standard compliant but simpler than a loop
-	memset(interp->intcache, 0, sizeof(interp->intcache));
+	memset(interp->intcache, 0, sizeof(interp->intcache));  // not strictly standard compliant but simpler than a loop
+	dynarray_init(&interp->stack);
 
 	return !!( interp->builtinscope = scopeobj_newglobal(interp) );
 }
@@ -37,4 +39,6 @@ void interp_destroy(Interp *interp)
 		next = obj->next;
 		object_destroy(obj, false, true);
 	}
+
+	free(interp->stack.ptr);
 }

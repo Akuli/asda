@@ -1,0 +1,13 @@
+let f = () -> void:
+    throw new ValueError("shit")
+
+let g = () -> void:
+    f()
+
+let h = () -> void:
+    g()
+
+let i = () -> void:
+    h()
+    
+i()

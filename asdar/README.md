@@ -189,6 +189,20 @@ $ valgrind ./asdar ../asda-compiled/something.asdac
 ```
 
 
+## C Standard
+
+C99.
+
+If you know that something works basically everywhere, you can use it in this
+project. For example, you can assume that:
+
+- `char` is 8 bits.
+- `intN_t` and `uintN_t` exist for `N` values 8, 16, 32 and 64.
+- `int`, `long` or some similar type is two's complement (but please check it at
+  compile-time using the preprocessor as is done in `objects/int.c`).
+- Code like `int i; memset(&i, 0, sizeof(i));` sets `i` to zero.
+
+
 ## Code Style
 
 The coding style is Linux kernel style-ish. The "-ish" stands for two things:
@@ -204,7 +218,8 @@ The coding style is Linux kernel style-ish. The "-ish" stands for two things:
         - `Object`, `IntObject`, `StringObject` etc. These are used a **lot** in
           function declarations. These also have a named struct with the same
           name, because those can be forward-declared (see `interp.h`).
-        - `Interp`. Also used a lot in function declarations.
+        - `Interp`. Similar to the objects: has struct with same name and used
+          a lot in function declarations.
         - Callback functions with long signatures. See `objects/func.h`.
     - There are probably some other things that I forgot to mention here. Again,
       don't be nit-picky when it comes to style.

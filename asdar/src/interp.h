@@ -2,6 +2,7 @@
 #define INTERP_H
 
 #include <stdbool.h>
+#include "dynarray.h"
 
 // forward declarations needed because many things need an Interp
 struct Object;
@@ -10,7 +11,13 @@ struct IntObject;
 struct ScopeObject;
 struct Module;
 
-typedef struct {
+
+struct InterpStackItem {
+	const char *srcpath;   // relative to interp->basedir
+	size_t lineno;
+};
+
+typedef struct Interp {
 	const char *argv0;
 	struct ScopeObject *builtinscope;
 
@@ -40,13 +47,18 @@ typedef struct {
 	Then the path of modules would be 'foo.asdac' and 'subdir/bar.asdac'.
 	Those are guaranteed to be lowercase and therefore are easy to compare with each other.
 
-	This is an absolute path and it's set in main.c
+	This is an absolute path and it's set in main.c, but interp_init() sets it to NULL temporarily
 	*/
 	const char *basedir;
 
 	// optimization for Int objects, contains integers 0, 1, 2, ...
 	struct IntObject* intcache[20];
+
+	// runner.c adds an item to this when the stuff runs
+	// items from this are displayed in error messages (aka stack traces)
+	DynArray(struct InterpStackItem) stack;
 } Interp;
+
 
 // returns false and sets an error to interp->err on no mem
 bool interp_init(Interp *interp, const char *argv0);

@@ -16,10 +16,20 @@ extern const struct Type
 typedef struct ErrObject {
 	OBJECT_HEAD
 	StringObject *msgstr;
-	// TODO: stack trace info
 	// TODO: chained errors
 	//       but maybe not as linked list?
 	//       if linked list then how about multiple NoMemErrors chaining? avoid chaining onto itself
+
+	/*
+	when an error is thrown, the stack points to interp->stack and ownstack is false
+	setting this up does not require a memory allocation, which is important (think no memory error)
+
+	if the error is caught, interp->stack has to change, so the stack is copied here and ownstack is set to true
+	this can fail with no memory error, but that's fine because error handlers can fail with no memory error anyway
+	*/
+	struct InterpStackItem *stack;
+	size_t stacklen;
+	bool ownstack;
 } ErrObject;
 
 // use this if you don't want to create a new error object
@@ -46,6 +56,12 @@ example:
 	}
 */
 void errobj_set_oserr(Interp *interp, const char *fmt, ...);
+
+// sets ownstack to true and does all the other stuff commented near definition of ownstack
+bool errobj_beginhandling(Interp *interp, ErrObject *err);
+
+// dump error message to stderr
+void errobj_printstack(Interp *interp, ErrObject *err);
 
 
 #endif   // OBJECTS_ERR_H
