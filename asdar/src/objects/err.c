@@ -51,7 +51,6 @@ static void destroy_error(Object *obj, bool decrefrefs, bool freenonrefs)
 
 
 // nomemerr is not created with malloc() because ... you know
-// FIXME: if nomemerr is thrown and caught, free its ->stack somehow
 
 static StringObject nomemerr_string = STRINGOBJ_COMPILETIMECREATE(
 	'n','o','t',' ','e','n','o','u','g','h',' ','m','e','m','o','r','y');
@@ -61,6 +60,8 @@ static ErrObject nomemerr = OBJECT_COMPILETIMECREATE(&errobj_type_nomem,
 	.stacklen = 0,
 	.ownstack = false,
 );
+
+static ErrObject *compile_time_created_errors[] = { &nomemerr };
 
 
 void errobj_set_obj(Interp *interp, ErrObject *err)
@@ -158,8 +159,27 @@ static Object *error_string_constructor(Interp *interp, const struct Type *errty
 	return (Object *) create_error_from_string(interp, errtype, (StringObject *) args[0]);
 }
 
+
+// if the ->stack of a compile-time created error is set, then this free()s it
+static bool freeing_cb_added = false;
+static void freeing_cb(void)
+{
+	for (size_t i = 0; i < sizeof(compile_time_created_errors)/sizeof(compile_time_created_errors[0]); i++)
+	{
+		assert(compile_time_created_errors[i]->refcount == 1);
+		if (compile_time_created_errors[i]->ownstack)
+			free(compile_time_created_errors[i]->stack);
+	}
+}
+
 bool errobj_beginhandling(Interp *interp, ErrObject *err)
 {
+	if (!freeing_cb_added) {
+		// not much can be done if the atexit fails, other than try again later
+		atexit(freeing_cb);
+		freeing_cb_added = true;
+	}
+
 	// check that error has been thrown, and this function hasn't been called after the throw
 	assert(err->stack == interp->stack.ptr);
 	assert(!err->ownstack);

@@ -14,7 +14,7 @@ struct Module {
 	struct Code code;    // loaded from bcpath
 	struct Type **types; // type_destroy()ed when the module is destroyed, NULL terminated
 
-	// binary search tree for looking up modules by path quickly
+	// binary search tree for looking up modules by bcpath quickly
 	// don't rely on these outside module.c
 	struct Module *left;
 	struct Module *right;
