@@ -46,8 +46,7 @@ TEST(errobj_beginhandling_memory_leak_bug)
 	assert(!e->ownstack);
 	assert(e->stack[0].srcpath == si.srcpath && e->stack[0].lineno == si.lineno);
 
-	ok = errobj_beginhandling(interp, e);
-	assert(ok);
+	errobj_beginhandling(interp, e);
 	assert(e->stacklen == 1);
 	assert(e->stack != interp->stack.ptr);
 	assert(e->ownstack);

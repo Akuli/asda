@@ -451,7 +451,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 }
 
 
-static bool jump_to_error_handler(struct Runner *rnr)
+static void jump_to_error_handler(struct Runner *rnr)
 {
 	struct CodeErrHndData eh = dynarray_pop(&rnr->ehstack);
 	rnr->opidx = eh.jmpidx;
@@ -464,7 +464,7 @@ static bool jump_to_error_handler(struct Runner *rnr)
 	rnr->scope->locals[eh.errvar] = (Object *)e;
 	rnr->interp->err = NULL;
 
-	return errobj_beginhandling(rnr->interp, e);
+	errobj_beginhandling(rnr->interp, e);
 }
 
 static void clear_stack(struct Runner *rnr)
@@ -494,8 +494,7 @@ enum RunnerResult runner_run(struct Runner *rnr)
 		if (res == RUNNER_ERROR) {
 			clear_stack(rnr);
 			if (rnr->ehstack.len) {
-				if (!jump_to_error_handler(rnr))   // FIXME shouldn't errors from this get caught by other error handlers
-					goto out;
+				jump_to_error_handler(rnr);
 				continue;
 			}
 		}

@@ -14,8 +14,6 @@
 #include "../type.h"
 
 /*
-i haven't implemented this yet i'm just leaving this here so that i can think about it later
-
 for (superstitious pseudo-)optimization, i think there are 3 ways to deal with errors:
 	1. error caught but stack trace not used for anything
 
@@ -35,7 +33,8 @@ for (superstitious pseudo-)optimization, i think there are 3 ways to deal with e
 
 	3. error never caught, so stack trace is displayed
 
-ideally 1 should be fast
+ideally 1 should be fast, so this could be optimized by not copying the stack trace anywhere in that case
+currently that's not implemented because it would be kinda complicated
 */
 
 static void destroy_error(Object *obj, bool decrefrefs, bool freenonrefs)
@@ -172,7 +171,7 @@ static void freeing_cb(void)
 	}
 }
 
-bool errobj_beginhandling(Interp *interp, ErrObject *err)
+void errobj_beginhandling(Interp *interp, ErrObject *err)
 {
 	if (!freeing_cb_added) {
 		// not much can be done if the atexit fails, other than try again later
@@ -184,22 +183,23 @@ bool errobj_beginhandling(Interp *interp, ErrObject *err)
 	assert(err->stack == interp->stack.ptr);
 	assert(!err->ownstack);
 
-	if (err->stacklen == 0) {
-		err->stack = NULL;
-		err->ownstack = true;
-		return true;
-	}
+	err->ownstack = true;
+
+	if (err->stacklen == 0)
+		goto set_empty_stack;
 
 	struct InterpStackItem *stackcp = malloc(sizeof(stackcp[0]) * err->stacklen);
-	if (!stackcp) {
-		errobj_set_nomem(interp);
-		return false;
-	}
+	if (!stackcp)
+		goto set_empty_stack;   // not ideal, but better than being unable to handle the error at all
 
 	memcpy(stackcp, interp->stack.ptr, sizeof(stackcp[0]) * err->stacklen);
 	err->stack = stackcp;
+	return;
+
+set_empty_stack:
+	err->stack = NULL;
+	err->stacklen = 0;
 	err->ownstack = true;
-	return true;
 }
 
 

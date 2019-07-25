@@ -58,7 +58,7 @@ example:
 void errobj_set_oserr(Interp *interp, const char *fmt, ...);
 
 // sets ownstack to true and does all the other stuff commented near definition of ownstack
-bool errobj_beginhandling(Interp *interp, ErrObject *err);
+void errobj_beginhandling(Interp *interp, ErrObject *err);
 
 // dump error message to stderr
 void errobj_printstack(Interp *interp, ErrObject *err);
