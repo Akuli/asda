@@ -7,7 +7,6 @@
 #include <string.h>
 
 
-// don't access alloc outside this file and dynarray.c
 #define DynArray(T) struct { \
 	T *ptr;       /* the items, free this when you are done with the dynarray */ \
 	size_t len;   /* number of items */ \
@@ -48,14 +47,6 @@ dynarray_alloc returns a success bool
 #define dynarray_push_itwillfit(DAP, OBJ) do { \
 	(DAP)->ptr[(DAP)->len++] = (OBJ); \
 } while(0)
-
-// more efficient than a push in a loop
-// returns a success bool
-#define dynarray_pushmany(INTERP, DAP, OBJS, N) ( \
-	dynarray_alloc((INTERP), (DAP), (DAP)->len + (N)) && \
-	( memcpy((DAP)->ptr + (DAP)->len, (OBJS), (N) * sizeof((DAP)->ptr[0])) , true ) && \
-	( ((DAP)->len += (N)) , true ) \
-)
 
 /*
 bad things happen if the dynarray is empty, never fails otherwise

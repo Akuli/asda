@@ -24,15 +24,13 @@ TEST(dynarray_basic_stuff)
 	DynArrayOfInt da;
 	dynarray_init(&da);
 
-	int fourfivesix[] = {4,5,6};   // needed because c macros are awesome
-	int *nullptr = NULL;           // needed to avoid a "clever" gcc warning and to annoy C++ people
-
-	bool ok;
-	ok = dynarray_push(interp, &da, 1); assert(ok);
-	ok = dynarray_push(interp, &da, 2); assert(ok);
-	ok = dynarray_push(interp, &da, 3); assert(ok);
-	ok = dynarray_pushmany(interp, &da, nullptr, 0); assert(ok);
-	ok = dynarray_pushmany(interp, &da, fourfivesix, 2); assert(ok);
+	bool ok =
+		dynarray_push(interp, &da, 1) &&
+		dynarray_push(interp, &da, 2) &&
+		dynarray_push(interp, &da, 3) &&
+		dynarray_push(interp, &da, 4) &&
+		dynarray_push(interp, &da, 5);
+	assert(ok);
 
 	da.ptr[2] = 7;
 	check_12745(da);
