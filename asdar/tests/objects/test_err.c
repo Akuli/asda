@@ -1,9 +1,12 @@
 #include <assert.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 #include <src/dynarray.h>
 #include <src/interp.h>
+#include <src/object.h>
 #include <src/objects/err.h>
 #include "../util.h"
 

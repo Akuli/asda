@@ -1,8 +1,11 @@
 #ifndef TYPE_H
 #define TYPE_H
 
-#include "interp.h"
 #include <stddef.h>
+#include "interp.h"
+
+// no idea why this is needed, iwyu appears to be dumb
+// IWYU pragma: no_forward_declare Type
 
 enum TypeKind {
 	TYPE_BASIC,

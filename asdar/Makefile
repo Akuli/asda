@@ -12,6 +12,7 @@ TESTS_SRC := $(wildcard tests/*.c tests/objects/*.c)
 TESTS_HEADERS := $(filter-out tests/runcalls.h, $(wildcard tests/*.h)) tests/runcalls.h
 
 IWYU ?= iwyu
+IWYU_SRC := $(filter-out src/dynarray.c, $(SRC) $(TESTS_SRC))
 
 ifdef NDEBUG
 	CFLAGS += -DNDEBUG
@@ -45,7 +46,7 @@ test: testrunner
 # passing headers as arguments to IWYU makes them get iwyued twice
 .PHONY: iwyu
 iwyu: tests/runcalls.h
-	for file in $(SRC) $(TESTS_SRC); do \
+	for file in $(IWYU_SRC); do \
 		$(IWYU) $(IWYUFLAGS) -I. "$$file" 2>&1 || true; \
 	done | grep --line-buffered -v '^(.* has correct #includes/fwd-decls)$$' | cat -s
 

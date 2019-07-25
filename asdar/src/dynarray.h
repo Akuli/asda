@@ -1,9 +1,11 @@
 #ifndef DYNARRAY_H
 #define DYNARRAY_H
 
-#include <assert.h>   // IWYU pragma: keep
+// this file is not IWYU'd (see Makefile) because it does too much magic for iwyu to understand
+#include <assert.h>
 #include <stdbool.h>
-#include <string.h>   // IWYU pragma: keep
+#include <string.h>
+
 
 // don't access alloc outside this file and dynarray.c
 #define DynArray(T) struct { \

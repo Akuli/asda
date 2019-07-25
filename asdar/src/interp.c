@@ -1,8 +1,8 @@
 #include "interp.h"
-#include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include "dynarray.h"
 #include "gc.h"
 #include "object.h"
 #include "objects/int.h"

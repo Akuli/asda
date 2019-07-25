@@ -1,6 +1,8 @@
 #ifndef OBJECTS_ERR_H
 #define OBJECTS_ERR_H
 
+#include <stdbool.h>
+#include <stddef.h>
 #include "../interp.h"
 #include "../object.h"
 #include "../type.h"

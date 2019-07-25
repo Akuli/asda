@@ -8,7 +8,6 @@
 #include "code.h"
 #include "interp.h"
 #include "module.h"
-#include "object.h"
 #include "path.h"
 #include "runner.h"
 #include "type.h"
