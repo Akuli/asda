@@ -75,8 +75,8 @@ Even though this code is short, it contains *many* bugs:
 
 - The code does not set an error to the interpreter when `malloc` fails. It
   should do that so that the interpreter can report the error to the user, or
-  the asda programmer can handle the error somehow (not implemented yet at the
-  time of writing this). Almost all functions do this.
+  the asda programmer can handle the error with `catch` or `finally`.
+  Almost all functions do this.
 
     ```c
     if (!buf) {
@@ -120,8 +120,7 @@ Even though this code is short, it contains *many* bugs:
     }
     ```
 
-    If you decref too much or don't incref enough, `valgrind` will report a
-    double free or something similar.
+    If you decref too much or don't incref enough, the object will get destroyed too early, and `valgrind` will complain when you try to use the object.
 
     If you incref too much or don't decref enough, there are a couple things
     that can happen:
@@ -251,11 +250,7 @@ Now you can open `graph.png` in an image viewer to see the results.
 
 ## IWYU
 
-I use `include-what-you-use` with this project, and I have discovered a
-bug in IWYU. I created an issue about it
-[here](https://github.com/include-what-you-use/include-what-you-use/issues/690).
-If that isn't fixed yet, you need to compile and use my fork of IWYU
-like this:
+I use `include-what-you-use` with this project. You can download and compile IWYU like this:
 
 1. Add LLVM 8 stuff to your `sources.list` from https://apt.llvm.org and
    install the stuff:
@@ -266,18 +261,14 @@ like this:
 
     I have no idea what you should do if you don't have apt. Sorry.
 
-2. Clone my IWYU fork and run `cmake`
+2. Download IWYU and run `cmake`
 
-        $ mkdir ~/akuli-iwyu
-        $ cd ~/akuli-iwyu
-        $ git clone https://github.com/Akuli/include-what-you-use
+        $ mkdir ~/iwyu
+        $ cd ~/iwyu
+        $ git clone https://github.com/include-what-you-use/include-what-you-use
         $ mkdir build
         $ cd build
         $ cmake ../include-what-you-use -DCMAKE_PREFIX_PATH=/usr/lib/llvm-8
-
-    IWYU's instructions pass some options to `cmake` in the last step. I
-    have no idea what they do, and I don't use them because the command
-    works without them too.
 
     **If you get a CMake error**, look for `llvm-something` in the error
     message. If the `something` part is NOT `8`, then the build is using
@@ -295,18 +286,18 @@ like this:
 4. Run the IWYU
 
         $ cd ~/path/to/asda/asdar
-        $ export IWYU=~/akuli-iwyu/build/bin/include-what-you-use
+        $ export IWYU=~/iwyu/build/bin/include-what-you-use
         $ make iwyu
 
     If you get an error about IWYU not finding `<stdbool.h>` or some
     other include file, try this instead:
 
-        $ export IWYU='~/akuli-iwyu/build/bin/include-what-you-use -I/usr/include/clang/8/include'
+        $ export IWYU='~/iwyu/build/bin/include-what-you-use -I/usr/include/clang/8/include'
         $ make iwyu
 
     With this, sometimes IWYU suggest `"stdbool.h"` instead of
     `<stdbool.h>` to me, but at least it's better than nothing. Adding
     `#include <stdbool.h>` instead of copy/pasting IWYU's suggestion
-    works, too.
+    works.
 
 Run `make help` for more instructions.
