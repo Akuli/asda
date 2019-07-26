@@ -1,0 +1,9 @@
+let do_twice = (functype{() -> void} f) -> void:
+    f()
+    f()
+
+# TODO: it should be possible to put this into do_twice invoking as a "lambda"
+let hello = () -> void:
+    print("hello")
+
+do_twice(hello)

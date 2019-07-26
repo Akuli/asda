@@ -387,17 +387,16 @@ class _Chef:
             raise common.CompileError(
                 "unknown %s '%s'" % (it_is, tybe.name), tybe.location)
 
-        # TODO: support generic types again
-#        if isinstance(tybe, raw_ast.FromGeneric):   # generic type
-#            if tybe.name not in objects.BUILTIN_GENERIC_TYPES:
-#                raise common.CompileError(
-#                    "unknown generic type '%s'" % tybe.name,
-#                    tybe.location)
-#
-#            genertype = objects.BUILTIN_GENERIC_TYPES[tybe.name]
-#            types = list(map(self.cook_type, tybe.types))
-#            result = genertype.get_real_type(types, tybe.location)
-#            return result
+        if isinstance(tybe, raw_ast.FuncType):
+            assert tybe.generics is None   # FIXME
+            argtypes, returntype = tybe.header
+            cooked_argtypes = list(map(self.cook_type, argtypes))
+            if returntype is None:
+                cooked_returntype = None
+            else:
+                cooked_returntype = self.cook_type(returntype)
+
+            return objects.FunctionType(cooked_argtypes, cooked_returntype)
 
         assert False, tybe   # pragma: no cover
 
@@ -479,17 +478,18 @@ class _Chef:
         argtypes = []
         argvars = []
 
-        for raw_argtype, argname, argnameloc in raw.args:
+        raw_args, raw_returntype = raw.header
+        for raw_argtype, argname, argnameloc in raw_args:
             argtype = self.cook_type(raw_argtype)
             self._check_name_not_exist(argname, argnameloc)
             argnames.append(argname)
             argtypes.append(argtype)
             argvars.append(Variable(argname, argtype, argnameloc))
 
-        if raw.returntype is None:
+        if raw_returntype is None:
             returntype = None
         else:
-            returntype = self.cook_type(raw.returntype)
+            returntype = self.cook_type(raw_returntype)
 
         subchef = _Chef(self, True, returntype)
         subchef.level += 1

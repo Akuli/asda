@@ -327,11 +327,17 @@ and IMO this is much better than lacking the ability to define multi-line lambda
 
 ## Types
 
-There are two different kinds of syntax for specifying types:
+These are the different kinds of syntax for specifying types:
 
 - Type names that are [identifier] tokens, like `Str`.
 - A [generic] type name (an [identifier]) followed by `[`, one or more types and
   another `]`. For example, `SomeType[Str]` or `SomeType[Othertype[Str], Int]`.
+- Function types consist of the keyword `functype`
+  followed by similar syntax as in function definitions (documented in [expressions without operators or calls])
+  between `{` and `}`.
+  For example, the type of `print` is `functype{(Str) -> void}`.
+- Generic function types are like you would expect them to be.
+  For example, `functype[T]{(T) -> T}` is the type of a generic function that returns its argument unchanged.
 
 Types are not objects in asda, so the above syntaxes are not expressions.
 

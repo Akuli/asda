@@ -9,6 +9,16 @@ def _astclass(name, fields):
     return collections.namedtuple(name, ['location'] + fields)
 
 
+#the "header" of the function is the "(Blah b) -> Blah" part
+# it is represented as (args, returntype) tuple
+# args are (tybe, name, location) tuples
+# returntype is None for "-> void"
+
+# GetType's generics is a list of other GetTypes, or None
+# TODO: combining FuncType and generics
+GetType = _astclass('GetType', ['name', 'generics'])
+FuncType = _astclass('FuncType', ['header', 'generics'])
+
 Integer = _astclass('Integer', ['python_int'])
 String = _astclass('String', ['python_string'])
 StrJoin = _astclass('StrJoin', ['parts'])
@@ -17,10 +27,8 @@ Let = _astclass('Let', ['varname', 'generics', 'value', 'outer', 'export'])
 SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['module_path', 'varname', 'generics'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
-# GetType's generics is a list of other GetTypes, or None
-GetType = _astclass('GetType', ['name', 'generics'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
-FuncDefinition = _astclass('FuncDefinition', ['args', 'returntype', 'body'])
+FuncDefinition = _astclass('FuncDefinition', ['header', 'body'])
 Return = _astclass('Return', ['value'])
 Throw = _astclass('Throw', ['value'])
 VoidStatement = _astclass('VoidStatement', [])
@@ -208,9 +216,26 @@ class _AsdaParser:
 
         return (lparen, result, rparen)
 
+    def parse_function_header(self, parse_an_arg):
+        lparen, args, rparen = self.parse_commasep_in_parens(
+            parse_an_arg)
+        _duplicate_check((arg[1:] for arg in args), 'argument')
+        arrow = self.tokens.next_token()
+        assert arrow.value == '->', arrow
+
+        if self.tokens.peek().value == 'void':
+            returntype = None
+            location = (lparen.location +
+                        self.tokens.next_token().location)
+        else:
+            returntype = self.parse_type()
+            location = lparen.location + returntype.location
+
+        return (location, args, returntype)
+
     def parse_type(self):
         name = self.tokens.next_token()
-        if name.type != 'ID':
+        if name.value != 'functype' and name.type != 'ID':
             raise common.CompileError("invalid type", name.location)
 
         if (not self.tokens.eof()) and self.tokens.peek().value == '[':
@@ -221,15 +246,22 @@ class _AsdaParser:
             generics = None
             location = name.location
 
-        return GetType(location, name.value, generics)
+        if name.value == 'functype':
+            lbracket = self.tokens.next_token()
+            if lbracket.value != '{':
+                raise common.CompileError("should be '{'", lbracket.location)
 
-    def parse_argument_definition(self):
-        tybe = self.parse_type()
-        name = self.tokens.next_token()
-        if name.type != 'ID':
-            raise common.CompileError("invalid variable name", name.location)
-        location = tybe.location + name.location
-        return (tybe, name.value, location)
+            header_location, *header = self.parse_function_header(
+                self.parse_type)
+
+            rbracket = self.tokens.next_token()
+            if rbracket.value != '}':
+                raise common.CompileError("should be '}'", rbracket.location)
+
+            return FuncType(name.location + rbracket.location, tuple(header),
+                            generics)
+
+        return GetType(location, name.value, generics)
 
     def operator_from_precedence_list_coming_up(self):
         if self.tokens.eof():
@@ -253,6 +285,14 @@ class _AsdaParser:
 
         return False
 
+    def parse_argument_definition(self):
+        tybe = self.parse_type()
+        name = self.tokens.next_token()
+        if name.type != 'ID':
+            raise common.CompileError("invalid variable name", name.location)
+        location = tybe.location + name.location
+        return (tybe, name.value, location)
+
     # remember to update expression_without_operators_coming_up()
     # whenever you change this method!
     def parse_expression_without_operators_or_calls(self):
@@ -273,23 +313,10 @@ class _AsdaParser:
                     paren_count -= 1
 
             if (not copy.eof()) and copy.next_token().value == '->':
-                # it is a function
-                lparen, args, rparen = self.parse_commasep_in_parens(
+                location, *header = self.parse_function_header(
                     self.parse_argument_definition)
-                _duplicate_check((arg[1:] for arg in args), 'argument')
-                arrow = self.tokens.next_token()
-                assert arrow.value == '->', arrow
-
-                if self.tokens.peek().value == 'void':
-                    returntype = None
-                    location = (lparen.location +
-                                self.tokens.next_token().location)
-                else:
-                    returntype = self.parse_type()
-                    location = lparen.location + returntype.location
-
                 body = self.parse_block()
-                return FuncDefinition(location, args, returntype, body)
+                return FuncDefinition(location, tuple(header), body)
 
             else:
                 # parentheses are being used for precedence here

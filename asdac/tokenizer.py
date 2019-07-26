@@ -10,7 +10,7 @@ _LETTER_REGEX = r'\p{Lu}|\p{Ll}|\p{Lo}'    # not available in stdlib re module
 _ID_REGEX = r'(?:%s|_)(?:%s|[0-9_])*' % (_LETTER_REGEX, _LETTER_REGEX)
 
 _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
-    ('OPERATOR', r'==|!=|->|[+\-*=`;:.,\[\]()]'),
+    ('OPERATOR', r'==|!=|->|[+\-*=`;:.,\[\]{}()]'),
     ('INTEGER', r'[1-9][0-9]*|0'),
     ('MODULEFUL_ID', r'%s:%s' % (_ID_REGEX, _ID_REGEX)),
     ('ID', _ID_REGEX),
@@ -34,6 +34,7 @@ _KEYWORDS = {
     'import', 'as',
     'throw', 'catch', 'try', 'finally',
     'new',
+    'functype',
 }
 
 
