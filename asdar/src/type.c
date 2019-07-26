@@ -1,4 +1,5 @@
 #include "type.h"
+#include <stdbool.h>
 #include <stdlib.h>
 #include "interp.h"
 #include "object.h"
@@ -37,4 +38,20 @@ void type_destroy(struct Type *t)
 		OBJECT_DECREF(t->methods[i]);
 	free(t->methods);
 	free(t);
+}
+
+bool type_compatiblewith(const struct Type *sub, const struct Type *par)
+{
+	if (sub == par)
+		return true;
+
+	// FIXME: is shit
+	if (par != &errobj_type_error)
+		return false;
+
+	return
+		sub == &errobj_type_nomem ||
+		sub == &errobj_type_variable ||
+		sub == &errobj_type_value ||
+		sub == &errobj_type_os;
 }

@@ -281,10 +281,12 @@ class _BytecodeWriter:
 
         if isinstance(op, opcoder.AddErrorHandler):
             self.bytecode.add_byte(ADD_ERROR_HANDLER)
-            self.bytecode.add_uint16(self.jumpmarker2index[op.jumpto_marker])
-            self.write_type(op.errortype)
-            self.bytecode.add_uint16(
-                varlists[op.errorvarlevel].index(op.errorvar))
+            self.bytecode.add_uint16(len(op.items))
+            for jumpto_marker, errortype, errorvarlevel, errorvar in op.items:
+                self.write_type(errortype)
+                self.bytecode.add_uint16(
+                    varlists[errorvarlevel].index(errorvar))
+                self.bytecode.add_uint16(self.jumpmarker2index[jumpto_marker])
             return
 
         if isinstance(op, opcoder.PushFinallyStateReturn):

@@ -1,6 +1,6 @@
-- check that try,catch,catch doesn't nest shittily
 - add yields back, were removed in b0e0fbb because they hadn't been
   maintained in a while and would have made the code more complicated
+- some kind of C extension api?
 - cyclic import, must choose one:
     - disallow? (add error message to compiler)
     - allow (design semantics and implement)
@@ -54,7 +54,7 @@
     work, but `cast[JsonObject]("hello").to_json()` or similar would be
     allowed
 
-- pipe syntax: `"hello"|cast[jsonObject].to_json()`
+- pipe syntax, yay or nay? not sure. `"hello"|cast[jsonObject].to_json()`
 - specifying base class of generics: `lol[T inherits SomeBaseClass]`
 - getters and setters for attributes
 - named function arguments like kwargs in python

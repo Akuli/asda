@@ -25,7 +25,7 @@ struct Runner {
 	Interp *interp;
 	ScopeObject *scope;
 	DynArray(Object*) stack;
-	DynArray(struct CodeErrHndData) ehstack;        // see finally.md
+	DynArray(struct CodeErrHnd) ehstack;            // see finally.md
 	DynArray(struct RunnerFinallyState) fsstack;    // see finally.md
 	size_t opidx;
 	const struct Code *code;

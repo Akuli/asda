@@ -111,7 +111,8 @@ class Compilation:
         return compiled_dir / pathlib.Path(*map(handle_part, relative_c.parts))
 
     def __repr__(self):
-        return '<%s of %s>' % (type(self).__name__, self.source_path)
+        #return '<%s of %s>' % (type(self).__name__, self.source_path)
+        return '<%s>' % type(self).__name__
 
     def open_source_file(self):
         # see docs/syntax.md
@@ -152,8 +153,9 @@ class Location:
         self.length = length
 
     def __repr__(self):
-        return '<Location offset=%r length=%r: %r>' % (
-            self.offset, self.length, self.get_source()[1])
+#        return '<Location offset=%r length=%r: %r>' % (
+#            self.offset, self.length, self.get_source()[1])
+        return '<%s>' % type(self).__name__
 
     # raises OSError
     def _read_before_value_after(self):

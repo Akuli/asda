@@ -34,7 +34,21 @@ Some words that I came up with:
 
 - An "error handler" (EH) tells the interpreter that if an error occurs,
   then the interpreter should store the error in a variable specified in
-  the EH and then jump to somewhere.
+  the EH and then jump somewhere to run error handling code.
+
+    An EH may specify the jump locations for several different error types.
+    For example, this...
+
+    ```js
+    try:
+        A
+    catch VariableError e:
+        B
+    catch ValueError e:
+        C
+    ```
+
+    ...will create an EH, and that same EH will be used for *both* catches.
 
     The interpreter also has a stack for EHs, and when an EH is used,
     it's popped from the stack.

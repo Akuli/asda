@@ -52,8 +52,8 @@ Times = _op_class('Times', [])
 # Divide = _op_class('Divide', [])
 Equal = _op_class('Equal', [])
 
-AddErrorHandler = _op_class('AddErrorHandler', [
-    'jumpto_marker', 'errortype', 'errorvarlevel', 'errorvar'])
+# items are tuples: (jumpto_marker, errortype, errorvarlevel, errorvar)
+AddErrorHandler = _op_class('AddErrorHandler', ['items'])
 RemoveErrorHandler = _op_class('RemoveErrorHandler', [])
 
 PushFinallyStateOk = _op_class('PushFinallyStateOk', [])
@@ -63,6 +63,13 @@ PushFinallyStateReturn = _op_class('PushFinallyStateReturn', [
 PushFinallyStateJump = _op_class('PushFinallyStateJump', ['index'])
 DiscardFinallyState = _op_class('DiscardFinallyState', [])
 ApplyFinallyState = _op_class('ApplyFinallyState', [])
+
+
+# convenience thing to add an error handler with just 1 item
+def _add_simple_error_handler(lineno, jumpto_marker, errortype,
+                              errorvarlevel, errorvar):
+    item = (jumpto_marker, errortype, errorvarlevel, errorvar)
+    return AddErrorHandler(lineno, [item])
 
 
 class JumpMarker(common.Marker):
@@ -316,6 +323,126 @@ class _OpCoder:
 
             assert False, expression    # pragma: no cover
 
+    def do_try_catch(self, statement):
+        try_start = JumpMarker()
+        try_end = JumpMarker()
+
+        catch_starts = [JumpMarker() for catch in statement.catches]
+        catches_end = JumpMarker()
+
+        self.output.ops.append(AddErrorHandler(
+            self._lineno(statement.location),
+            [(catch_start, errorvar.type,
+              self.level, self.local_vars[errorvar])
+             for catch_start, (errorvar, body)
+             in zip(catch_starts, statement.catches)]
+        ))
+
+        self.output.ops.append(try_start)
+        for substatement in statement.try_body:
+            self.do_statement(substatement)
+        self.output.ops.append(try_end)
+
+        def add_error_handler_remover(op):
+            result = [RemoveErrorHandler(None)]
+            if op is None:
+                return result
+            return result + [op]
+
+        self.add_more_ops_to_exit_points(
+            try_start, try_end, add_error_handler_remover)
+
+        self.output.ops.append(Jump(None, catches_end))
+
+        for catch_start, (errorvar, body) in zip(catch_starts,
+                                                 statement.catches):
+            self.output.ops.append(catch_start)
+            for substatement in body:
+                self.do_statement(substatement)
+            self.output.ops.append(Jump(None, catches_end))
+
+        self.output.ops.append(catches_end)
+
+    # see finally.md
+    def do_try_finally(self, statement):
+        try_error_var = self.output.add_local_var()
+        finally_error_var = self.output.add_local_var()
+        try_error_handler_start = JumpMarker()
+        finally_error_handler_start = JumpMarker()
+        try_start = JumpMarker()
+        try_end = JumpMarker()
+        finally_start = JumpMarker()
+        finally_end = JumpMarker()
+
+        finally_state_pushed = JumpMarker()
+        everything_done = JumpMarker()
+
+        # add EH
+        self.output.ops.append(_add_simple_error_handler(
+            self._lineno(statement.location),
+            try_error_handler_start, objects.BUILTIN_TYPES['Error'],
+            self.level, try_error_var))
+
+        # run try code
+        self.output.ops.append(try_start)
+        for substatement in statement.try_body:
+            self.do_statement(substatement)
+        self.output.ops.append(try_end)
+
+        # remove EH, create and push FS
+        def handle_try_exiting(op):
+            result = [RemoveErrorHandler(None)]
+            if op is None:
+                result.append(PushFinallyStateOk(None))
+            else:   # FIXME TODO
+                raise NotImplementedError(repr(op))   # pragma: no cover
+            result.append(Jump(None, finally_state_pushed))
+            return result
+
+        self.add_more_ops_to_exit_points(
+            try_start, try_end, handle_try_exiting)
+
+        # EH used, create and push FS
+        self.output.ops.append(try_error_handler_start)
+        self.output.ops.append(LookupVar(None, self.level, try_error_var))
+        self.output.ops.append(PushFinallyStateError(None))
+        # "fall through"
+        self.output.ops.append(finally_state_pushed)
+
+        # add another EH
+        self.output.ops.append(_add_simple_error_handler(
+            self._lineno(statement.location),
+            finally_error_handler_start, objects.BUILTIN_TYPES['Error'],
+            self.level, finally_error_var))
+
+        # run finally code
+        self.output.ops.append(finally_start)
+        for substatement in statement.finally_body:
+            self.do_statement(substatement)
+        self.output.ops.append(finally_end)
+
+        # remove EH and apply FS
+        def handle_finally_exiting(op):
+            return [
+                RemoveErrorHandler(None),
+                ApplyFinallyState(None),
+                Jump(None, everything_done) if op is None else op,
+            ]
+
+        self.add_more_ops_to_exit_points(
+            finally_start, finally_end, handle_finally_exiting)
+
+        self.output.ops.append(Jump(None, everything_done))
+
+        # finally EH: discard FS and rethrow error
+        self.output.ops.append(finally_error_handler_start)
+        self.output.ops.append(DiscardFinallyState(None))
+        self.output.ops.append(LookupVar(
+            None, self.level, finally_error_var))
+        self.output.ops.append(Throw(None))
+
+        self.output.ops.append(everything_done)
+
     def do_statement(self, statement):
         if isinstance(statement, cooked_ast.CreateLocalVar):
             var = self.output.add_local_var()
@@ -389,119 +516,13 @@ class _OpCoder:
             self.output.ops.append(end)
 
         elif isinstance(statement, cooked_ast.TryCatch):
-            try_start = JumpMarker()
-            try_end = JumpMarker()
-            catch_start = JumpMarker()
-            catch_end = JumpMarker()
-
-            self.output.ops.append(AddErrorHandler(
-                self._lineno(statement.location),
-                catch_start, statement.caught_var.type, self.level,
-                self.local_vars[statement.caught_var]))
-
-            self.output.ops.append(try_start)
-            for substatement in statement.try_body:
-                self.do_statement(substatement)
-            self.output.ops.append(try_end)
-
-            def add_error_handler_remover(op):
-                if op is None:
-                    return [RemoveErrorHandler(None)]
-                return [RemoveErrorHandler(None), op]
-
-            self.add_more_ops_to_exit_points(
-                try_start, try_end, add_error_handler_remover)
-
-            self.output.ops.append(Jump(None, catch_end))
-
-            self.output.ops.append(catch_start)
-            for substatement in statement.catch_body:
-                self.do_statement(substatement)
-            self.output.ops.append(catch_end)
+            self.do_try_catch(statement)
 
         elif isinstance(statement, cooked_ast.TryFinally):
-            # see finally.md
-
-            try_error_var = self.output.add_local_var()
-            finally_error_var = self.output.add_local_var()
-            try_error_handler_start = JumpMarker()
-            finally_error_handler_start = JumpMarker()
-            try_start = JumpMarker()
-            try_end = JumpMarker()
-            finally_start = JumpMarker()
-            finally_end = JumpMarker()
-
-            finally_state_pushed = JumpMarker()
-            everything_done = JumpMarker()
-
-            # add EH
-            self.output.ops.append(AddErrorHandler(
-                self._lineno(statement.location),
-                try_error_handler_start, objects.BUILTIN_TYPES['Error'],
-                self.level, try_error_var))
-
-            # run try code
-            self.output.ops.append(try_start)
-            for substatement in statement.try_body:
-                self.do_statement(substatement)
-            self.output.ops.append(try_end)
-
-            # remove EH, create and push FS
-            def handle_try_exiting(op):
-                result = [RemoveErrorHandler(None)]
-                if op is None:
-                    result.append(PushFinallyStateOk(None))
-                else:   # FIXME TODO
-                    raise NotImplementedError(repr(op))   # pragma: no cover
-                result.append(Jump(None, finally_state_pushed))
-                return result
-
-            self.add_more_ops_to_exit_points(
-                try_start, try_end, handle_try_exiting)
-
-            # EH used, create and push FS
-            self.output.ops.append(try_error_handler_start)
-            self.output.ops.append(LookupVar(None, self.level, try_error_var))
-            self.output.ops.append(PushFinallyStateError(None))
-            # "fall through"
-            self.output.ops.append(finally_state_pushed)
-
-            # add another EH
-            self.output.ops.append(AddErrorHandler(
-                self._lineno(statement.location),
-                finally_error_handler_start, objects.BUILTIN_TYPES['Error'],
-                self.level, finally_error_var))
-
-            # run finally code
-            self.output.ops.append(finally_start)
-            for substatement in statement.finally_body:
-                self.do_statement(substatement)
-            self.output.ops.append(finally_end)
-
-            # remove EH and apply FS
-            def handle_finally_exiting(op):
-                return [
-                    RemoveErrorHandler(None),
-                    ApplyFinallyState(None),
-                    Jump(None, everything_done) if op is None else op,
-                ]
-
-            self.add_more_ops_to_exit_points(
-                finally_start, finally_end, handle_finally_exiting)
-
-            self.output.ops.append(Jump(None, everything_done))
-
-            # finally EH: discard FS and rethrow error
-            self.output.ops.append(finally_error_handler_start)
-            self.output.ops.append(DiscardFinallyState(None))
-            self.output.ops.append(LookupVar(
-                None, self.level, finally_error_var))
-            self.output.ops.append(Throw(None))
-
-            self.output.ops.append(everything_done)
+            self.do_try_finally(statement)
 
         else:
-            assert False, statement     # pragma: no cover
+            assert False, type(statement)     # pragma: no cover
 
     def do_body(self, statements):
         for statement in statements:

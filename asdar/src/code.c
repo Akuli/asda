@@ -9,6 +9,10 @@ void codeop_destroy(const struct CodeOp *op)
 		OBJECT_DECREF(op->data.obj);
 		break;
 
+	case CODE_EH_ADD:
+		free(op->data.errhnd.arr);
+		break;
+
 	case CODE_CREATEFUNC:
 		code_destroy(&op->data.createfunc.code);
 		break;

@@ -29,7 +29,7 @@
 } while(0)
 
 /*
-after a successful dynarray_alloc(&da, N), you can put N items to the dynamic array without allocating more
+after a successful dynarray_alloc(&da, N), da can hold N items without allocating more
 i.e. dynarray_push will always succeed and 'da.ptr[da.len++] = item' is also valid
 dynarray_alloc returns a success bool
 */

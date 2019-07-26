@@ -408,9 +408,32 @@ static bool read_int_constant(struct BcReader *bcr, Object **objptr, bool negate
 static bool read_add_error_handler(struct BcReader *bcr, struct CodeOp *res)
 {
 	res->kind = CODE_EH_ADD;
-	return read_uint16(bcr, &res->data.errhnd.jmpidx) &&
-			read_type(bcr, &res->data.errhnd.errtype, false) &&
-			read_uint16(bcr, &res->data.errhnd.errvar);
+
+	uint16_t n;
+	if (!read_uint16(bcr, &n))
+		return false;
+	res->data.errhnd.len = n;
+
+	assert(n != 0);
+	struct CodeErrHndItem *arr = malloc(sizeof(arr[0]) * n);
+	if (!arr) {
+		errobj_set_nomem(bcr->interp);
+		return false;
+	}
+	res->data.errhnd.arr = arr;
+
+	for (size_t i = 0; i < n; i++) {
+		bool ok =
+			read_type(bcr, &arr[i].errtype, false) &&
+			read_uint16(bcr, &arr[i].errvar) &&
+			read_uint16(bcr, &arr[i].jmpidx);
+
+		if (!ok) {
+			free(arr);
+			return false;
+		}
+	}
+	return true;
 }
 
 static bool read_construction(struct BcReader *bcr, struct CodeOp *res)

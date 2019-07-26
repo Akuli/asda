@@ -451,17 +451,37 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 }
 
 
-static void jump_to_error_handler(struct Runner *rnr)
+// returns NULL for nothing found (that's not an error)
+// discards checked error handlers, including the possible matching one
+// leaves other error handlers there because they could catch other errors later
+static const struct CodeErrHndItem *
+find_matching_error_handler_item(struct Runner *rnr)
 {
-	struct CodeErrHndData eh = dynarray_pop(&rnr->ehstack);
-	rnr->opidx = eh.jmpidx;
+	assert(rnr->interp->err);
+	for (long i = (long)rnr->ehstack.len - 1; i >= 0; i--) {
+		struct CodeErrHnd eh = rnr->ehstack.ptr[i];
+		for (size_t k = 0; k < eh.len; k++) {
+			if (type_compatiblewith(rnr->interp->err->type, eh.arr[k].errtype)) {
+				rnr->ehstack.len = (size_t)i;
+				return &eh.arr[k];
+			}
+		}
+	}
+
+	rnr->ehstack.len = 0;
+	return NULL;
+}
+
+static void jump_to_error_handler(struct Runner *rnr, struct CodeErrHndItem ehi)
+{
+	rnr->opidx = ehi.jmpidx;
 
 	struct ErrObject *e = rnr->interp->err;
 	assert(e);
 
-	if (rnr->scope->locals[eh.errvar])
-		OBJECT_DECREF(rnr->scope->locals[eh.errvar]);
-	rnr->scope->locals[eh.errvar] = (Object *)e;
+	if (rnr->scope->locals[ehi.errvar])
+		OBJECT_DECREF(rnr->scope->locals[ehi.errvar]);
+	rnr->scope->locals[ehi.errvar] = (Object *)e;
 	rnr->interp->err = NULL;
 
 	errobj_beginhandling(rnr->interp, e);
@@ -493,8 +513,9 @@ enum RunnerResult runner_run(struct Runner *rnr)
 		res = run_one_op(rnr, op);
 		if (res == RUNNER_ERROR) {
 			clear_stack(rnr);
-			if (rnr->ehstack.len) {
-				jump_to_error_handler(rnr);
+			const struct CodeErrHndItem *ehi = find_matching_error_handler_item(rnr);
+			if (ehi) {
+				jump_to_error_handler(rnr, *ehi);
 				continue;
 			}
 		}

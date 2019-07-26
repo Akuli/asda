@@ -12,3 +12,31 @@ try:
     print("after bad print")
 catch VariableError e:
     print("this is the error: {e}")
+
+# catches are checked in the order they are added in
+try:
+    print(string)
+catch Error e:
+    print("error catch, this should run")
+catch VariableError e:
+    print("variable error catch, this should NOT run")
+
+try:
+    print(string)
+catch VariableError e:
+    print("should run")
+catch Error e:
+    print("should NOT run")
+
+# specifying more than one 'catch' part is different from using nested try,catch
+try:
+    try:
+        print("This should get printed")
+        throw new VariableError("oh no")
+    catch VariableError e:
+        print("This should also get printed")
+        throw new ValueError("u suck")
+    catch ValueError e:
+        print("This should NOT get printed")
+catch ValueError e:
+    print("This should get printed, too")

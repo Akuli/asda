@@ -1,3 +1,8 @@
 no errors here
 before bad print
 this is the error: value of a variable hasn't been set
+error catch, this should run
+should run
+This should get printed
+This should also get printed
+This should get printed, too

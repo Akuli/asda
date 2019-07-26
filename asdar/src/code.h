@@ -56,11 +56,13 @@ struct Code {
 	uint16_t nlocalvars;
 };
 
-struct CodeVarData { uint8_t level; uint16_t index; };
-struct CodeLookupMethodData { const struct Type *type; uint16_t index; };
-struct CodeErrHndData { uint16_t jmpidx; const struct Type *errtype; uint16_t errvar; };
-struct CodeCreateFuncData { const struct TypeFunc *type; struct Code code; };
+struct CodeErrHndItem { const struct Type *errtype; uint16_t errvar; uint16_t jmpidx; };
+struct CodeErrHnd { struct CodeErrHndItem *arr; size_t len; };
+
 struct CodeConstructorData { const struct Type *type; size_t nargs; };
+struct CodeCreateFuncData { const struct TypeFunc *type; struct Code code; };
+struct CodeLookupMethodData { const struct Type *type; uint16_t index; };
+struct CodeVarData { uint8_t level; uint16_t index; };
 
 typedef union {
 	struct CodeVarData var;
@@ -68,7 +70,7 @@ typedef union {
 	uint16_t jump_idx;
 	uint16_t strjoin_nstrs;
 	struct CodeLookupMethodData lookupmethod;
-	struct CodeErrHndData errhnd;
+	struct CodeErrHnd errhnd;
 	struct CodeCreateFuncData createfunc;
 	struct CodeConstructorData constructor;
 	Object *obj;

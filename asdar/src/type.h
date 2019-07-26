@@ -1,6 +1,7 @@
 #ifndef TYPE_H
 #define TYPE_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include "interp.h"
 
@@ -63,5 +64,8 @@ void type_destroy(struct Type *t);
 
 // does NOT destroy each argtype, but will free argtypes eventually (immediately on error, later on success)
 struct TypeFunc *type_func_new(Interp *interp, const struct Type **argtypes, size_t nargtypes, const struct Type *rettype);
+
+// type A is compatible with type B, if A is subclass of B or the types are the same
+bool type_compatiblewith(const struct Type *sub, const struct Type *par);
 
 #endif    // TYPE_H
