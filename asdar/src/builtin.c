@@ -39,7 +39,7 @@ const struct Type* const builtin_types[] = {
 	&stringobj_type,
 	&intobj_type,
 	&boolobj_type,
-	&object_type,
+	&type_object,
 	&errobj_type_error,
 	&errobj_type_nomem,
 	&errobj_type_variable,

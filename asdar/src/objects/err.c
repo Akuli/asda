@@ -270,10 +270,11 @@ void errobj_printstack(Interp *interp, ErrObject *err)
 }
 
 
-#define BOILERPLATE(CONSTRUCTOR) TYPE_BASIC_COMPILETIMECREATE(methods, sizeof(methods)/sizeof(methods[0]), (CONSTRUCTOR))
-const struct Type errobj_type_error = BOILERPLATE(NULL);
-const struct Type errobj_type_nomem = BOILERPLATE(NULL);
-const struct Type errobj_type_variable = BOILERPLATE(error_string_constructor);
-const struct Type errobj_type_value = BOILERPLATE(error_string_constructor);
-const struct Type errobj_type_os = BOILERPLATE(error_string_constructor);
+#define BOILERPLATE(NAME, BASE, CONSTRUCTOR) \
+	const struct Type NAME = TYPE_BASIC_COMPILETIMECREATE((BASE), (CONSTRUCTOR), methods, sizeof(methods)/sizeof(methods[0]))
+BOILERPLATE(errobj_type_error, NULL, NULL);
+BOILERPLATE(errobj_type_nomem, &errobj_type_error, NULL);
+BOILERPLATE(errobj_type_variable, &errobj_type_error, error_string_constructor);
+BOILERPLATE(errobj_type_value, &errobj_type_error, error_string_constructor);
+BOILERPLATE(errobj_type_os, &errobj_type_error, error_string_constructor);
 #undef BOILERPLATE

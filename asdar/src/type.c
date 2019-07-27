@@ -6,6 +6,16 @@
 #include "objects/err.h"
 #include "objects/func.h"
 
+// can't use TYPE_BASIC_COMPILETIMECREATE because it disallows making the base NULL
+const struct Type type_object = {
+	.kind = TYPE_BASIC,
+	.base = NULL,
+	.constructor = NULL,
+	.methods = NULL,
+	.nmethods = 0,
+};
+
+
 struct TypeFunc *type_func_new(Interp *interp, const struct Type **argtypes, size_t nargtypes, const struct Type *rettype)
 {
 	struct TypeFunc *res = malloc(sizeof(*res));
@@ -40,18 +50,11 @@ void type_destroy(struct Type *t)
 	free(t);
 }
 
+// TODO: handle function types
 bool type_compatiblewith(const struct Type *sub, const struct Type *par)
 {
-	if (sub == par)
-		return true;
-
-	// FIXME: is shit
-	if (par != &errobj_type_error)
-		return false;
-
-	return
-		sub == &errobj_type_nomem ||
-		sub == &errobj_type_variable ||
-		sub == &errobj_type_value ||
-		sub == &errobj_type_os;
+	for (const struct Type *t = sub; t; t = t->base)
+		if (t == par)
+			return true;
+	return false;
 }

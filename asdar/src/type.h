@@ -17,8 +17,12 @@ enum TypeKind {
 struct Object;
 struct FuncObject;
 
+// the Object base-class-of-everything type
+extern const struct Type type_object;
+
 #define HEAD \
 	enum TypeKind kind; \
+	const struct Type *base;    /* Object has no base class, so this is NULL for it */ \
 	struct Object* (*constructor)(Interp *, const struct Type *, struct Object *const *args, size_t nargs); \
 	struct FuncObject **methods; \
 	size_t nmethods;
@@ -42,8 +46,10 @@ struct TypeFunc {
 // never runs for compile-time created types
 void type_destroy(struct Type *t);
 
-#define TYPE_BASIC_COMPILETIMECREATE(METHODS, NMETHODS, CONSTRUCTOR) { \
+// if you change this, note that there is a thing in type.c that fills in the fields without this
+#define TYPE_BASIC_COMPILETIMECREATE(BASE, CONSTRUCTOR, METHODS, NMETHODS) { \
 	.kind = TYPE_BASIC, \
+	.base = (BASE) ? (BASE) : &type_object, \
 	.constructor = (CONSTRUCTOR), \
 	.methods = (METHODS), \
 	.nmethods = (NMETHODS), \
@@ -54,6 +60,7 @@ void type_destroy(struct Type *t);
 	static const struct Type *VARNAME##_argtypes[] = __VA_ARGS__; \
 	static const struct TypeFunc VARNAME = { \
 		.kind = TYPE_FUNC, \
+		.base = &type_object, \
 		.constructor = NULL, \
 		.methods = NULL, \
 		.nmethods = 0, \

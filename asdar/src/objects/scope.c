@@ -86,4 +86,4 @@ ScopeObject *scopeobj_getforlevel(ScopeObject *scope, size_t level)
 	return (level == scope->nparents) ? scope : scope->parents[level];
 }
 
-const struct Type scopeobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, 0, NULL);
+const struct Type scopeobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, NULL, NULL, 0);

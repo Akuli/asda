@@ -7,9 +7,6 @@
 #include "objects/err.h"
 
 
-const struct Type object_type = TYPE_BASIC_COMPILETIMECREATE(NULL, 0, NULL);
-
-
 void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs)
 {
 	/*

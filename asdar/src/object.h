@@ -40,7 +40,7 @@ Here is a complete usage example (with includes omitted):
 		return obj;
 	}
 
-	const struct Type exampleobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, 0);
+	const struct Type exampleobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, NULL, NULL, 0);
 */
 
 #ifndef OBJECT_H
@@ -119,8 +119,6 @@ void *object_new(Interp *interp, const struct Type *type,
 
 // use decref instead of calling this yourself
 void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs);
-
-extern const struct Type object_type;
 
 
 #endif   // OBJECT_H
