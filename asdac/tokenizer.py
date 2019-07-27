@@ -74,7 +74,7 @@ def _raw_tokenize(compilation, code, initial_offset):
             # the value is 1 character
             if value.isprintable():
                 raise common.CompileError(
-                    # TODO: this is confusing if token.value == "'"
+                    # TODO: this is confusing if value == "'"
                     "unexpected '%s'" % value, location)
             raise common.CompileError(
                 "unexpected character U+%04X" % ord(value), location)
@@ -121,57 +121,20 @@ def _match_parens(tokens):
             stack[-1].location)
 
 
-# This function needs to run before hiad (aka _handle_indents_and_dedents)
-# because hiad shouldn't see any of the whitespace between parens, but on the
-# other hand, this needs to stop ignoring whitespace whenever there is a block.
-# Nothing before hiad knows fully when blocks begin and end, so hiad must tell
-# iuw (aka _ignore_unwanted_whitespace) about it somehow. It does that by
-# .send()ing it strings.
-def _ignore_unwanted_whitespace(tokens):
-    ignore_stack = [False]
-
-    for token in tokens:
-        if token.value in {'(', '[', '{'}:
-            ignore_stack.append(True)
-        elif token.value in {')', ']', '}'}:
-            # the temporary variable is needed, because disabling asserts
-            # disables them completely ... i hope u understood this
-            popped = ignore_stack.pop()
-            assert popped
-
-        if not (ignore_stack[-1] and token.type in {'NEWLINE', 'INDENT'}):
-            while True:
-                sent2me = yield token
-                if sent2me == 'beginning of block':
-                    ignore_stack.append(False)
-                elif sent2me == 'end of block':
-                    popped = ignore_stack.pop()
-                    assert not popped
-                elif sent2me is None:
-                    # token was received, hiad used next() instead of send()
-                    # yes, next(generator) is same as generator.send(None)
-                    break
-                else:
-                    raise RuntimeError("wat")     # pragma: no cover
-
-    assert ignore_stack
-
-    # it is possible that hiad doesn't send enough 'end of block' messages,
-    # because it only knows about some dedents after it has went through all
-    # the tokens, i.e. ran iuw to the end
-    for boolean in ignore_stack[1:]:
-        assert not boolean
-
-
-def _handle_indents_and_dedents(tokens):
+def _handle_indents_and_dedents_and_unwanted_whitespace(tokens):
     # this code took a while to figure out... don't ask me to comment it more
+    space_ignore_stack = [False]
     indent_levels = [0]
     new_line_starting = True
 
-    token = None    # used below
+    token = None    # used below, set in for loop
 
     for token in tokens:
         assert token is not None
+
+        if token.type in {'NEWLINE', 'INDENT'} and space_ignore_stack[-1]:
+            continue
+
         if token.type == 'NEWLINE':
             assert not new_line_starting, "_raw_tokenize() doesn't work"
             new_line_starting = True
@@ -190,20 +153,22 @@ def _handle_indents_and_dedents(tokens):
                 assert token.type == 'INDENT'
                 yield token
                 indent_levels.append(indent_level)
-                tokens.send('beginning of block')
 
             elif indent_level < indent_levels[-1]:
                 if indent_level not in indent_levels:
                     raise common.CompileError(
                         "the indentation is wrong", token.location)
                 while indent_level != indent_levels[-1]:
-                    # this is why you shouldn't check if the value of a token
-                    # is '\n', you should instead check if the type of the
-                    # token is 'NEWLINE'
-                    yield Token('DEDENT', '', fake_token_location)
-                    yield Token('NEWLINE', '', fake_token_location)
                     del indent_levels[-1]
-                    tokens.send('end of block')
+                    was_ignoring_spaces = space_ignore_stack.pop()
+                    assert not was_ignoring_spaces
+                    yield Token('DEDENT', '', fake_token_location)
+
+                    if not space_ignore_stack[-1]:
+                        # this is why you shouldn't check if the value of a
+                        # token is '\n', you should instead check if the type
+                        # of the token is 'NEWLINE'
+                        yield Token('NEWLINE', '', fake_token_location)
 
             if token.type != 'INDENT':
                 yield token
@@ -213,9 +178,18 @@ def _handle_indents_and_dedents(tokens):
         else:
             yield token
 
+        if token.value in {'(', '[', '{'}:
+            space_ignore_stack.append(True)
+        elif token.value in {')', ']', '}'}:
+            was_ignoring_spaces = space_ignore_stack.pop()
+            assert was_ignoring_spaces
+        elif token.value == ':':
+            space_ignore_stack.append(False)
+
     # if the previous loop didn't leave a token variable around, it can't have
     # done anything
     if token is None:
+        assert space_ignore_stack == [False]
         assert indent_levels == [0]
         return
 
@@ -227,8 +201,9 @@ def _handle_indents_and_dedents(tokens):
         yield Token('DEDENT', '', fake_token_location)
         yield Token('NEWLINE', '', fake_token_location)
         del indent_levels[-1]
-        # it's not possible to send 'end of block' message anymore, because iuw
-        # has already ran to end
+
+    assert space_ignore_stack
+    assert not any(space_ignore_stack)
 
 
 # the only allowed sequence that contains colon or indent is: colon \n indent
@@ -279,9 +254,7 @@ def tokenize(compilation, code, *, initial_offset=0):
     assert initial_offset >= 0
     tokens = _raw_tokenize(compilation, code, initial_offset)
     tokens = _match_parens(tokens)
-    # these are on the same line because they "depend" on each other a lot
-    # i.e. you can't easily add another step between them
-    tokens = _handle_indents_and_dedents(_ignore_unwanted_whitespace(tokens))
+    tokens = _handle_indents_and_dedents_and_unwanted_whitespace(tokens)
     tokens = _check_colons(tokens)
     tokens = _remove_colons(tokens)
     return tokens

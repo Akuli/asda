@@ -246,7 +246,8 @@ class _Chef:
             call = self.cook_function_call(raw_expression)
             if call.function.type.returntype is None:
                 raise common.CompileError(
-                    "%s doesn't return a value" % call.function.type.name,
+                    ("functions of type %s don't return a value"
+                     % call.function.type.name),
                     raw_expression.location)
             return call
 

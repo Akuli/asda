@@ -47,7 +47,7 @@ class FunctionType(Type):
         self.argtypes = list(argtypes)
 
         super().__init__(
-            'function (%s) -> %s' % (
+            'functype{(%s) -> %s}' % (
                 ', '.join(argtype.name for argtype in self.argtypes),
                 'void' if returntype is None else returntype.name,
             ), BUILTIN_TYPES['Object'])

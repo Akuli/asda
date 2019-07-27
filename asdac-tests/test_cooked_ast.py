@@ -30,7 +30,7 @@ def test_function_calling_errors(compiler):
     compiler.doesnt_cooked_parse(
         'let x = "lol"\nx("boo")', "expected a function, got Str", 'x')
 
-    template = ("cannot call function (Str) -> void with %s, "
+    template = ("cannot call functype{(Str) -> void} with %s, "
                 "because one argument of type Str is needed")
     compiler.doesnt_cooked_parse(
         'print("a", "b")', template % "arguments of types (Str, Str)",
@@ -66,7 +66,8 @@ def test_missing_attribute(compiler):
 def test_void_function_wrong_call(compiler):
     compiler.doesnt_cooked_parse(
         'let x = print("boo")',
-        "function (Str) -> void doesn't return a value", 'print("boo")')
+        "functions of type functype{(Str) -> void} don't return a value",
+        'print("boo")')
 
 
 def test_unknown_types(compiler):
@@ -79,7 +80,7 @@ def test_unknown_types(compiler):
 def test_assign_errors(compiler):
     compiler.doesnt_cooked_parse(
         'print = "lol"',
-        "'print' is of type function (Str) -> void, can't assign Str to it",
+        "'print' is of type functype{(Str) -> void}, can't assign Str to it",
         '=')
     compiler.doesnt_cooked_parse(
         'lol = "woot"', "variable not found: lol", '=')
@@ -103,7 +104,7 @@ def test_return_errors(compiler):
                                  "missing return value", 'return')
     compiler.doesnt_cooked_parse(
         'let lol = () -> Str:\n    return print',
-        "should return Str, not function (Str) -> void", 'print')
+        "should return Str, not functype{(Str) -> void}", 'print')
 
 
 def test_operator_errors(compiler):

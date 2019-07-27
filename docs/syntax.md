@@ -273,7 +273,7 @@ whenever an opening paren occurs, and the mode before the opening paren is
 restored whenever a closing paren occurs. Here "opening paren" means one of
 the tokens `(`, `[` and `{`, and you can guess what a "closing paren" is.
 
-The space-ignoring mode is turned **off** whenever the beginning of an indented [block] is encountered,
+The space-ignoring mode is turned **off** whenever the beginning of an indented [block] occurs,
 and the mode before the block is restored at the end of the block.
 
 For example, this is valid asda code:
