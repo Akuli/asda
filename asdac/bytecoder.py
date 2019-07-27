@@ -160,25 +160,36 @@ class _BytecodeWriter:
         self.bytecode.write_string(
             os.path.normcase(str(relative_path)).replace(os.sep, '/'))
 
+    def _ensure_type_is_in_type_list_if_needed(self, tybe):
+        assert tybe is not None
+        if tybe in self.type_list or tybe in objects.BUILTIN_TYPES.values():
+            return
+
+        if isinstance(tybe, objects.FunctionType):
+            for argtype in tybe.argtypes:
+                self._ensure_type_is_in_type_list_if_needed(argtype)
+            if tybe.returntype is not None:
+                self._ensure_type_is_in_type_list_if_needed(tybe.returntype)
+        else:
+            assert False, tybe      # pragma: no cover
+
+        self.type_list.append(tybe)
+
     def write_type(self, tybe, *, allow_void=False):
+        if tybe is None:
+            assert allow_void
+            self.bytecode.add_byte(TYPE_VOID)
+            return
+
+        self._ensure_type_is_in_type_list_if_needed(tybe)
+
         if tybe in self.type_list:
             self.bytecode.add_byte(TYPE_FROM_LIST)
             self.bytecode.add_uint16(self.type_list.index(tybe))
-
         elif tybe in objects.BUILTIN_TYPES.values():
             names = list(objects.BUILTIN_TYPES)
             self.bytecode.add_byte(TYPE_BUILTIN)
             self.bytecode.add_uint8(names.index(tybe.name))
-
-        elif isinstance(tybe, objects.FunctionType):
-            self.bytecode.add_byte(TYPE_FROM_LIST)
-            self.bytecode.add_uint16(len(self.type_list))
-            self.type_list.append(tybe)
-
-        elif tybe is None:
-            assert allow_void
-            self.bytecode.add_byte(TYPE_VOID)
-
         else:
             assert False, tybe      # pragma: no cover
 

@@ -7,14 +7,13 @@ do_twice(() -> void:
 )
 
 
-# FIXME: this doesn't work yet
-#let do_twice_with_arg[T] = (functype{(T) -> void} f, T arg) -> void:
-#    f(arg)
-#    f(arg)
-#
-#do_twice_with_arg[Int]((Int arg) -> void:
-#    print(arg.to_string())
-#, 123)
-#do_twice_with_arg[Str]((Str arg) -> void:
-#    print("{arg} {arg}")
-#, "Blah")
+let do_twice_with_arg[T] = (functype{(T) -> void} f, T arg) -> void:
+    f(arg)
+    f(arg)
+
+do_twice_with_arg[Int]((Int arg) -> void:
+    print(arg.to_string())
+, 123)
+do_twice_with_arg[Str]((Str arg) -> void:
+    print("{arg} {arg}")
+, "Blah")

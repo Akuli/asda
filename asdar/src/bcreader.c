@@ -97,7 +97,6 @@ static bool read_bytes(struct BcReader *bcr, unsigned char *buf, size_t n)
 	return false;
 }
 
-
 // this is little-endian
 #define CREATE_UINT_READER(N) \
 static bool read_uint ## N (struct BcReader *bcr, uint ## N ## _t *res) \
