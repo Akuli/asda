@@ -1,6 +1,4 @@
 #include <assert.h>
-#include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "import.h"
@@ -8,10 +6,7 @@
 #include "module.h"
 #include "object.h"
 #include "path.h"
-#include "type.h"
 #include "objects/err.h"
-#include "objects/int.h"
-#include "objects/string.h"
 
 
 int main(int argc, char **argv)

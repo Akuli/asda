@@ -13,7 +13,7 @@ TESTS_SRC := $(wildcard tests/*.c tests/objects/*.c)
 TESTS_HEADERS := $(filter-out tests/runcalls.h, $(wildcard tests/*.h)) tests/runcalls.h
 
 IWYU ?= iwyu
-IWYU_SRC := $(filter-out src/dynarray.c, $(SRC) $(TESTS_SRC))
+IWYU_SRC := src/main.c $(filter-out src/dynarray.c, $(SRC) $(TESTS_SRC))
 
 ifdef NDEBUG
 	CFLAGS += -DNDEBUG
