@@ -336,8 +336,6 @@ These are the different kinds of syntax for specifying types:
   followed by similar syntax as in function definitions (documented in [expressions without operators or calls])
   between `{` and `}`.
   For example, the type of `print` is `functype{(Str) -> void}`.
-- Generic function types are like you would expect them to be.
-  For example, `functype[T]{(T) -> T}` is the type of a generic function that returns its argument unchanged.
 
 Types are not objects in asda, so the above syntaxes are not expressions.
 

@@ -388,7 +388,6 @@ class _Chef:
                 "unknown %s '%s'" % (it_is, tybe.name), tybe.location)
 
         if isinstance(tybe, raw_ast.FuncType):
-            assert tybe.generics is None   # FIXME
             argtypes, returntype = tybe.header
             cooked_argtypes = list(map(self.cook_type, argtypes))
             if returntype is None:

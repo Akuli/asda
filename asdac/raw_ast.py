@@ -9,15 +9,14 @@ def _astclass(name, fields):
     return collections.namedtuple(name, ['location'] + fields)
 
 
-#the "header" of the function is the "(Blah b) -> Blah" part
+# the "header" of the function is the "(Blah b) -> Blah" part
 # it is represented as (args, returntype) tuple
 # args are (tybe, name, location) tuples
 # returntype is None for "-> void"
 
 # GetType's generics is a list of other GetTypes, or None
-# TODO: combining FuncType and generics
 GetType = _astclass('GetType', ['name', 'generics'])
-FuncType = _astclass('FuncType', ['header', 'generics'])
+FuncType = _astclass('FuncType', ['header'])
 
 Integer = _astclass('Integer', ['python_int'])
 String = _astclass('String', ['python_string'])
@@ -235,17 +234,6 @@ class _AsdaParser:
 
     def parse_type(self):
         name = self.tokens.next_token()
-        if name.value != 'functype' and name.type != 'ID':
-            raise common.CompileError("invalid type", name.location)
-
-        if (not self.tokens.eof()) and self.tokens.peek().value == '[':
-            lbracket, generics, rbracket = self.parse_commasep_in_parens(
-                self.parse_type, parens='[]', allow_empty=False)
-            location = name.location + rbracket.location
-        else:
-            generics = None
-            location = name.location
-
         if name.value == 'functype':
             lbracket = self.tokens.next_token()
             if lbracket.value != '{':
@@ -258,8 +246,18 @@ class _AsdaParser:
             if rbracket.value != '}':
                 raise common.CompileError("should be '}'", rbracket.location)
 
-            return FuncType(name.location + rbracket.location, tuple(header),
-                            generics)
+            return FuncType(name.location + rbracket.location, tuple(header))
+
+        if name.type != 'ID':
+            raise common.CompileError("invalid type", name.location)
+
+        if (not self.tokens.eof()) and self.tokens.peek().value == '[':
+            lbracket, generics, rbracket = self.parse_commasep_in_parens(
+                self.parse_type, parens='[]', allow_empty=False)
+            location = name.location + rbracket.location
+        else:
+            generics = None
+            location = name.location
 
         return GetType(location, name.value, generics)
 
