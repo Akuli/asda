@@ -5,7 +5,7 @@
 #include "object.h"
 #include "objects/asdainst.h"
 #include "objects/err.h"
-#include "objects/func.h"
+#include "objects/func.h"   // IWYU pragma: keep
 
 // can't use TYPE_BASIC_COMPILETIMECREATE because it disallows making the base NULL
 const struct Type type_object = {
