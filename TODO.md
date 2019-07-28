@@ -27,7 +27,11 @@
             print(obj.to_debug_string())
 
 - reference objects: (&some_variable).set("Hello")
-- defining classes
+- add a way to create class members without taking more arguments in class
+- add some way to run code whenever a new instance is created, maybe a method named `setup()`?
+- `const` for class members
+- `const` for variables, maybe `let` should const by default to encourage using constness?
+- `private` for class members and methods
 - some way to refer to the type of a function, e.g.
   `functype[(Str, Int) -> Bool]` (`functype` can be a keyword)
 - interfaces kinda like they are done in rust, e.g. if you are writing a
