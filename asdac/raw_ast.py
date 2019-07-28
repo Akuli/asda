@@ -762,6 +762,13 @@ class _AsdaParser:
 
     def _parse_method(self):
         method = self.tokens.next_token()
+        if method.value == 'void':
+            newline = self.tokens.next_token()
+            if newline.type != 'NEWLINE':
+                raise common.CompileError("should be a newline",
+                                          newline.location)
+            return None
+
         if method.value != 'method':
             raise common.CompileError("should be 'method'", method.location)
 
@@ -842,8 +849,9 @@ class _AsdaParser:
 
             lparen, args, rparen = self.parse_commasep_in_parens(
                 self.parse_argument_definition)
-            methods = self.parse_block(
+            none_methods = self.parse_block(
                 parse_content=self._parse_method, consume_newline=True)
+            methods = [method for method in none_methods if method is not None]
 
             arg_infos = [arg[1:] for arg in args]
             method_infos = [method[:2] for method in methods]
