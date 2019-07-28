@@ -107,6 +107,27 @@ static enum RunnerResult run_getvar(struct Runner *rnr, const struct CodeOp *op)
 	return RUNNER_DIDNTRETURN;
 }
 
+static enum RunnerResult run_setattr(struct Runner *rnr, const struct CodeOp *op)
+{
+	assert(rnr->stack.len >= 2);
+	AsdaInstObject *sethere = (AsdaInstObject *) dynarray_pop(&rnr->stack);
+	Object *val = dynarray_pop(&rnr->stack);
+
+	assert(sethere->type->kind == TYPE_ASDACLASS);
+	assert(sethere->type == op->data.attr.type);
+
+	size_t i = op->data.attr.index;
+	assert(sethere->type->attrs[i].kind == TYPE_ATTR_ASDA);
+
+	if (sethere->attrvals[i])
+		OBJECT_DECREF(sethere->attrvals[i]);
+	sethere->attrvals[i] = val;
+
+	OBJECT_DECREF(sethere);
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
 static enum RunnerResult run_getattr(struct Runner *rnr, const struct CodeOp *op)
 {
 	assert(rnr->stack.len >= 1);
@@ -457,6 +478,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_CONSTANT, run_constant);
 		BOILERPLATE(CODE_SETVAR, run_setvar);
 		BOILERPLATE(CODE_GETVAR, run_getvar);
+		BOILERPLATE(CODE_SETATTR, run_setattr);
 		BOILERPLATE(CODE_GETATTR, run_getattr);
 		BOILERPLATE(CODE_GETFROMMODULE, run_getfrommodule);
 		BOILERPLATE(CODE_CALLFUNC, run_callfunc);

@@ -24,9 +24,10 @@ String = _astclass('String', ['python_string'])
 StrJoin = _astclass('StrJoin', ['parts'])
 # Let's generics is a list of (name, location) tuples, or None
 Let = _astclass('Let', ['varname', 'generics', 'value', 'outer', 'export'])
-SetVar = _astclass('SetVar', ['varname', 'value'])
 GetVar = _astclass('GetVar', ['module_path', 'varname', 'generics'])
+SetVar = _astclass('SetVar', ['varname', 'value'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
+SetAttr = _astclass('SetAttr', ['obj', 'attrname', 'value'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
 FuncDefinition = _astclass('FuncDefinition', ['header', 'body'])
 Return = _astclass('Return', ['value'])
@@ -661,15 +662,25 @@ class _AsdaParser:
         result = self.parse_expression(it_should_be=it_should_be)
 
         if (not self.tokens.eof()) and self.tokens.peek().value == '=':
-            if not isinstance(result, GetVar):
+            if not isinstance(result, (GetVar, GetAttr)):
                 raise common.CompileError(
                     "invalid assignment", self.tokens.peek().location)
-            assert result.module_path is None, (
-                "can't assign to other modules yet")
 
             equal_sign = self.tokens.next_token()
             value = self.parse_expression()
-            return SetVar(equal_sign.location, result.varname, value)
+
+            if isinstance(result, GetVar):
+                assert result.module_path is None, (
+                    "can't assign to other modules yet")
+                assert result.generics is None, (
+                    "can't assign to generic variables yet")
+                return SetVar(equal_sign.location, result.varname, value)
+
+            if isinstance(result, GetAttr):
+                return SetAttr(equal_sign.location, result.obj,
+                               result.attrname, value)
+
+            raise RuntimeError("wut")   # pragma: no cover
 
         if isinstance(result, FuncCall):
             return result

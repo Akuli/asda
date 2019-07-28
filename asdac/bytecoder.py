@@ -8,16 +8,17 @@ from . import common, objects, opcoder
 
 SET_LINENO = b'L'
 
-CREATE_FUNCTION = b'f'     # also used when bytecoding a type
-LOOKUP_VAR = b'v'
 SET_VAR = b'V'
+GET_VAR = b'v'
+SET_ATTR = b':'
+GET_ATTR = b'.'
+GET_FROM_MODULE = b'm'
+CREATE_FUNCTION = b'f'
 STR_CONSTANT = b'"'
 NON_NEGATIVE_INT_CONSTANT = b'1'
 NEGATIVE_INT_CONSTANT = b'2'
 TRUE_CONSTANT = b'T'
 FALSE_CONSTANT = b'F'
-LOOKUP_ATTRIBUTE = b'.'
-LOOKUP_FROM_MODULE = b'm'
 CALL_FUNCTION = b'('
 CALL_CONSTRUCTOR = b')'
 STR_JOIN = b'j'
@@ -228,13 +229,13 @@ class _BytecodeWriter:
 
         if isinstance(op, opcoder.CreateFunction):
             assert isinstance(op.functype, objects.FunctionType)
-            self.bytecode.add_byte(CREATE_FUNCTION)
+            self.bytecode.add_byte(TYPE_FUNCTION)
             self.write_type(op.functype)
             self._create_subwriter().run(op.body_opcode, varlists)
             return
 
-        if isinstance(op, opcoder.LookupVar):
-            self.bytecode.add_byte(LOOKUP_VAR)
+        if isinstance(op, opcoder.GetVar):
+            self.bytecode.add_byte(GET_VAR)
             self.bytecode.add_uint8(op.level)
             if isinstance(op.var, opcoder.ArgMarker):
                 self.bytecode.add_uint16(op.var.index)
@@ -275,8 +276,9 @@ class _BytecodeWriter:
             self.bytecode.add_uint16(self.jumpmarker2index[op.marker])
             return
 
-        if isinstance(op, opcoder.LookupAttribute):
-            self.bytecode.add_byte(LOOKUP_ATTRIBUTE)
+        if isinstance(op, (opcoder.GetAttr, opcoder.SetAttr)):
+            self.bytecode.add_byte(
+                GET_ATTR if isinstance(op, opcoder.GetAttr) else SET_ATTR)
             self.write_type(op.type)
             self.bytecode.add_uint16(op.indeks)
             return
@@ -290,8 +292,8 @@ class _BytecodeWriter:
             # already handled in run()
             return
 
-        if isinstance(op, opcoder.LookupFromModule):
-            self.bytecode.add_byte(LOOKUP_FROM_MODULE)
+        if isinstance(op, opcoder.GetFromModule):
+            self.bytecode.add_byte(GET_FROM_MODULE)
             self.bytecode.add_uint16(
                 self.compilation.imports.index(op.compilation))
             self.bytecode.add_uint16(op.indeks)
@@ -511,7 +513,7 @@ class _BytecodeReader:
             index = self.read_uint8()
             return list(objects.BUILTIN_TYPES.values())[index]
 
-        if byte == CREATE_FUNCTION:
+        if byte == TYPE_FUNCTION:
             returntype = self.read_type()
             nargs = self.read_uint8()
             argtypes = [self.read_type() for junk in range(nargs)]

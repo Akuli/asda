@@ -20,9 +20,12 @@
 #define IMPORT_SECTION 'i'
 #define TYPE_LIST_SECTION 'y'
 
+#define SET_LINENO 'L'
 #define SET_VAR 'V'
 #define GET_VAR 'v'
-#define SET_LINENO 'L'
+#define SET_ATTR ':'
+#define GET_ATTR '.'
+#define GET_FROM_MODULE 'm'
 #define STR_CONSTANT '"'
 #define TRUE_CONSTANT 'T'
 #define FALSE_CONSTANT 'F'
@@ -33,8 +36,6 @@
 #define JUMP 'K'
 #define JUMPIF 'J'
 #define STRING_JOIN 'j'
-#define GET_ATTR '.'
-#define GET_FROM_MODULE 'm'
 #define NON_NEGATIVE_INT_CONSTANT '1'
 #define NEGATIVE_INT_CONSTANT '2'
 #define THROW 't'
@@ -479,6 +480,16 @@ static bool read_setmethods2class(struct BcReader *bcr, struct CodeOp *res)
 	return true;
 }
 
+static bool read_attribute(struct BcReader *bcr, struct CodeOp *res) {
+	if(!read_type(bcr, &res->data.attr.type, false))
+		return false;
+	if (!read_uint16(bcr, &res->data.attr.index))
+		return false;
+
+	assert(res->data.attr.index < res->data.attr.type->nattrs);
+	return true;
+}
+
 
 static bool read_body(struct BcReader *bcr, struct Code *code);  // forward declare
 static bool read_create_function(struct BcReader *bcr, struct CodeOp *res)
@@ -533,18 +544,16 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case CALL_CONSTRUCTOR: return read_construction(bcr, res);
 	case JUMP:   res->kind = CODE_JUMP;   return read_uint16(bcr, &res->data.jump_idx);
 	case JUMPIF: res->kind = CODE_JUMPIF; return read_uint16(bcr, &res->data.jump_idx);
+
 	case NON_NEGATIVE_INT_CONSTANT:
 	case NEGATIVE_INT_CONSTANT:
 		res->kind = CODE_CONSTANT;
 		return read_int_constant(bcr, &res->data.obj, opbyte==NEGATIVE_INT_CONSTANT);
-	case GET_ATTR:
-		res->kind = CODE_GETATTR;
-		if(!read_type(bcr, &res->data.attr.type, false))
-			return false;
-		if (!read_uint16(bcr, &res->data.attr.index))
-			return false;
-		assert(res->data.attr.index < res->data.attr.type->nattrs);
-		return true;
+
+	case GET_ATTR: res->kind = CODE_GETATTR; return read_attribute(bcr, res);
+	case SET_ATTR:
+		res->kind = CODE_SETATTR;
+		return read_attribute(bcr, res);
 
 	case GET_FROM_MODULE:
 		res->kind = CODE_GETFROMMODULE;

@@ -29,11 +29,12 @@ StrConstant = _op_class('StrConstant', ['python_string'])
 IntConstant = _op_class('IntConstant', ['python_int'])
 BoolConstant = _op_class('BoolConstant', ['python_bool'])
 CreateFunction = _op_class('CreateFunction', ['functype', 'body_opcode'])
-LookupVar = _op_class('LookupVar', ['level', 'var'])
 # tuples have an index() method, avoid name clash with misspelling
-LookupFromModule = _op_class('LookupFromModule', ['compilation', 'indeks'])
-LookupAttribute = _op_class('LookupAttribute', ['type', 'indeks'])
+GetFromModule = _op_class('GetFromModule', ['compilation', 'indeks'])
 SetVar = _op_class('SetVar', ['level', 'var'])
+GetVar = _op_class('GetVar', ['level', 'var'])
+SetAttr = _op_class('SetAttr', ['type', 'indeks'])
+GetAttr = _op_class('GetAttr', ['type', 'indeks'])
 CallFunction = _op_class('CallFunction', ['nargs'])
 CallConstructor = _op_class('CallConstructor', ['tybe', 'nargs'])
 StrJoin = _op_class('StrJoin', ['how_many_parts'])
@@ -215,6 +216,10 @@ class _OpCoder:
             end_index = self.output.ops.index(end)
             index_range = range(start_index, end_index)
 
+    def attrib_index(self, tybe, name):
+        assert isinstance(tybe.attributes, collections.OrderedDict)
+        return list(tybe.attributes.keys()).index(name)
+
     def do_expression(self, expression):
         if isinstance(expression, cooked_ast.StrConstant):
             self.output.ops.append(StrConstant(
@@ -267,11 +272,17 @@ class _OpCoder:
                 self._lineno(expression.location),
                 expression.type, function_opcode))
 
-        elif isinstance(expression, cooked_ast.LookupVar):
+        elif isinstance(expression, cooked_ast.GetVar):
             coder = self._get_coder_for_level(expression.level)
-            self.output.ops.append(LookupVar(
+            self.output.ops.append(GetVar(
                 self._lineno(expression.location), expression.level,
                 coder.local_vars[expression.var]))
+
+        elif isinstance(expression, cooked_ast.GetAttr):
+            self.do_expression(expression.obj)
+            self.output.ops.append(GetAttr(
+                self._lineno(expression.location), expression.obj.type,
+                self.attrib_index(expression.obj.type, expression.attrname)))
 
         elif isinstance(expression, cooked_ast.IfExpression):
             if_expr_begins = JumpMarker()
@@ -285,19 +296,12 @@ class _OpCoder:
             self.do_expression(expression.true_expr)
             self.output.ops.append(done)
 
-        elif isinstance(expression, cooked_ast.LookupFromModule):
+        elif isinstance(expression, cooked_ast.GetFromModule):
             exported_names = list(expression.compilation.export_types.keys())
-            self.output.ops.append(LookupFromModule(
+            self.output.ops.append(GetFromModule(
                 self._lineno(expression.location),
                 expression.compilation,
                 exported_names.index(expression.name)))
-
-        elif isinstance(expression, cooked_ast.LookupAttr):
-            self.do_expression(expression.obj)
-            attribute_names = list(expression.obj.type.attributes.keys())
-            index = attribute_names.index(expression.attrname)
-            self.output.ops.append(LookupAttribute(
-                self._lineno(expression.location), expression.obj.type, index))
 
         elif isinstance(expression, cooked_ast.PrefixMinus):
             self.do_expression(expression.prefixed)
@@ -406,7 +410,7 @@ class _OpCoder:
 
         # EH used, create and push FS
         self.output.ops.append(try_error_handler_start)
-        self.output.ops.append(LookupVar(None, self.level, try_error_var))
+        self.output.ops.append(GetVar(None, self.level, try_error_var))
         self.output.ops.append(PushFinallyStateError(None))
         # "fall through"
         self.output.ops.append(finally_state_pushed)
@@ -439,7 +443,7 @@ class _OpCoder:
         # finally EH: discard FS and rethrow error
         self.output.ops.append(finally_error_handler_start)
         self.output.ops.append(DiscardFinallyState(None))
-        self.output.ops.append(LookupVar(
+        self.output.ops.append(GetVar(
             None, self.level, finally_error_var))
         self.output.ops.append(Throw(None))
 
@@ -464,6 +468,13 @@ class _OpCoder:
             self.output.ops.append(SetVar(
                 self._lineno(statement.location), statement.level,
                 coder.local_vars[statement.var]))
+
+        elif isinstance(statement, cooked_ast.SetAttr):
+            self.do_expression(statement.value)
+            self.do_expression(statement.obj)
+            self.output.ops.append(SetAttr(
+                self._lineno(statement.location), statement.obj.type,
+                self.attrib_index(statement.obj.type, statement.attrname)))
 
         elif isinstance(statement, cooked_ast.VoidReturn):
             self.output.ops.append(Return(

@@ -1,3 +1,4 @@
 Hello world
+greeter.name is world
+now it is asda
 Hello asda
-Accessing attributes works so that world.name gives "world"

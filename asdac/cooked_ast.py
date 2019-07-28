@@ -12,13 +12,11 @@ def _astclass(name, fields):
 StrConstant = _astclass('StrConstant', ['python_string'])
 StrJoin = _astclass('StrJoin', ['parts'])  # there are always >=2 parts
 IntConstant = _astclass('IntConstant', ['python_int'])
+GetVar = _astclass('GetVar', ['var', 'level'])
 SetVar = _astclass('SetVar', ['var', 'level', 'value'])
-LookupVar = _astclass('LookupVar', ['var', 'level'])
-LookupFromModule = _astclass('LookupFromModule', ['compilation', 'name'])
-LookupAttr = _astclass('LookupAttr', ['obj', 'attrname'])
-LookupGenericFunction = _astclass('LookupGenericFunction',
-                                  ['funcname', 'types', 'level'])
-LookupModule = _astclass('LookupModule', [])
+GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
+SetAttr = _astclass('SetAttr', ['obj', 'attrname', 'value'])
+GetFromModule = _astclass('GetFromModule', ['compilation', 'name'])
 CreateFunction = _astclass('CreateFunction', ['argvars', 'body'])
 CreateLocalVar = _astclass('CreateLocalVar', ['var'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
@@ -240,14 +238,14 @@ class _Chef:
             obj = self.cook_expression(raw_expression.obj)
             try:
                 tybe = obj.type.attributes[raw_expression.attrname].tybe
-            except KeyError as e:
+            except KeyError:
                 raise common.CompileError(
                     "%s objects have no '%s' attribute" % (
                         obj.type.name, raw_expression.attrname),
                     raw_expression.location)
 
-            return LookupAttr(raw_expression.location, tybe,
-                              obj, raw_expression.attrname)
+            return GetAttr(raw_expression.location, tybe,
+                           obj, raw_expression.attrname)
 
         if isinstance(raw_expression, raw_ast.FuncCall):
             call = self.cook_function_call(raw_expression)
@@ -291,7 +289,7 @@ class _Chef:
                         list(map(self.cook_type, raw_expression.generics)),
                         raw_expression.location)
 
-                return LookupVar(
+                return GetVar(
                     raw_expression.location, tybe, var, chef.level)
 
             assert raw_expression.generics is None, (
@@ -306,7 +304,7 @@ class _Chef:
                     common.path_string(raw_expression.module_path),
                     raw_expression.varname)
 
-            return LookupFromModule(
+            return GetFromModule(
                 raw_expression.location, tybe,
                 compilation, raw_expression.varname)
 
@@ -407,8 +405,17 @@ class _Chef:
 
         assert False, tybe   # pragma: no cover
 
+    # dest = value
+    def _check_assign_type(self, dest_string, dest_type, value,
+                           assign_location):
+        if dest_type != value.type:
+            raise common.CompileError(
+                "%s is of type %s, can't assign %s to it"
+                % (dest_string, dest_type.name, value.type.name),
+                assign_location)
+
     def cook_setvar(self, raw):
-        cooked_value = self.cook_expression(raw.value)
+        value = self.cook_expression(raw.value)
         varname = raw.varname
         chef = self
 
@@ -416,14 +423,9 @@ class _Chef:
             if varname in chef.vars.maps[0]:
                 var = chef.vars.maps[0][varname]
                 assert not isinstance(var, str)
-                if cooked_value.type != var.type:
-                    raise common.CompileError(
-                        ("'%s' is of type %s, can't assign %s to it"
-                         % (varname, var.type.name,
-                            cooked_value.type.name)),
-                        raw.location)
-                return SetVar(
-                    raw.location, None, var, chef.level, cooked_value)
+                self._check_assign_type(
+                    "'%s'" % varname, var.type, value, raw.location)
+                return SetVar(raw.location, None, var, chef.level, value)
 
             if chef.parent_chef is None:
                 raise common.CompileError(
@@ -431,6 +433,26 @@ class _Chef:
                     raw.location)
 
             chef = chef.parent_chef
+
+    def cook_setattr(self, raw):
+        obj = self.cook_expression(raw.obj)
+        try:
+            attr = obj.type.attributes[raw.attrname]
+        except KeyError:
+            raise common.CompileError(
+                "%s objects have no '%s' attribute" % (
+                    obj.type.name, raw_expression.attrname),
+                raw.location)
+        if not attr.settable:
+            raise common.CompileError(
+                "the '%s' attribute is not settable" % raw.attrname,
+                raw.location)
+
+        value = self.cook_expression(raw.value)
+        self._check_assign_type(
+            "%s.%s" % (obj.type.name, raw.attrname), attr.tybe,
+            value, raw.location)
+        return SetAttr(raw.location, None, obj, raw.attrname, value)
 
     def _check_can_export(self, location):
         # 0 = global chef, 1 = file chef, 2 = function chef, etc
@@ -734,6 +756,8 @@ class _Chef:
             return self.cook_let(raw_statement)
         if isinstance(raw_statement, raw_ast.SetVar):
             return [self.cook_setvar(raw_statement)]
+        if isinstance(raw_statement, raw_ast.SetAttr):
+            return [self.cook_setattr(raw_statement)]
         if isinstance(raw_statement, raw_ast.FuncCall):
             return [self.cook_function_call(raw_statement)]
         if isinstance(raw_statement, raw_ast.Return):
