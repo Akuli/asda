@@ -32,6 +32,8 @@ Loop = _astclass('Loop', ['pre_cond', 'post_cond', 'incr', 'body'])
 TryCatch = _astclass('TryCatch', ['try_body', 'catches'])
 TryFinally = _astclass('TryFinally', ['try_body', 'finally_body'])
 New = _astclass('New', ['args'])
+# used when creating classes
+SetMethodsToClass = _astclass('SetMethodsToClass', ['klass', 'methods'])
 
 Plus = _astclass('Plus', ['lhs', 'rhs'])
 Minus = _astclass('Minus', ['lhs', 'rhs'])
@@ -65,6 +67,11 @@ def _replace_generic_markers_with_object(node, markers):
     return node
 
 
+# FIXME: this is wrong? collections.ChainMap.__iter__ source code is:
+#
+#    def __iter__(self):
+#        return iter(set().union(*self.maps))
+
 def _create_chainmap(fallback_chainmap):
     return collections.ChainMap(
         collections.OrderedDict(), *fallback_chainmap.maps)
@@ -75,7 +82,7 @@ class Variable:
     def __init__(self, name, tybe, definition_location):
         self.name = name
         self.type = tybe
-        self.definition_location = definition_location    # None for builtins
+        self.definition_location = definition_location    # can be None
 
     def __repr__(self):
         return '<%s %r>' % (type(self).__name__, self.name)
@@ -86,7 +93,7 @@ class GenericVariable:
     def __init__(self, name, generic, definition_location):
         self.name = name
         self.generic = generic
-        self.definition_location = definition_location    # None for builtins
+        self.definition_location = definition_location    # can be None
 
 
 BUILTIN_VARS = collections.OrderedDict([
@@ -232,7 +239,7 @@ class _Chef:
         if isinstance(raw_expression, raw_ast.GetAttr):
             obj = self.cook_expression(raw_expression.obj)
             try:
-                tybe = obj.type.attributes[raw_expression.attrname]
+                tybe = obj.type.attributes[raw_expression.attrname].tybe
             except KeyError as e:
                 raise common.CompileError(
                     "%s objects have no '%s' attribute" % (
@@ -425,6 +432,13 @@ class _Chef:
 
             chef = chef.parent_chef
 
+    def _check_can_export(self, location):
+        # 0 = global chef, 1 = file chef, 2 = function chef, etc
+        if self.level != 1:
+            assert self.level >= 2
+            raise common.CompileError(
+                "export cannot be used in a function", location)
+
     # returns a list, unlike most other cook_blah methods
     def cook_let(self, raw):
         self._check_name_not_exist(raw.varname, raw.location)
@@ -473,10 +487,16 @@ class _Chef:
         ]
 
     # TODO: allow functions to call themselves
-    def cook_function_definition(self, raw):
+    def cook_function_definition(self, raw, *, this_type=None):
         argnames = []
         argtypes = []
         argvars = []
+
+        if this_type is not None:
+            self._check_name_not_exist('this', raw.location)
+            argnames.append('this')
+            argtypes.append(this_type)
+            argvars.append(Variable('this', this_type, raw.location))
 
         raw_args, raw_returntype = raw.header
         for raw_argtype, argname, argnameloc in raw_args:
@@ -690,12 +710,23 @@ class _Chef:
                 raw_try.finally_location, raw_try.finally_body)
         return cooked_try_catch
 
-    def _check_can_export(self, location):
-        # 0 = global chef, 1 = file chef, 2 = function chef, etc
-        if self.level != 1:
-            assert self.level >= 2
-            raise common.CompileError(
-                "export cannot be used in a function", location)
+    def cook_class(self, raw_class):
+        cooked_types = collections.OrderedDict(
+            (name, self.cook_type(tybe))
+            for tybe, name, location in raw_class.args)
+        tybe = objects.UserDefinedClass(raw_class.name, cooked_types)
+        self.types[raw_class.name] = tybe
+
+        methods = []
+        for name, name_location, funcdef in raw_class.methods:
+            cooked_funcdef = self.cook_function_definition(
+                funcdef, this_type=tybe)
+            methods.append(cooked_funcdef)
+            assert name not in tybe.attributes   # checked by raw_ast
+            tybe.attributes[name] = objects.Attribute(
+                cooked_funcdef.type.remove_this_arg(tybe), False)
+
+        return SetMethodsToClass(raw_class.location, None, tybe, methods)
 
     # returns a list, unlike most other cook_blah methods
     def cook_statement(self, raw_statement):
@@ -721,6 +752,8 @@ class _Chef:
             return self.cook_for(raw_statement)
         if isinstance(raw_statement, raw_ast.Try):
             return self.cook_try(raw_statement)
+        if isinstance(raw_statement, raw_ast.Class):
+            return [self.cook_class(raw_statement)]
 
         assert False, raw_statement     # pragma: no cover
 

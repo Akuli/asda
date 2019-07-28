@@ -1,0 +1,3 @@
+Hello world
+Hello asda
+Accessing attributes works so that world.name gives "world"

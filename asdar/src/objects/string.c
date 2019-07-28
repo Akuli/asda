@@ -330,5 +330,10 @@ static bool tostring_cfunc(Interp *interp, struct ObjData data,
 }
 FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &stringobj_type });
 
-static FuncObject *methods[] = { &uppercase, &lowercase, &tostring };
-const struct Type stringobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, NULL, methods, sizeof(methods)/sizeof(methods[0]));
+static struct TypeAttr attrs[] = {
+	{ TYPE_ATTR_METHOD, &uppercase },
+	{ TYPE_ATTR_METHOD, &lowercase },
+	{ TYPE_ATTR_METHOD, &tostring },
+};
+
+const struct Type stringobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, NULL, attrs, sizeof(attrs)/sizeof(attrs[0]));

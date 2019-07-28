@@ -9,6 +9,10 @@ import collections
 from asdac import common
 
 
+# non-settable attributes are aka read-only
+Attribute = collections.namedtuple('Attribute', ['tybe', 'settable'])
+
+
 class Type:
 
     def __init__(self, name, parent_type):
@@ -34,7 +38,8 @@ class Type:
         return self
 
     def add_method(self, name, argtypes, returntype):
-        self.attributes[name] = FunctionType(argtypes, returntype)
+        self.attributes[name] = Attribute(
+            FunctionType(argtypes, returntype), False)
 
     def __repr__(self):
         return '<%s type %r>' % (__name__, self.name)
@@ -65,6 +70,10 @@ class FunctionType(Type):
             [tybe.undo_generics(type_dict) for tybe in self.argtypes],
             (None if self.returntype is None else
              self.returntype.undo_generics(type_dict)))
+
+    def remove_this_arg(self, this_arg_type):
+        assert self.argtypes[0] == this_arg_type
+        return FunctionType(self.argtypes[1:], self.returntype)
 
 
 def _fill_builtin_types_ordered_dict():
@@ -103,6 +112,22 @@ BUILTIN_VARS = collections.OrderedDict([
     ('TRUE', BUILTIN_TYPES['Bool']),
     ('FALSE', BUILTIN_TYPES['Bool']),
 ])
+
+
+# feels nice and evil to create a class with just one method >xD MUHAHAHA ...
+class UserDefinedClass(Type):
+
+    def __init__(self, name, attr_arg_types: collections.OrderedDict):
+        super().__init__(name, BUILTIN_TYPES['Object'])
+
+        assert not self.attributes
+        self.attributes.update(
+            (name, Attribute(tybe, True))
+            for name, tybe in attr_arg_types.items()
+        )
+        # self.attributes will also contain methods added with add_method()
+
+        self.constructor_argtypes = list(attr_arg_types.values())
 
 
 class GeneratorType(Type):

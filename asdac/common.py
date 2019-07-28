@@ -155,8 +155,7 @@ class Location:
     def __repr__(self):
 #        return '<Location offset=%r length=%r: %r>' % (
 #            self.offset, self.length, self.get_source()[1])
-#        return '<%s>' % type(self).__name__
-        return '<%s@%#x>' % (type(self).__name__, id(self))
+        return '<%s>' % type(self).__name__
 
     # raises OSError
     def _read_before_value_after(self):

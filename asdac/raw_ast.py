@@ -1,4 +1,5 @@
 import collections
+import enum
 import itertools
 import os
 
@@ -46,6 +47,9 @@ TernaryOperator = _astclass('TernaryOperator', ['operator', 'lhs', 'mid',
 Try = _astclass('TryCatch', ['try_body', 'catches',
                              'finally_location', 'finally_body'])
 New = _astclass('New', ['tybe', 'args'])
+# args are (tybe, name, location) tuples
+# methods are (name, name_location, FuncDefinition) tuples
+Class = _astclass('Class', ['name', 'args', 'methods'])
 
 
 def _duplicate_check(iterable, what_are_they):
@@ -99,7 +103,7 @@ class _TokenIterator:
 # the values can be used as bit flags, e.g. OP_BINARY | OP_BINARY_CHAINING
 #
 # i would use enum.IntFlag but it's new in python 3.6, and other stuff works
-# on python works 3.5
+# on python 3.5
 OP_PREFIX = 1 << 0              # -x
 OP_BINARY = 1 << 1              # x + y
 OP_TERNARY = 1 << 2             # x `y` z
@@ -716,9 +720,65 @@ class _AsdaParser:
         if token.value != ';':
             raise common.CompileError("should be ';'", token.location)
 
+    def _parse_try_statement(self):
+        try_location = self.tokens.next_token().location
+        try_body = self.parse_block(consume_newline=True)
+
+        catches = []
+        while ((not self.tokens.eof()) and
+               self.tokens.peek().value == 'catch'):
+            catch = self.tokens.next_token()
+
+            tybe = self.parse_type()
+            if self.tokens.peek().type == 'ID':
+                varname_token = self.tokens.next_token()
+                if varname_token.type != 'ID':
+                    raise common.Compilation("should be a variable name",
+                                             varname_token.location)
+                varname = varname_token.value
+                varname_location = varname_token.location
+            else:
+                varname = None
+                varname_location = None
+
+            catch_body = self.parse_block(consume_newline=True)
+            catches.append((catch.location, tybe, varname,
+                            varname_location, catch_body))
+
+        if ((not self.tokens.eof()) and
+                self.tokens.peek().value == 'finally'):
+            finally_location = self.tokens.next_token().location
+            finally_body = self.parse_block(consume_newline=True)
+        elif catches:
+            finally_location = None
+            finally_body = []
+        else:
+            raise common.CompileError(
+                "you need to use 'catch' or 'finally' after a 'try'",
+                try_location)
+
+        return Try(try_location, try_body, catches,
+                   finally_location, finally_body)
+
+    def _parse_method(self):
+        method = self.tokens.next_token()
+        if method.value != 'method':
+            raise common.CompileError("should be 'method'", method.location)
+
+        name = self.tokens.next_token()
+        if name.type != 'ID':
+            raise common.CompileError(
+                "should be the name of the method", name.location)
+
+        junky_location, *header = self.parse_function_header(
+            self.parse_argument_definition)
+        body = self.parse_block(consume_newline=True)
+        return (name.value, name.location,
+                FuncDefinition(method.location, tuple(header), body))
+
     # note that 'if x then y else z' is not a valid statement even though it
     # is a valid expression
-    def parse_statement(self):
+    def parse_statement(self, *, allow_classes=False):
         if self.tokens.peek().value == 'while':
             while_location = self.tokens.next_token().location
             cond = self.parse_expression()
@@ -771,44 +831,27 @@ class _AsdaParser:
             return For(for_location, init, cond, incr, body)
 
         if self.tokens.peek().value == 'try':
-            try_location = self.tokens.next_token().location
-            try_body = self.parse_block(consume_newline=True)
+            return self._parse_try_statement()
 
-            catches = []
-            while ((not self.tokens.eof()) and
-                   self.tokens.peek().value == 'catch'):
-                catch = self.tokens.next_token()
-
-                tybe = self.parse_type()
-                if self.tokens.peek().type == 'ID':
-                    varname_token = self.tokens.next_token()
-                    if varname_token.type != 'ID':
-                        raise common.Compilation("should be a variable name",
-                                                 varname_token.location)
-                    varname = varname_token.value
-                    varname_location = varname_token.location
-                else:
-                    varname = None
-                    varname_location = None
-
-                catch_body = self.parse_block(consume_newline=True)
-                catches.append((catch.location, tybe, varname,
-                                varname_location, catch_body))
-
-            if ((not self.tokens.eof()) and
-                    self.tokens.peek().value == 'finally'):
-                finally_location = self.tokens.next_token().location
-                finally_body = self.parse_block(consume_newline=True)
-            elif catches:
-                finally_location = None
-                finally_body = []
-            else:
+        if allow_classes and self.tokens.peek().value == 'class':
+            class_location = self.tokens.next_token().location
+            name = self.tokens.next_token()
+            if name.type != 'ID':
                 raise common.CompileError(
-                    "you need to use 'catch' or 'finally' after a 'try'",
-                    try_location)
+                    "should be the name of the class", name.location)
 
-            return Try(try_location, try_body, catches,
-                       finally_location, finally_body)
+            lparen, args, rparen = self.parse_commasep_in_parens(
+                self.parse_argument_definition)
+            methods = self.parse_block(
+                parse_content=self._parse_method, consume_newline=True)
+
+            arg_infos = [arg[1:] for arg in args]
+            method_infos = [method[:2] for method in methods]
+            _duplicate_check(arg_infos, 'argument')
+            _duplicate_check(method_infos, 'method')
+            _duplicate_check(arg_infos + method_infos, 'argument or method')
+
+            return Class(name.location, name.value, args, methods)
 
         result = self.parse_1line_statement(it_should_be='a statement')
 
@@ -817,7 +860,10 @@ class _AsdaParser:
             raise common.CompileError("should be a newline", newline.location)
         return result
 
-    def parse_block(self, *, consume_newline=False):
+    def parse_block(self, *, parse_content=None, consume_newline=False):
+        if parse_content is None:
+            parse_content = self.parse_statement
+
         indent = self.tokens.next_token()
         if indent.type != 'INDENT':
             # there was no colon, tokenizer replaces 'colon indent' with
@@ -826,7 +872,7 @@ class _AsdaParser:
 
         result = []
         while self.tokens.peek().type != 'DEDENT':
-            result.append(self.parse_statement())
+            result.append(parse_content())
 
         dedent = self.tokens.next_token()
         assert dedent.type == 'DEDENT'
@@ -837,14 +883,14 @@ class _AsdaParser:
 
         return result
 
-    def parse_statements(self):
+    def parse_file(self):
         while not self.tokens.eof():
-            yield self.parse_statement()
+            yield self.parse_statement(allow_classes=True)
 
 
 def parse(compilation, code):
     parser = _AsdaParser(compilation, tokenizer.tokenize(compilation, code),
                          collections.OrderedDict())
     parser.parse_imports()
-    statements = list(parser.parse_statements())    # must not be lazy iterator
+    statements = list(parser.parse_file())    # must not be lazy iterator
     return (statements, list(parser.import_paths.values()))

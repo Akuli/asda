@@ -44,6 +44,8 @@ BoolNegation = _op_class('BoolNegation', [])
 Jump = _op_class('Jump', ['marker'])
 JumpIf = _op_class('JumpIf', ['marker'])
 DidntReturnError = _op_class('DidntReturnError', [])
+SetMethodsToClass = _op_class('SetMethodsToClass', ['klass',
+                                                    'how_many_methods'])
 
 Plus = _op_class('Plus', [])
 Minus = _op_class('Minus', [])
@@ -520,6 +522,13 @@ class _OpCoder:
 
         elif isinstance(statement, cooked_ast.TryFinally):
             self.do_try_finally(statement)
+
+        elif isinstance(statement, cooked_ast.SetMethodsToClass):
+            for method in statement.methods:
+                self.do_expression(method)
+            assert isinstance(statement.klass, objects.UserDefinedClass)
+            self.output.ops.append(SetMethodsToClass(
+                None, statement.klass, len(statement.methods)))
 
         else:
             assert False, type(statement)     # pragma: no cover

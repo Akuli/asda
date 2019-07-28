@@ -1,0 +1,15 @@
+class Greeter(Str name):
+
+    method hello() -> void:
+        print("Hello {this.name}")
+
+    method hello_wrapper() -> void:
+        this.hello()
+
+
+let world = new Greeter("world")
+let asda = new Greeter("asda")
+world.hello()
+asda.hello_wrapper()
+
+print("Accessing attributes works so that world.name gives \"{world.name}\"")

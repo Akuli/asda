@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "interp.h"
 #include "object.h"
+#include "objects/asdainst.h"
 #include "objects/err.h"
 #include "objects/func.h"
 
@@ -11,8 +12,8 @@ const struct Type type_object = {
 	.kind = TYPE_BASIC,
 	.base = NULL,
 	.constructor = NULL,
-	.methods = NULL,
-	.nmethods = 0,
+	.attrs = NULL,
+	.nattrs = 0,
 };
 
 
@@ -26,27 +27,61 @@ struct TypeFunc *type_func_new(Interp *interp, const struct Type **argtypes, siz
 	}
 
 	res->kind = TYPE_FUNC;
-	res->methods = NULL;
-	res->nmethods = 0;
+	res->base = &type_object;
+	res->constructor = NULL;
+	res->attrs = NULL;
+	res->nattrs = 0;
 	res->argtypes = argtypes;
 	res->nargtypes = nargtypes;
 	res->rettype = rettype;
 	return res;
 }
 
-void type_destroy(struct Type *t)
+struct TypeAsdaClass *type_asdaclass_new(Interp *interp, size_t nasdaattrs, size_t nmethods)
 {
-	switch(t->kind) {
-	case TYPE_BASIC:
-		break;
-	case TYPE_FUNC:
-		free( ((struct TypeFunc *)t)->argtypes );
-		break;
+	struct TypeAsdaClass *res = malloc(sizeof(*res));
+	if (!res){
+		errobj_set_nomem(interp);
+		return NULL;
 	}
 
-	for (size_t i = 0; i < t->nmethods; i++)
-		OBJECT_DECREF(t->methods[i]);
-	free(t->methods);
+	if (nasdaattrs + nmethods == 0)
+		res->attrs = NULL;
+	else {
+		res->attrs = malloc(sizeof(res->attrs[0]) * (nasdaattrs + nmethods));
+		if (!res->attrs) {
+			free(res);
+			errobj_set_nomem(interp);
+			return NULL;
+		}
+	}
+
+	for (size_t i = 0; i < nasdaattrs; i++)
+		res->attrs[i].kind = TYPE_ATTR_ASDA;
+	for (size_t i = nasdaattrs; i < nasdaattrs + nmethods; i++) {
+		res->attrs[i].kind = TYPE_ATTR_METHOD;
+		res->attrs[i].method = NULL;
+	}
+
+	res->kind = TYPE_ASDACLASS;
+	res->base = &type_object;
+	res->constructor = asdainstobj_constructor;
+	res->nattrs = nasdaattrs + nmethods;
+	res->nasdaattrs = nasdaattrs;
+	return res;
+}
+
+
+void type_destroy(struct Type *t)
+{
+	if (t->kind == TYPE_FUNC)
+		free( ((struct TypeFunc *)t)->argtypes );
+
+	for (size_t i = 0; i < t->nattrs; i++)
+		if (t->attrs[i].kind == TYPE_ATTR_METHOD && t->attrs[i].method)
+			OBJECT_DECREF(t->attrs[i].method);
+
+	free(t->attrs);
 	free(t);
 }
 

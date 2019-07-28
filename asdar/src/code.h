@@ -11,7 +11,7 @@ enum CodeOpKind {
 	CODE_CONSTANT,
 	CODE_SETVAR,
 	CODE_GETVAR,
-	CODE_GETMETHOD,
+	CODE_GETATTR,
 	CODE_GETFROMMODULE,
 	CODE_CALLFUNC,
 	CODE_CALLCONSTRUCTOR,
@@ -21,6 +21,7 @@ enum CodeOpKind {
 	CODE_STRJOIN,
 	CODE_POP1,
 	CODE_THROW,
+	CODE_SETMETHODS2CLASS,
 
 	CODE_CREATEFUNC,
 	CODE_VOIDRETURN,
@@ -61,18 +62,20 @@ struct CodeErrHnd { struct CodeErrHndItem *arr; size_t len; };
 
 struct CodeConstructorData { const struct Type *type; size_t nargs; };
 struct CodeCreateFuncData { const struct TypeFunc *type; struct Code code; };
-struct CodeLookupMethodData { const struct Type *type; uint16_t index; };
+struct CodeAttrData { const struct Type *type; uint16_t index; };
 struct CodeVarData { uint8_t level; uint16_t index; };
+struct CodeSetMethodsData { const struct TypeAsdaClass *type; uint16_t nmethods; };
 
 typedef union {
 	struct CodeVarData var;
 	uint8_t callfunc_nargs;
 	uint16_t jump_idx;
 	uint16_t strjoin_nstrs;
-	struct CodeLookupMethodData lookupmethod;
+	struct CodeAttrData attr;
 	struct CodeErrHnd errhnd;
 	struct CodeCreateFuncData createfunc;
 	struct CodeConstructorData constructor;
+	struct CodeSetMethodsData setmethods;
 	Object *obj;
 	Object **modmemberptr;
 } CodeData;

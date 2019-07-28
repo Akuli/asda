@@ -9,6 +9,7 @@
 #include "object.h"
 #include "partialfunc.h"
 #include "type.h"
+#include "objects/asdainst.h"
 #include "objects/bool.h"
 #include "objects/err.h"
 #include "objects/func.h"
@@ -106,17 +107,40 @@ static enum RunnerResult run_getvar(struct Runner *rnr, const struct CodeOp *op)
 	return RUNNER_DIDNTRETURN;
 }
 
-static enum RunnerResult run_getmethod(struct Runner *rnr, const struct CodeOp *op)
+static enum RunnerResult run_getattr(struct Runner *rnr, const struct CodeOp *op)
 {
 	assert(rnr->stack.len >= 1);
-	struct CodeLookupMethodData data = op->data.lookupmethod;
 	Object **ptr = &rnr->stack.ptr[rnr->stack.len - 1];
-	FuncObject *parti = partialfunc_create(rnr->interp, data.type->methods[data.index], ptr, 1);
-	if(!parti)
-		return RUNNER_ERROR;
+	assert((*ptr)->type == op->data.attr.type);
+
+	struct TypeAttr attr = (*ptr)->type->attrs[op->data.attr.index];
+	Object *res;
+
+	switch(attr.kind) {
+
+	case TYPE_ATTR_ASDA:
+		assert((*ptr)->type->kind == TYPE_ASDACLASS);
+		res = ((AsdaInstObject *) *ptr)->attrvals[op->data.attr.index];
+		if (!res) {
+			// TODO: "AttrError" class or something
+			// TODO: include attribute name in error message somehow
+			errobj_set(rnr->interp, &errobj_type_value, "value of an attribute has not been set");
+			return RUNNER_ERROR;
+		}
+		OBJECT_INCREF(res);
+		break;
+
+	case TYPE_ATTR_METHOD:
+		assert(attr.method);
+		res = (Object *) partialfunc_create(rnr->interp, attr.method, ptr, 1);
+		if (!res)
+			return RUNNER_ERROR;
+		break;
+
+	}
 
 	OBJECT_DECREF(*ptr);
-	*ptr = (Object *)parti;
+	*ptr = res;
 	rnr->opidx++;
 	return RUNNER_DIDNTRETURN;
 }
@@ -279,6 +303,24 @@ static enum RunnerResult run_throw(struct Runner *rnr, const struct CodeOp *op)
 	return RUNNER_ERROR;
 }
 
+static enum RunnerResult run_setmethods2class(struct Runner *rnr, const struct CodeOp *op)
+{
+	const struct TypeAsdaClass *type = op->data.setmethods.type;
+	assert(type->nasdaattrs + op->data.setmethods.nmethods == type->nattrs);
+	assert(rnr->stack.len >= op->data.setmethods.nmethods);
+
+	Object **ptr = &rnr->stack.ptr[rnr->stack.len - op->data.setmethods.nmethods];
+	for (size_t i = type->nasdaattrs; i < type->nattrs; i++) {
+		assert(type->attrs[i].kind == TYPE_ATTR_METHOD);
+		assert(!type->attrs[i].method);
+		type->attrs[i].method = (FuncObject *) *ptr++;
+	}
+	rnr->stack.len -= op->data.setmethods.nmethods;
+
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
 static enum RunnerResult run_fs_push_something(struct Runner *rnr, const struct CodeOp *op)
 {
 	struct RunnerFinallyState fs;
@@ -415,7 +457,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_CONSTANT, run_constant);
 		BOILERPLATE(CODE_SETVAR, run_setvar);
 		BOILERPLATE(CODE_GETVAR, run_getvar);
-		BOILERPLATE(CODE_GETMETHOD, run_getmethod);
+		BOILERPLATE(CODE_GETATTR, run_getattr);
 		BOILERPLATE(CODE_GETFROMMODULE, run_getfrommodule);
 		BOILERPLATE(CODE_CALLFUNC, run_callfunc);
 		BOILERPLATE(CODE_CALLCONSTRUCTOR, run_callconstructor);
@@ -429,6 +471,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_VOIDRETURN, run_voidreturn);
 		BOILERPLATE(CODE_VALUERETURN, run_valuereturn);
 		BOILERPLATE(CODE_DIDNTRETURNERROR, run_didntreturnerror);
+		BOILERPLATE(CODE_SETMETHODS2CLASS, run_setmethods2class);
 		BOILERPLATE(CODE_EH_ADD, run_eh_add);
 		BOILERPLATE(CODE_EH_RM, run_eh_rm);
 		BOILERPLATE(CODE_FS_OK, run_fs_push_something);
@@ -454,8 +497,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 // returns NULL for nothing found (that's not an error)
 // discards checked error handlers, including the possible matching one
 // leaves other error handlers there because they could catch other errors later
-static const struct CodeErrHndItem *
-find_matching_error_handler_item(struct Runner *rnr)
+static const struct CodeErrHndItem *find_matching_error_handler_item(struct Runner *rnr)
 {
 	assert(rnr->interp->err);
 	for (long i = (long)rnr->ehstack.len - 1; i >= 0; i--) {

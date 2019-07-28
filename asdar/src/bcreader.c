@@ -33,7 +33,7 @@
 #define JUMP 'K'
 #define JUMPIF 'J'
 #define STRING_JOIN 'j'
-#define GET_METHOD '.'   // currently all attributes are methods
+#define GET_ATTR '.'
 #define GET_FROM_MODULE 'm'
 #define NON_NEGATIVE_INT_CONSTANT '1'
 #define NEGATIVE_INT_CONSTANT '2'
@@ -49,6 +49,7 @@
 #define VOID_RETURN 'r'
 #define VALUE_RETURN 'R'
 #define DIDNT_RETURN_ERROR 'd'
+#define SET_METHODS_TO_CLASS 'S'
 #define END_OF_BODY 'E'
 #define PUSH_FINALLY_STATE_OK '3'
 #define PUSH_FINALLY_STATE_ERROR '4'
@@ -58,6 +59,7 @@
 #define APPLY_FINALLY_STATE 'A'
 #define DISCARD_FINALLY_STATE 'D'
 
+#define TYPEBYTE_ASDACLASS 'a'
 #define TYPEBYTE_BUILTIN 'b'
 #define TYPEBYTE_TYPE_LIST 'l'
 #define TYPEBYTE_FUNC 'f'
@@ -299,6 +301,19 @@ static struct TypeFunc *read_func_type(struct BcReader *bcr)
 	return type_func_new(bcr->interp, argtypes, nargs, rettyp);
 }
 
+// TODO: include types of constructor arguments everywhere, including non-asdaclass types?
+static struct TypeAsdaClass *read_asda_class_type(struct BcReader *bcr)
+{
+	uint16_t nasdaattribs, nmethods;
+	if (!read_uint16(bcr, &nasdaattribs) ||
+		!read_uint16(bcr, &nmethods))
+	{
+		return NULL;
+	}
+
+	return type_asdaclass_new(bcr->interp, nasdaattribs, nmethods);
+}
+
 static struct Type *read_typelist_item(struct BcReader *bcr)
 {
 	unsigned char byte;
@@ -308,6 +323,8 @@ static struct Type *read_typelist_item(struct BcReader *bcr)
 	switch(byte) {
 	case TYPEBYTE_FUNC:
 		return (struct Type *) read_func_type(bcr);
+	case TYPEBYTE_ASDACLASS:
+		return (struct Type *) read_asda_class_type(bcr);
 	default:
 		errobj_set(bcr->interp, &errobj_type_value, "unknown typelist type byte: %B", byte);
 		return NULL;
@@ -449,6 +466,19 @@ static bool read_construction(struct BcReader *bcr, struct CodeOp *res)
 	return true;
 }
 
+static bool read_setmethods2class(struct BcReader *bcr, struct CodeOp *res)
+{
+	res->kind = CODE_SETMETHODS2CLASS;
+	if (!read_type(bcr, (const struct Type **) &res->data.setmethods.type, false) ||
+		!read_uint16(bcr, &res->data.setmethods.nmethods))
+	{
+		return false;
+	}
+
+	assert(res->data.setmethods.type->kind == TYPE_ASDACLASS);
+	return true;
+}
+
 
 static bool read_body(struct BcReader *bcr, struct Code *code);  // forward declare
 static bool read_create_function(struct BcReader *bcr, struct CodeOp *res)
@@ -507,13 +537,13 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case NEGATIVE_INT_CONSTANT:
 		res->kind = CODE_CONSTANT;
 		return read_int_constant(bcr, &res->data.obj, opbyte==NEGATIVE_INT_CONSTANT);
-	case GET_METHOD:
-		res->kind = CODE_GETMETHOD;
-		if(!read_type(bcr, &res->data.lookupmethod.type, false))
+	case GET_ATTR:
+		res->kind = CODE_GETATTR;
+		if(!read_type(bcr, &res->data.attr.type, false))
 			return false;
-		if (!read_uint16(bcr, &res->data.lookupmethod.index))
+		if (!read_uint16(bcr, &res->data.attr.index))
 			return false;
-		assert(res->data.lookupmethod.index < res->data.lookupmethod.type->nmethods);
+		assert(res->data.attr.index < res->data.attr.type->nattrs);
 		return true;
 
 	case GET_FROM_MODULE:
@@ -535,6 +565,8 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case VOID_RETURN: res->kind = CODE_VOIDRETURN; return true;
 	case VALUE_RETURN: res->kind = CODE_VALUERETURN; return true;
 	case DIDNT_RETURN_ERROR: res->kind = CODE_DIDNTRETURNERROR; return true;
+
+	case SET_METHODS_TO_CLASS: return read_setmethods2class(bcr, res);
 
 	case INT_ADD: res->kind = CODE_INT_ADD; return true;
 	case INT_SUB: res->kind = CODE_INT_SUB; return true;

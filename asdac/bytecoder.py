@@ -30,6 +30,7 @@ YIELD = b'Y'
 BOOL_NEGATION = b'!'
 JUMP_IF = b'J'
 JUMP = b'K'
+SET_METHODS_TO_CLASS = b'S'
 END_OF_BODY = b'E'
 
 PLUS = b'+'
@@ -53,6 +54,7 @@ DISCARD_FINALLY_STATE = b'D'
 
 
 # these are used when bytecoding a type
+TYPE_ASDA_CLASS = b'a'
 TYPE_BUILTIN = b'b'
 TYPE_FUNCTION = b'f'
 TYPE_VOID = b'v'
@@ -170,6 +172,11 @@ class _BytecodeWriter:
                 self._ensure_type_is_in_type_list_if_needed(argtype)
             if tybe.returntype is not None:
                 self._ensure_type_is_in_type_list_if_needed(tybe.returntype)
+        elif isinstance(tybe, objects.UserDefinedClass):
+            # TODO: remember to change this when argtypes and class members
+            #       become different things
+            for argtybe in tybe.constructor_argtypes:
+                self._ensure_type_is_in_type_list_if_needed(argtybe)
         else:
             assert False, tybe      # pragma: no cover
 
@@ -311,6 +318,12 @@ class _BytecodeWriter:
             self.bytecode.add_uint16(self.jumpmarker2index[op.index])
             return
 
+        if isinstance(op, opcoder.SetMethodsToClass):
+            self.bytecode.add_byte(SET_METHODS_TO_CLASS)
+            self.write_type(op.klass)
+            self.bytecode.add_uint16(op.how_many_methods)
+            return
+
         simple_things = [
             (opcoder.PopOne, POP_ONE),
             (opcoder.BoolNegation, BOOL_NEGATION),
@@ -360,12 +373,18 @@ class _BytecodeWriter:
         self.bytecode.add_uint16(len(self.type_list))
         for tybe in self.type_list:
             if isinstance(tybe, objects.FunctionType):
-                self.bytecode.add_byte(CREATE_FUNCTION)
+                self.bytecode.add_byte(TYPE_FUNCTION)
                 self.write_type(tybe.returntype, allow_void=True)
 
                 self.bytecode.add_uint8(len(tybe.argtypes))
                 for argtype in tybe.argtypes:
                     self.write_type(argtype)
+
+            elif isinstance(tybe, objects.UserDefinedClass):
+                self.bytecode.add_byte(TYPE_ASDA_CLASS)
+                self.bytecode.add_uint16(len(tybe.constructor_argtypes))
+                self.bytecode.add_uint16(
+                    len(tybe.attributes) - len(tybe.constructor_argtypes))
 
             else:   # pragma: no cover
                 raise NotImplementedError(repr(tybe))

@@ -141,17 +141,6 @@ void errobj_set_oserr(Interp *interp, const char *fmt, ...)
 }
 
 
-static bool tostring_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
-{
-	StringObject *s = ((ErrObject *) args[0])->msgstr;
-	OBJECT_INCREF(s);
-	*result = (Object *)s;
-	return true;
-}
-FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &errobj_type_error });
-
-static FuncObject *methods[] = { &tostring };
-
 static Object *error_string_constructor(Interp *interp, const struct Type *errtype, struct Object *const *args, size_t nargs)
 {
 	assert(nargs == 1);
@@ -274,8 +263,21 @@ void errobj_printstack(Interp *interp, ErrObject *err)
 }
 
 
+static bool tostring_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
+{
+	StringObject *s = ((ErrObject *) args[0])->msgstr;
+	OBJECT_INCREF(s);
+	*result = (Object *)s;
+	return true;
+}
+FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &errobj_type_error });
+
+static struct TypeAttr attrs[] = {
+	{ TYPE_ATTR_METHOD, &tostring },
+};
+
 #define BOILERPLATE(NAME, BASE, CONSTRUCTOR) \
-	const struct Type NAME = TYPE_BASIC_COMPILETIMECREATE((BASE), (CONSTRUCTOR), methods, sizeof(methods)/sizeof(methods[0]))
+	const struct Type NAME = TYPE_BASIC_COMPILETIMECREATE((BASE), (CONSTRUCTOR), attrs, sizeof(attrs)/sizeof(attrs[0]))
 BOILERPLATE(errobj_type_error, NULL, NULL);
 BOILERPLATE(errobj_type_nomem, &errobj_type_error, NULL);
 BOILERPLATE(errobj_type_variable, &errobj_type_error, error_string_constructor);
