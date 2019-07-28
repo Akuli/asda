@@ -51,6 +51,7 @@ New = _astclass('New', ['tybe', 'args'])
 # args are (tybe, name, location) tuples
 # methods are (name, name_location, FuncDefinition) tuples
 Class = _astclass('Class', ['name', 'args', 'methods'])
+ThisExpression = _astclass('This', [])
 
 
 def _duplicate_check(iterable, what_are_they):
@@ -224,8 +225,10 @@ class _AsdaParser:
         lparen, args, rparen = self.parse_commasep_in_parens(
             parse_an_arg)
         _duplicate_check((arg[1:] for arg in args), 'argument')
+
         arrow = self.tokens.next_token()
-        assert arrow.value == '->', arrow
+        if arrow.value != '->':
+            raise common.CompileError("should be '->'", arrow.location)
 
         if self.tokens.peek().value == 'void':
             returntype = None
@@ -279,7 +282,10 @@ class _AsdaParser:
     def expression_without_operators_coming_up(self):
         # '(' could be a function or parentheses for predecence
         # both are expressions
-        if self.tokens.peek().value in {'(', 'if', 'new'}:
+        #
+        # 'if' is a part of an if expression: 'if foo then bar else baz'
+        # (doesn't conflict with if statements)
+        if self.tokens.peek().value in {'(', 'if', 'new', 'this'}:
             return True
 
         if self.tokens.peek().type in {'INTEGER', 'STRING', 'ID',
@@ -372,6 +378,9 @@ class _AsdaParser:
                 name = token.value
 
             return GetVar(location, module_path, name, generics)
+
+        if self.tokens.peek().value == 'this':
+            return ThisExpression(self.tokens.next_token().location)
 
         if self.tokens.peek().value == 'if':
             # if cond then true_expr else false_expr

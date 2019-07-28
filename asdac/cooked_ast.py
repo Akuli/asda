@@ -218,6 +218,10 @@ class _Chef:
                     return chef
             chef = chef.parent_chef
 
+        if varname == 'this':
+            raise common.CompileError(
+                "'this' can be used only inside methods", error_location)
+
         message = "variable not found: " + varname
         if is_generic:
             message = "generic " + message
@@ -307,6 +311,14 @@ class _Chef:
             return GetFromModule(
                 raw_expression.location, tybe,
                 compilation, raw_expression.varname)
+
+        # from now on, 'this' is a variable
+        # it is actually a keyword to prevent doing confusing things
+        if isinstance(raw_expression, raw_ast.ThisExpression):
+            chef = self.get_chef_for_varname(
+                'this', False, raw_expression.location)
+            return GetVar(raw_expression.location, chef.vars['this'].type,
+                          chef.vars['this'], chef.level)
 
         if isinstance(raw_expression, raw_ast.StrJoin):
             return StrJoin(
@@ -419,6 +431,7 @@ class _Chef:
         varname = raw.varname
         chef = self
 
+        # TODO: should this use get_chef_for_varname?
         while True:
             if varname in chef.vars.maps[0]:
                 var = chef.vars.maps[0][varname]
@@ -428,6 +441,8 @@ class _Chef:
                 return SetVar(raw.location, None, var, chef.level, value)
 
             if chef.parent_chef is None:
+                # 'this = lel' fails in raw_ast.py
+                assert varname != 'this'
                 raise common.CompileError(
                     "variable not found: %s" % varname,
                     raw.location)
@@ -516,16 +531,6 @@ class _Chef:
         raw_args, raw_returntype = raw.header
 
         if this_type is not None:
-            self._check_name_not_exist('this', raw.location)
-
-            this_arg_location = next(
-                (loc for tybe, name, loc in raw_args if name == 'this'),
-                None)
-            if this_arg_location is not None:
-                raise common.CompileError(
-                    "don't add an argument called 'this' to a method",
-                    this_arg_location)
-
             argnames.append('this')
             argtypes.append(this_type)
             argvars.append(Variable('this', this_type, raw.location))

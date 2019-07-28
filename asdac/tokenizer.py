@@ -33,7 +33,7 @@ _KEYWORDS = {
     'outer', 'export', 'let',
     'import', 'as',
     'throw', 'catch', 'try', 'finally',
-    'class', 'method', 'new',
+    'class', 'method', 'this', 'new',
     'functype',
 }
 

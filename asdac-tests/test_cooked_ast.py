@@ -240,3 +240,14 @@ def test_constructor_errors(compiler):
 def test_bad_throw(compiler):
     compiler.doesnt_cooked_parse(
         'throw "lol"', "should be an Error object", '"lol"')
+
+
+def test_this_assigning_disallowed(compiler):
+    compiler.doesnt_cooked_parse('''\
+class Foo():
+    method lol() -> void:
+        this = new Foo()
+''', 'invalid assignment', '=')
+
+    compiler.doesnt_cooked_parse(
+        'print(this)', "'this' can be used only inside methods", 'this')
