@@ -513,14 +513,23 @@ class _Chef:
         argnames = []
         argtypes = []
         argvars = []
+        raw_args, raw_returntype = raw.header
 
         if this_type is not None:
             self._check_name_not_exist('this', raw.location)
+
+            this_arg_location = next(
+                (loc for tybe, name, loc in raw_args if name == 'this'),
+                None)
+            if this_arg_location is not None:
+                raise common.CompileError(
+                    "don't add an argument called 'this' to a method",
+                    this_arg_location)
+
             argnames.append('this')
             argtypes.append(this_type)
             argvars.append(Variable('this', this_type, raw.location))
 
-        raw_args, raw_returntype = raw.header
         for raw_argtype, argname, argnameloc in raw_args:
             argtype = self.cook_type(raw_argtype)
             self._check_name_not_exist(argname, argnameloc)
