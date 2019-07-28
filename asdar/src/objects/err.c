@@ -215,8 +215,10 @@ static bool print_source_line(const char *path, size_t lineno)
 		// skip line
 		while ((c = fgetc(f)) != EOF && c != '\n')
 			;
-		if (c == EOF)
+		if (c == EOF) {
+			fclose(f);
 			return false;
+		}
 	}
 
 	// skip spaces
@@ -229,6 +231,8 @@ static bool print_source_line(const char *path, size_t lineno)
 	while ((c = fgetc(f)) != EOF && c != '\n')
 		putc(c, stderr);
 	putc('\n', stderr);
+
+	fclose(f);
 	return true;
 }
 

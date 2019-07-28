@@ -25,4 +25,4 @@ compile-examples:
 	$(PYTHON) -m asdac --always-recompile $(EXAMPLES)
 
 example-tests: compile-examples asdar/asdar
-	bash test-examples.sh $(EXAMPLES)
+	bash test-examples.sh
