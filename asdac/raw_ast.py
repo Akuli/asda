@@ -500,7 +500,7 @@ class _AsdaParser:
                 else:
                     break
 
-                # now we have these variables: index, kind, token
+                # now we have these variables: index, flags, token
 
                 if flags & OP_TERNARY:
                     assert flags == OP_TERNARY     # no other flags
