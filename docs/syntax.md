@@ -389,6 +389,8 @@ Here is the list of all valid expressions without operators or calls:
   `B` or `C`.
 - **`new` expressions** consist of the keyword `new` followed by a [type],
     and then zero or more comma-separated expressions between `(` and `)`.
+- **`this` expressions** can be only used in methods of classes,
+    and they work like `this` works in many other programming languages (it's `self` in python).
 
 
 ### Expressions without operators
@@ -532,17 +534,21 @@ Here is the list of one-line-ish statements:
     Currently it is not possible to `export` a generic variable, but I'm planning on fixing that.
     Also, combining `outer` and `export` is not allowed.
 
-- **Assignment statements** are like `varname = value` without a `let`, but
+- **Variable assignment statements** are like `varname = value` without a `let`, but
   otherwise similar to let statements without `export` or `outer`. They change the value of a variable. The
   new value has to be of the same type as the value that was given to the
   variable with `let`.
+
+- **Attribute assignment statements** are like `foo.bar = baz`.
+    Here the attribute name `bar` must be an [identifier],
+    but `foo` and `baz` can be any [expressions].
 
 - **Function calls** are documented in the [expressions without operators] section.
     When a call to a function that returns something (the function definition does not use `-> void`) is used as a statement,
     the return value of the function is ignored.
 
 
-### Multiline Statements
+### Statements (including non-one-line statements)
 
 - **While statements** consist of `while` followed by a condition and a block.
   The condition must be an [expression] with type [Bool]. This does the same
@@ -623,6 +629,20 @@ Here is the list of one-line-ish statements:
 
     The finally part consists of the keyword `finally` followed by a block.
     It works like in most other programming lanuages.
+
+- **Class statements** consist of `class Foo(Bar baz):` followed by zero or more newline-separated `void` keywords or method definitions.
+    Here the `void` keyword is like the void statement, documented in [one-line-ish statements];
+    it does nothing.
+    `Foo` is the name of the class, and it can be any [identifier].
+
+    The `Bar baz` part is like the similar part in function definitions,
+    documented in [expressions without operators or calls].
+    It defines the arguments of the constructor.
+    Each constructor argument is set to an attribute with a similar name when an instance of the class is created.
+
+    Each method definition consists of the keyword `method`, a method name [identifier],
+    and the rest is a function definition.
+
 
 - All [one-line-ish statements] are also statements.
 
