@@ -39,7 +39,6 @@ enum TypeKind {
 	TYPE_BASIC,
 	TYPE_FUNC,
 	TYPE_ASDACLASS,  // TODO: combine this with TYPE_BASIC
-	TYPE_GENERIC,    // only for types returned from type_generic_new
 };
 
 #define HEAD \
@@ -80,12 +79,6 @@ struct TypeAsdaClass {
 	size_t nasdaattrs;
 };
 
-struct TypeGeneric {
-	HEAD
-	const struct Type **generics;
-	size_t ngenerics;
-};
-
 #undef HEAD
 
 
@@ -120,25 +113,10 @@ extern const struct Type type_object;
 void type_destroy(struct Type *t);
 
 
-/*
-use this function like this:
-1. create a "base type" with TYPE_BASIC
-	it represents e.g. Array[T]
-	set generics to NULL and ngenerics to 0
-	can be created at compile time
-	never exposed to the asda user
-	must not be destroyed before the types returned by this
-2. use this function to turn it into Array[Str]
-
-does free(generics) at some point (immediately on error)
-*/
-struct TypeGeneric *type_generic_new(Interp *interp, const struct Type *basetype, const struct Type **generics, size_t ngenerics);
-
 // will free(argtypes) eventually (immediately on error, later on success)
 struct TypeFunc *type_func_new(Interp *interp, const struct Type **argtypes, size_t nargtypes, const struct Type *rettype);
 
 // sets the FuncObject of each method to NULL
-// TODO: generics
 struct TypeAsdaClass *type_asdaclass_new(Interp *interp, size_t nasdaattrs, size_t nmethods);
 
 // type A is compatible with type B, if A is subclass of B or the types are the same

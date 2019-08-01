@@ -46,6 +46,6 @@ const struct Type* const builtin_types[] = {
 	&errobj_type_variable,
 	&errobj_type_value,
 	&errobj_type_os,
-	&arrayobj_basetype,
+	&arrayobj_type,
 };
 const size_t builtin_ntypes = sizeof(builtin_types)/sizeof(builtin_types[0]);

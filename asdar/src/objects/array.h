@@ -7,7 +7,7 @@
 #include "../object.h"
 #include "../type.h"
 
-extern const struct Type arrayobj_basetype;
+extern const struct Type arrayobj_type;
 
 typedef struct ArrayObject {
 	OBJECT_HEAD

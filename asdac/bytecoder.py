@@ -57,7 +57,6 @@ DISCARD_FINALLY_STATE = b'D'
 # these are used when bytecoding a type
 TYPE_ASDA_CLASS = b'a'
 TYPE_BUILTIN = b'b'
-TYPE_GENERIC = b'g'
 TYPE_FUNCTION = b'f'
 TYPE_VOID = b'v'
 TYPE_FROM_LIST = b'l'
@@ -171,7 +170,10 @@ class _BytecodeWriter:
 
     def _ensure_type_is_in_type_list_if_needed(self, tybe):
         assert tybe is not None
-        if tybe in self.type_list or tybe in objects.BUILTIN_TYPES.values():
+        if (
+          tybe in self.type_list or
+          tybe in objects.BUILTIN_TYPES.values() or
+          self._is_builtin_generic_type(tybe)):
             return
 
         if isinstance(tybe, objects.FunctionType):
@@ -184,9 +186,6 @@ class _BytecodeWriter:
             #       become different things
             for argtybe in tybe.constructor_argtypes:
                 self._ensure_type_is_in_type_list_if_needed(argtybe)
-        elif self._is_builtin_generic_type(tybe):
-            for generic_type in tybe.generic_types:
-                self._ensure_type_is_in_type_list_if_needed(generic_type)
         else:
             assert False, tybe      # pragma: no cover
 
@@ -207,6 +206,14 @@ class _BytecodeWriter:
             names = list(objects.BUILTIN_TYPES)
             self.bytecode.add_byte(TYPE_BUILTIN)
             self.bytecode.add_uint8(names.index(tybe.name))
+        elif self._is_builtin_generic_type(tybe):
+            # interpreter doesn't know anything about generic types
+            # it has all built-in types in the same array
+            # generics are there last
+            lizt = list(objects.BUILTIN_GENERIC_TYPES.values())
+            index = lizt.index(tybe.original_generic)
+            self.bytecode.add_byte(TYPE_BUILTIN)
+            self.bytecode.add_uint8(len(objects.BUILTIN_TYPES) + index)
         else:
             assert False, tybe      # pragma: no cover
 
@@ -228,20 +235,6 @@ class _BytecodeWriter:
                 self.bytecode.add_uint16(len(tybe.constructor_argtypes))
                 self.bytecode.add_uint16(
                     len(tybe.attributes) - len(tybe.constructor_argtypes))
-
-            elif self._is_builtin_generic_type(tybe):
-                self.bytecode.add_byte(TYPE_GENERIC)
-
-                # interpreter has generic types and other types in same array
-                # generics are there last
-                lizt = list(objects.BUILTIN_GENERIC_TYPES.values())
-                index = lizt.index(tybe.original_generic)
-                self.bytecode.add_byte(TYPE_BUILTIN)
-                self.bytecode.add_uint8(len(objects.BUILTIN_TYPES) + index)
-
-                self.bytecode.add_uint16(len(tybe.generic_types))
-                for generic_type in tybe.generic_types:
-                    self.write_type(generic_type)
 
             else:   # pragma: no cover
                 raise NotImplementedError(repr(tybe))
