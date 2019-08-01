@@ -1,0 +1,29 @@
+akuli@Akuli-Desktop:~/asda$ rm -r asda-compiled/
+akuli@Akuli-Desktop:~/asda$ python3 -m asdac examples/import.asda 
+examples/import.asda: Compiling...
+examples/export.asda: Compiling...
+examples/subdir/export.asda: Compiling...
+akuli@Akuli-Desktop:~/asda$ python3 -m asdac examples/import.asda 
+Traceback (most recent call last):
+  File "/usr/lib/python3.5/runpy.py", line 193, in _run_module_as_main
+    "__main__", mod_spec)
+  File "/usr/lib/python3.5/runpy.py", line 85, in _run_code
+    exec(code, run_globals)
+  File "/home/akuli/asda/asdac/__main__.py", line 292, in <module>
+    main()
+  File "/home/akuli/asda/asdac/__main__.py", line 278, in main
+    compile_manager.compile(path)
+  File "/home/akuli/asda/asdac/__main__.py", line 147, in compile
+    self._compile_imports(compilation, imports)
+  File "/home/akuli/asda/asdac/__main__.py", line 123, in _compile_imports
+    self.compile(path)
+  File "/home/akuli/asda/asdac/__main__.py", line 146, in compile
+    compilation)
+  File "/home/akuli/asda/asdac/bytecoder.py", line 539, in read_imports_and_exports
+    exports = reader.read_export_section()
+  File "/home/akuli/asda/asdac/bytecoder.py", line 527, in read_export_section
+    tybe = self.read_type(name_hint=name)
+  File "/home/akuli/asda/asdac/bytecoder.py", line 488, in read_type
+    if byte == TYPE_GENERATOR:
+NameError: name 'TYPE_GENERATOR' is not defined
+akuli@Akuli-Desktop:~/asda$ 

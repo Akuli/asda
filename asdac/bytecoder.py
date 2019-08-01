@@ -57,6 +57,7 @@ DISCARD_FINALLY_STATE = b'D'
 # these are used when bytecoding a type
 TYPE_ASDA_CLASS = b'a'
 TYPE_BUILTIN = b'b'
+TYPE_GENERIC = b'g'
 TYPE_FUNCTION = b'f'
 TYPE_VOID = b'v'
 TYPE_FROM_LIST = b'l'
@@ -163,6 +164,11 @@ class _BytecodeWriter:
         self.bytecode.write_string(
             os.path.normcase(str(relative_path)).replace(os.sep, '/'))
 
+    def _is_builtin_generic_type(self, tybe):
+        return (
+            tybe.original_generic is not None and
+            tybe.original_generic in objects.BUILTIN_GENERIC_TYPES.values())
+
     def _ensure_type_is_in_type_list_if_needed(self, tybe):
         assert tybe is not None
         if tybe in self.type_list or tybe in objects.BUILTIN_TYPES.values():
@@ -178,6 +184,9 @@ class _BytecodeWriter:
             #       become different things
             for argtybe in tybe.constructor_argtypes:
                 self._ensure_type_is_in_type_list_if_needed(argtybe)
+        elif self._is_builtin_generic_type(tybe):
+            for generic_type in tybe.generic_types:
+                self._ensure_type_is_in_type_list_if_needed(generic_type)
         else:
             assert False, tybe      # pragma: no cover
 
@@ -200,6 +209,43 @@ class _BytecodeWriter:
             self.bytecode.add_uint8(names.index(tybe.name))
         else:
             assert False, tybe      # pragma: no cover
+
+    # use this after run()
+    def write_type_list(self):
+        self.bytecode.add_byte(TYPE_LIST_SECTION)
+        self.bytecode.add_uint16(len(self.type_list))
+        for tybe in self.type_list:
+            if isinstance(tybe, objects.FunctionType):
+                self.bytecode.add_byte(TYPE_FUNCTION)
+                self.write_type(tybe.returntype, allow_void=True)
+
+                self.bytecode.add_uint8(len(tybe.argtypes))
+                for argtype in tybe.argtypes:
+                    self.write_type(argtype)
+
+            elif isinstance(tybe, objects.UserDefinedClass):
+                self.bytecode.add_byte(TYPE_ASDA_CLASS)
+                self.bytecode.add_uint16(len(tybe.constructor_argtypes))
+                self.bytecode.add_uint16(
+                    len(tybe.attributes) - len(tybe.constructor_argtypes))
+
+            elif self._is_builtin_generic_type(tybe):
+                self.bytecode.add_byte(TYPE_GENERIC)
+
+                # interpreter has generic types and other types in same array
+                # generics are there last
+                lizt = list(objects.BUILTIN_GENERIC_TYPES.values())
+                index = lizt.index(tybe.original_generic)
+                self.bytecode.add_byte(TYPE_BUILTIN)
+                print(objects.BUILTIN_TYPES.keys(), index)
+                self.bytecode.add_uint8(len(objects.BUILTIN_TYPES) + index)
+
+                self.bytecode.add_uint16(len(tybe.generic_types))
+                for generic_type in tybe.generic_types:
+                    self.write_type(generic_type)
+
+            else:   # pragma: no cover
+                raise NotImplementedError(repr(tybe))
 
     def write_op(self, op, varlists):
         self.bytecode.set_lineno(op.lineno)
@@ -368,28 +414,6 @@ class _BytecodeWriter:
         for op in opcode.ops:
             self.write_op(op, varlists)
         self.bytecode.add_byte(END_OF_BODY)
-
-    # use this after run()
-    def write_type_list(self):
-        self.bytecode.add_byte(TYPE_LIST_SECTION)
-        self.bytecode.add_uint16(len(self.type_list))
-        for tybe in self.type_list:
-            if isinstance(tybe, objects.FunctionType):
-                self.bytecode.add_byte(TYPE_FUNCTION)
-                self.write_type(tybe.returntype, allow_void=True)
-
-                self.bytecode.add_uint8(len(tybe.argtypes))
-                for argtype in tybe.argtypes:
-                    self.write_type(argtype)
-
-            elif isinstance(tybe, objects.UserDefinedClass):
-                self.bytecode.add_byte(TYPE_ASDA_CLASS)
-                self.bytecode.add_uint16(len(tybe.constructor_argtypes))
-                self.bytecode.add_uint16(
-                    len(tybe.attributes) - len(tybe.constructor_argtypes))
-
-            else:   # pragma: no cover
-                raise NotImplementedError(repr(tybe))
 
     # this can be used to write either one of the two import sections
     def write_import_section(self, paths):

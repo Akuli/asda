@@ -5,6 +5,7 @@ they are here as well.
 """
 
 import collections
+import copy
 
 from asdac import common
 
@@ -12,15 +13,20 @@ from asdac import common
 # non-settable attributes are aka read-only
 Attribute = collections.namedtuple('Attribute', ['tybe', 'settable'])
 
+GenericInfo = collections.namedtuple('GenericInfo', ['generic_obj', 'types'])
+
 
 class Type:
 
+    # if you want the name to change when the class is mutated, you can pass
+    # None for __init__'s name and override the name property
     def __init__(self, name, parent_type):
-        self.name = name
+        self._name = name
         self.parent_type = parent_type      # OBJECT's parent_type is None
+        self.generic_types = []             # for doing ThisType[blah blah]
 
         # the following things don't work well with inheritance
-        # for now, create the subclasses in a for loop
+        # see creation of Error and its subclasses for a workaround
         #
         # refactoring note: collections.ChainMap can't be used for ordered
         # things, because its source code has this:
@@ -28,14 +34,57 @@ class Type:
         #    def __iter__(self):
         #        return iter(set().union(*self.maps))
 
-        # keys are strings, values are types
+        # keys are strings, values are Attribute namdtuples
         self.attributes = collections.OrderedDict()
 
         # you can set this to a list of types
         self.constructor_argtypes = None
 
+        # this attribute is how to get Array[T] from Array[Str]
+        # turning Array[T] to Array[Str] is called substituting
+        self.original_generic = None
+
+        # to prevent recursion
+        # for example, Str has a method that returns Str
+        # so Str's undo_generics_may_do_something must be False
+        # remember to set this to True if you change .generic_types
+        self.undo_generics_may_do_something = False
+
+    @property
+    def name(self):
+        if self.generic_types:
+            return '%s[%s]' % (self._name, ', '.join(
+                tybe.name for tybe in self.generic_types))
+        return self._name
+
+    # override _undo_generics_internal instead of overriding this
+    # always returns a copy
     def undo_generics(self, type_dict):
-        return self
+        if not self.undo_generics_may_do_something:
+            return self
+
+        result = self._undo_generics_internal(type_dict)
+        if self.generic_types and result.original_generic is None:
+                assert result is not self
+                result.original_generic = self
+        return result
+
+    def _undo_generics_internal(self, type_dict):
+        result = copy.copy(self)
+        result.attributes = collections.OrderedDict(
+            (name, attr._replace(tybe=attr.tybe.undo_generics(type_dict)))
+            for name, attr in self.attributes.items()
+        )
+        if self.constructor_argtypes is not None:
+            result.constructor_argtypes = [
+                tybe.undo_generics(type_dict)
+                for tybe in self.constructor_argtypes
+            ]
+        result.generic_types = [
+            tybe.undo_generics(type_dict)
+            for tybe in self.generic_types
+        ]
+        return result
 
     def add_method(self, name, argtypes, returntype):
         self.attributes[name] = Attribute(
@@ -51,12 +100,16 @@ class FunctionType(Type):
     def __init__(self, argtypes, returntype):
         self.argtypes = list(argtypes)
 
-        super().__init__(
-            'functype{(%s) -> %s}' % (
-                ', '.join(argtype.name for argtype in self.argtypes),
-                'void' if returntype is None else returntype.name,
-            ), BUILTIN_TYPES['Object'])
+        super().__init__(None, BUILTIN_TYPES['Object'])
         self.returntype = returntype
+        self.undo_generics_may_do_something = True
+
+    @property
+    def name(self):
+        return 'functype{(%s) -> %s}' % (
+            ', '.join(argtype.name for argtype in self.argtypes),
+            'void' if self.returntype is None else self.returntype.name,
+        )
 
     def __eq__(self, other):
         if not isinstance(other, FunctionType):
@@ -65,11 +118,13 @@ class FunctionType(Type):
         return (self.argtypes == other.argtypes and
                 self.returntype == other.returntype)
 
-    def undo_generics(self, type_dict):
-        return FunctionType(
-            [tybe.undo_generics(type_dict) for tybe in self.argtypes],
-            (None if self.returntype is None else
-             self.returntype.undo_generics(type_dict)))
+    def _undo_generics_internal(self, type_dict):
+        result = super()._undo_generics_internal(type_dict)
+        result.argtypes = [tybe.undo_generics(type_dict)
+                           for tybe in self.argtypes]
+        if result.returntype is not None:
+            result.returntype = result.returntype.undo_generics(type_dict)
+        return result
 
     def remove_this_arg(self, this_arg_type):
         assert self.argtypes[0] == this_arg_type
@@ -127,67 +182,55 @@ class UserDefinedClass(Type):
         )
         # self.attributes will also contain methods added with add_method()
 
+        self.undo_generics_may_do_something = True
         self.constructor_argtypes = list(attr_arg_types.values())
-
-
-class GeneratorType(Type):
-
-    def __init__(self, item_type):
-        super().__init__('Generator[%s]' % item_type.name,
-                         BUILTIN_TYPES['Object'])
-        self.item_type = item_type
-
-    def __eq__(self, other):
-        if not isinstance(other, GeneratorType):
-            return NotImplemented
-        return self.item_type == other.item_type
-
-    def undo_generics(self, type_dict):
-        return GeneratorType(self.item_type.undo_generics(type_dict))
 
 
 class GenericMarker(Type):
 
     def __init__(self, name):
         super().__init__(name, BUILTIN_TYPES['Object'])
+        self.undo_generics_may_do_something = True
 
-    def undo_generics(self, type_dict):
+    def _undo_generics_internal(self, type_dict):
         return type_dict.get(self, self)
 
 
-# note: generics are NOT objects
-#       generics are NOT types
-#       generics are something yet else :D
-class Generic:
+def n_types(n):
+    if n == 1:
+        return '1 type'
+    return '%d types' % n
 
-    # type_markers contains GenericMarker objects
-    def __init__(self, type_markers, real_type):
-        self.type_markers = type_markers
-        self.real_type = real_type
 
-    def get_real_type(self, the_types, error_location):
-        if len(the_types) != len(self.type_markers):
-            if len(self.type_markers) == 1:
-                type_maybe_s = '1 type'
-            else:
-                type_maybe_s = '%d types' % len(self.type_markers)
+# turns Array[T] into Array[Str], for example
+def substitute_generics(tybe, markers, types_to_substitute, error_location):
+    assert markers
+    if len(types_to_substitute) != len(markers):
+        raise common.CompileError(
+            "needs %s, but got %s: [%s]"
+            % (n_types(len(markers)),
+               n_types(len(types_to_substitute)),
+               ', '.join(t.name for t in types_to_substitute)),
+            error_location)
 
-            raise common.CompileError(
-                "expected %s, [%s], but got %d" % (
-                    type_maybe_s,
-                    ', '.join(tm.name for tm in self.type_markers),
-                    len(the_types)),
-                error_location)
-
-        type_dict = dict(zip(self.type_markers, the_types))
-        return self.real_type.undo_generics(type_dict)
+    mapping = dict(zip(markers, types_to_substitute))
+    return tybe.undo_generics(mapping)
 
 
 T = GenericMarker('T')
+
+array = Type('Array', BUILTIN_TYPES['Object'])
+array.generic_types.append(T)
+array.constructor_argtypes = []
+array.undo_generics_may_do_something = True
+
 BUILTIN_GENERIC_TYPES = collections.OrderedDict([
-    ('Generator', Generic([T], GeneratorType(T))),
+    ('Array', array),
 ])
 BUILTIN_GENERIC_VARS = collections.OrderedDict([
-    ('next', Generic([T], FunctionType([GeneratorType(T)], T))),
+    # TODO: delete this, it's here only because tests use it and not actually
+    # implemented anywhere
+    ('next', (FunctionType([BUILTIN_GENERIC_TYPES['Array']], T), [T])),
 ])
+
 del T

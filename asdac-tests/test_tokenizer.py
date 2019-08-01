@@ -105,7 +105,7 @@ def test_whitespace_ignoring(monkeypatch, compiler):
     monkeypatch.setattr(common.Location, '__eq__', (lambda *shit: True))
     assert compiler.tokenize('''
 let lol = (
-     Generator
+     Array
     [
    Str
   ]
@@ -115,6 +115,6 @@ let lol = (
         "yay"
             )
 ''') == compiler.tokenize('''
-let lol = (Generator[Str]wat)->asd:
+let lol = (Array[Str]wat)->asd:
     print("yay")
 ''')

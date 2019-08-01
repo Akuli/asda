@@ -1,5 +1,6 @@
 - add yields back, were removed in b0e0fbb because they hadn't been
   maintained in a while and would have made the code more complicated
+- add a way to forward-declare variables for e.g. functions that call each other
 - some kind of C extension api?
 - cyclic import, must choose one:
     - disallow? (add error message to compiler)
@@ -10,6 +11,7 @@
 - update asdac tests, go for 100% coverage
 - update asdar tests, check coverages with printf or find better coverage tool
 - array objects
+- cleanup needed in asdac, grep for `welcome to my hell`
 - union types (may be hard to implement):
 
         func debug_print(Union[Str, Int] obj):
@@ -17,7 +19,7 @@
 
     are they even necessary though?
 
-- optimizations: for non-trivial (read: non-shitty) optimizations, probably need to
+- optimizations in asdac: for non-trivial (read: non-shitty) optimizations, probably need to
   add a new compile step, a directed graph of possible code
   paths that could run
 - to_debug_string method to all objects
@@ -27,18 +29,19 @@
             print(obj.to_debug_string())
 
 - reference objects: (&some_variable).set("Hello")
-- add a way to create class members without taking more arguments in class
-- add some way to run code whenever a new instance is created, maybe a method named `setup()`?
-- `const` for class members
 - `const` for variables, maybe `let` should const by default to encourage using constness?
-- `private` for class members and methods
-- some way to refer to the type of a function, e.g.
-  `functype[(Str, Int) -> Bool]` (`functype` can be a keyword)
+- classes and oop:
+    - add a way to create class members without taking more arguments in class
+    - add some way to run code whenever a new instance is created, maybe a method named `setup()`?
+    - `const` for class members
+    - `private` for class members and methods
+    - `instanceof` or similar
+- add syntax for specifying custom getters and setters of attributes
 - interfaces kinda like they are done in rust, e.g. if you are writing a
   JSON lib you could do something like
 
         interface JsonObject for T:
-            functype[(T) -> Str] to_json
+            functype{(T) -> Str} to_json
 
         implement JsonObject for Int:
             toJson = (Int i) -> Str:
@@ -60,7 +63,6 @@
 
 - pipe syntax, yay or nay? not sure. `"hello"|cast[jsonObject].to_json()`
 - specifying base class of generics: `lol[T inherits SomeBaseClass]`
-- getters and setters for attributes
 - named function arguments like kwargs in python
 - add i/o and stuff enough for rewriting the compiler in asda
 - combine compiler and interpreter:
@@ -89,7 +91,7 @@
   `[cast[Object](1), cast[Object]("a")]` (but why?)
 
 - one-liner lambdas: if `run_callback` wants an argument of type
-  `functype[(Int) -> Str]`, then `run_callback(x => x.to_string())`
+  `functype{(Int) -> Str}`, then `run_callback(x => x.to_string())`
   should be same as
 
         run_callback((auto x) -> auto:
@@ -106,21 +108,56 @@
     have better ideas
 
 - relpath and different drives
-- case-insensitive vs case-sensitive paths
-
-    python has os.path.normcase, which lowercases a string on windows
-    and does nothing on posix. I think that's kinda broken because OSX
-    is treated as posix here but typically (not always) is installed on
-    a case-insensitive file system?
-
-    the biggest problem is when the interpreter needs to check whether a
-    compiled file is imported, given its path. how should it do that?
-    I'm thinking of statting the paths as they are imported and storing
-    the stat results as keys of a hash table
-
 - how should compiler and interpreter treat symlinks?
 
     I don't know what is best. Currently they treat them "stupidly" so
     that if you e.g. have a compiled asda file a symlink to it, and a
     different compiled file that imports both, the imported code will
     run twice (but in separate namespaces).
+
+
+## Optimization Ideas
+
+I'm not sure which of these are good ideas. I wrote everything here so
+that I won't forget the ideas.
+
+The goal is to make asda at least as fast as python, which it currently
+isn't.
+
+- strings: use utf-8 as internal representation
+    - most code inputs and outputs utf-8 anyway so this will mean less conversions
+    - add a way to iterate through the code points (when iterators exist)
+    - add a way to iterate through the code points backwards
+    - add a way to convert a code point to utf-8 (may be more than 1 byte)
+
+- integers: should be possible to create a new integer from anything
+  that fits into a long without any allocations, maybe change Object to
+  be something like `union { long intval; struct HeapObject *heapobj; }`
+  for this? `HeapObject` would be like all objects are now (reference
+  counted etc)
+
+- allocate less `Scope` objects by putting local vars to the runner stack
+    - may need to add an optimizer to the compiler to make this useful
+    - problem: how to ensure that variables defined in closures work?
+
+        ```
+        let f = () -> functype{() -> Int}:
+            let i = 0
+            return () -> Int:
+                i += 1
+                return i
+
+        let g = f()
+        print("{g()} {g()} {g()}")
+        ```
+
+        this should print `1 2 3`, and for that, the `g` function needs
+        to hold the `i` value somehow (currently with definition scopes
+        and parent scopes)
+
+        maybe could be solved by wrapping `i` into a "container" object
+        that the returned function would hold a reference to
+
+- create less runners by inlining functions in compiler
+- make the runners use the same stack? this seems complicated, could be
+  better to just inline

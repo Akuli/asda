@@ -1,17 +1,17 @@
 def test_generic_lookup_errors(compiler):
     compiler.doesnt_cooked_parse(
-        'next[Str, Int]()', "expected 1 type, [T], but got 2",
+        'next[Str, Int]()', "needs 1 type, but got 2 types: [Str, Int]",
         'next[Str, Int]')
     compiler.doesnt_cooked_parse(
-        'let lol = () -> Generator[Str, Int]:\n    print("Boo")',
-        "expected 1 type, [T], but got 2", 'Generator[Str, Int]')
+        'let lol = () -> Array[Str, Int]:\n    print("Boo")',
+        "needs 1 type, but got 2 types: [Str, Int]", 'Array[Str, Int]')
 
     compiler.doesnt_cooked_parse('''
 let lol[T, U] = (T arg) -> Str:
     return "Hello"
 
 lol[Bool](TRUE)
-''', "expected 2 types, [T, U], but got 1", 'lol[Bool]')
+''', "needs 2 types, but got 1 type: [Bool]", 'lol[Bool]')
 
 
 # there used to be a bug that couldn't handle genericness in void-returning

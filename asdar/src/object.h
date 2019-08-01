@@ -16,7 +16,7 @@ Here is a complete usage example (with includes omitted):
 
 	static void destroy_exampleobj(Object *obj, bool decrefrefs, bool freenonrefs)
 	{
-		ExampleObject *ex = obj;
+		ExampleObject *ex = (ExampleObject *) obj;
 		if (freenonrefs)
 			free(ex->customthing);
 	}

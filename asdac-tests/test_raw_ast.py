@@ -125,25 +125,25 @@ def test_joined_strings(compiler):
 
 
 def test_generics(compiler):
-    [fc] = compiler.raw_parse('magic_function[Str, Generator[Int]](x)')
+    [fc] = compiler.raw_parse('magic_function[Str, Array[Int]](x)')
     assert fc == FuncCall(
-        location=Location(Any(), 0, 38),
+        location=Any(),
         function=GetVar(
-            location=Location(Any(), 0, 35),
+            location=Any(),
             module_path=None,
             varname='magic_function',
             generics=[
                 GetType(
-                    location=Location(Any(), 15, 3),
+                    location=Any(),
                     name='Str',
                     generics=None,
                 ),
                 GetType(
-                    location=Location(Any(), 20, 14),
-                    name='Generator',
+                    location=Any(),
+                    name='Array',
                     generics=[
                         GetType(
-                            location=Location(Any(), 30, 3),
+                            location=Any(),
                             name='Int',
                             generics=None,
                         ),
@@ -154,7 +154,7 @@ def test_generics(compiler):
         args=[
             GetVar(
                 module_path=None,
-                location=Location(Any(), 36, 1),
+                location=Any(),
                 varname='x',
                 generics=None,
             ),

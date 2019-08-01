@@ -1,2 +1,3 @@
 more_itertools
 regex
+pytest

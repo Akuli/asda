@@ -62,6 +62,7 @@
 
 #define TYPEBYTE_ASDACLASS 'a'
 #define TYPEBYTE_BUILTIN 'b'
+#define TYPEBYTE_GENERIC 'g'
 #define TYPEBYTE_TYPE_LIST 'l'
 #define TYPEBYTE_FUNC 'f'
 #define TYPEBYTE_VOID 'v'
@@ -315,6 +316,32 @@ static struct TypeAsdaClass *read_asda_class_type(struct BcReader *bcr)
 	return type_asdaclass_new(bcr->interp, nasdaattribs, nmethods);
 }
 
+static struct TypeGeneric *read_generic_type(struct BcReader *bcr)
+{
+	const struct Type *basetype;
+	if (!read_type(bcr, &basetype, false))
+		return NULL;
+
+	uint16_t ngenerics;
+	if (!read_uint16(bcr, &ngenerics))
+		return NULL;
+	assert(ngenerics != 0);
+
+	const struct Type **generics = malloc(sizeof(generics[0]) * ngenerics);
+	if (!generics) {
+		errobj_set_nomem(bcr->interp);
+		return NULL;
+	}
+
+	for (uint16_t i = 0; i < ngenerics; i++)
+		if (!read_type(bcr, &generics[i], false)) {
+			free(generics);
+			return NULL;
+		}
+
+	return type_generic_new(bcr->interp, basetype, generics, ngenerics);
+}
+
 static struct Type *read_typelist_item(struct BcReader *bcr)
 {
 	unsigned char byte;
@@ -326,6 +353,8 @@ static struct Type *read_typelist_item(struct BcReader *bcr)
 		return (struct Type *) read_func_type(bcr);
 	case TYPEBYTE_ASDACLASS:
 		return (struct Type *) read_asda_class_type(bcr);
+	case TYPEBYTE_GENERIC:
+		return (struct Type *) read_generic_type(bcr);
 	default:
 		errobj_set(bcr->interp, &errobj_type_value, "unknown typelist type byte: %B", byte);
 		return NULL;

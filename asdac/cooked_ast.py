@@ -86,12 +86,11 @@ class Variable:
         return '<%s %r>' % (type(self).__name__, self.name)
 
 
-class GenericVariable:
+class GenericVariable(Variable):
 
-    def __init__(self, name, generic, definition_location):
-        self.name = name
-        self.generic = generic
-        self.definition_location = definition_location    # can be None
+    def __init__(self, generic_markers, *args):
+        super().__init__(*args)
+        self.generic_markers = generic_markers
 
 
 BUILTIN_VARS = collections.OrderedDict([
@@ -100,8 +99,8 @@ BUILTIN_VARS = collections.OrderedDict([
 ])
 
 BUILTIN_GENERIC_VARS = collections.OrderedDict([
-    (name, GenericVariable(name, generic, None))
-    for name, generic in objects.BUILTIN_GENERIC_VARS.items()
+    (name, GenericVariable(generic_types, name, tybe, None))
+    for name, (tybe, generic_types) in objects.BUILTIN_GENERIC_VARS.items()
 ])
 
 
@@ -287,9 +286,10 @@ class _Chef:
                     var = chef.vars[raw_expression.varname]
                     tybe = var.type
                 else:
-                    name = raw_expression.varname   # pep8 line length
+                    name = raw_expression.varname
                     var = chef.generic_vars[name]
-                    tybe = var.generic.get_real_type(
+                    tybe = objects.substitute_generics(
+                        var.type, var.generic_markers,
                         list(map(self.cook_type, raw_expression.generics)),
                         raw_expression.location)
 
@@ -397,7 +397,9 @@ class _Chef:
                 it_is = "type"
             else:
                 if tybe.name in self.generic_types:
-                    return self.generic_types[tybe.name].get_real_type(
+                    return objects.substitute_generics(
+                        self.generic_types[tybe.name],
+                        self.generic_types[tybe.name].generic_types,
                         list(map(self.cook_type, tybe.generics)),
                         tybe.location)
                 it_is = "generic type"
@@ -512,9 +514,8 @@ class _Chef:
 
         assert not raw.export, "sorry, cannot export generic variables yet :("
 
-        generic = objects.Generic(
-            list(generic_markers.values()), value.type)
-        var = GenericVariable(raw.varname, generic, raw.location)
+        var = GenericVariable(list(generic_markers.values()),
+                              raw.varname, value.type, raw.location)
         target_chef.generic_vars[raw.varname] = var
         return [
             CreateLocalVar(raw.location, None, var),

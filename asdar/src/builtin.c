@@ -4,6 +4,7 @@
 #include "interp.h"
 #include "object.h"
 #include "type.h"
+#include "objects/array.h"
 #include "objects/bool.h"
 #include "objects/err.h"
 #include "objects/func.h"
@@ -43,6 +44,8 @@ const struct Type* const builtin_types[] = {
 	&errobj_type_error,
 	&errobj_type_nomem,
 	&errobj_type_variable,
+	&errobj_type_value,
 	&errobj_type_os,
+	&arrayobj_basetype,
 };
 const size_t builtin_ntypes = sizeof(builtin_types)/sizeof(builtin_types[0]);

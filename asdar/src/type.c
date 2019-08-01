@@ -71,21 +71,53 @@ struct TypeAsdaClass *type_asdaclass_new(Interp *interp, size_t nasdaattrs, size
 	return res;
 }
 
+struct TypeGeneric *type_generic_new(Interp *interp, const struct Type *basetype, const struct Type **generics, size_t ngenerics)
+{
+	struct TypeGeneric *res = malloc(sizeof(*res));
+	if (!res) {
+		free(generics);
+		errobj_set_nomem(interp);
+		return NULL;
+	}
+
+	*(struct Type *)res = *basetype;
+	res->kind = TYPE_GENERIC;
+	res->generics = generics;
+	res->ngenerics = ngenerics;
+	return res;
+}
+
 
 void type_destroy(struct Type *t)
 {
-	if (t->kind == TYPE_FUNC)
+	switch(t->kind) {
+	case TYPE_FUNC:
 		free( ((struct TypeFunc *)t)->argtypes );
+		// currently functions have no attributes
+		// if this changes, all attrs will be compile-time created, and this will do the right thing anyway
+		break;
 
-	for (size_t i = 0; i < t->nattrs; i++)
-		if (t->attrs[i].kind == TYPE_ATTR_METHOD && t->attrs[i].method)
-			OBJECT_DECREF(t->attrs[i].method);
+	case TYPE_BASIC:
+	case TYPE_ASDACLASS:
+		for (size_t i = 0; i < t->nattrs; i++)
+			if (t->attrs[i].kind == TYPE_ATTR_METHOD && t->attrs[i].method)
+				OBJECT_DECREF(t->attrs[i].method);
+		free(t->attrs);
+		break;
 
-	free(t->attrs);
+	case TYPE_GENERIC:
+		// see type_generic_new
+		// everything except t->generics is copied from the base type with no increfs etc
+		// because it is assumed that the base type is not destroyed before this type
+		free( ((struct TypeGeneric *)t)->generics );
+		break;
+	}
+
 	free(t);
 }
 
-// TODO: handle function types
+
+// TODO: handle generics and function types
 bool type_compatiblewith(const struct Type *sub, const struct Type *par)
 {
 	for (const struct Type *t = sub; t; t = t->base)

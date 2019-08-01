@@ -153,9 +153,16 @@ class Location:
         self.length = length
 
     def __repr__(self):
-#        return '<Location offset=%r length=%r: %r>' % (
-#            self.offset, self.length, self.get_source()[1])
-        return '<%s>' % type(self).__name__
+#        return '<%s>' % type(self).__name__
+        result = 'Location offset=%r length=%r' % (self.offset, self.length)
+        try:
+            result += ': ' + repr(self.get_source()[1])
+        except OSError:
+            pass
+        except AttributeError:
+            # tests do magic
+            assert not isinstance(self.compilation, Compilation)
+        return '<' + result + '>'
 
     # raises OSError
     def _read_before_value_after(self):

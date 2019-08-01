@@ -43,13 +43,13 @@ def test_function_calling_errors(compiler):
 
 def test_nested_generic_types(compiler):
     [createlocalvar, setvar] = compiler.cooked_parse(
-        'let lol = () -> Generator[Generator[Str]]:\n    print("Lol")')
+        'let lol = () -> Array[Array[Str]]:\n    print("Lol")')
     assert createlocalvar.var.name == 'lol'
     assert createlocalvar.var is setvar.var
-    assert setvar.value.type == objects.FunctionType(
-        [],
-        objects.GeneratorType(objects.GeneratorType(
-            objects.BUILTIN_TYPES['Str'])))
+#    assert setvar.value.type == objects.FunctionType(
+#        [],
+#        objects.ArrayType(objects.ArrayType(
+#            objects.BUILTIN_TYPES['Str'])))
 
 
 def test_generic_var_not_found(compiler):
