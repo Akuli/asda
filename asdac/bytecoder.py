@@ -237,7 +237,6 @@ class _BytecodeWriter:
                 lizt = list(objects.BUILTIN_GENERIC_TYPES.values())
                 index = lizt.index(tybe.original_generic)
                 self.bytecode.add_byte(TYPE_BUILTIN)
-                print(objects.BUILTIN_TYPES.keys(), index)
                 self.bytecode.add_uint8(len(objects.BUILTIN_TYPES) + index)
 
                 self.bytecode.add_uint16(len(tybe.generic_types))

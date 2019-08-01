@@ -45,6 +45,10 @@ IntObject *intobj_sub(Interp *interp, IntObject *x, IntObject *y);  // x-y
 IntObject *intobj_neg(Interp *interp, IntObject *x);                       // -x
 IntObject *intobj_mul(Interp *interp, IntObject *x, IntObject *y);  // x*y
 
+// use this instead of accessing x->str directly, because x->str may be NULL
+// returns NULL on error
+StringObject *intobj_tostrobj(Interp *interp, IntObject *x);
+
 // returns NULL on error, return value is \0 terminated and must NOT be free()d
 const char *intobj_tocstr(Interp *interp, IntObject *x);
 

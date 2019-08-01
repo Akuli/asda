@@ -1,0 +1,15 @@
+let contributors = new Array[Str]()
+
+# if you contribute something to asda, you can add your name here
+contributors.push("Akuli")
+contributors.push("PurpleMyst")
+
+print("There are {contributors.get_length()} contributors")
+
+# FIXME: doesn't compile without extra parens around contributors.get_length()
+for let i = 0; i != (contributors.get_length()); i = i+1:
+    print("Contributor {i+1} is {contributors.get(i)}")
+
+while (contributors.get_length()) != 0:
+    let popped = contributors.pop()
+    print("Popped contributor: {popped}")

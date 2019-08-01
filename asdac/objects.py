@@ -223,6 +223,10 @@ array = Type('Array', BUILTIN_TYPES['Object'])
 array.generic_types.append(T)
 array.constructor_argtypes = []
 array.undo_generics_may_do_something = True
+array.add_method('get_length', [], BUILTIN_TYPES['Int'])
+array.add_method('push', [T], None)
+array.add_method('pop', [], T)
+array.add_method('get', [BUILTIN_TYPES['Int']], T)
 
 BUILTIN_GENERIC_TYPES = collections.OrderedDict([
     ('Array', array),

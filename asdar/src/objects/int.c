@@ -266,10 +266,13 @@ IntObject *intobj_neg(Interp *interp, IntObject *x)
 
 
 // this does NOT return a new reference, you need to incref
-static StringObject *get_string_object(Interp *interp, IntObject *x)
+StringObject *intobj_tostrobj(Interp *interp, IntObject *x)
 {
 	if (x->str)
+	{
+		OBJECT_INCREF(x->str);
 		return x->str;
+	}
 
 	char *str;
 	char buf[100];   // enough for a long, but not for an mpz
@@ -290,33 +293,32 @@ static StringObject *get_string_object(Interp *interp, IntObject *x)
 	x->str = stringobj_new_utf8(interp, str, strlen(str));   // may be NULL
 	if (str != buf)
 		free(str);
-	return x->str;   // may be NULL
+
+	if (x->str) {
+		OBJECT_INCREF(x->str);
+		return x->str;
+	}
+	return NULL;
 }
 
 const char *intobj_tocstr(Interp *interp, IntObject *x)
 {
-	StringObject *obj = get_string_object(interp, x);
+	StringObject *obj = intobj_tostrobj(interp, x);
 	if (!obj)
 		return NULL;
 
 	const char *res;
 	size_t junk;
-	if (!stringobj_toutf8(obj, &res, &junk))
-		return NULL;
-	return res;
+	bool ok = stringobj_toutf8(obj, &res, &junk);
+	OBJECT_DECREF(obj);
+
+	return ok ? res : NULL;
 }
 
 static bool tostring_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
 	IntObject *x = (IntObject *)args[0];
-
-	StringObject *obj = get_string_object(interp, x);
-	if (!obj)
-		return false;
-
-	OBJECT_INCREF(obj);
-	*result = (Object *)obj;
-	return true;
+	return !!( *result = (Object *) intobj_tostrobj(interp, x) );
 }
 FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &intobj_type });
 

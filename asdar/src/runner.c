@@ -219,7 +219,12 @@ static enum RunnerResult run_callconstructor(struct Runner *rnr, const struct Co
 		return RUNNER_ERROR;
 
 	assert(obj->type == t);
-	dynarray_push_itwillfit(&rnr->stack, obj);
+
+	if (!dynarray_push(rnr->interp, &rnr->stack, obj)) {
+		OBJECT_DECREF(obj);
+		return RUNNER_ERROR;
+	}
+
 	rnr->opidx++;
 	return RUNNER_DIDNTRETURN;
 }
