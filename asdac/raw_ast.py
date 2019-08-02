@@ -1,5 +1,4 @@
 import collections
-import enum
 import itertools
 import os
 
@@ -128,6 +127,160 @@ def _find_adjacent_items(the_list, key):
         if key(item1, item2):
             return (item1, item2)
     return None
+
+
+# value is an expression ast node or an operator token
+_PrecedenceHandlerPart = collections.namedtuple(
+    '_PrecedenceHandlerPart', ['is_expression', 'value'])
+
+
+class _PrecedenceHandler:
+
+    # parts should be a list of _PrecedenceHandlerPart
+    def __init__(self, parts, part_parsed_callback):
+        self.parts = parts.copy()
+        self.part_parsed_callback = part_parsed_callback
+        assert self.parts
+
+    # there must not be two expressions next to each other without an
+    # operator between
+    def _check_no_adjacent_parts(self):
+        adjacent_expression_parts = _find_adjacent_items(
+            self.parts,
+            lambda part1, part2: part1.is_expression and part2.is_expression
+        )
+        if adjacent_expression_parts is not None:
+            part1, part2 = adjacent_expression_parts
+            # if you have an idea for a better error message, add that here
+            raise common.CompileError(
+                "invalid syntax", part1.value.location + part2.value.location)
+
+    def _find_op(self, op_flags_pairs):
+        ops = [op for op, flags in op_flags_pairs]
+
+        for parts_index, part in enumerate(self.parts):
+            if part.is_expression:
+                continue
+            token = part.value
+
+            try:
+                op_index = ops.index(token.value)
+            except ValueError:
+                continue
+
+            flags = op_flags_pairs[op_index][1]
+            return (parts_index, flags, token)
+
+        return None
+
+    # the tokens around the token being considered are named like this:
+    #   before, this_token, after, that_token, more_after
+    #
+    # _handle_blah() methods return tuples like this:
+    #   (parts used before this_token, parts used after this_token, result)
+
+    def _handle_ternary(self, before, this_token, after,
+                        that_token, more_after):
+        if (
+          before is None or
+          after is None or
+          that_token is None or
+          that_token.value != this_token.value or
+          more_after is None):
+            raise common.CompileError(
+                "should be: expression {0}expression{0} expression"
+                .format(this_token.value),
+                this_token.location)
+
+        # taking just one of the operator tokens feels wrong, because the other
+        # operator token isn't taken
+        #
+        # taking both and the mid expression between them feels wrong, because
+        # why aren't lhs and rhs taken
+        #
+        # taking everything feels about right
+        location = before.location + more_after.location
+
+        result = TernaryOperator(location, this_token.value, before, after,
+                                 more_after)
+        return (1, 3, result)
+
+    def _binary_is_chained_but_shouldnt_be(
+            self, that_token, other_op, other_flags):
+        return bool(other_op == that_token.value and
+                    (other_flags & OP_BINARY) and
+                    not (other_flags & OP_BINARY_CHAINING))
+
+    def _handle_binary_or_prefix(self, before, this_token, after, that_token,
+                                 op_flags_pairs, flags):
+        if before is None and after is not None and (flags & OP_PREFIX):
+            result = PrefixOperator(
+                this_token.location, this_token.value, after)
+            return (0, 1, result)
+
+        if before is not None and after is not None and (flags & OP_BINARY):
+            if (
+              that_token is not None and
+              not (flags & OP_BINARY_CHAINING) and
+              any(self._binary_is_chained_but_shouldnt_be(that_token, *pair)
+                  for pair in op_flags_pairs)):
+                raise common.CompileError(
+                    "'a {0} b {1} c' is not valid syntax"
+                    .format(this_token.value, that_token.value),
+                    that_token.location)
+
+            result = BinaryOperator(
+                this_token.location, this_token.value, before, after)
+            return (1, 1, result)
+
+        raise common.CompileError(
+            "'%s' cannot be used like this" % this_token.value,
+            this_token.location)
+
+    def _get_part_value(self, index, should_be_expression):
+        return self.parts[index].value if (
+            index >= 0 and
+            index < len(self.parts) and
+            self.parts[index].is_expression == should_be_expression
+        ) else None
+
+    def run(self):
+        self._check_no_adjacent_parts()
+
+        for op_flags_pairs in _PRECEDENCE_LIST:
+            while True:
+                find_result = self._find_op(op_flags_pairs)
+                if find_result is None:
+                    break
+                index, flags, this_token = find_result
+
+                before = self._get_part_value(index-1, True)
+                after = self._get_part_value(index+1, True)
+                that_token = self._get_part_value(index+2, False)
+                more_after = self._get_part_value(index+3, True)
+
+                if flags & OP_TERNARY:
+                    assert flags == OP_TERNARY     # no other flags
+                    before_count, after_count, result = self._handle_ternary(
+                        before, this_token, after, that_token, more_after)
+                else:
+                    before_count, after_count, result = (
+                        self._handle_binary_or_prefix(
+                            before, this_token, after, that_token,
+                            op_flags_pairs, flags))
+
+                result = self.part_parsed_callback(result)
+
+                start_index = index - before_count
+                end_index = index + 1 + after_count
+                assert start_index >= 0
+                assert end_index <= len(self.parts)
+                self.parts[start_index:end_index] = [
+                    _PrecedenceHandlerPart(True, result)]
+
+        assert len(self.parts) == 1
+        assert self.parts[0].is_expression
+        return self.parts[0].value
 
 
 class _AsdaParser:
@@ -461,9 +614,11 @@ class _AsdaParser:
             assert not (expression_coming and operator_coming)
 
             if expression_coming:
-                parts.append((True, self.parse_expression_without_operators()))
+                parts.append(_PrecedenceHandlerPart(
+                    True, self.parse_expression_without_operators()))
             elif operator_coming:
-                parts.append((False, self.tokens.next_token()))
+                parts.append(_PrecedenceHandlerPart(
+                    False, self.tokens.next_token()))
             else:
                 break
 
@@ -473,135 +628,7 @@ class _AsdaParser:
             raise common.CompileError(
                 "should be %s" % it_should_be, not_expression.location)
 
-        # there must not be two expressions next to each other without an
-        # operator between
-        adjacent_expression_parts = _find_adjacent_items(
-            parts, (lambda part1, part2: part1[0] and part2[0]))
-        if adjacent_expression_parts is not None:
-            (junk1, bad1), (junk2, bad2) = adjacent_expression_parts
-            # if you have an idea for a better error message, add that here
-            raise common.CompileError(
-                "invalid syntax", bad1.location + bad2.location)
-
-        # welcome to my hell
-        for op_flags_pairs in _PRECEDENCE_LIST:
-            ops = [op for op, flags in op_flags_pairs]
-
-            while True:
-                for index, (is_expression, token) in enumerate(parts):
-                    if is_expression:
-                        continue
-                    try:
-                        i = ops.index(token.value)
-                    except ValueError:
-                        continue
-                    flags = op_flags_pairs[i][1]
-                    break
-                else:
-                    break
-
-                # now we have these variables: index, flags, token
-
-                if flags & OP_TERNARY:
-                    assert flags == OP_TERNARY     # no other flags
-
-                    if not (index-1 >= 0 and
-                            index+4 <= len(parts) and
-                            parts[index-1][0] and
-                            not parts[index][0] and
-                            parts[index+1][0] and
-                            not parts[index+2][0] and
-                            parts[index+2][1].value == token.value and
-                            parts[index+3][0]):
-                        raise common.CompileError(
-                            "should be: expression {0}expression{0} expression"
-                            .format(token.value),
-                            token.location)
-
-                    start_index = index-1
-                    end_index = index+4
-
-                    lhs = parts[index-1][1]
-                    assert token is parts[index][1]
-                    mid = parts[index+1][1]
-                    # the second token at parts[index+2][1] is ignored here
-                    rhs = parts[index+3][1]
-
-                    # taking just one of the operator tokens feels wrong,
-                    # because the other operator token isn't taken
-                    #
-                    # taking both and the mid expression between them feels
-                    # wrong, because why aren't lhs and rhs taken
-                    #
-                    # taking everything feels about right
-                    location = lhs.location + rhs.location
-
-                    result = TernaryOperator(
-                        location, token.value, lhs, mid, rhs)
-
-                else:
-                    if index-1 >= 0 and parts[index-1][0]:
-                        before = parts[index-1][1]
-                        assert before is not None
-                    else:
-                        before = None
-
-                    if index+1 < len(parts) and parts[index+1][0]:
-                        after = parts[index+1][1]
-                        assert after is not None
-                    else:
-                        after = None
-
-                    if index+2 < len(parts) and not parts[index+2][0]:
-                        after_after = parts[index+2][1]
-                        assert after_after is not None
-                    else:
-                        after_after = None
-
-                    if before is None and after is not None:
-                        valid = bool(flags & OP_PREFIX)
-                        result = PrefixOperator(
-                            token.location, token.value, after)
-                    elif before is not None and after is not None:
-                        valid = bool(flags & OP_BINARY)
-                        if (
-                          valid and
-                          not (flags & OP_BINARY_CHAINING) and
-                          after_after is not None and
-                          any(
-                            (other_op == after_after.value and
-                             (other_flags & OP_BINARY) and
-                             not (other_flags & OP_BINARY_CHAINING))
-                            for other_op, other_flags in op_flags_pairs
-                          )):
-                            raise common.CompileError(
-                                "'a {0} b {1} c' is not valid syntax"
-                                .format(token.value, after_after.value),
-                                after_after.location)
-                        result = BinaryOperator(
-                            token.location, token.value, before, after)
-                    else:
-                        valid = False
-                        # result is not needed
-
-                    if not valid:
-                        raise common.CompileError(
-                            "'%s' cannot be used like this" % token.value,
-                            token.location)
-
-                    start_index = index if before is None else index-1
-                    end_index = index + 1 if after is None else index + 2
-
-                result = self.operator_helper(result)
-
-                assert start_index >= 0
-                assert end_index <= len(parts)
-                parts[start_index:end_index] = [(True, result)]
-
-        assert len(parts) == 1
-        result_is_expression, result = parts[0]
-        assert result_is_expression
-        return result
+        return _PrecedenceHandler(parts, self.operator_helper).run()
 
     def parse_generic_type_name(self):
         id_token = self.tokens.next_token()
