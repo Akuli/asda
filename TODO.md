@@ -1,17 +1,42 @@
 - add yields back, were removed in b0e0fbb because they hadn't been
   maintained in a while and would have made the code more complicated
-- add a way to forward-declare variables for e.g. functions that call each other
-- some kind of C extension api?
+- add a way to forward-declare variables for e.g. functions that call each other?
+
+    alternatively could cook in two steps instead, first signatures and then definitions,
+    but it would lead to weird javascripty hoisting stuff.
+    For example, if this is allowed
+
+    ```
+    let f = () -> void:
+        g()
+
+    let g = () -> void:
+        ...
+    ```
+
+    then how about this?
+
+    ```
+    let a = b
+    let b = 123
+    ```
+
+    or this?
+
+    ```
+    print(message)
+    let message = "hello"
+    ```
+
 - cyclic import, must choose one:
     - disallow? (add error message to compiler)
     - allow (design semantics and implement)
+- some kind of C extension api?
 - generic types in nested functions bug
     is this fixed now? it could be
 - docs for Str, Int, Bool and friends
 - update asdac tests, go for 100% coverage
 - update asdar tests, check coverages with printf or find better coverage tool
-- array objects
-- cleanup needed in asdac, grep for `welcome to my hell`
 - union types (may be hard to implement):
 
         func debug_print(Union[Str, Int] obj):
@@ -19,9 +44,6 @@
 
     are they even necessary though?
 
-- optimizations in asdac: for non-trivial (read: non-shitty) optimizations, probably need to
-  add a new compile step, a directed graph of possible code
-  paths that could run
 - to_debug_string method to all objects
 - oopy subclassy stuff:
 
@@ -30,6 +52,26 @@
 
 - reference objects: (&some_variable).set("Hello")
 - `const` for variables, maybe `let` should const by default to encourage using constness?
+
+    could be difficult to check for corner cases, e.g. what should this do?
+
+    ```
+    if FALSE:
+        outer const let i = 1
+    print(i)
+    ```
+
+    maybe just disallow using `outer` and `const` together?
+    here's a corner case without `outer`:
+
+    ```
+    for void; TRUE; const let wat = "heh":
+        print(wat)
+    ```
+
+    are there more corner cases left?
+    also is this really a good idea? python works fine without constness
+
 - classes and oop:
     - add a way to create class members without taking more arguments in class
     - add some way to run code whenever a new instance is created, maybe a method named `setup()`?
@@ -161,3 +203,5 @@ isn't.
 - create less runners by inlining functions in compiler
 - make the runners use the same stack? this seems complicated, could be
   better to just inline
+- asdac: new compile step, a directed graph of possible code
+  paths that could run
