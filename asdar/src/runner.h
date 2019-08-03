@@ -8,15 +8,8 @@
 #include "object.h"
 #include "objects/scope.h"
 
-// see finally.md
 // don't use this outside runner.c
-struct RunnerFinallyState {
-	enum CodeOpKind kind;   // one of CODE_FS_* things, but not CODE_FS_APPLY or CODE_FS_DISCARD
-	union {
-		Object *obj;       // error or return value, for CODE_FS_VALUERETURN and CODE_FS_ERROR
-		size_t jumpidx;    // for CODE_FS_JUMP
-	} val;
-};
+struct RunnerFinallyState;
 
 struct Runner {
 	Object *retval;

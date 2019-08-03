@@ -23,6 +23,15 @@
 */
 #define DEBUG_PRINTF(...) ((void)0)
 
+// see finally.md
+struct RunnerFinallyState {
+	enum CodeOpKind kind;   // one of CODE_FS_* things, but not CODE_FS_APPLY or CODE_FS_DISCARD
+	union {
+		Object *obj;       // error or return value, for CODE_FS_VALUERETURN and CODE_FS_ERROR
+		size_t jumpidx;    // for CODE_FS_JUMP
+	} val;
+};
+
 void runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, const struct Code *code)
 {
 	rnr->interp = interp;
