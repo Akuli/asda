@@ -114,6 +114,8 @@ class Node:
                                stdin=subprocess.PIPE)
         dot_stdin = io.TextIOWrapper(dot.stdin)
         dot_stdin.write('digraph {\n')
+        dot_stdin.write(
+            'label="\\nmax stack size = %d";\n' % get_max_stack_size(self))
 
         for node, id_string in nodes.items():
             parts = [type(node).__name__]
@@ -177,6 +179,20 @@ class GetVar(_SetOrGetVar):
         self.push_count = 1
 
 
+class PopOne(PassThroughNode):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.push_count = -1
+
+
+class Equal(PassThroughNode):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.push_count = -2 + 1    # pop 2 objs to compare, push 1 result bool
+
+
 class StrConstant(PassThroughNode):
 
     def __init__(self, python_string, **kwargs):
@@ -188,12 +204,22 @@ class StrConstant(PassThroughNode):
         return repr(self.python_string)
 
 
+class IntConstant(PassThroughNode):
+
+    def __init__(self, python_int, **kwargs):
+        super().__init__(**kwargs)
+        self.python_int = python_int
+        self.push_count = 1
+
+    def graphviz_string(self):
+        return str(self.python_int)
+
+
 class CallFunction(PassThroughNode):
 
     def __init__(self, how_many_args, is_returning, **kwargs):
         super().__init__(**kwargs)
         self.how_many_args = how_many_args
-        print(is_returning)
         self.push_count = (
             -1                          # function object
             - how_many_args             # arguments
@@ -232,12 +258,19 @@ class BoolDecision(TwoWayDecision):
 class _TreeCreator:
 
     def __init__(self, compilation, line_start_offsets):
-        self.results = []
+        self.root_node = None
+        # why can't i assign in python lambda without dirty setattr haxor :(
+        self.set_next_node = lambda node: setattr(self, 'root_node', node)
         self.compilation = compilation
         self.line_start_offsets = line_start_offsets
 
     def subcreator(self):
         return _TreeCreator(self.compilation, self.line_start_offsets)
+
+    def add_pass_through_node(self, node):
+        assert isinstance(node, PassThroughNode)
+        self.set_next_node(node)
+        self.set_next_node = node.set_next_node
 
     # returns line number so that 1 means first line
     def _lineno(self, location):
@@ -261,7 +294,8 @@ class _TreeCreator:
         self.do_expression(call.function)
         for arg in call.args:
             self.do_expression(arg)
-        self.results.append(CallFunction(
+
+        self.add_pass_through_node(CallFunction(
             len(call.args), (call.function.type.returntype is not None),
             lineno=self._lineno(call.location)))
 
@@ -273,11 +307,21 @@ class _TreeCreator:
         boilerplate = {'lineno': self._lineno(expression.location)}
 
         if isinstance(expression, cooked_ast.StrConstant):
-            self.results.append(StrConstant(
+            self.add_pass_through_node(StrConstant(
                 expression.python_string, **boilerplate))
 
+        elif isinstance(expression, cooked_ast.IntConstant):
+            self.add_pass_through_node(IntConstant(
+                expression.python_int, **boilerplate))
+
         elif isinstance(expression, cooked_ast.GetVar):
-            self.results.append(GetVar(expression.var, **boilerplate))
+            self.add_pass_through_node(GetVar(
+                expression.var, **boilerplate))
+
+        elif isinstance(expression, cooked_ast.Equal):
+            self.do_expression(expression.lhs)
+            self.do_expression(expression.rhs)
+            self.add_pass_through_node(Equal(**boilerplate))
 
         else:
             assert False, expression    # pragma: no cover
@@ -292,11 +336,29 @@ class _TreeCreator:
             self.do_function_call(statement)
             if statement.type is not None:
                 # not a void function, ignore return value
-                self.results.append(PopOne(**boilerplate))
+                self.add_pass_through_node(PopOne(**boilerplate))
 
         elif isinstance(statement, cooked_ast.SetVar):
             self.do_expression(statement.value)
-            self.results.append(SetVar(statement.var, **boilerplate))
+            self.add_pass_through_node(SetVar(statement.var, **boilerplate))
+
+        elif isinstance(statement, cooked_ast.IfStatement):
+            self.do_expression(statement.cond)
+
+            if_creator = self.subcreator()
+            if_creator.do_body(statement.if_body)
+            else_creator = self.subcreator()
+            else_creator.do_body(statement.else_body)
+
+            result = BoolDecision(**boilerplate)
+            result.set_then(if_creator.root_node)
+            result.set_otherwise(else_creator.root_node)
+            self.set_next_node(result)
+
+            self.set_next_node = lambda next_node: (
+                if_creator.set_next_node(next_node),
+                else_creator.set_next_node(next_node),
+            )
 
         else:
             assert False, type(statement)     # pragma: no cover
@@ -313,6 +375,40 @@ def _combine_nodes(lizt):
     return lizt[0] if lizt else None
 
 
+# size_dict is like this {node: stack size BEFORE running the node}
+def _get_stack_sizes_to_dict(node, size, size_dict):
+    assert node is not None
+
+    while True:
+        if node in size_dict:
+            assert size == size_dict[node]
+            return
+
+        size_dict[node] = size
+        size += node.push_count
+        assert size >= 0
+
+        if not node.jumps_to:
+            return
+
+        # avoid recursion in the common case because it could be slow
+        [node, *other_nodes] = node.jumps_to
+        for other in other_nodes:
+            _get_stack_sizes_to_dict(other, size, size_dict)
+
+
+def get_max_stack_size(node):
+    if node is None:
+        return 0
+
+    size_dict = {}
+    _get_stack_sizes_to_dict(node, 0, size_dict)
+    return max(
+        max(before, before + node.push_count)
+        for node, before in size_dict.items()
+    )
+
+
 def create_tree(compilation, cooked_statements, source_code):
     line_start_offsets = []
     offset = 0
@@ -320,8 +416,6 @@ def create_tree(compilation, cooked_statements, source_code):
         line_start_offsets.append(offset)
         offset += len(line)
 
-    builtin_tree_creator = _TreeCreator(compilation, line_start_offsets)
-    file_tree_creator = builtin_tree_creator.subcreator()
-
-    file_tree_creator.do_body(cooked_statements)
-    return _combine_nodes(file_tree_creator.results)
+    tree_creator = _TreeCreator(compilation, line_start_offsets)
+    tree_creator.do_body(cooked_statements)
+    return tree_creator.root_node

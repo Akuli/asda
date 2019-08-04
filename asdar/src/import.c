@@ -90,18 +90,13 @@ error:
 static bool run(Interp *interp, ScopeObject *scope, const struct Code *code)
 {
 	struct Runner rnr;
-	runner_init(&rnr, interp, scope, code);
+	if (!runner_init(&rnr, interp, scope, code))
+		return false;
 	enum RunnerResult res = runner_run(&rnr);
 	runner_free(&rnr);
 
-	switch(res) {
-	case RUNNER_DIDNTRETURN:
-		return true;
-	case RUNNER_ERROR:
-		return false;
-	default:
-		assert(0);  // asda compiler shouldn't allow doing anything else
-	}
+	assert(res == RUNNER_ERROR || res == RUNNER_DIDNTRETURN);  // asda compiler shouldn't allow others
+	return (res != RUNNER_ERROR);
 }
 
 bool import(Interp *interp, const char *path)

@@ -610,6 +610,8 @@ static bool read_body(struct BcReader *bcr, struct Code *code)
 {
 	if (!read_uint16(bcr, &code->nlocalvars))
 		return false;
+	if (!read_uint16(bcr, &code->maxstacksz))
+		return false;
 
 	DynArray(struct CodeOp) ops;
 	dynarray_init(&ops);

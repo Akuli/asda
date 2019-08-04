@@ -33,13 +33,15 @@ run(Interp *interp, const struct AsdaFunctionData *afd, struct Runner *rnr, Obje
 	if(!sco)
 		return RUNNER_ERROR;
 
+	bool ok = runner_init(rnr, interp, sco, afd->code);
+	OBJECT_DECREF(sco);
+	if (!ok)
+		return RUNNER_ERROR;
+
 	assert(nargs <= afd->code->nlocalvars);
 	memcpy(sco->locals, args, sizeof(args[0]) * nargs);
 	for (size_t i = 0; i < nargs; i++)
 		OBJECT_INCREF(args[i]);
-
-	runner_init(rnr, interp, sco, afd->code);
-	OBJECT_DECREF(sco);
 
 	enum RunnerResult res = runner_run(rnr);
 	runner_free(rnr);

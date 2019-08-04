@@ -56,6 +56,7 @@ struct Code {
 	struct CodeOp *ops;
 	size_t nops;
 	uint16_t nlocalvars;
+	uint16_t maxstacksz;
 };
 
 struct CodeErrHndItem { const struct Type *errtype; uint16_t errvar; uint16_t jmpidx; };
@@ -86,6 +87,9 @@ struct CodeOp {
 	CodeData data;
 	uint32_t lineno;
 };
+
+// dumps to stdout
+void codeop_debug(const struct CodeOp *op);
 
 // destroys op, doesn't free it
 void codeop_destroy(const struct CodeOp *op);

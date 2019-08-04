@@ -85,10 +85,11 @@ class JumpMarker(common.Marker):
 # debugging tip: pprint.pprint(opcode.ops)
 class OpCode:
 
-    def __init__(self, nargs):
+    def __init__(self, nargs, max_stack_size):
         self.nargs = nargs
         self.ops = []
         self.local_vars = [ArgMarker(i) for i in range(nargs)]
+        self.max_stack_size = max_stack_size
 
     def add_local_var(self):
         var = VarMarker()
@@ -130,6 +131,8 @@ class _OpCoder:
         # values are VarMarker or ArgMarker
         self.local_vars = {}
 
+        self.node2jumpmarker = {}
+
     def create_subcoder(self, output_opcode):
         result = _OpCoder(output_opcode, self.compilation)
         result.parent_coder = self
@@ -146,6 +149,11 @@ class _OpCoder:
         return coder
 
     def opcode_passthroughnode(self, node):
+        if len(node.jumped_from) > 1:
+            marker = JumpMarker()
+            self.node2jumpmarker[node] = marker
+            self.output.ops.append(marker)
+
         if isinstance(node, (decision_tree.SetVar, decision_tree.GetVar)):
             coder = self._get_coder_for_level(node.var.level)
             if node.var not in coder.local_vars:
@@ -162,6 +170,12 @@ class _OpCoder:
             self.output.ops.append(StrConstant(
                 node.lineno, node.python_string))
 
+        elif isinstance(node, decision_tree.IntConstant):
+            self.output.ops.append(IntConstant(node.lineno, node.python_int))
+
+        elif isinstance(node, decision_tree.Equal):
+            self.output.ops.append(Equal(node.lineno))
+
         elif isinstance(node, decision_tree.CallFunction):
             self.output.ops.append(CallFunction(
                 node.lineno, node.how_many_args))
@@ -171,13 +185,27 @@ class _OpCoder:
             raise NotImplementedError(repr(node))
 
     def opcode_tree(self, node):
-        # TODO: don't do shit with loops
+        # FIXME: handle loops
         while node is not None:
             if isinstance(node, decision_tree.PassThroughNode):
                 self.opcode_passthroughnode(node)
                 node = node.next_node
+
+            elif isinstance(node, decision_tree.BoolDecision):
+                # FIXME: duplicates all opcode after the if,else
+                then_marker = JumpMarker()
+                done_marker = JumpMarker()
+
+                self.output.ops.append(JumpIf(node.lineno, then_marker))
+                self.opcode_tree(node.otherwise)
+                self.output.ops.append(Jump(None, done_marker))
+                self.output.ops.append(then_marker)
+                self.opcode_tree(node.then)
+                self.output.ops.append(done_marker)
+                node = None
+
             else:
-                raise NotImplementedError
+                raise NotImplementedError(repr(node))
 
 
 def create_opcode(compilation, root_node, export_vars):
@@ -191,11 +219,13 @@ def create_opcode(compilation, root_node, export_vars):
     })
 
     # exported symbols are kinda like arguments
-    output = OpCode(len(export_vars))
+    output = OpCode(len(export_vars),
+                    decision_tree.get_max_stack_size(root_node))
     file_opcoder = builtin_opcoder.create_subcoder(output)
     for arg_marker, var in zip(output.local_vars, export_vars.values()):
         file_opcoder.local_vars[var] = arg_marker
 
     file_opcoder.opcode_tree(root_node)
+    import pprint; pprint.pprint(output.ops)
     output.fix_none_linenos()
     return output

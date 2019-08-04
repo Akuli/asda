@@ -403,6 +403,8 @@ class _BytecodeWriter:
                 i += 1
 
         self.bytecode.add_uint16(len(opcode.local_vars))
+        self.bytecode.add_uint16(opcode.max_stack_size)
+
         for op in opcode.ops:
             self.write_op(op, varlists)
         self.bytecode.add_byte(END_OF_BODY)
