@@ -77,10 +77,11 @@ def _create_chainmap(fallback_chainmap):
 
 class Variable:
 
-    def __init__(self, name, tybe, definition_location):
+    def __init__(self, name, tybe, definition_location, level):
         self.name = name
         self.type = tybe
         self.definition_location = definition_location    # can be None
+        self.level = level
 
     def __repr__(self):
         return '<%s %r>' % (type(self).__name__, self.name)
@@ -88,18 +89,18 @@ class Variable:
 
 class GenericVariable(Variable):
 
-    def __init__(self, generic_markers, *args):
-        super().__init__(*args)
+    def __init__(self, generic_markers, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.generic_markers = generic_markers
 
 
 BUILTIN_VARS = collections.OrderedDict([
-    (name, Variable(name, tybe, None))
+    (name, Variable(name, tybe, None, 0))
     for name, tybe in objects.BUILTIN_VARS.items()
 ])
 
 BUILTIN_GENERIC_VARS = collections.OrderedDict([
-    (name, GenericVariable(generic_types, name, tybe, None))
+    (name, GenericVariable(generic_types, name, tybe, None, 0))
     for name, (tybe, generic_types) in objects.BUILTIN_GENERIC_VARS.items()
 ])
 
@@ -498,14 +499,13 @@ class _Chef:
         value = value_chef.cook_expression(raw.value)
 
         if raw.generics is None:
+            var = Variable(raw.varname, value.type, raw.location, self.level)
             if raw.export:
                 target_chef._check_can_export(raw.location)
-                var = Variable(raw.varname, value.type, raw.location)
                 target_chef.export_vars[raw.varname] = var
                 return [
                     SetVar(raw.location, None, var, target_chef.level, value)]
 
-            var = Variable(raw.varname, value.type, raw.location)
             target_chef.vars[raw.varname] = var
             return [
                 CreateLocalVar(raw.location, None, var),
@@ -514,8 +514,9 @@ class _Chef:
 
         assert not raw.export, "sorry, cannot export generic variables yet :("
 
-        var = GenericVariable(list(generic_markers.values()),
-                              raw.varname, value.type, raw.location)
+        var = GenericVariable(
+            list(generic_markers.values()), raw.varname, value.type,
+            raw.location, self.level)
         target_chef.generic_vars[raw.varname] = var
         return [
             CreateLocalVar(raw.location, None, var),
@@ -534,14 +535,16 @@ class _Chef:
         if this_type is not None:
             argnames.append('this')
             argtypes.append(this_type)
-            argvars.append(Variable('this', this_type, raw.location))
+            argvars.append(Variable(
+                'this', this_type, raw.location, self.level + 1))
 
         for raw_argtype, argname, argnameloc in raw_args:
             argtype = self.cook_type(raw_argtype)
             self._check_name_not_exist(argname, argnameloc)
             argnames.append(argname)
             argtypes.append(argtype)
-            argvars.append(Variable(argname, argtype, argnameloc))
+            argvars.append(Variable(
+                argname, argtype, argnameloc, self.level + 1))
 
         if raw_returntype is None:
             returntype = None
@@ -680,7 +683,8 @@ class _Chef:
             cooked_errortype = self.cook_type(errortype)
 
             catch_chef = self._create_subchef()
-            errorvar = Variable(varname, cooked_errortype, varname_location)
+            errorvar = Variable(varname, cooked_errortype, varname_location,
+                                self.level)
             catch_chef.vars[varname] = errorvar
             cooked_catch_body = catch_chef.cook_body(
                 catch_body, new_subchef=False)

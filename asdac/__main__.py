@@ -7,7 +7,7 @@ import textwrap
 
 import colorama
 
-from . import bytecoder, common, cooked_ast, opcoder, raw_ast
+from . import bytecoder, common, cooked_ast, decision_tree, opcoder, raw_ast
 
 
 # TODO: error handling for bytecoder.RecompileFixableError
@@ -23,13 +23,14 @@ def source2bytecode(compilation: common.Compilation):
         from step 2 and the values are Compilation objects.
     5.  Finally, you're done with using this function :D
     """
-    compilation.messager(0, "Compiling...")
+    compilation.messager(0, 'Compiling to "%s"...' % common.path_string(
+        compilation.compiled_path))
 
-    compilation.messager(3, "Reading the source file...")
+    compilation.messager(3, "Reading the source file")
     with compilation.open_source_file() as file:
         source = file.read()
 
-    compilation.messager(3, "Parsing...")
+    compilation.messager(3, "Parsing")
     raw, imports = raw_ast.parse(compilation, source)
     import_compilation_dict = yield imports
     assert import_compilation_dict.keys() == set(imports)
@@ -37,18 +38,21 @@ def source2bytecode(compilation: common.Compilation):
         import_compilation_dict[path] for path in imports])
 
     # TODO: better message for cooking?
-    compilation.messager(3, "Processing the parsed AST...")
+    compilation.messager(3, "Creating typed AST")
     cooked, export_vars, export_types = cooked_ast.cook(
         compilation, raw, import_compilation_dict)
     compilation.set_export_types(export_types)
 
-    compilation.messager(3, "Creating opcode...")
-    opcode = opcoder.create_opcode(compilation, cooked, export_vars, source)
+    compilation.messager(3, "Creating a decision tree")
+    root_node = decision_tree.create_tree(compilation, cooked, source)
 
-    compilation.messager(3, "Creating bytecode...")
+    compilation.messager(3, "Creating opcode")
+    opcode = opcoder.create_opcode(compilation, root_node, export_vars)
+
+    compilation.messager(3, "Creating bytecode")
     bytecode = bytecoder.create_bytecode(compilation, opcode)
 
-    compilation.messager(3, 'Writing bytecode to "%s"...' % common.path_string(
+    compilation.messager(3, 'Writing bytecode to "%s"' % common.path_string(
         compilation.compiled_path))
     # if you change this, make sure that the last step before opening the
     # output file does NOT produce an iterator, so that if something fails, an
