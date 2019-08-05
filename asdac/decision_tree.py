@@ -144,6 +144,39 @@ class Node:
         webbrowser.open('file://' + pathname2url(str(png)))
 
 
+# if we have (in graphviz syntax) a->c->d->f->g, b->e->f->g
+# then find_merge(a, b) returns f, because that's first node where they merge
+# may return None, if paths never merge together
+# see tests for corner cases
+#
+# TODO: better algorithm? i found this
+# https://www.hackerrank.com/topics/lowest-common-ancestor
+# but doesn't seem to handle cyclic graphs?
+def find_merge(a: Node, b: Node):
+    assert a is not None
+    assert b is not None
+
+    reachable_from_a = {a}
+    reachable_from_b = {b}
+
+    while True:
+        try:
+            return (reachable_from_a & reachable_from_b).pop()
+        except KeyError:
+            pass
+
+        did_something = False
+        for reaching_set in [reachable_from_a, reachable_from_b]:
+            for node in reaching_set.copy():
+                for other_node in node.jumps_to:
+                    if other_node not in reaching_set:
+                        reaching_set.add(other_node)
+                        did_something = True
+
+        if not did_something:
+            return None
+
+
 # a node that can be used like:
 #    something --> this node --> something
 class PassThroughNode(Node):
