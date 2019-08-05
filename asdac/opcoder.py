@@ -153,7 +153,10 @@ class _OpCoder:
         return coder
 
     def opcode_passthroughnode(self, node):
-        if isinstance(node, (decision_tree.SetVar, decision_tree.GetVar)):
+        if isinstance(node, decision_tree.Start):
+            pass
+
+        elif isinstance(node, (decision_tree.SetVar, decision_tree.GetVar)):
             coder = self._get_coder_for_level(node.var.level)
             if node.var not in coder.local_vars:
                 coder.local_vars[node.var] = coder.output.add_local_var()
@@ -174,6 +177,9 @@ class _OpCoder:
 
         elif isinstance(node, decision_tree.Equal):
             self.output.ops.append(Equal(node.lineno))
+
+        elif isinstance(node, decision_tree.Plus):
+            self.output.ops.append(Plus(node.lineno))
 
         elif isinstance(node, decision_tree.CallFunction):
             self.output.ops.append(CallFunction(

@@ -71,7 +71,13 @@ class Node:
 
         # how many objects this pushes to the stack (positive value) or pops
         # from the stack (negative value)
-        self.push_count = 0
+        #
+        # override if needed
+        #
+        # this default is good for things like:
+        #   - pop two things, do something, push result: -2 + 1 = -1
+        #   - just pop off something
+        self.push_count = -1
 
         # should be None for nodes created by the compiler
         self.lineno = lineno
@@ -79,6 +85,11 @@ class Node:
     def add_jump_to(self, other):
         # TODO: what should this do when an if has same 'then' and 'otherwise'?
         assert other not in self.jumps_to
+
+        # can't jump to Start, avoids special cases
+        # but you can jump to the node after the Start node
+        assert not isinstance(other, Start)
+
         self.jumps_to.add(other)
         other.jumped_from.add(self)
 
@@ -190,6 +201,14 @@ class PassThroughNode(Node):
         self.next_node = next_node
 
 
+# execution begins here, having this avoids weird special cases
+class Start(PassThroughNode):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.push_count = 0
+
+
 class _SetOrGetVar(PassThroughNode):
 
     def __init__(self, var, **kwargs):
@@ -201,10 +220,7 @@ class _SetOrGetVar(PassThroughNode):
 
 
 class SetVar(_SetOrGetVar):
-
-    def __init__(self, var, **kwargs):
-        super().__init__(var, **kwargs)
-        self.push_count = -1
+    pass
 
 
 class GetVar(_SetOrGetVar):
@@ -215,17 +231,15 @@ class GetVar(_SetOrGetVar):
 
 
 class PopOne(PassThroughNode):
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.push_count = -1
+    pass
 
 
 class Equal(PassThroughNode):
+    pass
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.push_count = -2 + 1    # pop 2 objs to compare, push 1 result bool
+
+class Plus(PassThroughNode):
+    pass
 
 
 class StrConstant(PassThroughNode):
@@ -283,10 +297,7 @@ class TwoWayDecision(Node):
 
 
 class BoolDecision(TwoWayDecision):
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.push_count = -1  # pops a bool object from the stack
+    pass
 
 
 # converts cooked ast to a decision tree
@@ -338,6 +349,16 @@ class _TreeCreator:
         assert isinstance(tybe.attributes, collections.OrderedDict)
         return list(tybe.attributes.keys()).index(name)
 
+    def add_bool_negation(self):
+        decision = BoolDecision()
+        decision.set_then(GetVar(cooked_ast.BUILTIN_VARS['FALSE']))
+        decision.set_otherwise(GetVar(cooked_ast.BUILTIN_VARS['TRUE']))
+        self.set_next_node(decision)
+        self.set_next_node = lambda node: (
+            decision.then.set_next_node(node),
+            decision.otherwise.set_next_node(node),
+        )
+
     def do_expression(self, expression):
         boilerplate = {'lineno': self._lineno(expression.location)}
 
@@ -353,10 +374,17 @@ class _TreeCreator:
             self.add_pass_through_node(GetVar(
                 expression.var, **boilerplate))
 
-        elif isinstance(expression, cooked_ast.Equal):
+        elif isinstance(expression, (cooked_ast.Equal, cooked_ast.NotEqual)):
             self.do_expression(expression.lhs)
             self.do_expression(expression.rhs)
             self.add_pass_through_node(Equal(**boilerplate))
+            if isinstance(expression, cooked_ast.NotEqual):
+                self.add_bool_negation()
+
+        elif isinstance(expression, cooked_ast.Plus):
+            self.do_expression(expression.lhs)
+            self.do_expression(expression.rhs)
+            self.add_pass_through_node(Plus(**boilerplate))
 
         else:
             assert False, expression    # pragma: no cover
@@ -394,6 +422,28 @@ class _TreeCreator:
                 if_creator.set_next_node(next_node),
                 else_creator.set_next_node(next_node),
             )
+
+        elif isinstance(statement, cooked_ast.Loop):
+            assert statement.post_cond is None            # TODO
+
+            creator = self.subcreator()
+            if statement.pre_cond is None:
+                creator.add_pass_through_node(GetVar(
+                    cooked_ast.BUILTIN_VARS['TRUE']))
+            else:
+                creator.do_expression(statement.pre_cond)
+
+            beginning_decision = BoolDecision(**boilerplate)
+            creator.set_next_node(beginning_decision)
+            creator.set_next_node = beginning_decision.set_then
+
+            creator.do_body(statement.body)
+            creator.do_body(statement.incr)
+            creator.set_next_node(creator.root_node)
+
+            # TODO: can creator.root_node be None? what would that do?
+            self.set_next_node(creator.root_node)
+            self.set_next_node = beginning_decision.set_otherwise
 
         else:
             assert False, type(statement)     # pragma: no cover
@@ -451,6 +501,11 @@ def create_tree(compilation, cooked_statements, source_code):
         line_start_offsets.append(offset)
         offset += len(line)
 
+    start = Start()
+
     tree_creator = _TreeCreator(compilation, line_start_offsets)
+    tree_creator.set_next_node(start)
+    tree_creator.set_next_node = start.set_next_node
     tree_creator.do_body(cooked_statements)
-    return tree_creator.root_node
+    assert tree_creator.root_node is start
+    return start
