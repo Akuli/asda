@@ -131,7 +131,11 @@ class _OpCoder:
         # values are VarMarker or ArgMarker
         self.local_vars = {}
 
-        self.node2jumpmarker = {}
+        # keys are opcoded nodes, values are JumpMarker objects
+        #
+        # this is a simple way to handle loops, code common to both branches of
+        # a decision, etc
+        self.jump_cache = {}
 
     def create_subcoder(self, output_opcode):
         result = _OpCoder(output_opcode, self.compilation)
@@ -149,11 +153,6 @@ class _OpCoder:
         return coder
 
     def opcode_passthroughnode(self, node):
-        if len(node.jumped_from) > 1:
-            marker = JumpMarker()
-            self.node2jumpmarker[node] = marker
-            self.output.ops.append(marker)
-
         if isinstance(node, (decision_tree.SetVar, decision_tree.GetVar)):
             coder = self._get_coder_for_level(node.var.level)
             if node.var not in coder.local_vars:
@@ -185,24 +184,69 @@ class _OpCoder:
             raise NotImplementedError(repr(node))
 
     def opcode_tree(self, node):
-        # FIXME: handle loops
         while node is not None:
+            if node in self.jump_cache:
+                self.output.ops.append(Jump(None, self.jump_cache[node]))
+                break
+
+            if len(node.jumped_from) > 1:
+                marker = JumpMarker()
+                self.jump_cache[node] = marker
+                self.output.ops.append(marker)
+
             if isinstance(node, decision_tree.PassThroughNode):
                 self.opcode_passthroughnode(node)
                 node = node.next_node
 
             elif isinstance(node, decision_tree.BoolDecision):
-                # FIXME: duplicates all opcode after the if,else
                 then_marker = JumpMarker()
                 done_marker = JumpMarker()
 
+                # this does not output the same bytecode twice
+                # for example, consider this code
+                #
+                #    a
+                #    if b:
+                #        c
+                #    else:
+                #        d
+                #    e
+                #
+                # it creates a tree like this
+                #
+                #     a
+                #     |
+                #     b
+                #    / \
+                #   c   d
+                #    \ /
+                #     e
+                #
+                # and opcode like this
+                #
+                #    a
+                #    b
+                #    if b is true, jump to then_marker
+                #    d
+                #    e
+                #    jump to done_marker
+                #    then_marker
+                #    c
+                #    jump to e
+                #    done_marker
+                #
+                # the 'jump to e' part gets added by jump_cache stuff, because
+                # e has already gotten opcoded once and can be reused
+                #
+                # not ideal, but I don't feel like optimizing this before the
+                # decision trees contain loops and other corner cases
                 self.output.ops.append(JumpIf(node.lineno, then_marker))
                 self.opcode_tree(node.otherwise)
                 self.output.ops.append(Jump(None, done_marker))
                 self.output.ops.append(then_marker)
                 self.opcode_tree(node.then)
                 self.output.ops.append(done_marker)
-                node = None
+                break
 
             else:
                 raise NotImplementedError(repr(node))

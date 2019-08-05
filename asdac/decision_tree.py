@@ -77,6 +77,8 @@ class Node:
         self.lineno = lineno
 
     def add_jump_to(self, other):
+        # TODO: what should this do when an if has same 'then' and 'otherwise'?
+        assert other not in self.jumps_to
         self.jumps_to.add(other)
         other.jumped_from.add(self)
 
