@@ -453,17 +453,17 @@ class _TreeCreator:
 
         elif isinstance(statement, cooked_ast.IfStatement):
             self.do_expression(statement.cond)
+            result = BoolDecision(**boilerplate)
 
             if_creator = self.subcreator()
+            if_creator.set_next_node = result.set_then
             if_creator.do_body(statement.if_body)
+
             else_creator = self.subcreator()
+            else_creator.set_next_node = result.set_otherwise
             else_creator.do_body(statement.else_body)
 
-            result = BoolDecision(**boilerplate)
-            result.set_then(if_creator.root_node)
-            result.set_otherwise(else_creator.root_node)
             self.set_next_node(result)
-
             self.set_next_node = lambda next_node: (
                 if_creator.set_next_node(next_node),
                 else_creator.set_next_node(next_node),

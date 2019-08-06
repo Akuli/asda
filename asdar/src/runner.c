@@ -559,8 +559,10 @@ static void jump_to_error_handler(struct Runner *rnr, struct CodeErrHndItem ehi)
 
 static void clear_stack(struct Runner *rnr)
 {
-	for (; rnr->stacktop > rnr->stackbot; rnr->stacktop--)
-		OBJECT_DECREF(*rnr->stacktop);
+	assert(rnr->stacktop >= rnr->stackbot);
+	for (long i = 0; i < rnr->stacktop - rnr->stackbot; i++)
+		OBJECT_DECREF(rnr->stackbot[i]);
+	rnr->stacktop = rnr->stackbot;
 }
 
 enum RunnerResult runner_run(struct Runner *rnr)
