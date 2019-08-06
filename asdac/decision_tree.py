@@ -127,8 +127,14 @@ class Node:
                                stdin=subprocess.PIPE)
         dot_stdin = io.TextIOWrapper(dot.stdin)
         dot_stdin.write('digraph {\n')
+
+        try:
+            max_stack_size = get_max_stack_size(self)
+        except AssertionError:
+            max_stack_size = 'error'    # lol
+
         dot_stdin.write(
-            'label="\\nmax stack size = %d";\n' % get_max_stack_size(self))
+            'label="\\nmax stack size = %s";\n' % max_stack_size)
 
         for node, id_string in nodes.items():
             parts = [type(node).__name__]
@@ -141,9 +147,18 @@ class Node:
             dot_stdin.write('%s [label="%s"];\n' % (
                 id_string, '\n'.join(parts).replace('"', r'\"')))
 
-            for to in node.jumps_to:
-                dot_stdin.write('%s -> %s\n' % (
-                    id_string, nodes[to]))
+            if isinstance(node, TwoWayDecision):
+                # color 'then' with green, 'otherwise' with red
+                if node.then is not None:
+                    dot_stdin.write('%s -> %s [color=green]\n' % (
+                        id_string, nodes[node.then]))
+                if node.otherwise is not None:
+                    dot_stdin.write('%s -> %s [color=red]\n' % (
+                        id_string, nodes[node.otherwise]))
+            else:
+                for to in node.jumps_to:
+                    dot_stdin.write('%s -> %s\n' % (
+                        id_string, nodes[to]))
 
         dot_stdin.write('}\n')
         dot_stdin.flush()
@@ -216,7 +231,7 @@ class _SetOrGetVar(PassThroughNode):
         self.var = var
 
     def graphviz_string(self):
-        return repr(self.var.name)
+        return self.var.name
 
 
 class SetVar(_SetOrGetVar):
@@ -240,6 +255,18 @@ class Equal(PassThroughNode):
 
 class Plus(PassThroughNode):
     pass
+
+
+class GetAttr(PassThroughNode):
+
+    def __init__(self, tybe, attrname, **kwargs):
+        super().__init__(**kwargs)
+        self.tybe = tybe
+        self.attrname = attrname
+        self.push_count = 0
+
+    def graphviz_string(self):
+        return self.tybe.name + '.' + self.attrname
 
 
 class StrConstant(PassThroughNode):
@@ -278,6 +305,14 @@ class CallFunction(PassThroughNode):
     def graphviz_string(self):
         return ('1 arg' if self.how_many_args == 1 else
                 '%d args' % self.how_many_args)
+
+
+class StrJoin(PassThroughNode):
+
+    def __init__(self, how_many_strings, **kwargs):
+        super().__init__(**kwargs)
+        self.how_many_strings = how_many_strings
+        self.push_count = -how_many_strings + 1
 
 
 class TwoWayDecision(Node):
@@ -345,10 +380,7 @@ class _TreeCreator:
             len(call.args), (call.function.type.returntype is not None),
             lineno=self._lineno(call.location)))
 
-    def attrib_index(self, tybe, name):
-        assert isinstance(tybe.attributes, collections.OrderedDict)
-        return list(tybe.attributes.keys()).index(name)
-
+    # inefficient, but there will be optimizers later i think
     def add_bool_negation(self):
         decision = BoolDecision()
         decision.set_then(GetVar(cooked_ast.BUILTIN_VARS['FALSE']))
@@ -360,6 +392,7 @@ class _TreeCreator:
         )
 
     def do_expression(self, expression):
+        assert expression.type is not None
         boilerplate = {'lineno': self._lineno(expression.location)}
 
         if isinstance(expression, cooked_ast.StrConstant):
@@ -385,6 +418,19 @@ class _TreeCreator:
             self.do_expression(expression.lhs)
             self.do_expression(expression.rhs)
             self.add_pass_through_node(Plus(**boilerplate))
+
+        elif isinstance(expression, cooked_ast.StrJoin):
+            for part in expression.parts:
+                self.do_expression(part)
+            self.add_pass_through_node(StrJoin(len(expression.parts)))
+
+        elif isinstance(expression, cooked_ast.CallFunction):
+            self.do_function_call(expression)
+
+        elif isinstance(expression, cooked_ast.GetAttr):
+            self.do_expression(expression.obj)
+            self.add_pass_through_node(GetAttr(
+                expression.obj.type, expression.attrname))
 
         else:
             assert False, expression    # pragma: no cover
@@ -424,8 +470,6 @@ class _TreeCreator:
             )
 
         elif isinstance(statement, cooked_ast.Loop):
-            assert statement.post_cond is None            # TODO
-
             creator = self.subcreator()
             if statement.pre_cond is None:
                 creator.add_pass_through_node(GetVar(
@@ -439,11 +483,22 @@ class _TreeCreator:
 
             creator.do_body(statement.body)
             creator.do_body(statement.incr)
-            creator.set_next_node(creator.root_node)
 
-            # TODO: can creator.root_node be None? what would that do?
+            if statement.post_cond is None:
+                creator.add_pass_through_node(GetVar(
+                    cooked_ast.BUILTIN_VARS['TRUE']))
+            else:
+                creator.do_expression(statement.post_cond)
+
+            end_decision = BoolDecision(**boilerplate)
+            end_decision.set_then(creator.root_node)
+            creator.set_next_node(end_decision)
+
             self.set_next_node(creator.root_node)
-            self.set_next_node = beginning_decision.set_otherwise
+            self.set_next_node = lambda node: (
+                beginning_decision.set_otherwise(node),
+                end_decision.set_otherwise(node),
+            )
 
         else:
             assert False, type(statement)     # pragma: no cover

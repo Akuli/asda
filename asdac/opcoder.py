@@ -152,6 +152,10 @@ class _OpCoder:
             coder = coder.parent_coder
         return coder
 
+    def attrib_index(self, tybe, name):
+        assert isinstance(tybe.attributes, collections.OrderedDict)
+        return list(tybe.attributes.keys()).index(name)
+
     def opcode_passthroughnode(self, node):
         if isinstance(node, decision_tree.Start):
             pass
@@ -167,6 +171,11 @@ class _OpCoder:
             else:
                 self.output.ops.append(GetVar(
                     node.lineno, node.var.level, coder.local_vars[node.var]))
+
+        elif isinstance(node, decision_tree.GetAttr):
+            self.output.ops.append(GetAttr(
+                node.lineno, node.tybe,
+                self.attrib_index(node.tybe, node.attrname)))
 
         elif isinstance(node, decision_tree.StrConstant):
             self.output.ops.append(StrConstant(
@@ -184,6 +193,10 @@ class _OpCoder:
         elif isinstance(node, decision_tree.CallFunction):
             self.output.ops.append(CallFunction(
                 node.lineno, node.how_many_args))
+
+        elif isinstance(node, decision_tree.StrJoin):
+            self.output.ops.append(StrJoin(
+                node.lineno, node.how_many_strings))
 
         else:
             print(dir(node))
