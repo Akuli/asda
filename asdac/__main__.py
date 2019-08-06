@@ -7,7 +7,8 @@ import textwrap
 
 import colorama
 
-from . import bytecoder, common, cooked_ast, decision_tree, opcoder, raw_ast
+from . import (bytecoder, common, cooked_ast, decision_tree, opcoder, raw_ast,
+               unset_vars)
 
 
 # TODO: error handling for bytecoder.RecompileFixableError
@@ -44,11 +45,15 @@ def source2bytecode(compilation: common.Compilation):
     compilation.set_export_types(export_types)
 
     compilation.messager(3, "Creating a decision tree")
-    root_node = decision_tree.create_tree(compilation, cooked, source)
-    root_node.graphviz()
+    root_node = decision_tree.create_tree(cooked)
+    #root_node.graphviz()
+
+    compilation.messager(
+        3, "Checking whether the values of all variables are always set")
+    unset_vars.check_for_unset_variables(root_node)
 
     compilation.messager(3, "Creating opcode")
-    opcode = opcoder.create_opcode(compilation, root_node, export_vars)
+    opcode = opcoder.create_opcode(compilation, root_node, export_vars, source)
 
     compilation.messager(3, "Creating bytecode")
     bytecode = bytecoder.create_bytecode(compilation, opcode)

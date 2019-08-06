@@ -59,7 +59,7 @@ from asdac import cooked_ast
 
 class Node:
 
-    def __init__(self, *, lineno=None):
+    def __init__(self, *, location=None):
         # the other of 'self -> other' is here
         # contains two elements for 'if' nodes
         # contains only one element for most things
@@ -80,7 +80,7 @@ class Node:
         self.push_count = -1
 
         # should be None for nodes created by the compiler
-        self.lineno = lineno
+        self.location = location
 
     def add_jump_to(self, other):
         # TODO: what should this do when an if has same 'then' and 'otherwise'?
@@ -138,8 +138,10 @@ class Node:
 
         for node, id_string in nodes.items():
             parts = [type(node).__name__]
-            if node.lineno is not None:
-                parts[0] += ', line %d' % node.lineno
+            # TODO: display location somewhat nicely
+            # .lineno attribute was replaced with .location attribute
+#            if node.lineno is not None:
+#                parts[0] += ', line %d' % node.lineno
             if node.graphviz_string() is not None:
                 parts.append(node.graphviz_string())
             parts.append('push_count=' + str(node.push_count))
@@ -168,39 +170,6 @@ class Node:
         assert status == 0
 
         webbrowser.open('file://' + pathname2url(str(png)))
-
-
-# if we have (in graphviz syntax) a->c->d->f->g, b->e->f->g
-# then find_merge(a, b) returns f, because that's first node where they merge
-# may return None, if paths never merge together
-# see tests for corner cases
-#
-# TODO: better algorithm? i found this
-# https://www.hackerrank.com/topics/lowest-common-ancestor
-# but doesn't seem to handle cyclic graphs?
-def find_merge(a: Node, b: Node):
-    assert a is not None
-    assert b is not None
-
-    reachable_from_a = {a}
-    reachable_from_b = {b}
-
-    while True:
-        try:
-            return (reachable_from_a & reachable_from_b).pop()
-        except KeyError:
-            pass
-
-        did_something = False
-        for reaching_set in [reachable_from_a, reachable_from_b]:
-            for node in reaching_set.copy():
-                for other_node in node.jumps_to:
-                    if other_node not in reaching_set:
-                        reaching_set.add(other_node)
-                        did_something = True
-
-        if not did_something:
-            return None
 
 
 # a node that can be used like:
@@ -335,41 +304,102 @@ class BoolDecision(TwoWayDecision):
     pass
 
 
+# size_dict is like this {node: stack size BEFORE running the node}
+def _get_stack_sizes_to_dict(node, size, size_dict):
+    assert node is not None
+
+    while True:
+        if node in size_dict:
+            assert size == size_dict[node]
+            return
+
+        size_dict[node] = size
+        size += node.push_count
+        assert size >= 0
+
+        if not node.jumps_to:
+            return
+
+        # avoid recursion in the common case because it could be slow
+        [node, *other_nodes] = node.jumps_to
+        for other in other_nodes:
+            _get_stack_sizes_to_dict(other, size, size_dict)
+
+
+def get_max_stack_size(node):
+    if node is None:
+        return 0
+
+    size_dict = {}
+    _get_stack_sizes_to_dict(node, 0, size_dict)
+    return max(
+        max(before, before + node.push_count)
+        for node, before in size_dict.items()
+    )
+
+
+# if we have (in graphviz syntax) a->c->d->f->g, b->e->f->g
+# then find_merge(a, b) returns f, because that's first node where they merge
+# may return None, if paths never merge together
+# see tests for corner cases
+#
+# TODO: better algorithm? i found this
+# https://www.hackerrank.com/topics/lowest-common-ancestor
+# but doesn't seem to handle cyclic graphs?
+def find_merge(a: Node, b: Node):
+    assert a is not None
+    assert b is not None
+
+    reachable_from_a = {a}
+    reachable_from_b = {b}
+
+    while True:
+        try:
+            return (reachable_from_a & reachable_from_b).pop()
+        except KeyError:
+            pass
+
+        did_something = False
+        for reaching_set in [reachable_from_a, reachable_from_b]:
+            for node in reaching_set.copy():
+                for other_node in node.jumps_to:
+                    if other_node not in reaching_set:
+                        reaching_set.add(other_node)
+                        did_something = True
+
+        if not did_something:
+            return None
+
+
+# TODO: cache result somewhere, but careful with invalidation?
+def get_all_nodes(root_node):
+    if root_node is None:
+        return set()
+
+    result = set()
+    to_visit = {root_node}      # should be faster than recursion
+
+    while to_visit:
+        node = to_visit.pop()
+        if node not in result:
+            result.add(node)
+            to_visit.update(node.jumps_to)
+
+    return result
+
+
 # converts cooked ast to a decision tree
 class _TreeCreator:
 
-    def __init__(self, compilation, line_start_offsets):
+    def __init__(self):
         self.root_node = None
         # why can't i assign in python lambda without dirty setattr haxor :(
         self.set_next_node = lambda node: setattr(self, 'root_node', node)
-        self.compilation = compilation
-        self.line_start_offsets = line_start_offsets
-
-    def subcreator(self):
-        return _TreeCreator(self.compilation, self.line_start_offsets)
 
     def add_pass_through_node(self, node):
         assert isinstance(node, PassThroughNode)
         self.set_next_node(node)
         self.set_next_node = node.set_next_node
-
-    # returns line number so that 1 means first line
-    def _lineno(self, location):
-        #    >>> offsets = [0, 4, 10]
-        #    >>> bisect.bisect(offsets, 0)
-        #    1
-        #    >>> bisect.bisect(offsets, 3)
-        #    1
-        #    >>> bisect.bisect(offsets, 4)
-        #    2
-        #    >>> bisect.bisect(offsets, 8)
-        #    2
-        #    >>> bisect.bisect(offsets, 9)
-        #    2
-        #    >>> bisect.bisect(offsets, 10)
-        #    3
-        assert location.compilation == self.compilation
-        return bisect.bisect(self.line_start_offsets, location.offset)
 
     def do_function_call(self, call):
         self.do_expression(call.function)
@@ -378,7 +408,7 @@ class _TreeCreator:
 
         self.add_pass_through_node(CallFunction(
             len(call.args), (call.function.type.returntype is not None),
-            lineno=self._lineno(call.location)))
+            location=call.location))
 
     # inefficient, but there will be optimizers later i think
     def add_bool_negation(self):
@@ -393,7 +423,7 @@ class _TreeCreator:
 
     def do_expression(self, expression):
         assert expression.type is not None
-        boilerplate = {'lineno': self._lineno(expression.location)}
+        boilerplate = {'location': expression.location}
 
         if isinstance(expression, cooked_ast.StrConstant):
             self.add_pass_through_node(StrConstant(
@@ -436,7 +466,7 @@ class _TreeCreator:
             assert False, expression    # pragma: no cover
 
     def do_statement(self, statement):
-        boilerplate = {'lineno': self._lineno(statement.location)}
+        boilerplate = {'location': statement.location}
 
         if isinstance(statement, cooked_ast.CreateLocalVar):
             pass
@@ -455,11 +485,11 @@ class _TreeCreator:
             self.do_expression(statement.cond)
             result = BoolDecision(**boilerplate)
 
-            if_creator = self.subcreator()
+            if_creator = _TreeCreator()
             if_creator.set_next_node = result.set_then
             if_creator.do_body(statement.if_body)
 
-            else_creator = self.subcreator()
+            else_creator = _TreeCreator()
             else_creator.set_next_node = result.set_otherwise
             else_creator.do_body(statement.else_body)
 
@@ -470,7 +500,7 @@ class _TreeCreator:
             )
 
         elif isinstance(statement, cooked_ast.Loop):
-            creator = self.subcreator()
+            creator = _TreeCreator()
             if statement.pre_cond is None:
                 creator.add_pass_through_node(GetVar(
                     cooked_ast.BUILTIN_VARS['TRUE']))
@@ -509,56 +539,10 @@ class _TreeCreator:
             self.do_statement(statement)
 
 
-def _combine_nodes(lizt):
-    for first, second in zip(lizt, lizt[1:]):
-        first.set_next_node(second)
-    return lizt[0] if lizt else None
-
-
-# size_dict is like this {node: stack size BEFORE running the node}
-def _get_stack_sizes_to_dict(node, size, size_dict):
-    assert node is not None
-
-    while True:
-        if node in size_dict:
-            assert size == size_dict[node]
-            return
-
-        size_dict[node] = size
-        size += node.push_count
-        assert size >= 0
-
-        if not node.jumps_to:
-            return
-
-        # avoid recursion in the common case because it could be slow
-        [node, *other_nodes] = node.jumps_to
-        for other in other_nodes:
-            _get_stack_sizes_to_dict(other, size, size_dict)
-
-
-def get_max_stack_size(node):
-    if node is None:
-        return 0
-
-    size_dict = {}
-    _get_stack_sizes_to_dict(node, 0, size_dict)
-    return max(
-        max(before, before + node.push_count)
-        for node, before in size_dict.items()
-    )
-
-
-def create_tree(compilation, cooked_statements, source_code):
-    line_start_offsets = []
-    offset = 0
-    for line in io.StringIO(source_code):
-        line_start_offsets.append(offset)
-        offset += len(line)
-
+def create_tree(cooked_statements):
     start = Start()
 
-    tree_creator = _TreeCreator(compilation, line_start_offsets)
+    tree_creator = _TreeCreator()
     tree_creator.set_next_node(start)
     tree_creator.set_next_node = start.set_next_node
     tree_creator.do_body(cooked_statements)

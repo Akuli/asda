@@ -121,11 +121,12 @@ class OpCode:
 
 class _OpCoder:
 
-    def __init__(self, output_opcode, compilation):
+    def __init__(self, output_opcode, compilation, line_start_offsets):
         self.output = output_opcode
         self.parent_coder = None
         self.level = 0
         self.compilation = compilation
+        self.line_start_offsets = line_start_offsets
 
         # keys are cooked_ast.Variable or cooked_ast.GenericVariable
         # values are VarMarker or ArgMarker
@@ -138,10 +139,32 @@ class _OpCoder:
         self.jump_cache = {}
 
     def create_subcoder(self, output_opcode):
-        result = _OpCoder(output_opcode, self.compilation)
+        result = _OpCoder(output_opcode, self.compilation,
+                          self.line_start_offsets)
         result.parent_coder = self
         result.level = self.level + 1
         return result
+
+    # returns line number so that 1 means first line
+    def _lineno(self, location):
+        if location is None:
+            return None
+
+        #    >>> offsets = [0, 4, 10]
+        #    >>> bisect.bisect(offsets, 0)
+        #    1
+        #    >>> bisect.bisect(offsets, 3)
+        #    1
+        #    >>> bisect.bisect(offsets, 4)
+        #    2
+        #    >>> bisect.bisect(offsets, 8)
+        #    2
+        #    >>> bisect.bisect(offsets, 9)
+        #    2
+        #    >>> bisect.bisect(offsets, 10)
+        #    3
+        assert location.compilation == self.compilation
+        return bisect.bisect(self.line_start_offsets, location.offset)
 
     def _get_coder_for_level(self, level):
         level_difference = self.level - level
@@ -157,6 +180,8 @@ class _OpCoder:
         return list(tybe.attributes.keys()).index(name)
 
     def opcode_passthroughnode(self, node):
+        lineno = self._lineno(node.location)
+
         if isinstance(node, decision_tree.Start):
             pass
 
@@ -167,39 +192,37 @@ class _OpCoder:
 
             if isinstance(node, decision_tree.SetVar):
                 self.output.ops.append(SetVar(
-                    node.lineno, node.var.level, coder.local_vars[node.var]))
+                    lineno, node.var.level, coder.local_vars[node.var]))
             else:
                 self.output.ops.append(GetVar(
-                    node.lineno, node.var.level, coder.local_vars[node.var]))
+                    lineno, node.var.level, coder.local_vars[node.var]))
 
         elif isinstance(node, decision_tree.GetAttr):
             self.output.ops.append(GetAttr(
-                node.lineno, node.tybe,
+                lineno, node.tybe,
                 self.attrib_index(node.tybe, node.attrname)))
 
         elif isinstance(node, decision_tree.StrConstant):
-            self.output.ops.append(StrConstant(
-                node.lineno, node.python_string))
+            self.output.ops.append(StrConstant(lineno, node.python_string))
 
         elif isinstance(node, decision_tree.IntConstant):
-            self.output.ops.append(IntConstant(node.lineno, node.python_int))
+            self.output.ops.append(IntConstant(lineno, node.python_int))
 
         elif isinstance(node, decision_tree.Equal):
-            self.output.ops.append(Equal(node.lineno))
+            self.output.ops.append(Equal(lineno))
 
         elif isinstance(node, decision_tree.Plus):
-            self.output.ops.append(Plus(node.lineno))
+            self.output.ops.append(Plus(lineno))
 
         elif isinstance(node, decision_tree.CallFunction):
             self.output.ops.append(CallFunction(
-                node.lineno, node.how_many_args))
+                lineno, node.how_many_args))
 
         elif isinstance(node, decision_tree.StrJoin):
             self.output.ops.append(StrJoin(
-                node.lineno, node.how_many_strings))
+                lineno, node.how_many_strings))
 
         else:
-            print(dir(node))
             raise NotImplementedError(repr(node))
 
     def opcode_tree(self, node):
@@ -208,6 +231,7 @@ class _OpCoder:
                 self.output.ops.append(Jump(None, self.jump_cache[node]))
                 break
 
+            lineno = self._lineno(node.location)
             if len(node.jumped_from) > 1:
                 marker = JumpMarker()
                 self.jump_cache[node] = marker
@@ -259,7 +283,7 @@ class _OpCoder:
                 #
                 # not ideal, but I don't feel like optimizing this before the
                 # decision trees contain loops and other corner cases
-                self.output.ops.append(JumpIf(node.lineno, then_marker))
+                self.output.ops.append(JumpIf(lineno, then_marker))
                 self.opcode_tree(node.otherwise)
                 self.output.ops.append(Jump(None, done_marker))
                 self.output.ops.append(then_marker)
@@ -271,8 +295,14 @@ class _OpCoder:
                 raise NotImplementedError(repr(node))
 
 
-def create_opcode(compilation, root_node, export_vars):
-    builtin_opcoder = _OpCoder(None, compilation)
+def create_opcode(compilation, root_node, export_vars, source_code):
+    line_start_offsets = []
+    offset = 0
+    for line in io.StringIO(source_code):
+        line_start_offsets.append(offset)
+        offset += len(line)
+
+    builtin_opcoder = _OpCoder(None, compilation, line_start_offsets)
     builtin_opcoder.local_vars.update({
         var: ArgMarker(index)
         for index, var in enumerate(itertools.chain(
