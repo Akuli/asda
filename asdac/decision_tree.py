@@ -80,21 +80,16 @@ class Node:
     def get_jumps_to(self):
         raise NotImplementedError
 
-    def add_jump_to(self, ref):
-        # can't jump to Start, avoids special cases
-        # but you can jump to the node after the Start node
-        assert not isinstance(ref.get(), Start)
-        ref.get().jumped_from.add(ref)
-
-    def remove_jump_to(self, ref):
-        ref.get().jumped_from.remove(ref)
-
     def change_jump_to(self, ref, new):
         if ref.get() is not None:
-            self.remove_jump_to(ref)
+            ref.get().jumped_from.remove(ref)
+
         ref.set(new)
         if new is not None:
-            self.add_jump_to(ref)
+            # can't jump to Start, avoids special cases
+            # but you can jump to the node after the Start node
+            assert not isinstance(ref.get(), Start)
+            ref.get().jumped_from.add(ref)
 
     def graphviz_string(self):
         return None
