@@ -44,7 +44,7 @@ def test_attributereference_equality():
     assert abar != 'lol'
     assert abar == abar
     assert abar == abar2
-    assert abar1 != bbar
+    assert abar != bbar
     assert bbar != bbaz
 
     check_equality([abar, abar2, bbar, bbaz])

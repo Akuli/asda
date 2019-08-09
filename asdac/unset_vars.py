@@ -18,8 +18,9 @@ def _check_variable_is_set(node, getvar_node, visited_nodes):
         # dead code
         return
 
-    for other in node.jumped_from:
-        _check_variable_is_set(other, getvar_node, visited_nodes)
+    for other in (ref.objekt for ref in node.jumped_from):
+        if other not in visited_nodes:
+            _check_variable_is_set(other, getvar_node, visited_nodes)
 
 
 def check_for_unset_variables(root_node):

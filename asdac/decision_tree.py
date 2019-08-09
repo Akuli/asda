@@ -54,17 +54,12 @@ import time
 from urllib.request import pathname2url
 import webbrowser
 
-from asdac import cooked_ast
+from asdac import cooked_ast, utils
 
 
 class Node:
 
     def __init__(self, *, location=None):
-        # the other of 'self -> other' is here
-        # contains two elements for 'if' nodes
-        # contains only one element for most things
-        self.jumps_to = set()
-
         # number of elements has nothing to do with the type of the node
         # more than 1 means e.g. beginning of loop, 0 means dead code
         self.jumped_from = set()
@@ -82,41 +77,32 @@ class Node:
         # should be None for nodes created by the compiler
         self.location = location
 
-    def add_jump_to(self, other):
-        # TODO: what should this do when an if has same 'then' and 'otherwise'?
-        assert other not in self.jumps_to
+    def get_jumps_to(self):
+        raise NotImplementedError
 
+    def add_jump_to(self, ref):
         # can't jump to Start, avoids special cases
         # but you can jump to the node after the Start node
-        assert not isinstance(other, Start)
+        assert not isinstance(ref.get(), Start)
+        ref.get().jumped_from.add(ref)
 
-        self.jumps_to.add(other)
-        other.jumped_from.add(self)
+    def remove_jump_to(self, ref):
+        ref.get().jumped_from.remove(ref)
 
-    def remove_jump_to(self, other):
-        self.jumps_to.remove(other)
-        other.jumped_from.remove(self)
-
-    def change_jump_to(self, old, new):
-        if old is not None:
-            self.remove_jump_to(old)
+    def change_jump_to(self, ref, new):
+        if ref.get() is not None:
+            self.remove_jump_to(ref)
+        ref.set(new)
         if new is not None:
-            self.add_jump_to(new)
+            self.add_jump_to(ref)
 
     def graphviz_string(self):
         return None
 
     # for debugging, displays a visual representation of the tree
     def graphviz(self):
-        nodes = {}      # {node: id string}
-
-        def recurser(node):
-            if node not in nodes:
-                nodes[node] = 'node' + str(len(nodes))
-                for subnode in node.jumps_to:
-                    recurser(subnode)
-
-        recurser(self)
+        nodes = {node: 'node' + str(number)
+                 for number, node in enumerate(get_all_nodes(self))}
 
         path = pathlib.Path(tempfile.gettempdir()) / 'asdac'
         path.mkdir(parents=True, exist_ok=True)
@@ -136,7 +122,7 @@ class Node:
         dot_stdin.write(
             'label="\\nmax stack size = %s";\n' % max_stack_size)
 
-        for node, id_string in nodes.items():
+        for node in nodes:
             parts = [type(node).__name__]
             # TODO: display location somewhat nicely
             # .lineno attribute was replaced with .location attribute
@@ -147,20 +133,23 @@ class Node:
             parts.append('push_count=' + str(node.push_count))
 
             dot_stdin.write('%s [label="%s"];\n' % (
-                id_string, '\n'.join(parts).replace('"', r'\"')))
+                nodes[node], '\n'.join(parts).replace('"', r'\"')))
+
+            for to in node.get_jumps_to():
+                assert node in (ref.objekt for ref in to.jumped_from)
 
             if isinstance(node, TwoWayDecision):
                 # color 'then' with green, 'otherwise' with red
                 if node.then is not None:
                     dot_stdin.write('%s -> %s [color=green]\n' % (
-                        id_string, nodes[node.then]))
+                        nodes[node], nodes[node.then]))
                 if node.otherwise is not None:
                     dot_stdin.write('%s -> %s [color=red]\n' % (
-                        id_string, nodes[node.otherwise]))
+                        nodes[node], nodes[node.otherwise]))
             else:
-                for to in node.jumps_to:
+                for to in node.get_jumps_to():
                     dot_stdin.write('%s -> %s\n' % (
-                        id_string, nodes[to]))
+                        nodes[node], nodes[to]))
 
         dot_stdin.write('}\n')
         dot_stdin.flush()
@@ -180,9 +169,13 @@ class PassThroughNode(Node):
         super().__init__(**kwargs)
         self.next_node = None
 
+    def get_jumps_to(self):
+        if self.next_node is not None:
+            yield self.next_node
+
     def set_next_node(self, next_node):
-        self.change_jump_to(self.next_node, next_node)
-        self.next_node = next_node
+        self.change_jump_to(
+            utils.AttributeReference(self, 'next_node'), next_node)
 
 
 # execution begins here, having this avoids weird special cases
@@ -291,13 +284,19 @@ class TwoWayDecision(Node):
         self.then = None
         self.otherwise = None
 
+    def get_jumps_to(self):
+        if self.then is not None:
+            yield self.then
+        if self.otherwise is not None:
+            yield self.otherwise
+
     def set_then(self, value):
-        self.change_jump_to(self.then, value)
-        self.then = value
+        self.change_jump_to(
+            utils.AttributeReference(self, 'then'), value)
 
     def set_otherwise(self, value):
-        self.change_jump_to(self.otherwise, value)
-        self.otherwise = value
+        self.change_jump_to(
+            utils.AttributeReference(self, 'otherwise'), value)
 
 
 class BoolDecision(TwoWayDecision):
@@ -317,11 +316,12 @@ def _get_stack_sizes_to_dict(node, size, size_dict):
         size += node.push_count
         assert size >= 0
 
-        if not node.jumps_to:
+        jumps_to = list(node.get_jumps_to())
+        if not jumps_to:
             return
 
         # avoid recursion in the common case because it could be slow
-        [node, *other_nodes] = node.jumps_to
+        [node, *other_nodes] = jumps_to
         for other in other_nodes:
             _get_stack_sizes_to_dict(other, size, size_dict)
 
@@ -362,7 +362,7 @@ def find_merge(a: Node, b: Node):
         did_something = False
         for reaching_set in [reachable_from_a, reachable_from_b]:
             for node in reaching_set.copy():
-                for other_node in node.jumps_to:
+                for other_node in node.get_jumps_to():
                     if other_node not in reaching_set:
                         reaching_set.add(other_node)
                         did_something = True
@@ -383,7 +383,7 @@ def get_all_nodes(root_node):
         node = to_visit.pop()
         if node not in result:
             result.add(node)
-            to_visit.update(node.jumps_to)
+            to_visit.update(node.get_jumps_to())
 
     return result
 

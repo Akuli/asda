@@ -46,7 +46,7 @@ def source2bytecode(compilation: common.Compilation):
 
     compilation.messager(3, "Creating a decision tree")
     root_node = decision_tree.create_tree(cooked)
-    #root_node.graphviz()
+    root_node.graphviz()
 
     compilation.messager(
         3, "Checking whether the values of all variables are always set")
