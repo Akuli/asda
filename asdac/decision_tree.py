@@ -91,69 +91,9 @@ class Node:
             assert not isinstance(ref.get(), Start)
             ref.get().jumped_from.add(ref)
 
+    # for debugging
     def graphviz_string(self):
         return None
-
-    # for debugging, displays a visual representation of the tree
-    def graphviz(self):
-        nodes = {node: 'node' + str(number)
-                 for number, node in enumerate(get_all_nodes(self))}
-
-        path = pathlib.Path(tempfile.gettempdir()) / 'asdac'
-        path.mkdir(parents=True, exist_ok=True)
-        png = path / 'decision_tree.png'
-
-        # overwrites the png file if it exists
-        dot = subprocess.Popen(['dot', '-o', str(png), '-T', 'png'],
-                               stdin=subprocess.PIPE)
-        dot_stdin = io.TextIOWrapper(dot.stdin)
-        dot_stdin.write('digraph {\n')
-
-        try:
-            max_stack_size = get_max_stack_size(self)
-        except AssertionError:
-            max_stack_size = 'error'    # lol
-
-        dot_stdin.write(
-            'label="\\nmax stack size = %s";\n' % max_stack_size)
-
-        for node in nodes:
-            parts = [type(node).__name__]
-            # TODO: display location somewhat nicely
-            # .lineno attribute was replaced with .location attribute
-#            if node.lineno is not None:
-#                parts[0] += ', line %d' % node.lineno
-            if node.graphviz_string() is not None:
-                parts.append(node.graphviz_string())
-            parts.append('push_count=' + str(node.push_count))
-
-            dot_stdin.write('%s [label="%s"];\n' % (
-                nodes[node], '\n'.join(parts).replace('"', r'\"')))
-
-            for to in node.get_jumps_to():
-                assert node in (ref.objekt for ref in to.jumped_from)
-
-            if isinstance(node, TwoWayDecision):
-                # color 'then' with green, 'otherwise' with red
-                if node.then is not None:
-                    dot_stdin.write('%s -> %s [color=green]\n' % (
-                        nodes[node], nodes[node.then]))
-                if node.otherwise is not None:
-                    dot_stdin.write('%s -> %s [color=red]\n' % (
-                        nodes[node], nodes[node.otherwise]))
-            else:
-                for to in node.get_jumps_to():
-                    dot_stdin.write('%s -> %s\n' % (
-                        nodes[node], nodes[to]))
-
-        dot_stdin.write('}\n')
-        dot_stdin.flush()
-        dot_stdin.close()
-
-        status = dot.wait()
-        assert status == 0
-
-        webbrowser.open('file://' + pathname2url(str(png)))
 
 
 # a node that can be used like:
@@ -381,6 +321,70 @@ def get_all_nodes(root_node):
             to_visit.update(node.get_jumps_to())
 
     return result
+
+
+# for debugging, displays a visual representation of the tree
+def graphviz(root_node, filename_without_ext):
+    nodes = {node: 'node' + str(number)
+             for number, node in enumerate(get_all_nodes(root_node))}
+
+    path = pathlib.Path(tempfile.gettempdir()) / 'asdac'
+    path.mkdir(parents=True, exist_ok=True)
+    png = path / (filename_without_ext + '.png')
+
+    # overwrites the png file if it exists
+    dot = subprocess.Popen(['dot', '-o', str(png), '-T', 'png'],
+                           stdin=subprocess.PIPE)
+    dot_stdin = io.TextIOWrapper(dot.stdin)
+    dot_stdin.write('digraph {\n')
+
+    try:
+        max_stack_size = get_max_stack_size(root_node)
+    except AssertionError:
+        # get_max_stack_size will be called later as a part of the compilation,
+        # and you will see the full traceback then
+        max_stack_size = 'error'
+
+    dot_stdin.write(
+        'label="\\nmax stack size = %s";\n' % max_stack_size)
+
+    for node in nodes:
+        parts = [type(node).__name__]
+        # TODO: display location somewhat nicely
+        # .lineno attribute was replaced with .location attribute
+#            if node.lineno is not None:
+#                parts[0] += ', line %d' % node.lineno
+        if node.graphviz_string() is not None:
+            parts.append(node.graphviz_string())
+        parts.append('push_count=' + str(node.push_count))
+
+        dot_stdin.write('%s [label="%s"];\n' % (
+            nodes[node], '\n'.join(parts).replace('"', r'\"')))
+
+        for to in node.get_jumps_to():
+            assert node in (ref.objekt for ref in to.jumped_from)
+
+        if isinstance(node, TwoWayDecision):
+            # color 'then' with green, 'otherwise' with red
+            if node.then is not None:
+                dot_stdin.write('%s -> %s [color=green]\n' % (
+                    nodes[node], nodes[node.then]))
+            if node.otherwise is not None:
+                dot_stdin.write('%s -> %s [color=red]\n' % (
+                    nodes[node], nodes[node.otherwise]))
+        else:
+            for to in node.get_jumps_to():
+                dot_stdin.write('%s -> %s\n' % (
+                    nodes[node], nodes[to]))
+
+    dot_stdin.write('}\n')
+    dot_stdin.flush()
+    dot_stdin.close()
+
+    status = dot.wait()
+    assert status == 0
+
+    print("decision_tree.graphviz(): see", str(png))
 
 
 # converts cooked ast to a decision tree
