@@ -238,6 +238,16 @@ class BoolDecision(TwoWayDecision):
     pass
 
 
+# to use this, create the new node and set its .next_node or similar
+# then call this function
+def replace_node(old: Node, new: Node):
+    if new is not None:
+        new.jumped_from.update(old.jumped_from)
+
+    for ref in old.jumped_from:
+        ref.set(new)
+
+
 # size_dict is like this {node: stack size BEFORE running the node}
 def _get_stack_sizes_to_dict(node, size, size_dict):
     assert node is not None
