@@ -1,3 +1,5 @@
+- asdac's bytecode reading stuff is broken
+- simpler import syntax
 - add yields back, were removed in b0e0fbb because they hadn't been
   maintained in a while and would have made the code more complicated
 - add a way to forward-declare variables for e.g. functions that call each other?
