@@ -30,6 +30,27 @@ def _find_getvars_for_setvar(setvar_node):
             and node.var is setvar_node.var)
 
 
+def _get_setvars_and_getvars_to_dicts(all_nodes, local_var_level):
+    setvar2getvars = {}
+    for node in all_nodes:
+        if (
+          isinstance(node, decision_tree.SetVar) and
+          node.var.level == local_var_level):
+            setvar2getvars[node] = set(_find_getvars_for_setvar(node))
+
+    getvar2setvars = {}
+    for node in all_nodes:
+        if (
+          isinstance(node, decision_tree.GetVar) and
+          node.var.level == local_var_level):
+            assert node not in getvar2setvars
+            getvar2setvars[node] = set(
+                _find_setvars_for_getvar(node, node, set()))
+            assert getvar2setvars[node]
+
+    return (setvar2getvars, getvar2setvars)
+
+
 # TODO: this feels like not the best way to do this?
 def _optimize_set_once_get_once(setvar: decision_tree.SetVar, getvar: decision_tree.GetVar):
     # used immediately after set?
@@ -44,6 +65,8 @@ def _optimize_set_once_get_once(setvar: decision_tree.SetVar, getvar: decision_t
     #   print(message)
     if (
       isinstance(setvar.next_node, decision_tree.PassThroughNode) and
+      # currently all nodes with .push_count==1 ignore the content of the stack
+      setvar.next_node.push_count == 1 and
       setvar.next_node.next_node is getvar and
       len(setvar.next_node.jumped_from) == 1 and
       len(getvar.jumped_from) == 1):
@@ -57,7 +80,9 @@ def _optimize_set_once_get_once(setvar: decision_tree.SetVar, getvar: decision_t
     return False
 
 
-def _do_the_stuff(setvar2getvars, getvar2setvars):
+def optimize_by_removing_temporary_vars(root_node, all_nodes, local_var_level):
+    setvar2getvars, getvar2setvars = _get_setvars_and_getvars_to_dicts(
+        all_nodes, local_var_level)
     did_something = False
 
     for setvar, getvars in setvar2getvars.items():
@@ -82,24 +107,3 @@ def _do_the_stuff(setvar2getvars, getvar2setvars):
                     did_something = True
 
     return did_something
-
-
-def remove_temporary_vars(root_node, all_nodes, local_var_level):
-    getvar2setvars = {}
-    for node in all_nodes:
-        if (
-          isinstance(node, decision_tree.GetVar) and
-          node.var.level == local_var_level):
-            assert node not in getvar2setvars
-            getvar2setvars[node] = set(
-                _find_setvars_for_getvar(node, node, set()))
-            assert getvar2setvars[node]
-
-    setvar2getvars = {}
-    for node in all_nodes:
-        if (
-          isinstance(node, decision_tree.SetVar) and
-          node.var.level == local_var_level):
-            setvar2getvars[node] = set(_find_getvars_for_setvar(node))
-
-    return _do_the_stuff(setvar2getvars, getvar2setvars)
