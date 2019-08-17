@@ -1,19 +1,18 @@
-# assumes that x and y are positive, and something else that i'm not sure about
-let divisible = (Int x, Int y) -> Bool:
-    let x_copy = x    # this is a bug in asdac, this shouldn't be required
-
+# assumes that x and y are positive
+let remainder = (Int x, Int y) -> Int:
     #       x divisible by y
     # <=>   there exists an integer n so that x = n*y
     # <=>   if x = n*y + r, where 0 <= r < y, then r=0
     #
-    # trying to find the r
-    while TRUE:
+    # the equation x = n*y + r will be true with some n and r
+    # so we try to find those
+    for let n = 0; TRUE; n = n+1:
         for let r = 0; r != y; r = r+1:
-            if x_copy == y + r:
-                return (r == 0)
+            if x == n*y + r:
+                return r
 
-        # exists n so that x = n*y  <=>  exists m so that x-y = m*y
-        x_copy = x_copy - y
+let divisible = (Int x, Int y) -> Bool:
+    return remainder(x, y) == 0
 
 let and = (Bool a, Bool b) -> Bool:
     if a:
@@ -30,6 +29,5 @@ let fizzbuzz = (Int n) -> Str:
         return "Buzz"
     return n.to_string()
 
-# loop starts at 5 because my stupid divisible func breaks otherwise
-for let n = 5; n != 50; n = n+1:
+for let n = 1; n != 50; n = n+1:
     print(fizzbuzz(n))
