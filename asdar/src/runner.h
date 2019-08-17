@@ -34,9 +34,8 @@ bool runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, const s
 void runner_free(const struct Runner *rnr);
 
 enum RunnerResult {
-	RUNNER_VOIDRETURN,
 	RUNNER_VALUERETURN,
-	RUNNER_DIDNTRETURN,
+	RUNNER_DIDNTRETURN,   // also represents returning from '-> void' function
 	RUNNER_ERROR,
 };
 

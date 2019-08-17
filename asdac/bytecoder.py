@@ -24,7 +24,6 @@ CALL_CONSTRUCTOR = b')'
 STR_JOIN = b'j'
 POP_ONE = b'P'
 SWAP_TWO = b's'
-VOID_RETURN = b'r'
 VALUE_RETURN = b'R'
 DIDNT_RETURN_ERROR = b'd'
 THROW = b't'
@@ -47,7 +46,7 @@ REMOVE_ERROR_HANDLER = b'H'
 
 PUSH_FINALLY_STATE_OK = b'3'
 PUSH_FINALLY_STATE_ERROR = b'4'
-PUSH_FINALLY_STATE_VOID_RETURN = b'5'
+# b'5' skipped for historical reasons
 PUSH_FINALLY_STATE_VALUE_RETURN = b'6'
 PUSH_FINALLY_STATE_JUMP = b'7'
 
@@ -301,8 +300,8 @@ class _BytecodeWriter:
             return
 
         if isinstance(op, opcoder.Return):
-            self.bytecode.add_byte(VALUE_RETURN if op.returns_a_value
-                                   else VOID_RETURN)
+            assert op.returns_a_value   # FIXME
+            self.bytecode.add_byte(VALUE_RETURN)
             return
 
         if isinstance(op, (opcoder.Jump, opcoder.JumpIf)):
@@ -349,9 +348,7 @@ class _BytecodeWriter:
             return
 
         if isinstance(op, opcoder.PushFinallyStateReturn):
-            self.bytecode.add_byte(PUSH_FINALLY_STATE_VALUE_RETURN
-                                   if op.returns_a_value else
-                                   PUSH_FINALLY_STATE_VOID_RETURN)
+            self.bytecode.add_byte(PUSH_FINALLY_STATE_VALUE_RETURN)
             return
 
         if isinstance(op, opcoder.PushFinallyStateJump):

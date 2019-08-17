@@ -62,8 +62,7 @@ RemoveErrorHandler = _op_class('RemoveErrorHandler', [])
 
 PushFinallyStateOk = _op_class('PushFinallyStateOk', [])
 PushFinallyStateError = _op_class('PushFinallyStateError', [])
-PushFinallyStateReturn = _op_class('PushFinallyStateReturn', [
-    'returns_a_value'])
+PushFinallyStateReturn = _op_class('PushFinallyStateReturn', [])
 PushFinallyStateJump = _op_class('PushFinallyStateJump', ['index'])
 DiscardFinallyState = _op_class('DiscardFinallyState', [])
 ApplyFinallyState = _op_class('ApplyFinallyState', [])

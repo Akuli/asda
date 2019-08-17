@@ -48,14 +48,12 @@
 #define ADD_ERROR_HANDLER 'h'
 #define REMOVE_ERROR_HANDLER 'H'
 #define CREATE_FUNCTION 'f'
-#define VOID_RETURN 'r'
 #define VALUE_RETURN 'R'
 #define DIDNT_RETURN_ERROR 'd'
 #define SET_METHODS_TO_CLASS 'S'
 #define END_OF_BODY 'E'
 #define PUSH_FINALLY_STATE_OK '3'
 #define PUSH_FINALLY_STATE_ERROR '4'
-#define PUSH_FINALLY_STATE_VOID_RETURN '5'
 #define PUSH_FINALLY_STATE_VALUE_RETURN '6'
 #define PUSH_FINALLY_STATE_JUMP '7'
 #define APPLY_FINALLY_STATE 'A'
@@ -573,7 +571,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 
 	case THROW: res->kind = CODE_THROW; return true;
 
-	case VOID_RETURN: res->kind = CODE_VOIDRETURN; return true;
 	case VALUE_RETURN: res->kind = CODE_VALUERETURN; return true;
 	case DIDNT_RETURN_ERROR: res->kind = CODE_DIDNTRETURNERROR; return true;
 
@@ -596,7 +593,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 
 	case PUSH_FINALLY_STATE_OK:           res->kind = CODE_FS_OK;          return true;
 	case PUSH_FINALLY_STATE_ERROR:        res->kind = CODE_FS_ERROR;       return true;
-	case PUSH_FINALLY_STATE_VOID_RETURN:  res->kind = CODE_FS_VOIDRETURN;  return true;
 	case PUSH_FINALLY_STATE_VALUE_RETURN: res->kind = CODE_FS_VALUERETURN; return true;
 
 	case APPLY_FINALLY_STATE:   res->kind = CODE_FS_APPLY;   return true;

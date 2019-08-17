@@ -57,16 +57,12 @@ static bool asda_function_cfunc(Interp *interp, struct ObjData data, Object *con
 			*result = rnr.retval;
 			return true;
 
-		case RUNNER_VOIDRETURN:
+		case RUNNER_DIDNTRETURN:
 			*result = NULL;
 			return true;
 
 		case RUNNER_ERROR:
 			return false;
-
-		case RUNNER_DIDNTRETURN:
-			// compiler adds a didn't return error to end of returning functions
-			assert(0);
 	}
 
 	// never runs, silences compiler warning

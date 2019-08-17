@@ -316,11 +316,6 @@ static enum RunnerResult run_createfunc(struct Runner *rnr, const struct CodeOp 
 	return RUNNER_DIDNTRETURN;
 }
 
-static enum RunnerResult run_voidreturn(struct Runner *rnr, const struct CodeOp *op)
-{
-	return RUNNER_VOIDRETURN;
-}
-
 static enum RunnerResult run_valuereturn(struct Runner *rnr, const struct CodeOp *op)
 {
 	rnr->retval = *--rnr->stacktop;
@@ -392,9 +387,7 @@ static enum RunnerResult run_fs_apply(struct Runner *rnr, const struct CodeOp *o
 			r = RUNNER_ERROR;
 			errobj_set_obj(rnr->interp, (ErrObject *)fs.val.obj);
 			break;
-		case CODE_FS_VOIDRETURN:
-			r = RUNNER_VOIDRETURN;
-			break;
+
 		case CODE_FS_VALUERETURN:
 			r = RUNNER_VALUERETURN;
 			rnr->retval = fs.val.obj;
@@ -511,7 +504,6 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_SWAP2, run_swap2);
 		BOILERPLATE(CODE_THROW, run_throw);
 		BOILERPLATE(CODE_CREATEFUNC, run_createfunc);
-		BOILERPLATE(CODE_VOIDRETURN, run_voidreturn);
 		BOILERPLATE(CODE_VALUERETURN, run_valuereturn);
 		BOILERPLATE(CODE_DIDNTRETURNERROR, run_didntreturnerror);
 		BOILERPLATE(CODE_SETMETHODS2CLASS, run_setmethods2class);
@@ -519,7 +511,6 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_EH_RM, run_eh_rm);
 		BOILERPLATE(CODE_FS_OK, run_fs_push_something);
 		BOILERPLATE(CODE_FS_ERROR, run_fs_push_something);
-		BOILERPLATE(CODE_FS_VOIDRETURN, run_fs_push_something);
 		BOILERPLATE(CODE_FS_VALUERETURN, run_fs_push_something);
 		BOILERPLATE(CODE_FS_JUMP, run_fs_push_something);
 		BOILERPLATE(CODE_FS_APPLY, run_fs_apply);
