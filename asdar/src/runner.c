@@ -291,6 +291,20 @@ static enum RunnerResult run_pop1(struct Runner *rnr, const struct CodeOp *op)
 	return RUNNER_DIDNTRETURN;
 }
 
+static inline void swap_objects(Object **a, Object **b)
+{
+	Object *tmp = *a;
+	*a = *b;
+	*b = tmp;
+}
+
+static enum RunnerResult run_swap2(struct Runner *rnr, const struct CodeOp *op)
+{
+	swap_objects(&rnr->stacktop[-1], &rnr->stacktop[-2]);
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
 static enum RunnerResult run_createfunc(struct Runner *rnr, const struct CodeOp *op)
 {
 	FuncObject *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc.type, &op->data.createfunc.code);
@@ -494,6 +508,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_JUMPIF, run_jumpif);
 		BOILERPLATE(CODE_STRJOIN, run_strjoin);
 		BOILERPLATE(CODE_POP1, run_pop1);
+		BOILERPLATE(CODE_SWAP2, run_swap2);
 		BOILERPLATE(CODE_THROW, run_throw);
 		BOILERPLATE(CODE_CREATEFUNC, run_createfunc);
 		BOILERPLATE(CODE_VOIDRETURN, run_voidreturn);

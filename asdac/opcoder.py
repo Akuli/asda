@@ -42,6 +42,7 @@ PopOne = _op_class('PopOne', [])
 Return = _op_class('Return', ['returns_a_value'])
 Throw = _op_class('Throw', [])
 BoolNegation = _op_class('BoolNegation', [])
+Swap2 = _op_class('Swap2', [])
 Jump = _op_class('Jump', ['marker'])
 JumpIf = _op_class('JumpIf', ['marker'])
 DidntReturnError = _op_class('DidntReturnError', [])
@@ -224,6 +225,9 @@ class _OpCoder:
 
         elif isinstance(node, decision_tree.PopOne):
             self.output.ops.append(PopOne(lineno))
+
+        elif isinstance(node, decision_tree.Swap2):
+            self.output.ops.append(Swap2(lineno))
 
         else:
             raise NotImplementedError(repr(node))

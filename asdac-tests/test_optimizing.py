@@ -161,6 +161,7 @@ print(three.to_string())
 
     optimizer.optimize(root_node)
 
+    # all the variables except print should get optimized away
     nodes = iterate_passthroughnodes(root_node)
     assert isinstance(next(nodes), decision_tree.Start)
     assert isinstance(next(nodes), decision_tree.IntConstant)   # 1
@@ -168,9 +169,8 @@ print(three.to_string())
     assert isinstance(next(nodes), decision_tree.Plus)          # +
     assert isinstance(next(nodes), decision_tree.IntConstant)   # 1
     assert isinstance(next(nodes), decision_tree.Plus)          # +
-    assert isinstance(next(nodes), decision_tree.SetVar)        # three
     assert isinstance(next(nodes), decision_tree.GetVar)        # print
-    assert isinstance(next(nodes), decision_tree.GetVar)        # three
+    assert isinstance(next(nodes), decision_tree.Swap2)
     assert isinstance(next(nodes), decision_tree.GetAttr)       # .to_string
     assert isinstance(next(nodes), decision_tree.CallFunction)  # ()
     assert isinstance(next(nodes), decision_tree.CallFunction)  # print(...)

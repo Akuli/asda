@@ -25,11 +25,36 @@ def _find_setvars_for_getvar(node, getvar_node, visited_nodes):
 
 
 def _find_getvars_for_setvar(setvar_node):
-    return (
-        node for node in decision_tree.get_all_nodes(setvar_node)
-        if isinstance(node, decision_tree.GetVar)
-        and node.var is setvar_node.var
-    )
+    return (node for node in decision_tree.get_all_nodes(setvar_node)
+            if isinstance(node, decision_tree.GetVar)
+            and node.var is setvar_node.var)
+
+
+# TODO: this feels like not the best way to do this?
+def _optimize_set_once_get_once(setvar: decision_tree.SetVar, getvar: decision_tree.GetVar):
+    # used immediately after set?
+    if setvar.next_node is getvar and len(getvar.jumped_from) == 1:
+        decision_tree.replace_node(setvar, getvar.next_node)
+        return True
+
+    # something that gets pushed between the set and get
+    # e.g.
+    #
+    #   let message = "lel"
+    #   print(message)
+    if (
+      isinstance(setvar.next_node, decision_tree.PassThroughNode) and
+      setvar.next_node.next_node is getvar and
+      len(setvar.next_node.jumped_from) == 1 and
+      len(getvar.jumped_from) == 1):
+        decision_tree.replace_node(setvar, setvar.next_node)
+
+        swap = decision_tree.Swap2()
+        swap.set_next_node(getvar.next_node)
+        decision_tree.replace_node(getvar, swap)
+        return True
+
+    return False
 
 
 def _do_the_stuff(setvar2getvars, getvar2setvars):
@@ -53,11 +78,7 @@ def _do_the_stuff(setvar2getvars, getvar2setvars):
             [getvar] = getvars
             if len(getvar2setvars[getvar]) == 1:
                 assert getvar2setvars[getvar] == {setvar}
-                if setvar.next_node is getvar:
-                    # variable used immediately after it's set and not
-                    # anywhere else
-                    # TODO: does this leave garbage to some node's .jumped_from
-                    decision_tree.replace_node(setvar, getvar.next_node)
+                if _optimize_set_once_get_once(setvar, getvar):
                     did_something = True
 
     return did_something

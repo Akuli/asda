@@ -23,6 +23,7 @@ CALL_FUNCTION = b'('
 CALL_CONSTRUCTOR = b')'
 STR_JOIN = b'j'
 POP_ONE = b'P'
+SWAP_TWO = b's'
 VOID_RETURN = b'r'
 VALUE_RETURN = b'R'
 DIDNT_RETURN_ERROR = b'd'
@@ -366,6 +367,7 @@ class _BytecodeWriter:
 
         simple_things = [
             (opcoder.PopOne, POP_ONE),
+            (opcoder.Swap2, SWAP_TWO),
             (opcoder.BoolNegation, BOOL_NEGATION),
             (opcoder.DidntReturnError, DIDNT_RETURN_ERROR),
             (opcoder.Plus, PLUS),

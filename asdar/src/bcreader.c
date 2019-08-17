@@ -33,6 +33,7 @@
 #define CALL_CONSTRUCTOR ')'
 #define BOOLNEG '!'
 #define POP_ONE 'P'
+#define SWAP_TWO 's'
 #define JUMP 'K'
 #define JUMPIF 'J'
 #define STRING_JOIN 'j'
@@ -568,6 +569,7 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 
 	case BOOLNEG: res->kind = CODE_BOOLNEG; return true;
 	case POP_ONE: res->kind = CODE_POP1; return true;
+	case SWAP_TWO: res->kind = CODE_SWAP2; return true;
 
 	case THROW: res->kind = CODE_THROW; return true;
 
