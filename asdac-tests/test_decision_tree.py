@@ -7,6 +7,13 @@ from asdac import decision_tree
 # 'TestBlah' is special naming for pytest
 class NodeForTesting(decision_tree.Node):
 
+    def __init__(self):
+        super().__init__()
+        self.jumps_to = []
+
+    def get_jumps_to(self):
+        return self.jumps_to
+
     def __repr__(self):
         try:
             return self.name
@@ -21,7 +28,7 @@ def setup_nodes(node_dict, instruction_string):
 
     # https://stackoverflow.com/a/5616910
     for start, end in re.findall(r'(?=(\w+) *-> *(\w+))', instruction_string):
-        node_dict[start].add_jump_to(node_dict[end])
+        node_dict[start].jumps_to.append(node_dict[end])
 
 
 def test_algorithms_simple():
@@ -47,16 +54,16 @@ def test_algorithms_simple():
     ''')
 
     assert decision_tree.get_all_nodes(a) == {a, b, c, d, e, f}
-    assert decision_tree.find_merge(b, d) is e
+    assert decision_tree.find_merge([b, d]) is e
 
     c.remove_jump_to(e)
     assert decision_tree.get_all_nodes(a) == {a, b, c, d, e, f}
-    assert decision_tree.find_merge(b, d) is None
+    assert decision_tree.find_merge([b, d]) is None
     c.add_jump_to(e)
 
     d.remove_jump_to(e)
     assert decision_tree.get_all_nodes(a) == {a, b, c, d, e, f}
-    assert decision_tree.find_merge(b, d) is None
+    assert decision_tree.find_merge([b, d]) is None
     d.add_jump_to(e)
 
 
@@ -86,21 +93,40 @@ def test_algorithms_cycle_and_stuff(monkeypatch):
     ''')
 
     assert decision_tree.get_all_nodes(a) == {a, b, c, d, e, f, g, h}
-    assert decision_tree.find_merge(b, d) is e
+    assert decision_tree.find_merge([b, d]) is e
 
     b.remove_jump_to(c)
     assert decision_tree.get_all_nodes(a) == {a, b, d, e, f, g, h}
-    assert decision_tree.find_merge(b, d) is None
+    assert decision_tree.find_merge([b, d]) is None
     b.add_jump_to(c)
 
     # tests that it does not traverse in the wrong direction
     d.remove_jump_to(g)
     assert decision_tree.get_all_nodes(a) == {a, b, c, d, e, f}
-    assert decision_tree.find_merge(b, d) is None
+    assert decision_tree.find_merge([b, d]) is None
     d.add_jump_to(g)
 
     # tests that it handles unrelated branchings
     h.remove_jump_to(d)
     assert decision_tree.get_all_nodes(a) == {a, b, c, d, e, f, g, h}
-    assert decision_tree.find_merge(b, d) is e
+    assert decision_tree.find_merge([b, d]) is e
     h.add_jump_to(d)
+
+
+def test_find_merge_special_cases():
+    a = NodeForTesting()
+    b = NodeForTesting()
+    c = NodeForTesting()
+    d = NodeForTesting()
+    e = NodeForTesting()
+    setup_nodes(locals(), '''
+    a -> e
+    b -> e
+    c -> d -> e
+    e -> e
+    ''')
+
+    assert decision_tree.find_merge([a, b, c]) is e
+    assert decision_tree.find_merge([a]) is a
+    assert decision_tree.find_merge([e]) is a
+    assert decision_tree.find_merge([]) is None

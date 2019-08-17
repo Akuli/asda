@@ -222,6 +222,9 @@ class _OpCoder:
             self.output.ops.append(StrJoin(
                 lineno, node.how_many_strings))
 
+        elif isinstance(node, decision_tree.PopOne):
+            self.output.ops.append(PopOne(lineno))
+
         else:
             raise NotImplementedError(repr(node))
 

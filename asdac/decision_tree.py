@@ -95,6 +95,15 @@ class Node:
     def graphviz_string(self):
         return None
 
+    def __repr__(self):
+        result = type(self).__name__
+
+        graphviz_string = self.graphviz_string()
+        if graphviz_string is not None:
+            result += ': ' + graphviz_string
+
+        return '<' + result + '>'
+
 
 # a node that can be used like:
 #    something --> this node --> something
@@ -283,33 +292,43 @@ def get_max_stack_size(node):
     )
 
 
+def _items_in_all_sets(sets):
+    return functools.reduce(set.intersection, sets)
+
+
 # if we have (in graphviz syntax) a->c->d->f->g, b->e->f->g
 # then find_merge(a, b) returns f, because that's first node where they merge
 # may return None, if paths never merge together
 # see tests for corner cases
 #
+# callback(node) should return an iterable of nodes after "node->", e.g. in
+# above example, callback(a) could return [c]
+#
 # TODO: better algorithm? i found this
 # https://www.hackerrank.com/topics/lowest-common-ancestor
 # but doesn't seem to handle cyclic graphs?
-def find_merge(a: Node, b: Node):
-    assert a is not None
-    assert b is not None
+def find_merge(nodes, callback=(lambda node: node.get_jumps_to())):
+    # {node: set of other nodes reachable from the node}
+    reachable_dict = {node: {node} for node in nodes}
 
-    reachable_from_a = {a}
-    reachable_from_b = {b}
+    # finding merge of empty iterable of nodes doesn't make sense
+    assert reachable_dict
 
     while True:
+        reachable_from_all_nodes = _items_in_all_sets(reachable_dict.values())
         try:
-            return (reachable_from_a & reachable_from_b).pop()
+            return reachable_from_all_nodes.pop()
         except KeyError:
             pass
 
         did_something = False
-        for reaching_set in [reachable_from_a, reachable_from_b]:
+        for reaching_set in reachable_dict.values():
+            # TODO: this goes through the same nodes over and over again
+            #       could be optimized
             for node in reaching_set.copy():
-                for other_node in node.get_jumps_to():
-                    if other_node not in reaching_set:
-                        reaching_set.add(other_node)
+                for newly_reachable in callback(node):
+                    if newly_reachable not in reaching_set:
+                        reaching_set.add(newly_reachable)
                         did_something = True
 
         if not did_something:
@@ -318,8 +337,7 @@ def find_merge(a: Node, b: Node):
 
 # TODO: cache result somewhere, but careful with invalidation?
 def get_all_nodes(root_node):
-    if root_node is None:
-        return set()
+    assert root_node is not None
 
     result = set()
     to_visit = {root_node}      # should be faster than recursion
