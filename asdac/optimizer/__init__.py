@@ -1,13 +1,14 @@
 import itertools
 
 from asdac import decision_tree
-from asdac.optimizer import decisions, variables
+from asdac.optimizer import decisions, unreachable_nodes, variables
 
 
 _function_list = [
     decisions.optimize_bool_constant_decisions,
     variables.optimize_temporary_vars,
     variables.optimize_garbage_dummies,
+    unreachable_nodes.optimize_unreachable_nodes,
 ]
 
 

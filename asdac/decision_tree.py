@@ -91,6 +91,8 @@ class Node:
             # can't jump to Start, avoids special cases
             # but you can jump to the node after the Start node
             assert not isinstance(ref.get(), Start)
+
+            assert ref not in ref.get().jumped_from
             ref.get().jumped_from.add(ref)
 
     def __repr__(self):
@@ -387,7 +389,8 @@ def get_all_nodes(root_node):
     return result
 
 
-def _get_unreachable_nodes(reachable_nodes: set):
+# TODO: optimize this?
+def get_unreachable_nodes(reachable_nodes: set):
     to_visit = reachable_nodes.copy()
     reachable_and_unreachable = set()
 
@@ -405,7 +408,7 @@ def _get_unreachable_nodes(reachable_nodes: set):
 # for debugging, displays a visual representation of the tree
 def graphviz(root_node, filename_without_ext):
     reachable = get_all_nodes(root_node)
-    unreachable = _get_unreachable_nodes(reachable)
+    unreachable = get_unreachable_nodes(reachable)
     assert not (reachable & unreachable)
     nodes = {node: 'node' + str(number)
              for number, node in enumerate(reachable | unreachable)}
@@ -663,6 +666,9 @@ class _TreeCreator:
         for var in self.local_vars_list:
             creator.add_pass_through_node(PushDummy(var))
         creator.set_next_node(self.root_node.next_node)
+
+        # avoid creating an unreachable Start node
+        self.root_node.set_next_node(None)
 
         assert isinstance(creator.root_node, Start)
         self.root_node = creator.root_node
