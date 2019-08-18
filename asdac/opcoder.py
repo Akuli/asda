@@ -3,7 +3,7 @@ import collections
 import io
 import itertools
 
-from . import decision_tree, common, cooked_ast, objects
+from . import decision_tree, common, cooked_ast
 
 
 class VarMarker(common.Marker):

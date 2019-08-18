@@ -459,7 +459,7 @@ class _Chef:
         except KeyError:
             raise common.CompileError(
                 "%s objects have no '%s' attribute" % (
-                    obj.type.name, raw_expression.attrname),
+                    obj.type.name, raw.attrname),
                 raw.location)
         if not attr.settable:
             raise common.CompileError(
@@ -802,7 +802,8 @@ class _Chef:
 
     def cook_body(self, raw_statements, *, new_subchef=True):
         if new_subchef:
-            return self._create_subchef().cook_body(raw_statements, new_subchef=False)
+            return self._create_subchef().cook_body(
+                raw_statements, new_subchef=False)
 
         flatten = itertools.chain.from_iterable
         return list(flatten(map(self.cook_statement, raw_statements)))

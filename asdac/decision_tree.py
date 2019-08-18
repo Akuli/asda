@@ -42,17 +42,11 @@ this can be optimized to fit into smaller space because it's repetitive, which
 is one reason for having a decision tree compile step
 """
 
-# most of the imports are for viewing this with graphviz while debugging
-import bisect
 import functools
 import io
 import pathlib
 import subprocess
 import tempfile
-import threading
-import time
-from urllib.request import pathname2url
-import webbrowser
 
 from asdac import cooked_ast, utils
 
@@ -487,14 +481,16 @@ class _TreeCreator:
     def __init__(self, local_vars_level, *, local_vars_list=None):
         # from now on, local variables are items in the beginning of the stack
         self.local_vars_level = local_vars_level
-        self.local_vars_list = [] if local_vars_list is None else local_vars_list
+        self.local_vars_list = ([] if local_vars_list is None
+                                else local_vars_list)
 
         # why can't i assign in python lambda without dirty setattr haxor :(
         self.set_next_node = lambda node: setattr(self, 'root_node', node)
         self.root_node = None
 
     def subcreator(self):
-        return _TreeCreator(self.local_vars_level, local_vars_list=self.local_vars_list)
+        return _TreeCreator(self.local_vars_level,
+                            local_vars_list=self.local_vars_list)
 
     def add_pass_through_node(self, node):
         assert isinstance(node, PassThroughNode)

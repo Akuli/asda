@@ -496,6 +496,7 @@ class RecompileFixableError(Exception):
         return '%s (%r)' % (self.message, self.compilation)
 
 
+# FIXME: this is HORRIBLY OUTDATED needs lot of updating
 class _BytecodeReader:
 
     def __init__(self, compilation, file):

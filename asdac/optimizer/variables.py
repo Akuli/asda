@@ -1,5 +1,3 @@
-import itertools
-
 from asdac import common, decision_tree
 
 
