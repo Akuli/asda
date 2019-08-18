@@ -23,8 +23,11 @@
 #define SET_LINENO 'L'
 #define SET_VAR 'V'
 #define GET_VAR 'v'
+#define SET_TO_BOTTOM 'B'
+#define GET_FROM_BOTTOM 'b'
 #define SET_ATTR ':'
 #define GET_ATTR '.'
+#define PUSH_DUMMY 'u'
 #define GET_FROM_MODULE 'm'
 #define STR_CONSTANT '"'
 #define TRUE_CONSTANT 'T'
@@ -533,10 +536,16 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 		res->data.obj = (Object *)boolobj_c2asda(opbyte == TRUE_CONSTANT);
 		return true;
 
-	case SET_VAR:
-		return read_vardata(bcr, res, CODE_SETVAR);
-	case GET_VAR:
-		return read_vardata(bcr, res, CODE_GETVAR);
+	case PUSH_DUMMY:
+		res->kind = CODE_PUSHDUMMY;
+		return true;
+
+	case SET_VAR: return read_vardata(bcr, res, CODE_SETVAR);
+	case GET_VAR: return read_vardata(bcr, res, CODE_GETVAR);
+
+	case SET_TO_BOTTOM:   res->kind = CODE_SETBOTTOM; return read_uint16(bcr, &res->data.stackbottom_index);
+	case GET_FROM_BOTTOM: res->kind = CODE_GETBOTTOM; return read_uint16(bcr, &res->data.stackbottom_index);
+
 	case CALL_FUNCTION:
 		res->kind = CODE_CALLFUNC;
 		return read_bytes(bcr, &res->data.callfunc_nargs, 1);

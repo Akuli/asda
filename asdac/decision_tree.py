@@ -58,26 +58,34 @@ from asdac import cooked_ast, utils
 
 
 class Node:
+    """
+    size_delta tells how many objects this node pushes to the stack (positive)
+    and pops from stack (negative). For example, if your function pops two
+    objects, does something with them, and pushes the result to the stack, you
+    should set size_delta to -2 + 1 = 0.
 
-    def __init__(self, *, location=None):
+    use_count tells how many topmost objects of the stack this node uses. In
+    the above example, it should be 2.
+    """
+
+    def __init__(self, *, use_count, size_delta, location=None):
+        self.use_count = use_count
+        self.size_delta = size_delta
+
+        assert use_count >= 0
+        if size_delta < 0:
+            assert use_count >= abs(size_delta)
+
+        # contains AttributeReferences
         # number of elements has nothing to do with the type of the node
-        # more than 1 means e.g. beginning of loop, 0 means dead code
+        # more than 1 means e.g. beginning of loop, 0 means unreachable code
         self.jumped_from = set()
-
-        # how many objects this pushes to the stack (positive value) or pops
-        # from the stack (negative value)
-        #
-        # override if needed
-        #
-        # this default is good for things like:
-        #   - pop two things, do something, push result: -2 + 1 = -1
-        #   - just pop off something
-        self.push_count = -1
 
         # should be None for nodes created by the compiler
         self.location = location
 
     def get_jumps_to(self):
+        """Return iterable of nodes that may be ran after running this node."""
         raise NotImplementedError
 
     def change_jump_to(self, ref, new):
@@ -91,18 +99,11 @@ class Node:
             assert not isinstance(ref.get(), Start)
             ref.get().jumped_from.add(ref)
 
-    # for debugging
-    def graphviz_string(self):
-        return None
-
     def __repr__(self):
-        result = type(self).__name__
-
-        graphviz_string = self.graphviz_string()
-        if graphviz_string is not None:
-            result += ': ' + graphviz_string
-
-        return '<' + result + '>'
+        debug_string = _get_debug_string(self)
+        if debug_string is None:
+            return super().__repr__()
+        return '<%s: %s>' % (type(self).__name__, debug_string)
 
 
 # a node that can be used like:
@@ -126,107 +127,118 @@ class PassThroughNode(Node):
 class Start(PassThroughNode):
 
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.push_count = 0
+        super().__init__(use_count=0, size_delta=0, **kwargs)
 
 
-class _SetOrGetVar(PassThroughNode):
+class PushDummy(PassThroughNode):
 
+    # the variable object is used for debugging and error messages
     def __init__(self, var, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(use_count=0, size_delta=1, **kwargs)
         self.var = var
 
-    def graphviz_string(self):
-        return self.var.name
 
-
-class SetVar(_SetOrGetVar):
-    pass
-
-
-class GetVar(_SetOrGetVar):
+class SetVar(PassThroughNode):
 
     def __init__(self, var, **kwargs):
-        super().__init__(var, **kwargs)
-        self.push_count = 1
+        super().__init__(use_count=1, size_delta=-1, **kwargs)
+        self.var = var
+
+
+class GetVar(PassThroughNode):
+
+    def __init__(self, var, **kwargs):
+        super().__init__(use_count=0, size_delta=1, **kwargs)
+        self.var = var
+
+
+class _BottomNode(PassThroughNode):
+
+    # the var is used for debugging and error messages
+    def __init__(self, index, var, **kwargs):
+        super().__init__(**kwargs)
+        self.index = index
+        self.var = var
+
+
+class SetToBottom(_BottomNode):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, use_count=1, size_delta=-1, **kwargs)
+
+
+class GetFromBottom(_BottomNode):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, use_count=0, size_delta=1, **kwargs)
 
 
 class PopOne(PassThroughNode):
-    pass
+
+    def __init__(self, *, is_popping_a_dummy=False, **kwargs):
+        super().__init__(use_count=1, size_delta=-1, **kwargs)
+        self.is_popping_a_dummy = is_popping_a_dummy
 
 
 class Equal(PassThroughNode):
-    pass
+
+    def __init__(self, **kwargs):
+        super().__init__(use_count=2, size_delta=-1, **kwargs)
 
 
 class Plus(PassThroughNode):
-    pass
+
+    def __init__(self, **kwargs):
+        super().__init__(use_count=2, size_delta=-1, **kwargs)
 
 
 class GetAttr(PassThroughNode):
 
     def __init__(self, tybe, attrname, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(use_count=1, size_delta=0, **kwargs)
         self.tybe = tybe
         self.attrname = attrname
-        self.push_count = 0
-
-    def graphviz_string(self):
-        return self.tybe.name + '.' + self.attrname
 
 
 class StrConstant(PassThroughNode):
 
     def __init__(self, python_string, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(use_count=0, size_delta=1, **kwargs)
         self.python_string = python_string
-        self.push_count = 1
-
-    def graphviz_string(self):
-        return repr(self.python_string)
 
 
 class IntConstant(PassThroughNode):
 
     def __init__(self, python_int, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(use_count=0, size_delta=1, **kwargs)
         self.python_int = python_int
-        self.push_count = 1
-
-    def graphviz_string(self):
-        return str(self.python_int)
 
 
 class CallFunction(PassThroughNode):
 
     def __init__(self, how_many_args, is_returning, **kwargs):
-        super().__init__(**kwargs)
+        use_count = 1 + how_many_args   # function object + arguments
+        super().__init__(
+            use_count=use_count,
+            size_delta=(-use_count + int(bool(is_returning))),
+            **kwargs)
         self.how_many_args = how_many_args
-        self.push_count = (
-            -1                          # function object
-            - how_many_args             # arguments
-            + int(bool(is_returning))   # return value, if any
-        )
-
-    def graphviz_string(self):
-        return ('1 arg' if self.how_many_args == 1 else
-                '%d args' % self.how_many_args)
 
 
 class StrJoin(PassThroughNode):
 
     def __init__(self, how_many_strings, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(
+            use_count=how_many_strings, size_delta=(-how_many_strings + 1),
+            **kwargs)
         self.how_many_strings = how_many_strings
-        self.push_count = -how_many_strings + 1
 
 
 # swaps top 2 elements of the stack
 class Swap2(PassThroughNode):
 
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.push_count = 0
+        super().__init__(use_count=2, size_delta=0, **kwargs)
 
 
 class TwoWayDecision(Node):
@@ -252,7 +264,28 @@ class TwoWayDecision(Node):
 
 
 class BoolDecision(TwoWayDecision):
-    pass
+
+    def __init__(self, **kwargs):
+        super().__init__(use_count=1, size_delta=-1, **kwargs)
+
+
+def _get_debug_string(node):
+    if isinstance(node, (SetVar, GetVar, PushDummy)):
+        return node.var.name
+    if isinstance(node, (SetToBottom, GetFromBottom)):
+        return 'varname %r, index %d' % (node.var.name, node.index)
+    if isinstance(node, GetAttr):
+        return node.tybe.name + '.' + node.attrname
+    if isinstance(node, IntConstant):
+        return str(node.python_int)
+    if isinstance(node, StrConstant):
+        return repr(node.python_string)
+    if isinstance(node, CallFunction):
+        n = node.how_many_args
+        return '%d arg%s' % (n, 's' * int(n != 1))
+    if isinstance(node, PopOne) and node.is_popping_a_dummy:
+        return "is popping a dummy"
+    return None
 
 
 # to use this, create the new node and set its .next_node or similar
@@ -275,7 +308,7 @@ def _get_stack_sizes_to_dict(node, size, size_dict):
             return
 
         size_dict[node] = size
-        size += node.push_count
+        size += node.size_delta
         assert size >= 0
 
         jumps_to = list(node.get_jumps_to())
@@ -283,20 +316,21 @@ def _get_stack_sizes_to_dict(node, size, size_dict):
             return
 
         # avoid recursion in the common case because it could be slow
-        [node, *other_nodes] = jumps_to
-        for other in other_nodes:
+        node = jumps_to.pop()
+        for other in jumps_to:
             _get_stack_sizes_to_dict(other, size, size_dict)
 
 
-def get_max_stack_size(node):
-    if node is None:
-        return 0
+def get_stack_sizes(root_node):
+    result = {}
+    _get_stack_sizes_to_dict(root_node, 0, result)
+    return result
 
-    size_dict = {}
-    _get_stack_sizes_to_dict(node, 0, size_dict)
+
+def get_max_stack_size(root_node):
     return max(
-        max(before, before + node.push_count)
-        for node, before in size_dict.items()
+        max(before, before + node.size_delta)
+        for node, before in get_stack_sizes(root_node).items()
     )
 
 
@@ -359,10 +393,28 @@ def get_all_nodes(root_node):
     return result
 
 
+def _get_unreachable_nodes(reachable_nodes: set):
+    to_visit = reachable_nodes.copy()
+    reachable_and_unreachable = set()
+
+    while to_visit:
+        node = to_visit.pop()
+        if node in reachable_and_unreachable:
+            continue
+
+        reachable_and_unreachable.add(node)
+        to_visit.update(ref.objekt for ref in node.jumped_from)
+
+    return reachable_and_unreachable - reachable_nodes
+
+
 # for debugging, displays a visual representation of the tree
 def graphviz(root_node, filename_without_ext):
+    reachable = get_all_nodes(root_node)
+    unreachable = _get_unreachable_nodes(reachable)
+    assert not (reachable & unreachable)
     nodes = {node: 'node' + str(number)
-             for number, node in enumerate(get_all_nodes(root_node))}
+             for number, node in enumerate(reachable | unreachable)}
 
     path = pathlib.Path(tempfile.gettempdir()) / 'asdac'
     path.mkdir(parents=True, exist_ok=True)
@@ -384,15 +436,21 @@ def graphviz(root_node, filename_without_ext):
     dot_stdin.write(
         'label="\\nmax stack size = %s";\n' % max_stack_size)
 
-    for node in nodes:
+    for node in (reachable | unreachable):
         parts = [type(node).__name__]
         # TODO: display location somewhat nicely
         # .lineno attribute was replaced with .location attribute
 #            if node.lineno is not None:
 #                parts[0] += ', line %d' % node.lineno
-        if node.graphviz_string() is not None:
-            parts.append(node.graphviz_string())
-        parts.append('push_count=' + str(node.push_count))
+
+        debug_string = _get_debug_string(node)
+        if debug_string is not None:
+            parts.append(debug_string)
+        parts.append('size_delta=' + str(node.size_delta))
+        parts.append('use_count=' + str(node.use_count))
+
+        if node in unreachable:
+            parts.append('UNREACHABLE')
 
         dot_stdin.write('%s [label="%s"];\n' % (
             nodes[node], '\n'.join(parts).replace('"', r'\"')))
@@ -426,10 +484,17 @@ def graphviz(root_node, filename_without_ext):
 # converts cooked ast to a decision tree
 class _TreeCreator:
 
-    def __init__(self):
-        self.root_node = None
+    def __init__(self, local_vars_level, *, local_vars_list=None):
+        # from now on, local variables are items in the beginning of the stack
+        self.local_vars_level = local_vars_level
+        self.local_vars_list = [] if local_vars_list is None else local_vars_list
+
         # why can't i assign in python lambda without dirty setattr haxor :(
         self.set_next_node = lambda node: setattr(self, 'root_node', node)
+        self.root_node = None
+
+    def subcreator(self):
+        return _TreeCreator(self.local_vars_level, local_vars_list=self.local_vars_list)
 
     def add_pass_through_node(self, node):
         assert isinstance(node, PassThroughNode)
@@ -456,6 +521,12 @@ class _TreeCreator:
             decision.otherwise.set_next_node(node),
         )
 
+    def _get_varlist_index(self, local_var: cooked_ast.Variable):
+        assert local_var.level == self.local_vars_level
+        if local_var not in self.local_vars_list:
+            self.local_vars_list.append(local_var)
+        return self.local_vars_list.index(local_var)
+
     def do_expression(self, expression):
         assert expression.type is not None
         boilerplate = {'location': expression.location}
@@ -469,8 +540,14 @@ class _TreeCreator:
                 expression.python_int, **boilerplate))
 
         elif isinstance(expression, cooked_ast.GetVar):
-            self.add_pass_through_node(GetVar(
-                expression.var, **boilerplate))
+            if expression.var.level == self.local_vars_level:
+                node = GetFromBottom(
+                    self._get_varlist_index(expression.var), expression.var,
+                    **boilerplate)
+            else:
+                node = GetVar(expression.var, **boilerplate)
+
+            self.add_pass_through_node(node)
 
         elif isinstance(expression, (cooked_ast.Equal, cooked_ast.NotEqual)):
             self.do_expression(expression.lhs)
@@ -514,17 +591,23 @@ class _TreeCreator:
 
         elif isinstance(statement, cooked_ast.SetVar):
             self.do_expression(statement.value)
-            self.add_pass_through_node(SetVar(statement.var, **boilerplate))
+            if statement.var.level == self.local_vars_level:
+                node = SetToBottom(
+                    self._get_varlist_index(statement.var), statement.var,
+                    **boilerplate)
+            else:
+                node = SetVar(statement.var, **boilerplate)
+            self.add_pass_through_node(node)
 
         elif isinstance(statement, cooked_ast.IfStatement):
             self.do_expression(statement.cond)
             result = BoolDecision(**boilerplate)
 
-            if_creator = _TreeCreator()
+            if_creator = self.subcreator()
             if_creator.set_next_node = result.set_then
             if_creator.do_body(statement.if_body)
 
-            else_creator = _TreeCreator()
+            else_creator = self.subcreator()
             else_creator.set_next_node = result.set_otherwise
             else_creator.do_body(statement.else_body)
 
@@ -535,7 +618,7 @@ class _TreeCreator:
             )
 
         elif isinstance(statement, cooked_ast.Loop):
-            creator = _TreeCreator()
+            creator = self.subcreator()
             if statement.pre_cond is None:
                 creator.add_pass_through_node(GetVar(
                     cooked_ast.BUILTIN_VARS['TRUE']))
@@ -573,13 +656,29 @@ class _TreeCreator:
             assert not isinstance(statement, list), statement
             self.do_statement(statement)
 
+    def add_bottom_dummies(self):
+        assert isinstance(self.root_node, Start)
+        if self.root_node.next_node is None:
+            assert not self.local_vars_list
+            return
+
+        creator = self.subcreator()
+        creator.add_pass_through_node(Start())
+        for var in self.local_vars_list:
+            creator.add_pass_through_node(PushDummy(var))
+        creator.set_next_node(self.root_node.next_node)
+
+        assert isinstance(creator.root_node, Start)
+        self.root_node = creator.root_node
+
+        for var in self.local_vars_list:
+            self.add_pass_through_node(PopOne(is_popping_a_dummy=True))
+
 
 def create_tree(cooked_statements):
-    start = Start()
-
-    tree_creator = _TreeCreator()
-    tree_creator.set_next_node(start)
-    tree_creator.set_next_node = start.set_next_node
+    tree_creator = _TreeCreator(1)
+    tree_creator.add_pass_through_node(Start())
     tree_creator.do_body(cooked_statements)
-    assert tree_creator.root_node is start
-    return start
+    tree_creator.add_bottom_dummies()
+    assert isinstance(tree_creator.root_node, Start)
+    return tree_creator.root_node

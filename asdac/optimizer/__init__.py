@@ -6,7 +6,8 @@ from asdac.optimizer import decisions, variables
 
 _function_list = [
     decisions.optimize_bool_constant_decisions,
-    variables.remove_temporary_vars,
+    variables.optimize_temporary_vars,
+    variables.optimize_garbage_dummies,
 ]
 
 
@@ -20,8 +21,7 @@ def optimize(root_node):
     # called subsequently without any of them doing anything
     while did_nothing_count < len(_function_list):
         optimizer_function = next(infinite_function_iterator)
-        # TODO: don't hard-code 1
-        if optimizer_function(root_node, all_nodes, 1):
+        if optimizer_function(root_node, all_nodes):
             did_nothing_count = 0
             all_nodes = decision_tree.get_all_nodes(root_node)
         else:

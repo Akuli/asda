@@ -175,6 +175,38 @@ static enum RunnerResult run_getattr(struct Runner *rnr, const struct CodeOp *op
 	return RUNNER_DIDNTRETURN;
 }
 
+static enum RunnerResult run_setbottom(struct Runner *rnr, const struct CodeOp *op)
+{
+	assert(rnr->stacktop > rnr->stackbot);
+	assert(op->data.stackbottom_index < rnr->stacktop - rnr->stackbot);
+	if (rnr->stackbot[op->data.stackbottom_index])
+		OBJECT_DECREF(rnr->stackbot[op->data.stackbottom_index]);
+	rnr->stackbot[op->data.stackbottom_index] = *--rnr->stacktop;
+
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_getbottom(struct Runner *rnr, const struct CodeOp *op)
+{
+	assert(op->data.stackbottom_index < rnr->stacktop - rnr->stackbot);
+	assert(rnr->stackbot[op->data.stackbottom_index]);
+	Object *val = rnr->stackbot[op->data.stackbottom_index];
+	*rnr->stacktop++ = val;
+	OBJECT_INCREF(val);
+
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
+static enum RunnerResult run_pushdummy(struct Runner *rnr, const struct CodeOp *op)
+{
+	*rnr->stacktop++ = NULL;
+
+	rnr->opidx++;
+	return RUNNER_DIDNTRETURN;
+}
+
 static enum RunnerResult run_getfrommodule(struct Runner *rnr, const struct CodeOp *op)
 {
 	Object *val = *op->data.modmemberptr;
@@ -268,6 +300,7 @@ static enum RunnerResult run_strjoin(struct Runner *rnr, const struct CodeOp *op
 {
 	DEBUG_PRINTF("string join of %zu strings\n", (size_t)op->data.strjoin_nstrs);
 	assert(rnr->stacktop - rnr->stackbot >= op->data.strjoin_nstrs);
+
 	Object **ptr = rnr->stacktop - op->data.strjoin_nstrs;
 	StringObject *res = stringobj_join(rnr->interp, (StringObject **)ptr, op->data.strjoin_nstrs);
 	if(!res)
@@ -286,7 +319,8 @@ static enum RunnerResult run_strjoin(struct Runner *rnr, const struct CodeOp *op
 static enum RunnerResult run_pop1(struct Runner *rnr, const struct CodeOp *op)
 {
 	Object *obj = *--rnr->stacktop;
-	OBJECT_DECREF(obj);
+	if (obj)
+		OBJECT_DECREF(obj);
 	rnr->opidx++;
 	return RUNNER_DIDNTRETURN;
 }
@@ -486,13 +520,17 @@ static enum RunnerResult run_int_eq(struct Runner *rnr, const struct CodeOp *op)
 
 static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 {
+	//codeop_debug(op);
 	switch(op->kind) {
-	#define BOILERPLATE(CONSTANT, FUNC) case CONSTANT: return (FUNC)(rnr, op)
+	#define BOILERPLATE(CONSTANT, FUNC) case (CONSTANT): return (FUNC)(rnr, op)
 		BOILERPLATE(CODE_CONSTANT, run_constant);
 		BOILERPLATE(CODE_SETVAR, run_setvar);
 		BOILERPLATE(CODE_GETVAR, run_getvar);
 		BOILERPLATE(CODE_SETATTR, run_setattr);
 		BOILERPLATE(CODE_GETATTR, run_getattr);
+		BOILERPLATE(CODE_SETBOTTOM, run_setbottom);
+		BOILERPLATE(CODE_GETBOTTOM, run_getbottom);
+		BOILERPLATE(CODE_PUSHDUMMY, run_pushdummy);
 		BOILERPLATE(CODE_GETFROMMODULE, run_getfrommodule);
 		BOILERPLATE(CODE_CALLFUNC, run_callfunc);
 		BOILERPLATE(CODE_CALLCONSTRUCTOR, run_callconstructor);

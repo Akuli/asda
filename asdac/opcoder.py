@@ -28,11 +28,14 @@ def _op_class(name, fields):
 StrConstant = _op_class('StrConstant', ['python_string'])
 IntConstant = _op_class('IntConstant', ['python_int'])
 BoolConstant = _op_class('BoolConstant', ['python_bool'])
+PushDummy = _op_class('PushDummy', [])
 CreateFunction = _op_class('CreateFunction', ['functype', 'body_opcode'])
 # tuples have an index() method, avoid name clash with misspelling
 GetFromModule = _op_class('GetFromModule', ['compilation', 'indeks'])
 SetVar = _op_class('SetVar', ['level', 'var'])
 GetVar = _op_class('GetVar', ['level', 'var'])
+SetToBottom = _op_class('SetToBottom', ['indeks'])
+GetFromBottom = _op_class('GetFromBottom', ['indeks'])
 SetAttr = _op_class('SetAttr', ['type', 'indeks'])
 GetAttr = _op_class('GetAttr', ['type', 'indeks'])
 CallFunction = _op_class('CallFunction', ['nargs'])
@@ -197,6 +200,12 @@ class _OpCoder:
                 self.output.ops.append(GetVar(
                     lineno, node.var.level, coder.local_vars[node.var]))
 
+        elif isinstance(node, decision_tree.SetToBottom):
+            self.output.ops.append(SetToBottom(lineno, node.index))
+
+        elif isinstance(node, decision_tree.GetFromBottom):
+            self.output.ops.append(GetFromBottom(lineno, node.index))
+
         elif isinstance(node, decision_tree.GetAttr):
             self.output.ops.append(GetAttr(
                 lineno, node.tybe,
@@ -224,6 +233,9 @@ class _OpCoder:
 
         elif isinstance(node, decision_tree.PopOne):
             self.output.ops.append(PopOne(lineno))
+
+        elif isinstance(node, decision_tree.PushDummy):
+            self.output.ops.append(PushDummy(lineno))
 
         elif isinstance(node, decision_tree.Swap2):
             self.output.ops.append(Swap2(lineno))

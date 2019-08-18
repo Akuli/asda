@@ -10,8 +10,11 @@ SET_LINENO = b'L'
 
 SET_VAR = b'V'
 GET_VAR = b'v'
+SET_TO_BOTTOM = b'B'
+GET_FROM_BOTTOM = b'b'
 SET_ATTR = b':'
 GET_ATTR = b'.'
+PUSH_DUMMY = b'u'
 GET_FROM_MODULE = b'm'
 CREATE_FUNCTION = b'f'
 STR_CONSTANT = b'"'
@@ -362,6 +365,16 @@ class _BytecodeWriter:
             self.bytecode.add_uint16(op.how_many_methods)
             return
 
+        if isinstance(op, opcoder.SetToBottom):
+            self.bytecode.add_byte(SET_TO_BOTTOM)
+            self.bytecode.add_uint16(op.indeks)
+            return
+
+        if isinstance(op, opcoder.GetFromBottom):
+            self.bytecode.add_byte(GET_FROM_BOTTOM)
+            self.bytecode.add_uint16(op.indeks)
+            return
+
         simple_things = [
             (opcoder.PopOne, POP_ONE),
             (opcoder.Swap2, SWAP_TWO),
@@ -379,6 +392,7 @@ class _BytecodeWriter:
             (opcoder.DiscardFinallyState, DISCARD_FINALLY_STATE),
             (opcoder.ApplyFinallyState, APPLY_FINALLY_STATE),
             (opcoder.Throw, THROW),
+            (opcoder.PushDummy, PUSH_DUMMY),
         ]
 
         for klass, byte in simple_things:

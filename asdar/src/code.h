@@ -13,6 +13,9 @@ enum CodeOpKind {
 	CODE_GETVAR,
 	CODE_SETATTR,
 	CODE_GETATTR,
+	CODE_SETBOTTOM,
+	CODE_GETBOTTOM,
+	CODE_PUSHDUMMY,
 	CODE_GETFROMMODULE,
 	CODE_CALLFUNC,
 	CODE_CALLCONSTRUCTOR,
@@ -73,6 +76,7 @@ typedef union {
 	uint8_t callfunc_nargs;
 	uint16_t jump_idx;
 	uint16_t strjoin_nstrs;
+	uint16_t stackbottom_index;
 	struct CodeAttrData attr;
 	struct CodeErrHnd errhnd;
 	struct CodeCreateFuncData createfunc;
