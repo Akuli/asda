@@ -230,13 +230,6 @@ class StrJoin(PassThroughNode):
         self.how_many_strings = how_many_strings
 
 
-# swaps top 2 elements of the stack
-class Swap2(PassThroughNode):
-
-    def __init__(self, **kwargs):
-        super().__init__(use_count=2, size_delta=0, **kwargs)
-
-
 class TwoWayDecision(Node):
 
     def __init__(self, **kwargs):
