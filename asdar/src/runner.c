@@ -34,7 +34,9 @@ struct RunnerFinallyState {
 
 bool runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, const struct Code *code)
 {
-	if (!( rnr->stackbot = malloc(sizeof(rnr->stackbot[0]) * code->maxstacksz) )) {
+	if (code->maxstacksz == 0)
+		rnr->stackbot = NULL;
+	else if (!( rnr->stackbot = malloc(sizeof(rnr->stackbot[0]) * code->maxstacksz) )) {
 		errobj_set_nomem(interp);
 		return false;
 	}

@@ -90,7 +90,7 @@ class OpCode:
     def __init__(self, nargs, max_stack_size):
         self.nargs = nargs
         self.ops = []
-        self.local_vars = [ArgMarker(i) for i in range(nargs)]
+        self.local_vars = []  # old value: [ArgMarker(i) for i in range(nargs)]
         self.max_stack_size = max_stack_size
 
     def add_local_var(self):
@@ -235,6 +235,16 @@ class _OpCoder:
 
         elif isinstance(node, decision_tree.PushDummy):
             self.output.ops.append(PushDummy(lineno))
+
+        elif isinstance(node, decision_tree.CreateFunction):
+            function_opcode = OpCode(
+                len(node.functype.argtypes),
+                decision_tree.get_max_stack_size(node.body_root_node),
+            )
+            opcoder = self.create_subcoder(function_opcode)
+            opcoder.opcode_tree(node.body_root_node)
+            self.output.ops.append(CreateFunction(
+                lineno, node.functype, function_opcode))
 
         else:
             raise NotImplementedError(repr(node))

@@ -13,12 +13,12 @@ struct RunnerFinallyState;
 
 struct Runner {
 	Object *retval;
+	Object **stackbot;
+	Object **stacktop;
 
 	// don't access rest of these directly
 	Interp *interp;
 	ScopeObject *scope;
-	Object **stackbot;
-	Object **stacktop;
 	DynArray(struct CodeErrHnd) ehstack;            // see finally.md
 	DynArray(struct RunnerFinallyState) fsstack;    // see finally.md
 	size_t opidx;

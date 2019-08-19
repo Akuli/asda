@@ -44,6 +44,7 @@ is one reason for having a decision tree compile step
 
 import functools
 import io
+import random
 import pathlib
 import subprocess
 import tempfile
@@ -122,8 +123,8 @@ class PassThroughNode(Node):
 # execution begins here, having this avoids weird special cases
 class Start(PassThroughNode):
 
-    def __init__(self, **kwargs):
-        super().__init__(use_count=0, size_delta=0, **kwargs)
+    def __init__(self, initial_size, **kwargs):
+        super().__init__(use_count=0, size_delta=initial_size, **kwargs)
 
 
 class PushDummy(PassThroughNode):
@@ -219,6 +220,14 @@ class CallFunction(PassThroughNode):
             size_delta=(-use_count + int(bool(is_returning))),
             **kwargs)
         self.how_many_args = how_many_args
+
+
+class CreateFunction(PassThroughNode):
+
+    def __init__(self, functype, body_root_node, **kwargs):
+        super().__init__(use_count=0, size_delta=1, **kwargs)
+        self.functype = functype
+        self.body_root_node = body_root_node
 
 
 class StrJoin(PassThroughNode):
@@ -398,23 +407,23 @@ def get_unreachable_nodes(reachable_nodes: set):
     return reachable_and_unreachable - reachable_nodes
 
 
-# for debugging, displays a visual representation of the tree
-def graphviz(root_node, filename_without_ext):
+def _random_color():
+    rgb = (0, 0, 0)
+    while sum(rgb)/len(rgb) < 0x80:   # too dark, create new color
+        rgb = (random.randint(0x00, 0xff),
+               random.randint(0x00, 0xff),
+               random.randint(0x00, 0xff))
+    return '#%02x%02x%02x' % rgb
+
+
+def _graphviz_id(node):
+    return 'node' + str(id(node))
+
+
+def _graphviz_code(root_node, label_extra=''):
     reachable = get_all_nodes(root_node)
     unreachable = get_unreachable_nodes(reachable)
     assert not (reachable & unreachable)
-    nodes = {node: 'node' + str(number)
-             for number, node in enumerate(reachable | unreachable)}
-
-    path = pathlib.Path(tempfile.gettempdir()) / 'asdac'
-    path.mkdir(parents=True, exist_ok=True)
-    png = path / (filename_without_ext + '.png')
-
-    # overwrites the png file if it exists
-    dot = subprocess.Popen(['dot', '-o', str(png), '-T', 'png'],
-                           stdin=subprocess.PIPE)
-    dot_stdin = io.TextIOWrapper(dot.stdin)
-    dot_stdin.write('digraph {\n')
 
     try:
         max_stack_size = get_max_stack_size(root_node)
@@ -422,9 +431,7 @@ def graphviz(root_node, filename_without_ext):
         # get_max_stack_size will be called later as a part of the compilation,
         # and you will see the full traceback then
         max_stack_size = 'error'
-
-    dot_stdin.write(
-        'label="\\nmax stack size = %s";\n' % max_stack_size)
+    yield 'label="%s\\nmax stack size = %s";\n' % (label_extra, max_stack_size)
 
     for node in (reachable | unreachable):
         parts = [type(node).__name__]
@@ -442,25 +449,47 @@ def graphviz(root_node, filename_without_ext):
         if node in unreachable:
             parts.append('UNREACHABLE')
 
-        dot_stdin.write('%s [label="%s"];\n' % (
-            nodes[node], '\n'.join(parts).replace('"', r'\"')))
+        yield '%s [label="%s"];\n' % (
+            _graphviz_id(node), '\n'.join(parts).replace('"', r'\"'))
 
         for to in node.get_jumps_to():
             assert node in (ref.objekt for ref in to.jumped_from)
 
+        if isinstance(node, CreateFunction):
+            color = _random_color()
+            yield 'subgraph cluster%s {\n' % _graphviz_id(node)
+            yield 'style=filled;\n'
+            yield 'color="%s";\n' % color
+            yield from _graphviz_code(node.body_root_node, "FUNCTION BODY")
+            yield '}\n'
+            yield '%s [style=filled, fillcolor="%s"];' % (
+                _graphviz_id(node), color)
+
         if isinstance(node, TwoWayDecision):
             # color 'then' with green, 'otherwise' with red
             if node.then is not None:
-                dot_stdin.write('%s -> %s [color=green]\n' % (
-                    nodes[node], nodes[node.then]))
+                yield '%s -> %s [color=green]\n' % (
+                    _graphviz_id(node), _graphviz_id(node.then))
             if node.otherwise is not None:
-                dot_stdin.write('%s -> %s [color=red]\n' % (
-                    nodes[node], nodes[node.otherwise]))
+                yield '%s -> %s [color=red]\n' % (
+                    _graphviz_id(node), _graphviz_id(node.otherwise))
         else:
             for to in node.get_jumps_to():
-                dot_stdin.write('%s -> %s\n' % (
-                    nodes[node], nodes[to]))
+                yield '%s -> %s\n' % (_graphviz_id(node), _graphviz_id(to))
 
+
+# for debugging, displays a visual representation of the tree
+def graphviz(root_node, filename_without_ext):
+    path = pathlib.Path(tempfile.gettempdir()) / 'asdac'
+    path.mkdir(parents=True, exist_ok=True)
+    png = path / (filename_without_ext + '.png')
+
+    # overwrites the png file if it exists
+    dot = subprocess.Popen(['dot', '-o', str(png), '-T', 'png'],
+                           stdin=subprocess.PIPE)
+    dot_stdin = io.TextIOWrapper(dot.stdin)
+    dot_stdin.write('digraph {\n')
+    dot_stdin.writelines(_graphviz_code(root_node))
     dot_stdin.write('}\n')
     dot_stdin.flush()
     dot_stdin.close()
@@ -474,19 +503,17 @@ def graphviz(root_node, filename_without_ext):
 # converts cooked ast to a decision tree
 class _TreeCreator:
 
-    def __init__(self, local_vars_level, *, local_vars_list=None):
+    def __init__(self, local_vars_level, local_vars_list):
         # from now on, local variables are items in the beginning of the stack
         self.local_vars_level = local_vars_level
-        self.local_vars_list = ([] if local_vars_list is None
-                                else local_vars_list)
+        self.local_vars_list = local_vars_list
 
         # why can't i assign in python lambda without dirty setattr haxor :(
         self.set_next_node = lambda node: setattr(self, 'root_node', node)
         self.root_node = None
 
     def subcreator(self):
-        return _TreeCreator(self.local_vars_level,
-                            local_vars_list=self.local_vars_list)
+        return _TreeCreator(self.local_vars_level, self.local_vars_list)
 
     def add_pass_through_node(self, node):
         assert isinstance(node, PassThroughNode)
@@ -565,6 +592,19 @@ class _TreeCreator:
             self.do_expression(expression.obj)
             self.add_pass_through_node(GetAttr(
                 expression.obj.type, expression.attrname))
+
+        # TODO: when closures work again, figure out how to do closures
+        #       for arguments of the function
+        elif isinstance(expression, cooked_ast.CreateFunction):
+            creator = _TreeCreator(self.local_vars_level + 1,
+                                   expression.argvars.copy())
+            creator.add_pass_through_node(Start(len(expression.argvars)))
+            creator.do_body(expression.body)
+            creator.add_bottom_dummies()
+
+            graphviz(creator.root_node, 'functionbody')
+            self.add_pass_through_node(CreateFunction(
+                expression.type, creator.root_node, **boilerplate))
 
         else:
             assert False, expression    # pragma: no cover
@@ -650,17 +690,20 @@ class _TreeCreator:
 
     def add_bottom_dummies(self):
         assert isinstance(self.root_node, Start)
+        assert self.root_node.size_delta >= 0
+
         if self.root_node.next_node is None:
             assert not self.local_vars_list
             return
 
         creator = self.subcreator()
-        creator.add_pass_through_node(Start())
-        for var in self.local_vars_list:
+        creator.add_pass_through_node(Start(self.root_node.size_delta))
+        for var in self.local_vars_list[self.root_node.size_delta:]:
             creator.add_pass_through_node(PushDummy(var))
         creator.set_next_node(self.root_node.next_node)
 
         # avoid creating an unreachable Start node
+        # TODO: is this necessary?
         self.root_node.set_next_node(None)
 
         assert isinstance(creator.root_node, Start)
@@ -671,8 +714,8 @@ class _TreeCreator:
 
 
 def create_tree(cooked_statements):
-    tree_creator = _TreeCreator(1)
-    tree_creator.add_pass_through_node(Start())
+    tree_creator = _TreeCreator(1, [])
+    tree_creator.add_pass_through_node(Start(0))
     tree_creator.do_body(cooked_statements)
     tree_creator.add_bottom_dummies()
     assert isinstance(tree_creator.root_node, Start)

@@ -1,3 +1,4 @@
+- fix function closures
 - asdac's bytecode reading stuff is broken
 - simpler import syntax
 - add yields back, were removed in b0e0fbb because they hadn't been

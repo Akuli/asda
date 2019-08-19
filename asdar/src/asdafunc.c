@@ -38,8 +38,11 @@ run(Interp *interp, const struct AsdaFunctionData *afd, struct Runner *rnr, Obje
 	if (!ok)
 		return RUNNER_ERROR;
 
-	assert(nargs <= afd->code->nlocalvars);
-	memcpy(sco->locals, args, sizeof(args[0]) * nargs);
+	assert(nargs <= afd->code->maxstacksz);
+	assert(rnr->stacktop == rnr->stackbot);
+
+	memcpy(rnr->stackbot, args, sizeof(args[0]) * nargs);
+	rnr->stacktop += nargs;
 	for (size_t i = 0; i < nargs; i++)
 		OBJECT_INCREF(args[i]);
 
