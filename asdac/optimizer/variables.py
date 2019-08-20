@@ -8,9 +8,12 @@ def _find_gets_for_set(set_node):
 
 
 # you can assume that the variable is set after any visited node
-def _find_sets_for_get(node, get_node, visited_nodes):
-    if not node.jumped_from:
-        # reached e.g. decision_tree.Start node or maybe some dead code thing?
+def _find_sets_for_get(node, get_node, visited_nodes, start_node):
+    is_initial_argument_value = (
+        node is start_node and get_node.var in start_node.argvars)
+
+    if (not node.jumped_from) and (not is_initial_argument_value):
+        # FIXME: does this handle unreachable nodes correctly?
         # TODO: show variable definition location in error message
         # TODO: mention this error in spec
         raise common.CompileError(
@@ -27,10 +30,11 @@ def _find_sets_for_get(node, get_node, visited_nodes):
 
     for ref in node.jumped_from:
         if ref.objekt not in visited_nodes:
-            yield from _find_sets_for_get(ref.objekt, get_node, visited_nodes)
+            yield from _find_sets_for_get(
+                ref.objekt, get_node, visited_nodes, start_node)
 
 
-def _sets_and_gets_to_dicts(all_nodes):
+def _sets_and_gets_to_dicts(all_nodes, start_node):
     set2gets = {}
     for node in all_nodes:
         if isinstance(node, decision_tree.SetToBottom):
@@ -41,8 +45,9 @@ def _sets_and_gets_to_dicts(all_nodes):
     for node in all_nodes:
         if isinstance(node, decision_tree.GetFromBottom):
             assert node not in get2sets
-            get2sets[node] = set(_find_sets_for_get(node, node, set()))
-            assert get2sets[node]
+            get2sets[node] = set(_find_sets_for_get(
+                node, node, set(), start_node))
+            # get2sets[node] may be empty for function arguments
 
     return (set2gets, get2sets)
 
@@ -62,7 +67,8 @@ def _optimize_set_once_get_once(set_node, get_node):
 
 
 def optimize_temporary_vars(root_node, all_nodes):
-    set2gets, get2sets = _sets_and_gets_to_dicts(all_nodes)
+    assert isinstance(root_node, decision_tree.Start)
+    set2gets, get2sets = _sets_and_gets_to_dicts(all_nodes, root_node)
     did_something = False
 
     for set_node, gets in set2gets.items():
@@ -79,7 +85,7 @@ def optimize_temporary_vars(root_node, all_nodes):
             decision_tree.replace_node(set_node, ignore_value)
             did_something = True
 
-        if len(gets) == 1:
+        if len(gets) == 1 and set_node.var not in root_node.argvars:
             [get_node] = gets
             if len(get2sets[get_node]) == 1:
                 assert get2sets[get_node] == {set_node}
@@ -104,7 +110,10 @@ def _append_to_inner_list(lol, lol_index, value):
 
 # optimize_away_temporary_vars() leaves unnecessary dummies around
 def optimize_garbage_dummies(root_node, all_nodes):
-    pushes = []     # PushDummy nodes
+    assert isinstance(root_node, decision_tree.Start)
+
+    # pushes contains PushDummy nodes, or None for arguments
+    pushes = [None] * len(root_node.argvars)
     pops = []       # PopOne nodes
     uses = []       # lists of SetToBottom or GetFromBottom
 
@@ -129,15 +138,16 @@ def optimize_garbage_dummies(root_node, all_nodes):
         uses.append([])
     assert len(uses) == len(pops)
 
-    assert None not in pushes
+    assert all(push is None for push in pushes[:len(root_node.argvars)])
+    assert None not in pushes[len(root_node.argvars):]
     assert None not in pops
     assert None not in uses
 
-    if all(uses):
+    if all(uses[len(root_node.argvars):]):
         return False
 
     # looping with an index because deleting items screws up indexes
-    i = 0
+    i = len(root_node.argvars)
     while i < len(uses):
         if uses[i]:
             i += 1
@@ -154,5 +164,5 @@ def optimize_garbage_dummies(root_node, all_nodes):
                 use.index -= 1
                 assert use.index >= 0
 
-    assert all(uses)
+    assert all(uses[len(root_node.argvars):])
     return True

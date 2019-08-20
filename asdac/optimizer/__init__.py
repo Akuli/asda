@@ -1,7 +1,7 @@
 import itertools
 
 from asdac import decision_tree
-from asdac.optimizer import decisions, unreachable_nodes, variables
+from asdac.optimizer import decisions, functions, unreachable_nodes, variables
 
 
 _function_list = [
@@ -9,12 +9,14 @@ _function_list = [
     variables.optimize_temporary_vars,
     variables.optimize_garbage_dummies,
     unreachable_nodes.optimize_unreachable_nodes,
+    functions.optimize_function_bodies,
 ]
 
 
 def optimize(root_node):
     infinite_function_iterator = itertools.cycle(_function_list)
 
+    did_something = False
     did_nothing_count = 0
     all_nodes = decision_tree.get_all_nodes(root_node)
 
@@ -23,7 +25,10 @@ def optimize(root_node):
     while did_nothing_count < len(_function_list):
         optimizer_function = next(infinite_function_iterator)
         if optimizer_function(root_node, all_nodes):
+            did_something = True
             did_nothing_count = 0
             all_nodes = decision_tree.get_all_nodes(root_node)
         else:
             did_nothing_count += 1
+
+    return did_something

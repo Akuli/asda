@@ -123,8 +123,9 @@ class PassThroughNode(Node):
 # execution begins here, having this avoids weird special cases
 class Start(PassThroughNode):
 
-    def __init__(self, initial_size, **kwargs):
-        super().__init__(use_count=0, size_delta=initial_size, **kwargs)
+    def __init__(self, argvars, **kwargs):
+        super().__init__(use_count=0, size_delta=len(argvars), **kwargs)
+        self.argvars = argvars
 
 
 class PushDummy(PassThroughNode):
@@ -529,7 +530,7 @@ class _TreeCreator:
             len(call.args), (call.function.type.returntype is not None),
             location=call.location))
 
-    # inefficient, but there will be optimizers later i think
+    # inefficient, but gets optimized away
     def add_bool_negation(self):
         decision = BoolDecision()
         decision.set_then(GetVar(cooked_ast.BUILTIN_VARS['FALSE']))
@@ -598,11 +599,10 @@ class _TreeCreator:
         elif isinstance(expression, cooked_ast.CreateFunction):
             creator = _TreeCreator(self.local_vars_level + 1,
                                    expression.argvars.copy())
-            creator.add_pass_through_node(Start(len(expression.argvars)))
+            creator.add_pass_through_node(Start(expression.argvars.copy()))
             creator.do_body(expression.body)
             creator.add_bottom_dummies()
 
-            graphviz(creator.root_node, 'functionbody')
             self.add_pass_through_node(CreateFunction(
                 expression.type, creator.root_node, **boilerplate))
 
@@ -690,15 +690,14 @@ class _TreeCreator:
 
     def add_bottom_dummies(self):
         assert isinstance(self.root_node, Start)
-        assert self.root_node.size_delta >= 0
 
         if self.root_node.next_node is None:
             assert not self.local_vars_list
             return
 
         creator = self.subcreator()
-        creator.add_pass_through_node(Start(self.root_node.size_delta))
-        for var in self.local_vars_list[self.root_node.size_delta:]:
+        creator.add_pass_through_node(Start(self.root_node.argvars))
+        for var in self.local_vars_list[len(self.root_node.argvars):]:
             creator.add_pass_through_node(PushDummy(var))
         creator.set_next_node(self.root_node.next_node)
 
@@ -715,7 +714,7 @@ class _TreeCreator:
 
 def create_tree(cooked_statements):
     tree_creator = _TreeCreator(1, [])
-    tree_creator.add_pass_through_node(Start(0))
+    tree_creator.add_pass_through_node(Start([]))
     tree_creator.do_body(cooked_statements)
     tree_creator.add_bottom_dummies()
     assert isinstance(tree_creator.root_node, Start)
