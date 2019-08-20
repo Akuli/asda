@@ -49,7 +49,7 @@ import pathlib
 import subprocess
 import tempfile
 
-from asdac import cooked_ast, utils
+from asdac import common, cooked_ast, utils
 
 
 class Node:
@@ -79,9 +79,18 @@ class Node:
         # should be None for nodes created by the compiler
         self.location = location
 
+    def get_jumps_to_including_nones(self):
+        """Return iterable of nodes that may be ran after running this node.
+
+        If execution (of the function or file) may end at this node, the
+        resulting iterable contains one or more Nones.
+        """
+        raise NotImplementedError
+
     def get_jumps_to(self):
         """Return iterable of nodes that may be ran after running this node."""
-        raise NotImplementedError
+        return (node for node in self.get_jumps_to_including_nones()
+                if node is not None)
 
     def change_jump_to(self, ref, new):
         if ref.get() is not None:
@@ -111,9 +120,8 @@ class PassThroughNode(Node):
         super().__init__(**kwargs)
         self.next_node = None
 
-    def get_jumps_to(self):
-        if self.next_node is not None:
-            yield self.next_node
+    def get_jumps_to_including_nones(self):
+        return [self.next_node]
 
     def set_next_node(self, next_node):
         self.change_jump_to(
@@ -224,6 +232,39 @@ class CreateFunction(PassThroughNode):
         self.body_root_node = body_root_node
 
 
+# you might be thinking of implementing 'return blah' so that it leaves 'blah'
+# on the stack and exits the function, but I thought about that for about 30
+# minutes straight and it turned out to be surprisingly complicated
+#
+# there may be local variables (including the function's arguments) in the
+# bottom of the stack, and they are cleared with nodes like
+# PopOne(is_popping_a_dummy=True) when the function exits
+#
+# the return value must go before the local variables in the stack, because
+# otherwise every PopOne(is_popping_a_dummy=True) has to move the return value
+# object in the stack by one, which feels dumb (but maybe not too inefficient):
+#
+#   [var1, var2, var3, result]      # Function is running 'return result'
+#   [var1, var2, result]            # PopOne(is_popping_a_dummy=True) ran
+#
+# i.e. PopOne, which used to be just decrementing stack top pointer (and
+# possibly a decref), is now a more complicated thing that can in some cases
+# delete stuff BEFORE the stack top? wtf. i don't like this
+#
+# I also thought about creating a special variable that would always go first
+# in the stack and would hold the return value, but function arguments go first
+# in the stack, so this would conflict with the first argument of the function.
+# Unless I make the function arguments start at index 1 for value-returning
+# functions and at index 0 for other functions. Would be a messy piece of shit.
+#
+# The solution is to store the return value into a special place outside the
+# stack before local variables are popped off.
+class StoreReturnValue(PassThroughNode):
+
+    def __init__(self, **kwargs):
+        super().__init__(use_count=1, size_delta=-1, **kwargs)
+
+
 class StrJoin(PassThroughNode):
 
     def __init__(self, how_many_strings, **kwargs):
@@ -240,11 +281,8 @@ class TwoWayDecision(Node):
         self.then = None
         self.otherwise = None
 
-    def get_jumps_to(self):
-        if self.then is not None:
-            yield self.then
-        if self.otherwise is not None:
-            yield self.otherwise
+    def get_jumps_to_including_nones(self):
+        return [self.then, self.otherwise]
 
     def set_then(self, value):
         self.change_jump_to(
@@ -499,17 +537,24 @@ def graphviz(root_node, filename_without_ext):
 # converts cooked ast to a decision tree
 class _TreeCreator:
 
-    def __init__(self, local_vars_level, local_vars_list):
+    def __init__(self, local_vars_level, local_vars_list, exit_points):
         # from now on, local variables are items in the beginning of the stack
         self.local_vars_level = local_vars_level
         self.local_vars_list = local_vars_list
+
+        # .set_next_node methods that should be called to make stuff run every
+        # time the function is about to early-return
+        # used for cleaning up local variables from stack
+        # not used in non-function tree creators
+        self.exit_points = exit_points
 
         # why can't i assign in python lambda without dirty setattr haxor :(
         self.set_next_node = lambda node: setattr(self, 'root_node', node)
         self.root_node = None
 
     def subcreator(self):
-        return _TreeCreator(self.local_vars_level, self.local_vars_list)
+        return _TreeCreator(
+            self.local_vars_level, self.local_vars_list, self.exit_points)
 
     def add_pass_through_node(self, node):
         assert isinstance(node, PassThroughNode)
@@ -541,6 +586,22 @@ class _TreeCreator:
         if local_var not in self.local_vars_list:
             self.local_vars_list.append(local_var)
         return self.local_vars_list.index(local_var)
+
+    def _check_always_returns_a_value(self, node, checked, error_location):
+        if node in checked:
+            return
+        checked.add(node)
+
+        if not isinstance(node, StoreReturnValue):
+            for subnode in node.get_jumps_to_including_nones():
+                if subnode is None:
+                    # FIXME: message and location
+                    raise common.CompileError(
+                        "this function should return a value in all cases, "
+                        "but seems like it doesn't",
+                        error_location)
+                self._check_always_returns_a_value(
+                    subnode, checked, error_location)
 
     def do_expression(self, expression):
         assert expression.type is not None
@@ -596,10 +657,13 @@ class _TreeCreator:
         #       for arguments of the function
         elif isinstance(expression, cooked_ast.CreateFunction):
             creator = _TreeCreator(self.local_vars_level + 1,
-                                   expression.argvars.copy())
+                                   expression.argvars.copy(), [])
             creator.add_pass_through_node(Start(expression.argvars.copy()))
             creator.do_body(expression.body)
             creator.add_bottom_dummies()
+            if expression.type.returntype is not None:
+                self._check_always_returns_a_value(
+                    creator.root_node, set(), expression.location)
 
             self.add_pass_through_node(CreateFunction(
                 expression.type, creator.root_node, **boilerplate))
@@ -677,6 +741,17 @@ class _TreeCreator:
                 end_decision.set_otherwise(node),
             )
 
+        elif isinstance(statement, cooked_ast.VoidReturn):
+            self.exit_points.append(self.set_next_node)
+            self.set_next_node = lambda node: None
+
+        # TODO: make sure that value-returning functions always return a value
+        elif isinstance(statement, cooked_ast.ValueReturn):
+            self.do_expression(statement.value)
+            self.add_pass_through_node(StoreReturnValue(**boilerplate))
+            self.exit_points.append(self.set_next_node)
+            self.set_next_node = lambda node: None
+
         else:
             assert False, type(statement)     # pragma: no cover
 
@@ -698,8 +773,13 @@ class _TreeCreator:
             creator.set_next_node(self.root_node.next_node)
             creator.set_next_node = self.set_next_node
 
-        for var in self.local_vars_list:
-            creator.add_pass_through_node(PopOne(is_popping_a_dummy=True))
+        for index, var in enumerate(self.local_vars_list):
+            pop = PopOne(is_popping_a_dummy=True)
+            if index == 0:      # first time
+                for func in creator.exit_points:
+                    func(pop)
+                creator.exit_points.clear()
+            creator.add_pass_through_node(pop)
 
         # avoid creating an unreachable Start node
         # TODO: is this necessary?
@@ -711,7 +791,7 @@ class _TreeCreator:
 
 
 def create_tree(cooked_statements):
-    tree_creator = _TreeCreator(1, [])
+    tree_creator = _TreeCreator(1, [], [])
     tree_creator.add_pass_through_node(Start([]))
     tree_creator.do_body(cooked_statements)
     tree_creator.add_bottom_dummies()

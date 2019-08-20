@@ -1,4 +1,6 @@
+- make sure that value-returning functions always return a value
 - fix function closures
+- fix error handling stufs
 - asdac's bytecode reading stuff is broken
 - simpler import syntax
 - add yields back, were removed in b0e0fbb because they hadn't been

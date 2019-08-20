@@ -26,8 +26,8 @@ enum CodeOpKind {
 	CODE_POP1,
 
 	CODE_CREATEFUNC,
-	CODE_VALUERETURN,
-	CODE_DIDNTRETURNERROR,
+	CODE_STORERETVAL,
+	CODE_DIDNTRETURNERROR,   // TODO: get rid of this
 
 	// EH = Error Handler, see finally.md
 	CODE_EH_ADD,

@@ -167,6 +167,8 @@ class Location:
     # raises OSError
     def _read_before_value_after(self):
         with self.compilation.open_source_file() as file:
+            # seek won't do because seek wants a number of bytes, not number
+            # of characters
             before = file.read(self.offset)
             value = file.read(self.length)
 

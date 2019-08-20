@@ -11,11 +11,12 @@
 #include "objects/err.h"
 #include "objects/func.h"
 
-static enum RunnerResult
-run(Interp *interp, const struct Code *code, struct Runner *rnr, Object *const *args, size_t nargs)
+static bool run(
+	Interp *interp, const struct Code *code, struct Runner *rnr,
+	Object *const *args, size_t nargs)
 {
 	if (!runner_init(rnr, interp, code))
-		return RUNNER_ERROR;
+		return false;
 
 	assert(nargs <= code->maxstacksz);
 	assert(rnr->stacktop == rnr->stackbot);
@@ -25,31 +26,19 @@ run(Interp *interp, const struct Code *code, struct Runner *rnr, Object *const *
 	for (size_t i = 0; i < nargs; i++)
 		OBJECT_INCREF(args[i]);
 
-	enum RunnerResult res = runner_run(rnr);
+	bool ok = runner_run(rnr);
 	runner_free(rnr);
-	return res;
+	return ok;
 }
 
 static bool asda_function_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
 	struct Runner rnr;
 
-	switch (run(interp, data.val, &rnr, args, nargs)) {
-		case RUNNER_VALUERETURN:
-			*result = rnr.retval;
-			return true;
-
-		case RUNNER_DIDNTRETURN:
-			*result = NULL;
-			return true;
-
-		case RUNNER_ERROR:
-			return false;
-	}
-
-	// never runs, silences compiler warning
-	assert(0);
-	return false;
+	if (!run(interp, data.val, &rnr, args, nargs))
+		return false;
+	*result = rnr.retval;
+	return true;
 }
 
 FuncObject *asdafunc_create(Interp *interp, const struct TypeFunc *type, const struct Code *code)

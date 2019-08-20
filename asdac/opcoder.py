@@ -41,7 +41,7 @@ CallFunction = _op_class('CallFunction', ['nargs'])
 CallConstructor = _op_class('CallConstructor', ['tybe', 'nargs'])
 StrJoin = _op_class('StrJoin', ['how_many_parts'])
 PopOne = _op_class('PopOne', [])
-Return = _op_class('Return', ['returns_a_value'])
+StoreReturnValue = _op_class('StoreReturnValue', [])
 Throw = _op_class('Throw', [])
 BoolNegation = _op_class('BoolNegation', [])
 Jump = _op_class('Jump', ['marker'])
@@ -209,6 +209,9 @@ class _OpCoder:
             self.output.ops.append(CreateFunction(
                 lineno, node.functype, function_opcode))
 
+        elif isinstance(node, decision_tree.StoreReturnValue):
+            self.output.ops.append(StoreReturnValue(lineno))
+
         else:
             raise NotImplementedError(repr(node))
 
@@ -268,8 +271,8 @@ class _OpCoder:
                 # the 'jump to e' part gets added by jump_cache stuff, because
                 # e has already gotten opcoded once and can be reused
                 #
-                # not ideal, but I don't feel like optimizing this before the
-                # decision trees contain loops and other corner cases
+                # this is not ideal, could be pseudo-optimized to do less
+                # jumps, but that is likely not a bottleneck so why bother
                 self.output.ops.append(JumpIf(lineno, then_marker))
                 self.opcode_tree(node.otherwise)
                 self.output.ops.append(Jump(None, done_marker))

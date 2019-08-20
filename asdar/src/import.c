@@ -91,11 +91,10 @@ static bool run(Interp *interp, const struct Code *code)
 	struct Runner rnr;
 	if (!runner_init(&rnr, interp, code))
 		return false;
-	enum RunnerResult res = runner_run(&rnr);
+	bool ok = runner_run(&rnr);
+	assert(!rnr.retval);
 	runner_free(&rnr);
-
-	assert(res == RUNNER_ERROR || res == RUNNER_DIDNTRETURN);  // asda compiler shouldn't allow others
-	return (res != RUNNER_ERROR);
+	return ok;
 }
 
 bool import(Interp *interp, const char *path)

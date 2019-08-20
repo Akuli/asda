@@ -25,8 +25,8 @@ CALL_FUNCTION = b'('
 CALL_CONSTRUCTOR = b')'
 STR_JOIN = b'j'
 POP_ONE = b'P'
-VALUE_RETURN = b'R'
-DIDNT_RETURN_ERROR = b'd'
+STORE_RETURN_VALUE = b'R'
+DIDNT_RETURN_ERROR = b'd'   # TODO: check at compile time
 THROW = b't'
 YIELD = b'Y'
 BOOL_NEGATION = b'!'
@@ -291,9 +291,8 @@ class _BytecodeWriter:
             self.bytecode.add_uint8(op.nargs)   # TODO: bigger than uint8
             return
 
-        if isinstance(op, opcoder.Return):
-            assert op.returns_a_value   # FIXME
-            self.bytecode.add_byte(VALUE_RETURN)
+        if isinstance(op, opcoder.StoreReturnValue):
+            self.bytecode.add_byte(STORE_RETURN_VALUE)
             return
 
         if isinstance(op, (opcoder.Jump, opcoder.JumpIf)):

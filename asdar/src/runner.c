@@ -47,7 +47,7 @@ bool runner_init(struct Runner *rnr, Interp *interp, const struct Code *code)
 	dynarray_init(&rnr->fsstack);
 	rnr->code = code;
 	rnr->opidx = 0;
-	// leave rnr->retval uninitialized for better valgrinding
+	rnr->retval = NULL;
 
 	return true;
 }
@@ -70,15 +70,15 @@ void runner_free(const struct Runner *rnr)
 }
 
 
-static enum RunnerResult run_constant(struct Runner *rnr, const struct CodeOp *op)
+static bool run_constant(struct Runner *rnr, const struct CodeOp *op)
 {
 	OBJECT_INCREF(op->data.obj);
 	*rnr->stacktop++ = op->data.obj;
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_setattr(struct Runner *rnr, const struct CodeOp *op)
+static bool run_setattr(struct Runner *rnr, const struct CodeOp *op)
 {
 	assert(rnr->stacktop - rnr->stackbot >= 2);
 	AsdaInstObject *sethere = (AsdaInstObject *) *--rnr->stacktop;
@@ -96,10 +96,10 @@ static enum RunnerResult run_setattr(struct Runner *rnr, const struct CodeOp *op
 
 	OBJECT_DECREF(sethere);
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_getattr(struct Runner *rnr, const struct CodeOp *op)
+static bool run_getattr(struct Runner *rnr, const struct CodeOp *op)
 {
 	assert(rnr->stacktop > rnr->stackbot);
 	Object **ptr = rnr->stacktop - 1;
@@ -117,7 +117,7 @@ static enum RunnerResult run_getattr(struct Runner *rnr, const struct CodeOp *op
 			// TODO: "AttrError" class or something
 			// TODO: include attribute name in error message somehow
 			errobj_set(rnr->interp, &errobj_type_value, "value of an attribute has not been set");
-			return RUNNER_ERROR;
+			return false;
 		}
 		OBJECT_INCREF(res);
 		break;
@@ -126,7 +126,7 @@ static enum RunnerResult run_getattr(struct Runner *rnr, const struct CodeOp *op
 		assert(attr.method);
 		res = (Object *) partialfunc_create(rnr->interp, attr.method, ptr, 1);
 		if (!res)
-			return RUNNER_ERROR;
+			return false;
 		break;
 
 	}
@@ -134,10 +134,10 @@ static enum RunnerResult run_getattr(struct Runner *rnr, const struct CodeOp *op
 	OBJECT_DECREF(*ptr);
 	*ptr = res;
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_setbottom(struct Runner *rnr, const struct CodeOp *op)
+static bool run_setbottom(struct Runner *rnr, const struct CodeOp *op)
 {
 	assert(rnr->stacktop > rnr->stackbot);
 	assert(op->data.stackbottom_index < rnr->stacktop - rnr->stackbot);
@@ -146,10 +146,10 @@ static enum RunnerResult run_setbottom(struct Runner *rnr, const struct CodeOp *
 	rnr->stackbot[op->data.stackbottom_index] = *--rnr->stacktop;
 
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_getbottom(struct Runner *rnr, const struct CodeOp *op)
+static bool run_getbottom(struct Runner *rnr, const struct CodeOp *op)
 {
 	assert(op->data.stackbottom_index < rnr->stacktop - rnr->stackbot);
 	assert(rnr->stackbot[op->data.stackbottom_index]);
@@ -158,32 +158,32 @@ static enum RunnerResult run_getbottom(struct Runner *rnr, const struct CodeOp *
 	OBJECT_INCREF(val);
 
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_pushdummy(struct Runner *rnr, const struct CodeOp *op)
+static bool run_pushdummy(struct Runner *rnr, const struct CodeOp *op)
 {
 	*rnr->stacktop++ = NULL;
 
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_getfrommodule(struct Runner *rnr, const struct CodeOp *op)
+static bool run_getfrommodule(struct Runner *rnr, const struct CodeOp *op)
 {
 	Object *val = *op->data.modmemberptr;
 	if (!val) {
 		errobj_set(rnr->interp, &errobj_type_variable, "value of an exported variable hasn't been set");
-		return RUNNER_ERROR;
+		return false;
 	}
 
 	OBJECT_INCREF(val);
 	*rnr->stacktop++ = val;
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_callfunc(struct Runner *rnr, const struct CodeOp *op)
+static bool run_callfunc(struct Runner *rnr, const struct CodeOp *op)
 {
 	size_t nargs = op->data.callfunc_nargs;
 	assert(rnr->stacktop - rnr->stackbot >= (long)nargs + 1);   // +1 for the function
@@ -197,15 +197,15 @@ static enum RunnerResult run_callfunc(struct Runner *rnr, const struct CodeOp *o
 	OBJECT_DECREF(func);
 	for(size_t i=0; i < nargs; i++) OBJECT_DECREF(argptr[i]);
 	if (!ok)
-		return RUNNER_ERROR;
+		return false;
 
 	if (result)
 		*rnr->stacktop++ = result;
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_callconstructor(struct Runner *rnr, const struct CodeOp *op)
+static bool run_callconstructor(struct Runner *rnr, const struct CodeOp *op)
 {
 	const struct Type *t = op->data.constructor.type;
 	size_t nargs = op->data.constructor.nargs;
@@ -219,16 +219,16 @@ static enum RunnerResult run_callconstructor(struct Runner *rnr, const struct Co
 	for(size_t i=0; i < nargs; i++)
 		OBJECT_DECREF(argptr[i]);
 	if (!obj)
-		return RUNNER_ERROR;
+		return false;
 
 	assert(obj->type == t);
 
 	*rnr->stacktop++ = obj;
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_boolneg(struct Runner *rnr, const struct CodeOp *op)
+static bool run_boolneg(struct Runner *rnr, const struct CodeOp *op)
 {
 	assert(rnr->stacktop > rnr->stackbot);
 	BoolObject **ptr = (BoolObject **)(rnr->stacktop - 1);
@@ -237,16 +237,16 @@ static enum RunnerResult run_boolneg(struct Runner *rnr, const struct CodeOp *op
 	OBJECT_DECREF(old);
 
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_jump(struct Runner *rnr, const struct CodeOp *op)
+static bool run_jump(struct Runner *rnr, const struct CodeOp *op)
 {
 	rnr->opidx = op->data.jump_idx;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_jumpif(struct Runner *rnr, const struct CodeOp *op)
+static bool run_jumpif(struct Runner *rnr, const struct CodeOp *op)
 {
 	BoolObject *obj = (BoolObject *) *--rnr->stacktop;
 	bool b = boolobj_asda2c(obj);
@@ -255,10 +255,10 @@ static enum RunnerResult run_jumpif(struct Runner *rnr, const struct CodeOp *op)
 		rnr->opidx = op->data.jump_idx;
 	else
 		rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_strjoin(struct Runner *rnr, const struct CodeOp *op)
+static bool run_strjoin(struct Runner *rnr, const struct CodeOp *op)
 {
 	DEBUG_PRINTF("string join of %zu strings\n", (size_t)op->data.strjoin_nstrs);
 	assert(rnr->stacktop - rnr->stackbot >= op->data.strjoin_nstrs);
@@ -266,7 +266,7 @@ static enum RunnerResult run_strjoin(struct Runner *rnr, const struct CodeOp *op
 	Object **ptr = rnr->stacktop - op->data.strjoin_nstrs;
 	StringObject *res = stringobj_join(rnr->interp, (StringObject **)ptr, op->data.strjoin_nstrs);
 	if(!res)
-		return RUNNER_ERROR;
+		return false;
 
 	for (; ptr < rnr->stacktop; ptr++)
 		OBJECT_DECREF(*ptr);
@@ -275,51 +275,53 @@ static enum RunnerResult run_strjoin(struct Runner *rnr, const struct CodeOp *op
 	*rnr->stacktop++ = (Object *)res;
 
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_pop1(struct Runner *rnr, const struct CodeOp *op)
+static bool run_pop1(struct Runner *rnr, const struct CodeOp *op)
 {
 	Object *obj = *--rnr->stacktop;
 	if (obj)
 		OBJECT_DECREF(obj);
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_createfunc(struct Runner *rnr, const struct CodeOp *op)
+static bool run_createfunc(struct Runner *rnr, const struct CodeOp *op)
 {
 	FuncObject *f = asdafunc_create(rnr->interp, op->data.createfunc.type, &op->data.createfunc.code);
 	if (!f)
-		return RUNNER_ERROR;
+		return false;
 
 	*rnr->stacktop++ = (Object *)f;
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_valuereturn(struct Runner *rnr, const struct CodeOp *op)
+static bool run_storeretval(struct Runner *rnr, const struct CodeOp *op)
 {
+	assert(!rnr->retval);
 	rnr->retval = *--rnr->stacktop;
-	return RUNNER_VALUERETURN;
+	rnr->opidx++;
+	return true;
 }
 
-static enum RunnerResult run_didntreturnerror(struct Runner *rnr, const struct CodeOp *op)
+static bool run_didntreturnerror(struct Runner *rnr, const struct CodeOp *op)
 {
 	// TODO: create a nicer error type for this
 	errobj_set(rnr->interp, &errobj_type_value, "function didn't return");
-	return RUNNER_ERROR;
+	return false;
 }
 
-static enum RunnerResult run_throw(struct Runner *rnr, const struct CodeOp *op)
+static bool run_throw(struct Runner *rnr, const struct CodeOp *op)
 {
 	Object *e = *--rnr->stacktop;
 	errobj_set_obj(rnr->interp, (ErrObject *)e);
 	OBJECT_DECREF(e);
-	return RUNNER_ERROR;
+	return false;
 }
 
-static enum RunnerResult run_setmethods2class(struct Runner *rnr, const struct CodeOp *op)
+static bool run_setmethods2class(struct Runner *rnr, const struct CodeOp *op)
 {
 	const struct TypeAsdaClass *type = op->data.setmethods.type;
 	assert(type->nasdaattrs + op->data.setmethods.nmethods == type->nattrs);
@@ -335,10 +337,10 @@ static enum RunnerResult run_setmethods2class(struct Runner *rnr, const struct C
 	rnr->stacktop -= op->data.setmethods.nmethods;
 
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_fs_push_something(struct Runner *rnr, const struct CodeOp *op)
+static bool run_fs_push_something(struct Runner *rnr, const struct CodeOp *op)
 {
 	struct RunnerFinallyState fs;
 	fs.kind = op->kind;
@@ -349,34 +351,35 @@ static enum RunnerResult run_fs_push_something(struct Runner *rnr, const struct 
 
 	if (!dynarray_push(rnr->interp, &rnr->fsstack, fs)) {
 		destroy_finally_state(fs);
-		return RUNNER_ERROR;
+		return false;
 	}
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_fs_apply(struct Runner *rnr, const struct CodeOp *op)
+static bool run_fs_apply(struct Runner *rnr, const struct CodeOp *op)
 {
 	struct RunnerFinallyState fs = dynarray_pop(&rnr->fsstack);
 
-	enum RunnerResult r;
+	bool r;
 	switch (fs.kind) {
 		case CODE_FS_OK:
-			r = RUNNER_DIDNTRETURN;
+			r = true;
 			rnr->opidx++;
 			break;
 		case CODE_FS_ERROR:
-			r = RUNNER_ERROR;
+			r = false;
 			errobj_set_obj(rnr->interp, (ErrObject *)fs.val.obj);
 			break;
 
 		case CODE_FS_VALUERETURN:
-			r = RUNNER_VALUERETURN;
+			r = true;
+			assert(!rnr->retval);
 			rnr->retval = fs.val.obj;
 			OBJECT_INCREF(rnr->retval);
 			break;
 		case CODE_FS_JUMP:
-			r = RUNNER_DIDNTRETURN;
+			r = true;
 			rnr->opidx = fs.val.jumpidx;
 			break;
 		default:
@@ -388,30 +391,30 @@ static enum RunnerResult run_fs_apply(struct Runner *rnr, const struct CodeOp *o
 	return r;
 }
 
-static enum RunnerResult run_fs_discard(struct Runner *rnr, const struct CodeOp *op)
+static bool run_fs_discard(struct Runner *rnr, const struct CodeOp *op)
 {
 	struct RunnerFinallyState fs = dynarray_pop(&rnr->fsstack);
 	destroy_finally_state(fs);
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_eh_add(struct Runner *rnr, const struct CodeOp *op)
+static bool run_eh_add(struct Runner *rnr, const struct CodeOp *op)
 {
 	if (!dynarray_push(rnr->interp, &rnr->ehstack, op->data.errhnd))
-		return RUNNER_ERROR;
+		return false;
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_eh_rm(struct Runner *rnr, const struct CodeOp *op)
+static bool run_eh_rm(struct Runner *rnr, const struct CodeOp *op)
 {
 	(void) dynarray_pop(&rnr->ehstack);
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_integer_binary_operation(struct Runner *rnr, const struct CodeOp *op)
+static bool run_integer_binary_operation(struct Runner *rnr, const struct CodeOp *op)
 {
 	assert(rnr->stacktop - rnr->stackbot >= 2);
 	// y before x because the stack is like this:
@@ -432,27 +435,27 @@ static enum RunnerResult run_integer_binary_operation(struct Runner *rnr, const 
 	OBJECT_DECREF(y);
 
 	if(!res)
-		return RUNNER_ERROR;
+		return false;
 	*rnr->stacktop++ = (Object *)res;
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_int_neg(struct Runner *rnr, const struct CodeOp *op)
+static bool run_int_neg(struct Runner *rnr, const struct CodeOp *op)
 {
 	assert(rnr->stacktop > rnr->stackbot);
 	IntObject **ptr = (IntObject **)(rnr->stacktop - 1);
 	IntObject *obj = intobj_neg(rnr->interp, *ptr);
 	if(!obj)
-		return RUNNER_ERROR;
+		return false;
 	OBJECT_DECREF(*ptr);
 	*ptr = obj;
 
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
-static enum RunnerResult run_int_eq(struct Runner *rnr, const struct CodeOp *op)
+static bool run_int_eq(struct Runner *rnr, const struct CodeOp *op)
 {
 	IntObject *x = (IntObject *)*--rnr->stacktop;
 	IntObject *y = (IntObject *)*--rnr->stacktop;
@@ -462,11 +465,11 @@ static enum RunnerResult run_int_eq(struct Runner *rnr, const struct CodeOp *op)
 	OBJECT_DECREF(y);
 
 	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
 
-static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
+static bool run_one_op(struct Runner *rnr, const struct CodeOp *op)
 {
 	//codeop_debug(op);
 	switch(op->kind) {
@@ -487,7 +490,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_POP1, run_pop1);
 		BOILERPLATE(CODE_THROW, run_throw);
 		BOILERPLATE(CODE_CREATEFUNC, run_createfunc);
-		BOILERPLATE(CODE_VALUERETURN, run_valuereturn);
+		BOILERPLATE(CODE_STORERETVAL, run_storeretval);
 		BOILERPLATE(CODE_DIDNTRETURNERROR, run_didntreturnerror);
 		BOILERPLATE(CODE_SETMETHODS2CLASS, run_setmethods2class);
 		BOILERPLATE(CODE_EH_ADD, run_eh_add);
@@ -507,7 +510,7 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	}
 
 	// never runs, silences compiler warning
-	return RUNNER_DIDNTRETURN;
+	return true;
 }
 
 
@@ -558,45 +561,47 @@ static void clear_stack(struct Runner *rnr)
 	rnr->stacktop = rnr->stackbot;
 }
 
-enum RunnerResult runner_run(struct Runner *rnr)
+bool runner_run(struct Runner *rnr)
 {
 	struct InterpStackItem tmp;
 	tmp.srcpath = rnr->code->srcpath;
 	// lineno set soon
 
 	if (!dynarray_push(rnr->interp, &rnr->interp->stack, tmp))
-		return RUNNER_ERROR;
+		return false;
 
 	size_t interpstackidx = rnr->interp->stack.len - 1;
-	enum RunnerResult res;
+	bool ok;
 
 	while (rnr->opidx < rnr->code->nops) {
 		const struct CodeOp *op = &rnr->code->ops[rnr->opidx];
 		rnr->interp->stack.ptr[interpstackidx].lineno = op->lineno;
 
 		//codeop_debug(op);
-		res = run_one_op(rnr, op);
+		ok = run_one_op(rnr, op);
+		if (!ok) {
+			if (rnr->retval) {
+				OBJECT_DECREF(rnr->retval);
+				rnr->retval = NULL;
+			}
 
-		if (res == RUNNER_ERROR) {
 			clear_stack(rnr);
 			const struct CodeErrHndItem *ehi = find_matching_error_handler_item(rnr);
 			if (ehi) {
 				jump_to_error_handler(rnr, *ehi);
 				continue;
 			}
-		}
-
-		if(res != RUNNER_DIDNTRETURN)
 			goto out;
+		}
 	}
 
 	assert(rnr->opidx == rnr->code->nops);
-	res = RUNNER_DIDNTRETURN;
+	ok = true;
 	// "fall through"
 
 out:
 	assert(interpstackidx == rnr->interp->stack.len - 1);
 	struct InterpStackItem pop = dynarray_pop(&rnr->interp->stack);
 	assert(pop.srcpath == rnr->code->srcpath);
-	return res;
+	return ok;
 }

@@ -28,18 +28,11 @@ struct Runner {
 // don't call runner_free when this fails
 bool runner_init(struct Runner *rnr, Interp *interp, const struct Code *code);
 
-// never fails
+// never fails, doesn't touch ->retval
 void runner_free(const struct Runner *rnr);
 
-enum RunnerResult {
-	RUNNER_VALUERETURN,
-	RUNNER_DIDNTRETURN,   // also represents returning from '-> void' function
-	RUNNER_ERROR,
-};
-
-// must not be called multiple times
-// if returns RUNNER_VALUERETURN, caller may use rnr->retval and must decref it eventually
-enum RunnerResult runner_run(struct Runner *rnr);
+// must NOT be called multiple times with same runner
+bool runner_run(struct Runner *rnr);
 
 
 #endif   // RUNNER_H
