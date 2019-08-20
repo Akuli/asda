@@ -691,15 +691,18 @@ class _TreeCreator:
     def add_bottom_dummies(self):
         assert isinstance(self.root_node, Start)
 
-        if self.root_node.next_node is None:
-            assert not self.local_vars_list
-            return
-
         creator = self.subcreator()
         creator.add_pass_through_node(Start(self.root_node.argvars))
+
         for var in self.local_vars_list[len(self.root_node.argvars):]:
             creator.add_pass_through_node(PushDummy(var))
-        creator.set_next_node(self.root_node.next_node)
+
+        if self.root_node.next_node is not None:
+            creator.set_next_node(self.root_node.next_node)
+            creator.set_next_node = self.set_next_node
+
+        for var in self.local_vars_list:
+            creator.add_pass_through_node(PopOne(is_popping_a_dummy=True))
 
         # avoid creating an unreachable Start node
         # TODO: is this necessary?
@@ -707,9 +710,7 @@ class _TreeCreator:
 
         assert isinstance(creator.root_node, Start)
         self.root_node = creator.root_node
-
-        for var in self.local_vars_list:
-            self.add_pass_through_node(PopOne(is_popping_a_dummy=True))
+        self.set_next_node = creator.set_next_node
 
 
 def create_tree(cooked_statements):
