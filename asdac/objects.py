@@ -231,6 +231,8 @@ array.add_method('get', [BUILTIN_TYPES['Int']], T)
 BUILTIN_GENERIC_TYPES = collections.OrderedDict([
     ('Array', array),
 ])
+
+# TODO: handle built-in generic vars in rest of asdac
 BUILTIN_GENERIC_VARS = collections.OrderedDict([
     # TODO: delete this, it's here only because tests use it and not actually
     # implemented anywhere

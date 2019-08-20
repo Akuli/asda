@@ -6,7 +6,6 @@
 #include "code.h"
 #include "interp.h"
 #include "object.h"
-#include "objects/scope.h"
 
 // don't use this outside runner.c
 struct RunnerFinallyState;
@@ -18,7 +17,6 @@ struct Runner {
 
 	// don't access rest of these directly
 	Interp *interp;
-	ScopeObject *scope;
 	DynArray(struct CodeErrHnd) ehstack;            // see finally.md
 	DynArray(struct RunnerFinallyState) fsstack;    // see finally.md
 	size_t opidx;
@@ -28,7 +26,7 @@ struct Runner {
 // increfs the scope as needed
 // never frees the bc
 // don't call runner_free when this fails
-bool runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, const struct Code *code);
+bool runner_init(struct Runner *rnr, Interp *interp, const struct Code *code);
 
 // never fails
 void runner_free(const struct Runner *rnr);

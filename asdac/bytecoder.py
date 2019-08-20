@@ -8,8 +8,7 @@ from . import common, objects, opcoder
 
 SET_LINENO = b'L'
 
-SET_VAR = b'V'
-GET_VAR = b'v'
+GET_BUILTIN_VAR = b'U'
 SET_TO_BOTTOM = b'B'
 GET_FROM_BOTTOM = b'b'
 SET_ATTR = b':'
@@ -241,7 +240,7 @@ class _BytecodeWriter:
             else:   # pragma: no cover
                 raise NotImplementedError(repr(tybe))
 
-    def write_op(self, op, varlists):
+    def write_op(self, op):
         self.bytecode.set_lineno(op.lineno)
 
         if isinstance(op, opcoder.StrConstant):
@@ -271,23 +270,14 @@ class _BytecodeWriter:
             assert isinstance(op.functype, objects.FunctionType)
             self.bytecode.add_byte(TYPE_FUNCTION)
             self.write_type(op.functype)
-            self._create_subwriter().run(op.body_opcode, varlists)
+            _BytecodeWriter(self.bytecode, self.compilation).run(op.body_opcode
+                                                                 )
             return
 
-        if isinstance(op, opcoder.GetVar):
-            self.bytecode.add_byte(GET_VAR)
-            self.bytecode.add_uint8(op.level)
-            if isinstance(op.var, opcoder.ArgMarker):
-                self.bytecode.add_uint16(op.var.index)
-            else:
-                assert isinstance(op.var, opcoder.VarMarker)
-                self.bytecode.add_uint16(varlists[op.level].index(op.var))
-            return
-
-        if isinstance(op, opcoder.SetVar):
-            self.bytecode.add_byte(SET_VAR)
-            self.bytecode.add_uint8(op.level)
-            self.bytecode.add_uint16(varlists[op.level].index(op.var))
+        if isinstance(op, opcoder.GetBuiltinVar):
+            self.bytecode.add_byte(GET_BUILTIN_VAR)
+            names = list(objects.BUILTIN_VARS.keys())
+            self.bytecode.add_uint8(names.index(op.varname))
             return
 
         if isinstance(op, opcoder.CallFunction):
@@ -339,16 +329,17 @@ class _BytecodeWriter:
             self.bytecode.add_uint16(op.indeks)
             return
 
-        if isinstance(op, opcoder.AddErrorHandler):
-            self.bytecode.add_byte(ADD_ERROR_HANDLER)
-            self.bytecode.add_uint16(len(op.items))
-            for jumpto_marker, errortype, errorvarlevel, errorvar in op.items:
-                self.write_type(errortype)
-                self.bytecode.add_uint16(
-                    varlists[errorvarlevel].index(errorvar))
-                self.bytecode.add_uint16(self.jumpmarker2index[jumpto_marker])
-            return
-
+        # FIXME: is very outdated
+#        if isinstance(op, opcoder.AddErrorHandler):
+#            self.bytecode.add_byte(ADD_ERROR_HANDLER)
+#            self.bytecode.add_uint16(len(op.items))
+#            for jumpto_marker, errortype, errorvarlevel, errorvar in op.items:
+#                self.write_type(errortype)
+#                self.bytecode.add_uint16(
+#                    varlists[errorvarlevel].index(errorvar))
+#                self.bytecode.add_uint16(self.jumpmarker2index[jumpto_marker])
+#            return
+#
         if isinstance(op, opcoder.PushFinallyStateReturn):
             self.bytecode.add_byte(PUSH_FINALLY_STATE_VALUE_RETURN)
             return
@@ -401,11 +392,7 @@ class _BytecodeWriter:
         assert False, op        # pragma: no cover
 
     # don't call this more than once because jumpmarker2index
-    def run(self, opcode, varlists):
-        # using += would mutate the argument and cause confusing things because
-        # python is awesome
-        varlists = varlists + [opcode.local_vars]
-
+    def run(self, opcode):
         i = 0       # no, enumerate() does not work for this
         for op in opcode.ops:
             if isinstance(op, opcoder.JumpMarker):
@@ -413,11 +400,10 @@ class _BytecodeWriter:
             else:
                 i += 1
 
-        self.bytecode.add_uint16(len(opcode.local_vars))
         self.bytecode.add_uint16(opcode.max_stack_size)
 
         for op in opcode.ops:
-            self.write_op(op, varlists)
+            self.write_op(op)
         self.bytecode.add_byte(END_OF_BODY)
 
     # this can be used to write either one of the two import sections
@@ -460,9 +446,7 @@ def create_bytecode(compilation, opcode):
         [impcomp.compiled_path for impcomp in compilation.imports])
     import_section_bytes = output.get_bytes()
 
-    # the built-in varlist is None because all builtins are implemented
-    # as ArgMarkers, so they don't need a varlist
-    writer.run(opcode, [None])
+    writer.run(opcode)
     opcode_bytes = output.get_bytes()
 
     writer.write_type_list()

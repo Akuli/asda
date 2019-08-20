@@ -136,18 +136,11 @@ class PushDummy(PassThroughNode):
         self.var = var
 
 
-class SetVar(PassThroughNode):
+class GetBuiltinVar(PassThroughNode):
 
-    def __init__(self, var, **kwargs):
-        super().__init__(use_count=1, size_delta=-1, **kwargs)
-        self.var = var
-
-
-class GetVar(PassThroughNode):
-
-    def __init__(self, var, **kwargs):
+    def __init__(self, varname, **kwargs):
         super().__init__(use_count=0, size_delta=1, **kwargs)
-        self.var = var
+        self.varname = varname
 
 
 class _BottomNode(PassThroughNode):
@@ -269,8 +262,10 @@ class BoolDecision(TwoWayDecision):
 
 
 def _get_debug_string(node):
-    if isinstance(node, (SetVar, GetVar, PushDummy)):
+    if isinstance(node, PushDummy):
         return node.var.name
+    if isinstance(node, GetBuiltinVar):
+        return node.varname
     if isinstance(node, (SetToBottom, GetFromBottom)):
         return 'varname %r, index %d' % (node.var.name, node.index)
     if isinstance(node, GetAttr):
@@ -533,8 +528,8 @@ class _TreeCreator:
     # inefficient, but gets optimized away
     def add_bool_negation(self):
         decision = BoolDecision()
-        decision.set_then(GetVar(cooked_ast.BUILTIN_VARS['FALSE']))
-        decision.set_otherwise(GetVar(cooked_ast.BUILTIN_VARS['TRUE']))
+        decision.set_then(GetBuiltinVar('FALSE'))
+        decision.set_otherwise(GetBuiltinVar('TRUE'))
         self.set_next_node(decision)
         self.set_next_node = lambda node: (
             decision.then.set_next_node(node),
@@ -564,8 +559,11 @@ class _TreeCreator:
                 node = GetFromBottom(
                     self._get_varlist_index(expression.var), expression.var,
                     **boilerplate)
+            elif expression.var.level == 0:
+                node = GetBuiltinVar(expression.var.name, **boilerplate)
             else:
-                node = GetVar(expression.var, **boilerplate)
+                # closure variable
+                raise NotImplementedError
 
             self.add_pass_through_node(node)
 
@@ -628,7 +626,8 @@ class _TreeCreator:
                     self._get_varlist_index(statement.var), statement.var,
                     **boilerplate)
             else:
-                node = SetVar(statement.var, **boilerplate)
+                # closure variable
+                raise NotImplementedError
             self.add_pass_through_node(node)
 
         elif isinstance(statement, cooked_ast.IfStatement):
@@ -652,8 +651,7 @@ class _TreeCreator:
         elif isinstance(statement, cooked_ast.Loop):
             creator = self.subcreator()
             if statement.pre_cond is None:
-                creator.add_pass_through_node(GetVar(
-                    cooked_ast.BUILTIN_VARS['TRUE']))
+                creator.add_pass_through_node(GetBuiltinVar('TRUE'))
             else:
                 creator.do_expression(statement.pre_cond)
 
@@ -665,8 +663,7 @@ class _TreeCreator:
             creator.do_body(statement.incr)
 
             if statement.post_cond is None:
-                creator.add_pass_through_node(GetVar(
-                    cooked_ast.BUILTIN_VARS['TRUE']))
+                creator.add_pass_through_node(GetBuiltinVar('TRUE'))
             else:
                 creator.do_expression(statement.post_cond)
 

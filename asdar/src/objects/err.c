@@ -227,6 +227,7 @@ static bool print_source_line(const char *path, size_t lineno)
 
 void errobj_printstack(Interp *interp, ErrObject *err)
 {
+	assert(!interp->err);
 	fprintf(stderr, "asda error: ");   // TODO: include type name somehow
 
 	// TODO: create a stringobj_toutf8 that doesn't do mallocs?

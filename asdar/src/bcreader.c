@@ -14,15 +14,13 @@
 #include "objects/bool.h"
 #include "objects/err.h"
 #include "objects/int.h"
-#include "objects/scope.h"
 #include "objects/string.h"
 
 #define IMPORT_SECTION 'i'
 #define TYPE_LIST_SECTION 'y'
 
 #define SET_LINENO 'L'
-#define SET_VAR 'V'
-#define GET_VAR 'v'
+#define GET_BUILTIN_VAR 'U'
 #define SET_TO_BOTTOM 'B'
 #define GET_FROM_BOTTOM 'b'
 #define SET_ATTR ':'
@@ -377,14 +375,17 @@ static bool read_opbyte(struct BcReader *bcr, unsigned char *ob)
 	return true;
 }
 
-static bool read_vardata(struct BcReader *bcr, struct CodeOp *res, enum CodeOpKind kind)
+static bool read_get_builtin_var(struct BcReader *bcr, struct CodeOp *res)
 {
-	struct CodeVarData vd;
-	if (!read_bytes(bcr, &vd.level, 1)) return false;
-	if (!read_uint16(bcr, &vd.index)) return false;
+	uint8_t i;
+	if (!read_bytes(bcr, &i, 1))
+		return false;
+	assert(i < builtin_nobjects);
 
-	res->data.var = vd;
-	res->kind = kind;
+	res->kind = CODE_CONSTANT;
+	res->data.obj = builtin_objects[i];
+
+	OBJECT_INCREF(res->data.obj);
 	return true;
 }
 
@@ -507,8 +508,10 @@ static bool read_create_function(struct BcReader *bcr, struct CodeOp *res)
 	return read_body(bcr, &res->data.createfunc.code);
 }
 
+// TODO
 static Object **get_module_member_pointer(struct BcReader *bcr)
 {
+/*
 	uint16_t modidx, membidx;
 	if (!read_uint16(bcr, &modidx))
 		return NULL;
@@ -520,6 +523,8 @@ static Object **get_module_member_pointer(struct BcReader *bcr)
 	const struct Module *mod = module_get(bcr->interp, bcr->imports[modidx]);
 	assert(mod);
 	return mod->scope->locals + membidx;
+*/
+	assert(0);
 }
 
 static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *res)
@@ -539,8 +544,8 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 		res->kind = CODE_PUSHDUMMY;
 		return true;
 
-	case SET_VAR: return read_vardata(bcr, res, CODE_SETVAR);
-	case GET_VAR: return read_vardata(bcr, res, CODE_GETVAR);
+	case GET_BUILTIN_VAR:
+		return read_get_builtin_var(bcr, res);
 
 	case SET_TO_BOTTOM:   res->kind = CODE_SETBOTTOM; return read_uint16(bcr, &res->data.stackbottom_index);
 	case GET_FROM_BOTTOM: res->kind = CODE_GETBOTTOM; return read_uint16(bcr, &res->data.stackbottom_index);
@@ -613,8 +618,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 
 static bool read_body(struct BcReader *bcr, struct Code *code)
 {
-	if (!read_uint16(bcr, &code->nlocalvars))
-		return false;
 	if (!read_uint16(bcr, &code->maxstacksz))
 		return false;
 

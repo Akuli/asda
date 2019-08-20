@@ -4,14 +4,14 @@
 #include <stdbool.h>
 #include "code.h"
 #include "interp.h"
-#include "objects/scope.h"
 
 struct Module {
 	// see interp->basedir comments for more details about the path
 	// srcpath and bcpath are relative to interp->basedir
 	char *srcpath;       // path of source file
 	char *bcpath;        // path of compiled bytecode file
-	ScopeObject *scope;  // a subscope of the built-in scope
+	// TODO: exporting
+	//ScopeObject *scope;  // a subscope of the built-in scope
 	struct Code code;    // loaded from bcpath
 	struct Type **types; // type_destroy()ed when the module is destroyed, NULL terminated
 

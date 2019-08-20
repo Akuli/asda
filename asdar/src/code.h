@@ -9,8 +9,6 @@
 
 enum CodeOpKind {
 	CODE_CONSTANT,
-	CODE_SETVAR,
-	CODE_GETVAR,
 	CODE_SETATTR,
 	CODE_GETATTR,
 	CODE_SETBOTTOM,
@@ -56,7 +54,6 @@ struct Code {
 	const char *srcpath;   // relative to interp->basedir, same for every code of a module
 	struct CodeOp *ops;
 	size_t nops;
-	uint16_t nlocalvars;
 	uint16_t maxstacksz;
 };
 
@@ -66,11 +63,9 @@ struct CodeErrHnd { struct CodeErrHndItem *arr; size_t len; };
 struct CodeConstructorData { const struct Type *type; size_t nargs; };
 struct CodeCreateFuncData { const struct TypeFunc *type; struct Code code; };
 struct CodeAttrData { const struct Type *type; uint16_t index; };
-struct CodeVarData { uint8_t level; uint16_t index; };
 struct CodeSetMethodsData { const struct TypeAsdaClass *type; uint16_t nmethods; };
 
 typedef union {
-	struct CodeVarData var;
 	uint8_t callfunc_nargs;
 	uint16_t jump_idx;
 	uint16_t strjoin_nstrs;

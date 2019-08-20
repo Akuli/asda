@@ -12,7 +12,6 @@
 #include "runner.h"
 #include "type.h"
 #include "objects/err.h"
-#include "objects/scope.h"
 
 static void destroy_types(struct Type **types)
 {
@@ -87,10 +86,10 @@ error:
 	return false;
 }
 
-static bool run(Interp *interp, ScopeObject *scope, const struct Code *code)
+static bool run(Interp *interp, const struct Code *code)
 {
 	struct Runner rnr;
-	if (!runner_init(&rnr, interp, scope, code))
+	if (!runner_init(&rnr, interp, code))
 		return false;
 	enum RunnerResult res = runner_run(&rnr);
 	runner_free(&rnr);
@@ -118,16 +117,7 @@ bool import(Interp *interp, const char *path)
 		return false;
 	}
 
-	if (!( mod->scope = scopeobj_newsub(interp, interp->builtinscope, mod->code.nlocalvars) )) {
-		code_destroy(&mod->code);
-		destroy_types(mod->types);
-		free(mod->srcpath);
-		free(mod->bcpath);
-		free(mod);
-		return false;
-	}
-
-	mod->runok = run(interp, mod->scope, &mod->code);
+	mod->runok = run(interp, &mod->code);
 	module_add(interp, mod);
 	return mod->runok;
 }

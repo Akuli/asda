@@ -10,35 +10,14 @@
 #include "type.h"
 #include "objects/err.h"
 #include "objects/func.h"
-#include "objects/scope.h"
-
-struct AsdaFunctionData {
-	ScopeObject *defscope;
-	const struct Code *code;
-};
-
-static void destroy_asdafunc_data(void *vpdata, bool decrefrefs, bool freenonrefs)
-{
-	// code is not destroyed, reason explained in asdafunc.h
-	if(decrefrefs)
-		OBJECT_DECREF( ((struct AsdaFunctionData*)vpdata)->defscope );
-	if(freenonrefs)
-		free(vpdata);
-}
 
 static enum RunnerResult
-run(Interp *interp, const struct AsdaFunctionData *afd, struct Runner *rnr, Object *const *args, size_t nargs)
+run(Interp *interp, const struct Code *code, struct Runner *rnr, Object *const *args, size_t nargs)
 {
-	ScopeObject *sco = scopeobj_newsub(interp, afd->defscope, afd->code->nlocalvars);
-	if(!sco)
+	if (!runner_init(rnr, interp, code))
 		return RUNNER_ERROR;
 
-	bool ok = runner_init(rnr, interp, sco, afd->code);
-	OBJECT_DECREF(sco);
-	if (!ok)
-		return RUNNER_ERROR;
-
-	assert(nargs <= afd->code->maxstacksz);
+	assert(nargs <= code->maxstacksz);
 	assert(rnr->stacktop == rnr->stackbot);
 
 	memcpy(rnr->stackbot, args, sizeof(args[0]) * nargs);
@@ -73,18 +52,11 @@ static bool asda_function_cfunc(Interp *interp, struct ObjData data, Object *con
 	return false;
 }
 
-FuncObject *asdafunc_create(Interp *interp, ScopeObject *defscope, const struct TypeFunc *type, const struct Code *code)
+FuncObject *asdafunc_create(Interp *interp, const struct TypeFunc *type, const struct Code *code)
 {
-	struct AsdaFunctionData *afd = malloc(sizeof(*afd));
-	if(!afd) {
-		errobj_set_nomem(interp);
-		return NULL;
-	}
-
-	afd->defscope = defscope;
-	OBJECT_INCREF(defscope);
-	afd->code = code;
-
-	struct ObjData od = { .val = afd, .destroy = destroy_asdafunc_data };
+	// BE CAREFUL to not modify the code in the rest of this file
+	// od.val is non-const void* pointer but code is const pointer
+	// this is simpler than wrapping the code inside a one-element struct
+	struct ObjData od = { .val = (void *)code, .destroy = NULL };
 	return funcobj_new(interp, type, asda_function_cfunc, od);
 }

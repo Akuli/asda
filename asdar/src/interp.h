@@ -9,7 +9,6 @@
 struct Object;
 struct ErrObject;
 struct IntObject;
-struct ScopeObject;
 struct Module;
 
 
@@ -20,7 +19,6 @@ struct InterpStackItem {
 
 typedef struct Interp {
 	const char *argv0;
-	struct ScopeObject *builtinscope;
 
 	// the only object created at runtime that has ->prev == NULL
 	// all (not yet destroyed) runtime created objects can be found from here with ->next
@@ -61,8 +59,8 @@ typedef struct Interp {
 } Interp;
 
 
-// returns false and sets an error to interp->err on no mem
-bool interp_init(Interp *interp, const char *argv0);
+// never fails
+void interp_init(Interp *interp, const char *argv0);
 
 // never fails, always leaves errstr untouched
 void interp_destroy(Interp *interp);

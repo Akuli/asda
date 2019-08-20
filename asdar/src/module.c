@@ -44,17 +44,16 @@ void module_add(Interp *interp, struct Module *mod)
 }
 
 
-static void destroy_path_scope_code(const struct Module *mod)
+static void destroy_paths_and_code(const struct Module *mod)
 {
 	if (!mod)
 		return;
 
 	free(mod->srcpath);
 	free(mod->bcpath);
-	OBJECT_DECREF(mod->scope);
 	code_destroy(&mod->code);
-	destroy_path_scope_code(mod->left);
-	destroy_path_scope_code(mod->right);
+	destroy_paths_and_code(mod->left);
+	destroy_paths_and_code(mod->right);
 }
 
 // feels good to destroy types last because other stuff may depend on them
@@ -74,7 +73,7 @@ static void destroy_types_and_free(struct Module *mod)
 void module_destroyall(Interp *interp)
 {
 	// this does nothing if interp->firstmod is NULL
-	destroy_path_scope_code(interp->firstmod);
+	destroy_paths_and_code(interp->firstmod);
 	destroy_types_and_free(interp->firstmod);
 	interp->firstmod = NULL;
 }

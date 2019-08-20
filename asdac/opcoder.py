@@ -32,8 +32,7 @@ PushDummy = _op_class('PushDummy', [])
 CreateFunction = _op_class('CreateFunction', ['functype', 'body_opcode'])
 # tuples have an index() method, avoid name clash with misspelling
 GetFromModule = _op_class('GetFromModule', ['compilation', 'indeks'])
-SetVar = _op_class('SetVar', ['level', 'var'])
-GetVar = _op_class('GetVar', ['level', 'var'])
+GetBuiltinVar = _op_class('GetBuiltinVar', ['varname'])
 SetToBottom = _op_class('SetToBottom', ['indeks'])
 GetFromBottom = _op_class('GetFromBottom', ['indeks'])
 SetAttr = _op_class('SetAttr', ['type', 'indeks'])
@@ -90,13 +89,7 @@ class OpCode:
     def __init__(self, nargs, max_stack_size):
         self.nargs = nargs
         self.ops = []
-        self.local_vars = []  # old value: [ArgMarker(i) for i in range(nargs)]
         self.max_stack_size = max_stack_size
-
-    def add_local_var(self):
-        var = VarMarker()
-        self.local_vars.append(var)
-        return var
 
     def _get_all_ops(self):
         # i wish python had pointer objects or something :(
@@ -125,27 +118,14 @@ class _OpCoder:
 
     def __init__(self, output_opcode, compilation, line_start_offsets):
         self.output = output_opcode
-        self.parent_coder = None
-        self.level = 0
         self.compilation = compilation
         self.line_start_offsets = line_start_offsets
-
-        # keys are cooked_ast.Variable or cooked_ast.GenericVariable
-        # values are VarMarker or ArgMarker
-        self.local_vars = {}
 
         # keys are opcoded nodes, values are JumpMarker objects
         #
         # this is a simple way to handle loops, code common to both branches of
         # a decision, etc
         self.jump_cache = {}
-
-    def create_subcoder(self, output_opcode):
-        result = _OpCoder(output_opcode, self.compilation,
-                          self.line_start_offsets)
-        result.parent_coder = self
-        result.level = self.level + 1
-        return result
 
     # returns line number so that 1 means first line
     def _lineno(self, location):
@@ -168,15 +148,6 @@ class _OpCoder:
         assert location.compilation == self.compilation
         return bisect.bisect(self.line_start_offsets, location.offset)
 
-    def _get_coder_for_level(self, level):
-        level_difference = self.level - level
-        assert level_difference >= 0
-
-        coder = self
-        for lel in range(level_difference):
-            coder = coder.parent_coder
-        return coder
-
     def attrib_index(self, tybe, name):
         assert isinstance(tybe.attributes, collections.OrderedDict)
         return list(tybe.attributes.keys()).index(name)
@@ -187,17 +158,8 @@ class _OpCoder:
         if isinstance(node, decision_tree.Start):
             pass
 
-        elif isinstance(node, (decision_tree.SetVar, decision_tree.GetVar)):
-            coder = self._get_coder_for_level(node.var.level)
-            if node.var not in coder.local_vars:
-                coder.local_vars[node.var] = coder.output.add_local_var()
-
-            if isinstance(node, decision_tree.SetVar):
-                self.output.ops.append(SetVar(
-                    lineno, node.var.level, coder.local_vars[node.var]))
-            else:
-                self.output.ops.append(GetVar(
-                    lineno, node.var.level, coder.local_vars[node.var]))
+        elif isinstance(node, decision_tree.GetBuiltinVar):
+            self.output.ops.append(GetBuiltinVar(lineno, node.varname))
 
         elif isinstance(node, decision_tree.SetToBottom):
             self.output.ops.append(SetToBottom(lineno, node.index))
@@ -241,7 +203,8 @@ class _OpCoder:
                 len(node.functype.argtypes),
                 decision_tree.get_max_stack_size(node.body_root_node),
             )
-            opcoder = self.create_subcoder(function_opcode)
+            opcoder = _OpCoder(
+                function_opcode, self.compilation, self.line_start_offsets)
             opcoder.opcode_tree(node.body_root_node)
             self.output.ops.append(CreateFunction(
                 lineno, node.functype, function_opcode))
@@ -320,29 +283,20 @@ class _OpCoder:
 
 
 def create_opcode(compilation, root_node, export_vars, source_code):
+    assert not export_vars      # TODO
+
     line_start_offsets = []
     offset = 0
     for line in io.StringIO(source_code):
         line_start_offsets.append(offset)
         offset += len(line)
 
-    builtin_opcoder = _OpCoder(None, compilation, line_start_offsets)
-    builtin_opcoder.local_vars.update({
-        var: ArgMarker(index)
-        for index, var in enumerate(itertools.chain(
-            cooked_ast.BUILTIN_VARS.values(),
-            cooked_ast.BUILTIN_GENERIC_VARS.values(),
-        ))
-    })
-
     # exported symbols are kinda like arguments
     output = OpCode(len(export_vars),
                     decision_tree.get_max_stack_size(root_node))
-    file_opcoder = builtin_opcoder.create_subcoder(output)
-    for arg_marker, var in zip(output.local_vars, export_vars.values()):
-        file_opcoder.local_vars[var] = arg_marker
 
-    file_opcoder.opcode_tree(root_node)
+    _OpCoder(output, compilation, line_start_offsets).opcode_tree(root_node)
+
     import pprint; pprint.pprint(output.ops)
     output.fix_none_linenos()
     return output

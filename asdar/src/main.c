@@ -19,8 +19,7 @@ int main(int argc, char **argv)
 	}
 
 	Interp interp;
-	if (!interp_init(&interp, argv[0]))
-		goto error;
+	interp_init(&interp, argv[0]);
 
 	if (!( basedir = path_toabsolute(argv[1]) )) {
 		errobj_set_oserr(&interp, "finding absolute path of '%s' failed", argv[1]);

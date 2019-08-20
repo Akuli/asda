@@ -14,7 +14,6 @@
 #include "objects/err.h"
 #include "objects/func.h"
 #include "objects/int.h"
-#include "objects/scope.h"
 #include "objects/string.h"
 
 /*
@@ -32,7 +31,7 @@ struct RunnerFinallyState {
 	} val;
 };
 
-bool runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, const struct Code *code)
+bool runner_init(struct Runner *rnr, Interp *interp, const struct Code *code)
 {
 	if (code->maxstacksz == 0)
 		rnr->stackbot = NULL;
@@ -43,8 +42,6 @@ bool runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, const s
 
 	// from now on, everything will succeed
 	rnr->interp = interp;
-	rnr->scope = scope;
-	OBJECT_INCREF(scope);
 	rnr->stacktop = rnr->stackbot;
 	dynarray_init(&rnr->ehstack);
 	dynarray_init(&rnr->fsstack);
@@ -70,15 +67,6 @@ void runner_free(const struct Runner *rnr)
 	free(rnr->stackbot);
 	free(rnr->ehstack.ptr);
 	free(rnr->fsstack.ptr);
-
-	OBJECT_DECREF(rnr->scope);
-	// leave rnr->retval untouched, caller of runner_run() should handle its decreffing
-}
-
-static Object **get_var_pointer(struct Runner *rnr, const struct CodeOp *op)
-{
-	ScopeObject *scope = scopeobj_getforlevel(rnr->scope, op->data.var.level);
-	return scope->locals + op->data.var.index;
 }
 
 
@@ -86,34 +74,6 @@ static enum RunnerResult run_constant(struct Runner *rnr, const struct CodeOp *o
 {
 	OBJECT_INCREF(op->data.obj);
 	*rnr->stacktop++ = op->data.obj;
-	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
-}
-
-static enum RunnerResult run_setvar(struct Runner *rnr, const struct CodeOp *op)
-{
-	assert(rnr->stacktop - rnr->stackbot >= 1);
-	Object **ptr = get_var_pointer(rnr, op);
-	if(*ptr)
-		OBJECT_DECREF(*ptr);
-	*ptr = *--rnr->stacktop;
-	assert(*ptr);
-
-	rnr->opidx++;
-	return RUNNER_DIDNTRETURN;
-}
-
-static enum RunnerResult run_getvar(struct Runner *rnr, const struct CodeOp *op)
-{
-	Object **ptr = get_var_pointer(rnr, op);
-	if(!*ptr) {
-		// TODO: include variable name here somehow
-		errobj_set(rnr->interp, &errobj_type_variable, "value of a variable hasn't been set");
-		return RUNNER_ERROR;
-	}
-
-	OBJECT_INCREF(*ptr);
-	*rnr->stacktop++ = *ptr;
 	rnr->opidx++;
 	return RUNNER_DIDNTRETURN;
 }
@@ -329,7 +289,7 @@ static enum RunnerResult run_pop1(struct Runner *rnr, const struct CodeOp *op)
 
 static enum RunnerResult run_createfunc(struct Runner *rnr, const struct CodeOp *op)
 {
-	FuncObject *f = asdafunc_create(rnr->interp, rnr->scope, op->data.createfunc.type, &op->data.createfunc.code);
+	FuncObject *f = asdafunc_create(rnr->interp, op->data.createfunc.type, &op->data.createfunc.code);
 	if (!f)
 		return RUNNER_ERROR;
 
@@ -512,8 +472,6 @@ static enum RunnerResult run_one_op(struct Runner *rnr, const struct CodeOp *op)
 	switch(op->kind) {
 	#define BOILERPLATE(CONSTANT, FUNC) case (CONSTANT): return (FUNC)(rnr, op)
 		BOILERPLATE(CODE_CONSTANT, run_constant);
-		BOILERPLATE(CODE_SETVAR, run_setvar);
-		BOILERPLATE(CODE_GETVAR, run_getvar);
 		BOILERPLATE(CODE_SETATTR, run_setattr);
 		BOILERPLATE(CODE_GETATTR, run_getattr);
 		BOILERPLATE(CODE_SETBOTTOM, run_setbottom);
@@ -573,8 +531,10 @@ static const struct CodeErrHndItem *find_matching_error_handler_item(struct Runn
 	return NULL;
 }
 
+// TODO
 static void jump_to_error_handler(struct Runner *rnr, struct CodeErrHndItem ehi)
 {
+/*
 	rnr->opidx = ehi.jmpidx;
 
 	struct ErrObject *e = rnr->interp->err;
@@ -586,6 +546,8 @@ static void jump_to_error_handler(struct Runner *rnr, struct CodeErrHndItem ehi)
 	rnr->interp->err = NULL;
 
 	errobj_beginhandling(rnr->interp, e);
+*/
+	assert(0);
 }
 
 static void clear_stack(struct Runner *rnr)
