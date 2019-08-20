@@ -437,6 +437,11 @@ class _Chef:
         # TODO: should this use get_chef_for_varname?
         while True:
             if varname in chef.vars.maps[0]:
+                if chef.level == 0:
+                    raise common.CompileError(
+                        "cannot set built-in variable '%s'" % varname,
+                        raw.location)
+
                 var = chef.vars.maps[0][varname]
                 assert not isinstance(var, str)
                 self._check_assign_type(
