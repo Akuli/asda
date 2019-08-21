@@ -136,21 +136,21 @@ class _ByteCode:
 
 class _BytecodeWriter:
 
-    def __init__(self, bytecode, compilation):
+    def __init__(self, bytecode, compilation, type_list):
         self.bytecode = bytecode
         self.compilation = compilation
+
+        # when the interpreter imports the bytecode file, it creates things
+        # that represent these types, and looks up these types by index
+        self.type_list = type_list
 
         # the bytecode doesn't contain jump markers, and it instead jumps by
         # index, it turns out to be much easier to figure out the indexes
         # beforehand
         self.jumpmarker2index = {}
 
-        # when the interpreter imports the bytecode file, it creates things
-        # that represent these types, and looks up these types by index
-        self.type_list = []
-
     def _create_subwriter(self):
-        return _BytecodeWriter(self.bytecode, self.compilation)
+        return _BytecodeWriter(self.bytecode, self.compilation, self.type_list)
 
     def write_path(self, path):
         relative2 = self.compilation.compiled_path.parent
@@ -269,8 +269,7 @@ class _BytecodeWriter:
             assert isinstance(op.functype, objects.FunctionType)
             self.bytecode.add_byte(TYPE_FUNCTION)
             self.write_type(op.functype)
-            _BytecodeWriter(self.bytecode, self.compilation).run(op.body_opcode
-                                                                 )
+            self._create_subwriter().run(op.body_opcode)
             return
 
         if isinstance(op, opcoder.GetBuiltinVar):
@@ -434,7 +433,7 @@ class _BytecodeWriter:
 # the separator
 def create_bytecode(compilation, opcode):
     output = _ByteCode()
-    writer = _BytecodeWriter(output, compilation)
+    writer = _BytecodeWriter(output, compilation, [])
 
     writer.write_path(compilation.source_path)
     source_path_bytes = output.get_bytes()

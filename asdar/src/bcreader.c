@@ -266,6 +266,7 @@ static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowv
 		if (!read_uint16(bcr, &i))
 			return false;
 		*typ = bcr->typelist[i];
+		assert(*typ);
 		return true;
 	}
 

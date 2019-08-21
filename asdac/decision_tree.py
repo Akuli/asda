@@ -191,6 +191,12 @@ class Plus(PassThroughNode):
         super().__init__(use_count=2, size_delta=-1, **kwargs)
 
 
+class Times(PassThroughNode):
+
+    def __init__(self, **kwargs):
+        super().__init__(use_count=2, size_delta=-1, **kwargs)
+
+
 class GetAttr(PassThroughNode):
 
     def __init__(self, tybe, attrname, **kwargs):
@@ -607,22 +613,29 @@ class _TreeCreator:
             elif expression.var.level == 0:
                 node = GetBuiltinVar(expression.var.name, **boilerplate)
             else:
+                print(expression.var)
                 # closure variable
                 raise NotImplementedError
 
             self.add_pass_through_node(node)
 
-        elif isinstance(expression, (cooked_ast.Equal, cooked_ast.NotEqual)):
+        elif isinstance(expression, (
+                cooked_ast.Equal, cooked_ast.NotEqual,
+                cooked_ast.Plus, cooked_ast.Times)):
             self.do_expression(expression.lhs)
             self.do_expression(expression.rhs)
-            self.add_pass_through_node(Equal(**boilerplate))
-            if isinstance(expression, cooked_ast.NotEqual):
-                self.add_bool_negation()
 
-        elif isinstance(expression, cooked_ast.Plus):
-            self.do_expression(expression.lhs)
-            self.do_expression(expression.rhs)
-            self.add_pass_through_node(Plus(**boilerplate))
+            if isinstance(expression, cooked_ast.Equal):
+                self.add_pass_through_node(Equal(**boilerplate))
+            elif isinstance(expression, cooked_ast.NotEqual):
+                self.add_pass_through_node(Equal(**boilerplate))
+                self.add_bool_negation()
+            elif isinstance(expression, cooked_ast.Plus):
+                self.add_pass_through_node(Plus(**boilerplate))
+            elif isinstance(expression, cooked_ast.Times):
+                self.add_pass_through_node(Times(**boilerplate))
+            else:
+                raise RuntimeError("wat")
 
         elif isinstance(expression, cooked_ast.StrJoin):
             for part in expression.parts:

@@ -155,49 +155,58 @@ class _OpCoder:
         lineno = self._lineno(node.location)
 
         if isinstance(node, decision_tree.Start):
-            pass
+            return
 
-        elif isinstance(node, decision_tree.GetBuiltinVar):
+        simple = [
+            (decision_tree.Equal, Equal),
+            (decision_tree.Plus, Plus),
+            (decision_tree.Times, Times),
+            (decision_tree.PushDummy, PushDummy),
+            (decision_tree.PopOne, PopOne),
+            (decision_tree.StoreReturnValue, StoreReturnValue),
+        ]
+        for node_class, op_class in simple:
+            if isinstance(node, node_class):
+                self.output.ops.append(op_class(lineno))
+                return
+
+        if isinstance(node, decision_tree.GetBuiltinVar):
             self.output.ops.append(GetBuiltinVar(lineno, node.varname))
+            return
 
-        elif isinstance(node, decision_tree.SetToBottom):
+        if isinstance(node, decision_tree.SetToBottom):
             self.output.ops.append(SetToBottom(lineno, node.index))
+            return
 
-        elif isinstance(node, decision_tree.GetFromBottom):
+        if isinstance(node, decision_tree.GetFromBottom):
             self.output.ops.append(GetFromBottom(lineno, node.index))
+            return
 
-        elif isinstance(node, decision_tree.GetAttr):
+        if isinstance(node, decision_tree.GetAttr):
             self.output.ops.append(GetAttr(
                 lineno, node.tybe,
                 self.attrib_index(node.tybe, node.attrname)))
+            return
 
-        elif isinstance(node, decision_tree.StrConstant):
+        if isinstance(node, decision_tree.StrConstant):
             self.output.ops.append(StrConstant(lineno, node.python_string))
+            return
 
-        elif isinstance(node, decision_tree.IntConstant):
+        if isinstance(node, decision_tree.IntConstant):
             self.output.ops.append(IntConstant(lineno, node.python_int))
+            return
 
-        elif isinstance(node, decision_tree.Equal):
-            self.output.ops.append(Equal(lineno))
-
-        elif isinstance(node, decision_tree.Plus):
-            self.output.ops.append(Plus(lineno))
-
-        elif isinstance(node, decision_tree.CallFunction):
+        if isinstance(node, decision_tree.CallFunction):
             self.output.ops.append(CallFunction(
                 lineno, node.how_many_args))
+            return
 
-        elif isinstance(node, decision_tree.StrJoin):
+        if isinstance(node, decision_tree.StrJoin):
             self.output.ops.append(StrJoin(
                 lineno, node.how_many_strings))
+            return
 
-        elif isinstance(node, decision_tree.PopOne):
-            self.output.ops.append(PopOne(lineno))
-
-        elif isinstance(node, decision_tree.PushDummy):
-            self.output.ops.append(PushDummy(lineno))
-
-        elif isinstance(node, decision_tree.CreateFunction):
+        if isinstance(node, decision_tree.CreateFunction):
             function_opcode = OpCode(
                 len(node.functype.argtypes),
                 decision_tree.get_max_stack_size(node.body_root_node),
@@ -207,12 +216,9 @@ class _OpCoder:
             opcoder.opcode_tree(node.body_root_node)
             self.output.ops.append(CreateFunction(
                 lineno, node.functype, function_opcode))
+            return
 
-        elif isinstance(node, decision_tree.StoreReturnValue):
-            self.output.ops.append(StoreReturnValue(lineno))
-
-        else:
-            raise NotImplementedError(repr(node))
+        raise NotImplementedError(repr(node))
 
     def opcode_tree(self, node):
         while node is not None:
