@@ -89,27 +89,6 @@ while TRUE:
         assert isinstance(next(nodes), decision_tree.CallFunction)
 
 
-def count_decisions(root_node):
-    return sum(1 for node in decision_tree.get_all_nodes(root_node)
-               if isinstance(node, decision_tree.BoolDecision))
-
-
-def test_bool_constant_decisions_negation(compiler):
-    root_node = compiler.create_tree('''
-# may need to be replaced with something more complicated if optimizer gets
-# better later
-if 1 != 2:
-    print("a")
-else:
-    print("b")
-''')
-
-    assert count_decisions(root_node) == 2
-    optimizer.optimize(root_node, None)
-    assert count_decisions(root_node) == 1
-    # TODO: test content of resulting tree
-
-
 def test_useless_variable(compiler, capsys):
     root_node = compiler.create_tree('''
 let garbage = "a"
@@ -167,7 +146,7 @@ print(three.to_string())
 
 def test_function_bodies_get_optimized(compiler):
     start_node = compiler.create_tree('''
-let f = (Bool b) -> Str:
+let f = (Bool b) -> void:
     while TRUE:
         print("I'll never return haha")
 ''')
@@ -182,6 +161,33 @@ let f = (Bool b) -> Str:
         assert isinstance(next(nodes), decision_tree.GetBuiltinVar)  # print
         assert isinstance(next(nodes), decision_tree.StrConstant)
         assert isinstance(next(nodes), decision_tree.CallFunction)
+
+
+def _count_decisions(root_node):
+    return sum(1 for node in decision_tree.get_all_nodes(root_node)
+               if isinstance(node, decision_tree.TwoWayDecision))
+
+
+def _find_merge_after_decision(start_node):
+    [decision] = (node for node in decision_tree.get_all_nodes(start_node)
+                  if isinstance(node, decision_tree.TwoWayDecision))
+    return decision_tree.find_merge([decision.then, decision.otherwise])
+
+
+def test_similar_nodes(compiler):
+    start_node = compiler.create_tree('''
+if 1 + 1 == 2:
+    print("A")
+else:
+    print("B")
+print("C")
+''')
+    assert _count_decisions(start_node) == 2
+
+    optimizer.optimize(start_node, None)
+    assert _count_decisions(start_node) == 1
+    common_to_print_a_and_b = _find_merge_after_decision(start_node)
+    assert isinstance(common_to_print_a_and_b, decision_tree.CallFunction)
 
 
 def test_function_doesnt_return_a_value_error(compiler):
@@ -243,3 +249,41 @@ let f = (Str s) -> void:
     print(s)
 ''')
     optimizer.optimize(root_node, None)
+
+
+def test_booldecision_before_truefalse(compiler):
+    start_node = compiler.create_tree('''
+let and = (Bool a, Bool b) -> Bool:
+    if a:
+        if b:
+            return TRUE
+    return FALSE
+''')
+    optimizer.optimize(start_node, None)
+    and_start = start_node.next_node.body_root_node
+
+    #     Start
+    #       |
+    #       a
+    #       |
+    #  BoolDecision
+    #  yes/     \no
+    #    /       \
+    #   b      FALSE
+    #    \     /
+    #     \   /
+    # StoreReturnValue
+    #       |
+    #      ...
+
+    assert isinstance(and_start, decision_tree.Start)
+    assert isinstance(and_start.next_node, decision_tree.GetFromBottom)
+    decision = and_start.next_node.next_node
+
+    assert isinstance(decision, decision_tree.BoolDecision)
+    assert isinstance(decision.then, decision_tree.GetFromBottom)
+    assert isinstance(decision.otherwise, decision_tree.GetBuiltinVar)
+    assert decision.otherwise.varname == 'FALSE'
+
+    assert isinstance(decision.then.next_node, decision_tree.StoreReturnValue)
+    assert decision.then.next_node is decision.otherwise.next_node

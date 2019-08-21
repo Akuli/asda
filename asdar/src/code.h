@@ -20,6 +20,7 @@ enum CodeOpKind {
 	CODE_BOOLNEG,
 	CODE_JUMP,
 	CODE_JUMPIF,
+	CODE_JUMPIFEQ,
 	CODE_STRJOIN,
 	CODE_THROW,
 	CODE_SETMETHODS2CLASS,
@@ -45,7 +46,6 @@ enum CodeOpKind {
 	CODE_INT_SUB,   // x-y
 	CODE_INT_MUL,   // x*y
 	CODE_INT_NEG,   // -x
-	CODE_INT_EQ,    // x == y
 };
 
 struct CodeOp;

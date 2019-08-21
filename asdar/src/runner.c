@@ -258,6 +258,21 @@ static bool run_jumpif(struct Runner *rnr, const struct CodeOp *op)
 	return true;
 }
 
+static bool run_jumpifeq(struct Runner *rnr, const struct CodeOp *op)
+{
+	IntObject *x = (IntObject *)*--rnr->stacktop;
+	IntObject *y = (IntObject *)*--rnr->stacktop;
+
+	if (intobj_cmp(x, y) == 0)
+		rnr->opidx = op->data.jump_idx;
+	else
+		rnr->opidx++;
+
+	OBJECT_DECREF(x);
+	OBJECT_DECREF(y);
+	return true;
+}
+
 static bool run_strjoin(struct Runner *rnr, const struct CodeOp *op)
 {
 	DEBUG_PRINTF("string join of %zu strings\n", (size_t)op->data.strjoin_nstrs);
@@ -448,19 +463,6 @@ static bool run_int_neg(struct Runner *rnr, const struct CodeOp *op)
 	return true;
 }
 
-static bool run_int_eq(struct Runner *rnr, const struct CodeOp *op)
-{
-	IntObject *x = (IntObject *)*--rnr->stacktop;
-	IntObject *y = (IntObject *)*--rnr->stacktop;
-	BoolObject *res = boolobj_c2asda(intobj_cmp(x, y) == 0);
-	*rnr->stacktop++ = (Object *)res;
-	OBJECT_DECREF(x);
-	OBJECT_DECREF(y);
-
-	rnr->opidx++;
-	return true;
-}
-
 
 static bool run_one_op(struct Runner *rnr, const struct CodeOp *op)
 {
@@ -479,6 +481,7 @@ static bool run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_BOOLNEG, run_boolneg);
 		BOILERPLATE(CODE_JUMP, run_jump);
 		BOILERPLATE(CODE_JUMPIF, run_jumpif);
+		BOILERPLATE(CODE_JUMPIFEQ, run_jumpifeq);
 		BOILERPLATE(CODE_STRJOIN, run_strjoin);
 		BOILERPLATE(CODE_POP1, run_pop1);
 		BOILERPLATE(CODE_THROW, run_throw);
@@ -497,7 +500,6 @@ static bool run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_INT_SUB, run_integer_binary_operation);
 		BOILERPLATE(CODE_INT_MUL, run_integer_binary_operation);
 		BOILERPLATE(CODE_INT_NEG, run_int_neg);
-		BOILERPLATE(CODE_INT_EQ, run_int_eq);
 	#undef BOILERPLATE
 	}
 

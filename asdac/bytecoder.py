@@ -29,17 +29,18 @@ STORE_RETURN_VALUE = b'R'
 THROW = b't'
 YIELD = b'Y'
 BOOL_NEGATION = b'!'
-JUMP_IF = b'J'
-JUMP = b'K'
 SET_METHODS_TO_CLASS = b'S'
 END_OF_BODY = b'E'
+
+JUMP = b'K'
+JUMP_IF = b'J'
+JUMP_IF_EQUAL = b'='
 
 PLUS = b'+'
 MINUS = b'-'
 PREFIX_MINUS = b'_'
 TIMES = b'*'
 # DIVIDE = b'/'
-EQUAL = b'='
 
 ADD_ERROR_HANDLER = b'h'
 REMOVE_ERROR_HANDLER = b'H'
@@ -293,11 +294,13 @@ class _BytecodeWriter:
             self.bytecode.add_byte(STORE_RETURN_VALUE)
             return
 
-        if isinstance(op, (opcoder.Jump, opcoder.JumpIf)):
+        if isinstance(op, (opcoder.Jump, opcoder.JumpIf, opcoder.JumpIfEqual)):
             if isinstance(op, opcoder.Jump):
                 self.bytecode.add_byte(JUMP)
             elif isinstance(op, opcoder.JumpIf):
                 self.bytecode.add_byte(JUMP_IF)
+            elif isinstance(op, opcoder.JumpIfEqual):
+                self.bytecode.add_byte(JUMP_IF_EQUAL)
             else:  # pragma: no cover
                 raise RuntimeError
             self.bytecode.add_uint16(self.jumpmarker2index[op.marker])
@@ -370,7 +373,6 @@ class _BytecodeWriter:
             (opcoder.PrefixMinus, PREFIX_MINUS),
             (opcoder.Times, TIMES),
             # (opcoder.Divide, DIVIDE),
-            (opcoder.Equal, EQUAL),
             (opcoder.RemoveErrorHandler, REMOVE_ERROR_HANDLER),
             (opcoder.PushFinallyStateOk, PUSH_FINALLY_STATE_OK),
             (opcoder.PushFinallyStateError, PUSH_FINALLY_STATE_ERROR),

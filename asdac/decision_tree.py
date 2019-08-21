@@ -179,12 +179,6 @@ class PopOne(PassThroughNode):
         self.is_popping_a_dummy = is_popping_a_dummy
 
 
-class Equal(PassThroughNode):
-
-    def __init__(self, **kwargs):
-        super().__init__(use_count=2, size_delta=-1, **kwargs)
-
-
 class Plus(PassThroughNode):
 
     def __init__(self, **kwargs):
@@ -227,7 +221,9 @@ class CallFunction(PassThroughNode):
             use_count=use_count,
             size_delta=(-use_count + int(bool(is_returning))),
             **kwargs)
+
         self.how_many_args = how_many_args
+        self.is_returning = is_returning
 
 
 class CreateFunction(PassThroughNode):
@@ -303,6 +299,12 @@ class BoolDecision(TwoWayDecision):
 
     def __init__(self, **kwargs):
         super().__init__(use_count=1, size_delta=-1, **kwargs)
+
+
+class EqualDecision(TwoWayDecision):
+
+    def __init__(self, **kwargs):
+        super().__init__(use_count=2, size_delta=-2, **kwargs)
 
 
 def _get_debug_string(node):
@@ -387,7 +389,7 @@ def _items_in_all_sets(sets):
 # TODO: better algorithm? i found this
 # https://www.hackerrank.com/topics/lowest-common-ancestor
 # but doesn't seem to handle cyclic graphs?
-def find_merge(nodes, callback=(lambda node: node.get_jumps_to())):
+def find_merge(nodes, *, callback=(lambda node: node.get_jumps_to())):
     # {node: set of other nodes reachable from the node}
     reachable_dict = {node: {node} for node in nodes}
 
@@ -576,17 +578,6 @@ class _TreeCreator:
             len(call.args), (call.function.type.returntype is not None),
             location=call.location))
 
-    # inefficient, but gets optimized away
-    def add_bool_negation(self):
-        decision = BoolDecision()
-        decision.set_then(GetBuiltinVar('FALSE'))
-        decision.set_otherwise(GetBuiltinVar('TRUE'))
-        self.set_next_node(decision)
-        self.set_next_node = lambda node: (
-            decision.then.set_next_node(node),
-            decision.otherwise.set_next_node(node),
-        )
-
     def _get_varlist_index(self, local_var: cooked_ast.Variable):
         assert local_var.level == self.local_vars_level
         if local_var not in self.local_vars_list:
@@ -620,22 +611,34 @@ class _TreeCreator:
             self.add_pass_through_node(node)
 
         elif isinstance(expression, (
-                cooked_ast.Equal, cooked_ast.NotEqual,
-                cooked_ast.Plus, cooked_ast.Times)):
+                cooked_ast.Plus, cooked_ast.Times,
+                cooked_ast.Equal, cooked_ast.NotEqual)):
             self.do_expression(expression.lhs)
             self.do_expression(expression.rhs)
 
-            if isinstance(expression, cooked_ast.Equal):
-                self.add_pass_through_node(Equal(**boilerplate))
-            elif isinstance(expression, cooked_ast.NotEqual):
-                self.add_pass_through_node(Equal(**boilerplate))
-                self.add_bool_negation()
-            elif isinstance(expression, cooked_ast.Plus):
+            if isinstance(expression, cooked_ast.Plus):
                 self.add_pass_through_node(Plus(**boilerplate))
             elif isinstance(expression, cooked_ast.Times):
                 self.add_pass_through_node(Times(**boilerplate))
             else:
-                raise RuntimeError("wat")
+                # push True or False to stack, usually this gets optimized into
+                # something that doesn't involve bool objects at all
+                eq = EqualDecision(**boilerplate)
+
+                if isinstance(expression, cooked_ast.Equal):
+                    eq.set_then(GetBuiltinVar('TRUE'))
+                    eq.set_otherwise(GetBuiltinVar('FALSE'))
+                elif isinstance(expression, cooked_ast.NotEqual):
+                    eq.set_then(GetBuiltinVar('FALSE'))
+                    eq.set_otherwise(GetBuiltinVar('TRUE'))
+                else:
+                    raise RuntimeError("wuut")      # pragma: no cover
+
+                self.set_next_node(eq)
+                self.set_next_node = lambda node: (
+                    eq.then.set_next_node(node),
+                    eq.otherwise.set_next_node(node),
+                )
 
         elif isinstance(expression, cooked_ast.StrJoin):
             for part in expression.parts:

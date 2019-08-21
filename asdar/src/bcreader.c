@@ -36,6 +36,7 @@
 #define POP_ONE 'P'
 #define JUMP 'K'
 #define JUMPIF 'J'
+#define JUMPIFEQ '='
 #define STRING_JOIN 'j'
 #define NON_NEGATIVE_INT_CONSTANT '1'
 #define NEGATIVE_INT_CONSTANT '2'
@@ -44,7 +45,6 @@
 #define INT_SUB '-'
 #define INT_NEG '_'
 #define INT_MUL '*'
-#define INT_EQ '='
 #define ADD_ERROR_HANDLER 'h'
 #define REMOVE_ERROR_HANDLER 'H'
 #define CREATE_FUNCTION 'f'
@@ -554,8 +554,10 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 		res->kind = CODE_CALLFUNC;
 		return read_bytes(bcr, &res->data.callfunc_nargs, 1);
 	case CALL_CONSTRUCTOR: return read_construction(bcr, res);
-	case JUMP:   res->kind = CODE_JUMP;   return read_uint16(bcr, &res->data.jump_idx);
-	case JUMPIF: res->kind = CODE_JUMPIF; return read_uint16(bcr, &res->data.jump_idx);
+
+	case JUMP:     res->kind = CODE_JUMP;     return read_uint16(bcr, &res->data.jump_idx);
+	case JUMPIF:   res->kind = CODE_JUMPIF;   return read_uint16(bcr, &res->data.jump_idx);
+	case JUMPIFEQ: res->kind = CODE_JUMPIFEQ; return read_uint16(bcr, &res->data.jump_idx);
 
 	case NON_NEGATIVE_INT_CONSTANT:
 	case NEGATIVE_INT_CONSTANT:
@@ -591,7 +593,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case INT_SUB: res->kind = CODE_INT_SUB; return true;
 	case INT_NEG: res->kind = CODE_INT_NEG; return true;
 	case INT_MUL: res->kind = CODE_INT_MUL; return true;
-	case INT_EQ: res->kind = CODE_INT_EQ; return true;
 
 	case ADD_ERROR_HANDLER: return read_add_error_handler(bcr, res);
 	case REMOVE_ERROR_HANDLER: res->kind = CODE_EH_RM; return true;

@@ -46,6 +46,7 @@ Throw = _op_class('Throw', [])
 BoolNegation = _op_class('BoolNegation', [])
 Jump = _op_class('Jump', ['marker'])
 JumpIf = _op_class('JumpIf', ['marker'])
+JumpIfEqual = _op_class('JumpIfEqual', ['marker'])
 SetMethodsToClass = _op_class('SetMethodsToClass', ['klass',
                                                     'how_many_methods'])
 
@@ -54,7 +55,6 @@ Minus = _op_class('Minus', [])
 PrefixMinus = _op_class('PrefixMinus', [])
 Times = _op_class('Times', [])
 # Divide = _op_class('Divide', [])
-Equal = _op_class('Equal', [])
 
 # items are tuples: (jumpto_marker, errortype, errorvarlevel, errorvar)
 AddErrorHandler = _op_class('AddErrorHandler', ['items'])
@@ -158,7 +158,6 @@ class _OpCoder:
             return
 
         simple = [
-            (decision_tree.Equal, Equal),
             (decision_tree.Plus, Plus),
             (decision_tree.Times, Times),
             (decision_tree.PushDummy, PushDummy),
@@ -236,10 +235,7 @@ class _OpCoder:
                 self.opcode_passthroughnode(node)
                 node = node.next_node
 
-            elif isinstance(node, decision_tree.BoolDecision):
-                then_marker = JumpMarker()
-                done_marker = JumpMarker()
-
+            elif isinstance(node, decision_tree.TwoWayDecision):
                 # this does not output the same bytecode twice
                 # for example, consider this code
                 #
@@ -278,7 +274,16 @@ class _OpCoder:
                 #
                 # this is not ideal, could be pseudo-optimized to do less
                 # jumps, but that is likely not a bottleneck so why bother
-                self.output.ops.append(JumpIf(lineno, then_marker))
+                then_marker = JumpMarker()
+                done_marker = JumpMarker()
+
+                if isinstance(node, decision_tree.BoolDecision):
+                    self.output.ops.append(JumpIf(lineno, then_marker))
+                elif isinstance(node, decision_tree.EqualDecision):
+                    self.output.ops.append(JumpIfEqual(lineno, then_marker))
+                else:
+                    raise RuntimeError("oh no")         # pragma: no cover
+
                 self.opcode_tree(node.otherwise)
                 self.output.ops.append(Jump(None, done_marker))
                 self.output.ops.append(then_marker)

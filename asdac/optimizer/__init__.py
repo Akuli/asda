@@ -1,7 +1,8 @@
 import itertools
 
 from asdac import decision_tree
-from asdac.optimizer import decisions, functions, unreachable_nodes, variables
+from asdac.optimizer import (
+    copy_pasta, decisions, functions, unreachable_nodes, variables)
 
 
 _function_lists = [
@@ -12,7 +13,7 @@ _function_lists = [
 
     # start by optimizing gently so that other things e.g. understand that
     # a loop like 'while TRUE' never ends
-    [decisions.optimize_bool_constant_decisions],
+    [decisions.optimize_truefalse_before_booldecision],
 
     # TODO: this haxor shouldn't be needed
     # this code doesn't compile without haxor:
@@ -30,7 +31,9 @@ _function_lists = [
 
     # now we can actually optimize
     # In the future, these steps could be skipped for e.g. debugging
-    [variables.optimize_temporary_vars,
+    [copy_pasta.optimize_similar_nodes,
+     decisions.optimize_booldecision_before_truefalse,
+     variables.optimize_temporary_vars,
      variables.optimize_garbage_dummies,
      unreachable_nodes.optimize_unreachable_nodes],
 ]
