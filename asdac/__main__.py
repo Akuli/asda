@@ -234,7 +234,6 @@ def main():
         '--compiled-dir', default='asda-compiled',
         help="directory for compiled asda files, default is ./asda-compiled")
     parser.add_argument(
-        # TODO: respect this flag
         '--always-recompile', action='store_true', default=False,
         help=("always compile all files, even if they have already been "
               "compiled and the compiled files are newer than the source "

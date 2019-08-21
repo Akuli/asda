@@ -625,7 +625,7 @@ class _Chef:
     #           else:
     #               body4
     #
-    # TODO: use functools.reduce
+    # TODO: use functools.reduce?
     def cook_if_statement(self, raw):
         raw_cond, raw_if_body = raw.ifs[0]
         cond = self.cook_expression(raw_cond)

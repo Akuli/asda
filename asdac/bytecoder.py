@@ -516,7 +516,6 @@ class _BytecodeReader:
         assert relative_to.is_absolute()
         return common.resolve_dotdots(relative_to / relative_path)
 
-    # TODO: module types?
     def read_type(self, *, name_hint='<unknown name>'):
         byte = self._read(1)
 
