@@ -26,7 +26,6 @@ CALL_CONSTRUCTOR = b')'
 STR_JOIN = b'j'
 POP_ONE = b'P'
 STORE_RETURN_VALUE = b'R'
-DIDNT_RETURN_ERROR = b'd'   # TODO: check at compile time
 THROW = b't'
 YIELD = b'Y'
 BOOL_NEGATION = b'!'
@@ -367,7 +366,6 @@ class _BytecodeWriter:
         simple_things = [
             (opcoder.PopOne, POP_ONE),
             (opcoder.BoolNegation, BOOL_NEGATION),
-            (opcoder.DidntReturnError, DIDNT_RETURN_ERROR),
             (opcoder.Plus, PLUS),
             (opcoder.Minus, MINUS),
             (opcoder.PrefixMinus, PREFIX_MINUS),

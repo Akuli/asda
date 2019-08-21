@@ -46,7 +46,6 @@ Throw = _op_class('Throw', [])
 BoolNegation = _op_class('BoolNegation', [])
 Jump = _op_class('Jump', ['marker'])
 JumpIf = _op_class('JumpIf', ['marker'])
-DidntReturnError = _op_class('DidntReturnError', [])
 SetMethodsToClass = _op_class('SetMethodsToClass', ['klass',
                                                     'how_many_methods'])
 

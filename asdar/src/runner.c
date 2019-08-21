@@ -306,13 +306,6 @@ static bool run_storeretval(struct Runner *rnr, const struct CodeOp *op)
 	return true;
 }
 
-static bool run_didntreturnerror(struct Runner *rnr, const struct CodeOp *op)
-{
-	// TODO: create a nicer error type for this
-	errobj_set(rnr->interp, &errobj_type_value, "function didn't return");
-	return false;
-}
-
 static bool run_throw(struct Runner *rnr, const struct CodeOp *op)
 {
 	Object *e = *--rnr->stacktop;
@@ -491,7 +484,6 @@ static bool run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_THROW, run_throw);
 		BOILERPLATE(CODE_CREATEFUNC, run_createfunc);
 		BOILERPLATE(CODE_STORERETVAL, run_storeretval);
-		BOILERPLATE(CODE_DIDNTRETURNERROR, run_didntreturnerror);
 		BOILERPLATE(CODE_SETMETHODS2CLASS, run_setmethods2class);
 		BOILERPLATE(CODE_EH_ADD, run_eh_add);
 		BOILERPLATE(CODE_EH_RM, run_eh_rm);

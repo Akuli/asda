@@ -49,7 +49,6 @@
 #define REMOVE_ERROR_HANDLER 'H'
 #define CREATE_FUNCTION 'f'
 #define STORE_RETURN_VALUE 'R'
-#define DIDNT_RETURN_ERROR 'd'     // TODO: do this in compiler not in interpreter
 #define SET_METHODS_TO_CLASS 'S'
 #define END_OF_BODY 'E'
 #define PUSH_FINALLY_STATE_OK '3'
@@ -584,7 +583,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case THROW: res->kind = CODE_THROW; return true;
 
 	case STORE_RETURN_VALUE: res->kind = CODE_STORERETVAL; return true;
-	case DIDNT_RETURN_ERROR: res->kind = CODE_DIDNTRETURNERROR; return true;
 
 	case SET_METHODS_TO_CLASS: return read_setmethods2class(bcr, res);
 
