@@ -587,22 +587,6 @@ class _TreeCreator:
             self.local_vars_list.append(local_var)
         return self.local_vars_list.index(local_var)
 
-    def _check_always_returns_a_value(self, node, checked, error_location):
-        if node in checked:
-            return
-        checked.add(node)
-
-        if not isinstance(node, StoreReturnValue):
-            for subnode in node.get_jumps_to_including_nones():
-                if subnode is None:
-                    # FIXME: message and location
-                    raise common.CompileError(
-                        "this function should return a value in all cases, "
-                        "but seems like it doesn't",
-                        error_location)
-                self._check_always_returns_a_value(
-                    subnode, checked, error_location)
-
     def do_expression(self, expression):
         assert expression.type is not None
         boilerplate = {'location': expression.location}
@@ -661,10 +645,6 @@ class _TreeCreator:
             creator.add_pass_through_node(Start(expression.argvars.copy()))
             creator.do_body(expression.body)
             creator.add_bottom_dummies()
-            if expression.type.returntype is not None:
-                self._check_always_returns_a_value(
-                    creator.root_node, set(), expression.location)
-
             self.add_pass_through_node(CreateFunction(
                 expression.type, creator.root_node, **boilerplate))
 

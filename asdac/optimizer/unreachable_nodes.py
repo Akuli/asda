@@ -8,7 +8,7 @@
 from asdac import decision_tree
 
 
-def optimize_unreachable_nodes(root_node, all_nodes):
+def optimize_unreachable_nodes(root_node, all_nodes, createfunc_node):
     # all_nodes are actually all the reachable nodes
     #
     # variables are named like in this pic:

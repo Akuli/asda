@@ -1,19 +1,13 @@
 from asdac import common, decision_tree
 
 
-def _find_gets_for_set(set_node):
-    return (node for node in decision_tree.get_all_nodes(set_node)
-            if isinstance(node, decision_tree.GetFromBottom)
-            and node.var is set_node.var)
-
-
 # you can assume that the variable is set after any visited node
-def _find_sets_for_get(node, get_node, visited_nodes, start_node):
+def _check_matching_sets_exist(node, get_node, visited_nodes, start_node):
     is_initial_argument_value = (
         node is start_node and get_node.var in start_node.argvars)
 
+    # FIXME: does this handle unreachable nodes correctly?
     if (not node.jumped_from) and (not is_initial_argument_value):
-        # FIXME: does this handle unreachable nodes correctly?
         # TODO: show variable definition location in error message
         # TODO: mention this error in spec
         raise common.CompileError(
@@ -25,13 +19,41 @@ def _find_sets_for_get(node, get_node, visited_nodes, start_node):
     if (
       isinstance(node, decision_tree.SetToBottom) and
       node.var is get_node.var):
+        return
+
+    for ref in node.jumped_from:
+        if ref.objekt not in visited_nodes:
+            _check_matching_sets_exist(
+                ref.objekt, get_node, visited_nodes, start_node)
+
+
+def check_variables_set(start_node, all_nodes, createfunc_node):
+    for node in all_nodes:
+        if isinstance(node, decision_tree.GetFromBottom):
+            _check_matching_sets_exist(node, node, set(), start_node)
+
+    return False
+
+
+def _find_gets_for_set(set_node):
+    # TODO: handle assigning to the same variable multiple times
+    return (node for node in decision_tree.get_all_nodes(set_node)
+            if isinstance(node, decision_tree.GetFromBottom)
+            and node.var is set_node.var)
+
+
+def _find_sets_for_var(node, var, visited_nodes):
+    visited_nodes.add(node)
+
+    if (
+      isinstance(node, decision_tree.SetToBottom) and
+      node.var is var):
         yield node
         return
 
     for ref in node.jumped_from:
         if ref.objekt not in visited_nodes:
-            yield from _find_sets_for_get(
-                ref.objekt, get_node, visited_nodes, start_node)
+            yield from _find_sets_for_var(ref.objekt, var, visited_nodes)
 
 
 def _sets_and_gets_to_dicts(all_nodes, start_node):
@@ -45,8 +67,7 @@ def _sets_and_gets_to_dicts(all_nodes, start_node):
     for node in all_nodes:
         if isinstance(node, decision_tree.GetFromBottom):
             assert node not in get2sets
-            get2sets[node] = set(_find_sets_for_get(
-                node, node, set(), start_node))
+            get2sets[node] = set(_find_sets_for_var(node, node.var, set()))
             # get2sets[node] may be empty for function arguments
 
     return (set2gets, get2sets)
@@ -66,7 +87,7 @@ def _optimize_set_once_get_once(set_node, get_node):
     return False
 
 
-def optimize_temporary_vars(root_node, all_nodes):
+def optimize_temporary_vars(root_node, all_nodes, createfunc_node):
     assert isinstance(root_node, decision_tree.Start)
     set2gets, get2sets = _sets_and_gets_to_dicts(all_nodes, root_node)
     did_something = False
@@ -77,7 +98,7 @@ def optimize_temporary_vars(root_node, all_nodes):
             print("warning: value of variable '%s' is set, but never used"
                   % set_node.var.name)
 
-            # replace setvar with ignoring the value
+            # replace SetToBottom with ignoring the value
             # TODO: mark some things as side-effect-free and implement
             #       optimizing PopOne
             ignore_value = decision_tree.PopOne()
@@ -109,7 +130,7 @@ def _append_to_inner_list(lol, lol_index, value):
 
 
 # optimize_away_temporary_vars() leaves unnecessary dummies around
-def optimize_garbage_dummies(root_node, all_nodes):
+def optimize_garbage_dummies(root_node, all_nodes, createfunc_node):
     assert isinstance(root_node, decision_tree.Start)
 
     # pushes contains PushDummy nodes, or None for arguments

@@ -49,7 +49,7 @@ def source2bytecode(compilation: common.Compilation):
 
     compilation.messager(3, "Optimizing")
     decision_tree.graphviz(root_node, 'before_optimization')
-    optimizer.optimize(root_node)
+    optimizer.optimize(root_node, None)
     decision_tree.graphviz(root_node, 'after_optimization')
 
     compilation.messager(3, "Creating opcode")

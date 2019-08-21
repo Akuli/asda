@@ -2,7 +2,7 @@ from asdac import cooked_ast, decision_tree
 
 
 # handles e.g. loops and ifs with TRUE or FALSE as a condition
-def optimize_bool_constant_decisions(root_node, all_nodes):
+def optimize_bool_constant_decisions(root_node, all_nodes, createfunc_node):
     getvars_before_decisions = {
         node for node in all_nodes
         if isinstance(node, decision_tree.GetBuiltinVar)
