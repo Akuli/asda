@@ -57,7 +57,7 @@ class Node:
     size_delta tells how many objects this node pushes to the stack (positive)
     and pops from stack (negative). For example, if your function pops two
     objects, does something with them, and pushes the result to the stack, you
-    should set size_delta to -2 + 1 = 0.
+    should set size_delta to -2 + 1 = -1.
 
     use_count tells how many topmost objects of the stack this node uses. In
     the above example, it should be 2.
