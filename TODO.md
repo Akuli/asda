@@ -1,4 +1,3 @@
-- make sure that value-returning functions always return a value
 - fix function closures
 - fix error handling stufs
 - asdac's bytecode reading stuff is broken

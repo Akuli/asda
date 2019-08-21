@@ -16,6 +16,6 @@ def optimize_bool_constant_decisions(root_node, all_nodes, createfunc_node):
         elif node.varname == 'FALSE':
             decision_tree.replace_node(node, node.next_node.otherwise)
         else:
-            raise RuntimeError("wut")
+            raise RuntimeError("wut")       # pragma: no cover
 
     return bool(getvars_before_decisions)

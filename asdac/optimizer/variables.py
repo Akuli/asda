@@ -119,6 +119,7 @@ def optimize_temporary_vars(root_node, all_nodes, createfunc_node):
 def _set_to_list(lizt, index, value):
     while len(lizt) <= index:
         lizt.append(None)
+    assert lizt[index] is None
     lizt[index] = value
 
 
@@ -151,17 +152,18 @@ def optimize_garbage_dummies(root_node, all_nodes, createfunc_node):
                                decision_tree.GetFromBottom)):
             _append_to_inner_list(uses, node.index, node)
 
+    # pops may be missing because e.g. infinite loop
+    while len(pops) < len(pushes):
+        pops.append(None)
     assert len(pushes) == len(pops)
 
-    # needed because all dummies have PushDummy and PopOne but some might have
-    # no uses
+    # some dummies might have no uses
     while len(uses) < len(pushes):
         uses.append([])
     assert len(uses) == len(pops)
 
     assert all(push is None for push in pushes[:len(root_node.argvars)])
     assert None not in pushes[len(root_node.argvars):]
-    assert None not in pops
     assert None not in uses
 
     if all(uses[len(root_node.argvars):]):
@@ -175,7 +177,9 @@ def optimize_garbage_dummies(root_node, all_nodes, createfunc_node):
             continue
 
         decision_tree.replace_node(pushes[i], pushes[i].next_node)
-        decision_tree.replace_node(pops[i], pops[i].next_node)
+        if pops[i] is not None:
+            decision_tree.replace_node(pops[i], pops[i].next_node)
+
         del pushes[i]
         del pops[i]
         del uses[i]
