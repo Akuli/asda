@@ -721,14 +721,10 @@ class _TreeCreator:
                 end_decision.set_otherwise(node),
             )
 
-        elif isinstance(statement, cooked_ast.VoidReturn):
-            self.exit_points.append(self.set_next_node)
-            self.set_next_node = lambda node: None
-
-        # TODO: make sure that value-returning functions always return a value
-        elif isinstance(statement, cooked_ast.ValueReturn):
-            self.do_expression(statement.value)
-            self.add_pass_through_node(StoreReturnValue(**boilerplate))
+        elif isinstance(statement, cooked_ast.Return):
+            if statement.value is not None:
+                self.do_expression(statement.value)
+                self.add_pass_through_node(StoreReturnValue(**boilerplate))
             self.exit_points.append(self.set_next_node)
             self.set_next_node = lambda node: None
 

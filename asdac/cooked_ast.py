@@ -20,8 +20,7 @@ GetFromModule = _astclass('GetFromModule', ['compilation', 'name'])
 CreateFunction = _astclass('CreateFunction', ['argvars', 'body'])
 CreateLocalVar = _astclass('CreateLocalVar', ['var'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
-VoidReturn = _astclass('VoidReturn', [])
-ValueReturn = _astclass('ValueReturn', ['value'])
+Return = _astclass('Return', ['value'])    # value can be None
 Throw = _astclass('Throw', ['value'])
 IfStatement = _astclass('IfStatement', ['cond', 'if_body', 'else_body'])
 IfExpression = _astclass('IfExpression', ['cond', 'true_expr', 'false_expr'])
@@ -573,7 +572,7 @@ class _Chef:
                 raise common.CompileError(
                     "cannot return a value from a void function",
                     raw.value.location)
-            return VoidReturn(raw.location, None)
+            return Return(raw.location, None, None)
         if raw.value is None:
             raise common.CompileError("missing return value", raw.location)
 
@@ -583,7 +582,7 @@ class _Chef:
                 ("should return %s, not %s"
                  % (self.returntype.name, value.type.name)),
                 value.location)
-        return ValueReturn(raw.location, None, value)
+        return Return(raw.location, None, value)
 
     def cook_throw(self, raw):
         value = self.cook_expression(raw.value)
