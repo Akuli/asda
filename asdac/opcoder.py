@@ -85,8 +85,7 @@ class JumpMarker(common.Marker):
 # debugging tip: pprint.pprint(opcode.ops)
 class OpCode:
 
-    def __init__(self, nargs, max_stack_size):
-        self.nargs = nargs
+    def __init__(self, max_stack_size):
         self.ops = []
         self.max_stack_size = max_stack_size
 
@@ -207,9 +206,7 @@ class _OpCoder:
 
         if isinstance(node, decision_tree.CreateFunction):
             function_opcode = OpCode(
-                len(node.functype.argtypes),
-                decision_tree.get_max_stack_size(node.body_root_node),
-            )
+                decision_tree.get_max_stack_size(node.body_root_node))
             opcoder = _OpCoder(
                 function_opcode, self.compilation, self.line_start_offsets)
             opcoder.opcode_tree(node.body_root_node)
@@ -304,10 +301,7 @@ def create_opcode(compilation, root_node, export_vars, source_code):
         line_start_offsets.append(offset)
         offset += len(line)
 
-    # exported symbols are kinda like arguments
-    output = OpCode(len(export_vars),
-                    decision_tree.get_max_stack_size(root_node))
-
+    output = OpCode(decision_tree.get_max_stack_size(root_node))
     _OpCoder(output, compilation, line_start_offsets).opcode_tree(root_node)
 
     import pprint; pprint.pprint(output.ops)
