@@ -61,9 +61,11 @@ def _nodes_are_similar(a: decision_tree.Node, b: decision_tree.Node):
 
 def optimize_similar_nodes(start_node, all_nodes, createfunc_node):
     for node in all_nodes:
-        jumped_from = (ref.objekt for ref in node.jumped_from
-                       if isinstance(ref.objekt, decision_tree.PassThroughNode)
-                       and ref.objekt in all_nodes)
+        jumped_from = (
+            ref.objekt for ref in node.jumped_from
+            if isinstance(ref.objekt, decision_tree.PassThroughNode)
+        )
+
         for a, b in itertools.combinations(jumped_from, 2):
             assert a.next_node is node
             assert b.next_node is node

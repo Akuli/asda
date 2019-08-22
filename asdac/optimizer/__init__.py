@@ -1,8 +1,7 @@
 import itertools
 
 from asdac import decision_tree
-from asdac.optimizer import (
-    copy_pasta, decisions, functions, unreachable_nodes, variables)
+from asdac.optimizer import copy_pasta, decisions, functions, variables
 
 
 _function_lists = [
@@ -15,15 +14,6 @@ _function_lists = [
     # a loop like 'while TRUE' never ends
     [decisions.optimize_truefalse_before_booldecision],
 
-    # TODO: this haxor shouldn't be needed
-    # this code doesn't compile without haxor:
-    #
-    #    if TRUE:
-    #        outer let x = 123
-    #    print("{x}")
-    #
-    [unreachable_nodes.optimize_unreachable_nodes],
-
     # Check all the things. These functions always return False, because they
     # don't actually optimize anything by changing the nodes etc
     [variables.check_variables_set,
@@ -34,9 +24,15 @@ _function_lists = [
     [copy_pasta.optimize_similar_nodes,
      decisions.optimize_booldecision_before_truefalse,
      variables.optimize_temporary_vars,
-     variables.optimize_garbage_dummies,
-     unreachable_nodes.optimize_unreachable_nodes],
+     variables.optimize_garbage_dummies],
 ]
+
+
+# there used to be lots of jumped_from bugs, if there are any then this errors
+def _check_jumped_froms(all_nodes):
+    for node in all_nodes:
+        for ref in node.jumped_from:
+            assert ref.objekt in all_nodes
 
 
 def optimize(root_node, createfunc_node):
@@ -46,6 +42,7 @@ def optimize(root_node, createfunc_node):
         infinite_function_iterator = itertools.cycle(function_list)
         did_nothing_count = 0
         all_nodes = decision_tree.get_all_nodes(root_node)
+        _check_jumped_froms(all_nodes)
 
         # if there are n optimizer functions, then stop when n of them have
         # been called subsequently without any of them doing anything
@@ -55,6 +52,11 @@ def optimize(root_node, createfunc_node):
                 did_something = True
                 did_nothing_count = 0
                 all_nodes = decision_tree.get_all_nodes(root_node)
+                try:
+                    _check_jumped_froms(all_nodes)
+                except AssertionError:
+                    #decision_tree.graphviz(root_node, 'error')
+                    raise
             else:
                 did_nothing_count += 1
 

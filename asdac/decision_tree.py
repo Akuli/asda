@@ -42,6 +42,7 @@ this can be optimized to fit into smaller space because it's repetitive, which
 is one reason for having a decision tree compile step
 """
 
+import collections
 import functools
 import io
 import random
@@ -328,6 +329,32 @@ def _get_debug_string(node):
     return None
 
 
+def _clean_unreachable_nodes(unreachable_head):
+    unreachable = set()
+    to_visit = collections.deque([unreachable_head])
+    did_nothing_count = 0
+
+    while did_nothing_count < len(to_visit):
+        assert to_visit
+        node = to_visit.popleft()
+
+        if all(ref.objekt in unreachable for ref in node.jumped_from):
+            unreachable.add(node)
+            to_visit.extend(node.get_jumps_to())
+            did_nothing_count = 0
+        else:
+            to_visit.append(node)
+            did_nothing_count += 1
+
+    assert unreachable_head in unreachable
+
+    # now to_visit contains reachable nodes that the unreachable nodes jump to
+    for reachable_node in to_visit:
+        for ref in reachable_node.jumped_from.copy():
+            if ref.objekt in unreachable:
+                reachable_node.jumped_from.remove(ref)
+
+
 # to use this, create the new node and set its .next_node or similar
 # then call this function
 def replace_node(old: Node, new: Node):
@@ -336,6 +363,9 @@ def replace_node(old: Node, new: Node):
 
     for ref in old.jumped_from:
         ref.set(new)
+
+    old.jumped_from.clear()
+    _clean_unreachable_nodes(old)
 
 
 # size_dict is like this {node: stack size BEFORE running the node}
@@ -773,8 +803,7 @@ class _TreeCreator:
                 creator.exit_points.clear()
             creator.add_pass_through_node(pop)
 
-        # avoid creating an unreachable Start node
-        # TODO: is this necessary?
+        # avoid creating an unreachable node
         self.root_node.set_next_node(None)
 
         assert isinstance(creator.root_node, Start)

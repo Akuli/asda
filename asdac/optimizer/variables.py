@@ -6,7 +6,6 @@ def _check_matching_sets_exist(node, get_node, visited_nodes, start_node):
     is_initial_argument_value = (
         node is start_node and get_node.var in start_node.argvars)
 
-    # FIXME: does this handle unreachable nodes correctly?
     if (not node.jumped_from) and (not is_initial_argument_value):
         # TODO: show variable definition location in error message
         # TODO: mention this error in spec
