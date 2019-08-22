@@ -51,8 +51,7 @@ int main(int argc, char **argv)
 	}
 
 	Interp interp;
-	bool ok = interp_init(&interp, "argv0 test value");
-	assert(ok);
+	interp_init(&interp, "argv0 test value");
 
 #define RUN_TEST(NAME) do{ \
 	if (test_should_run(&tl, #NAME)) { \
