@@ -1,5 +1,4 @@
 - fix function closures
-    - var level difference >1 with nested functions
     - changing variables
 - fix error handling stufs
 - asdac's bytecode reading stuff is broken

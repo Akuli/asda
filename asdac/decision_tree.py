@@ -641,9 +641,7 @@ class _TreeCreator:
             else:
                 self.local_vars_list.insert(0, local_var)
 
-    def _add_to_closure_vars(self, nonlocal_var):
-        assert nonlocal_var.level == self.local_vars_level - 1    # TODO
-
+    def get_local_closure_var(self, nonlocal_var):
         try:
             return self.closure_vars[nonlocal_var]
         except KeyError:
@@ -661,7 +659,7 @@ class _TreeCreator:
             node = GetBuiltinVar(var.name, **boilerplate)
         else:
             # closure variable
-            local = self._add_to_closure_vars(var)
+            local = self.get_local_closure_var(var)
             self._add_to_varlist(local, append=False)
             node = GetFromBottom(None, local, **boilerplate)
 
