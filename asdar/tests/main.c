@@ -18,8 +18,7 @@ static bool test_should_run(struct TestList *tl, const char *name)
 
 	for (int i = 0; i < tl->ntests; i++) {
 		if (strcmp(tl->testnames[i], name) == 0) {
-			memmove(tl->testnames + i, tl->testnames + i+1, sizeof(const char *) * (unsigned)(tl->ntests - (i+1)));
-			tl->ntests--;
+			tl->testnames[i] = tl->testnames[--tl->ntests];
 			return true;
 		}
 	}
@@ -46,8 +45,7 @@ int main(int argc, char **argv)
 		tl.ntests = argc-1;
 		tl.testnames = malloc(sizeof(tl.testnames[0]) * (unsigned)tl.ntests);
 		assert(tl.testnames);
-		for (int i = 1; i < argc; i++)
-			tl.testnames[i-1] = argv[i];
+		memcpy(tl.testnames, argv+1, (unsigned)(argc-1) * sizeof(argv[0]));
 	}
 
 	Interp interp;
