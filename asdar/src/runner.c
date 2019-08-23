@@ -185,7 +185,7 @@ static bool run_getfrommodule(struct Runner *rnr, const struct CodeOp *op)
 
 static bool run_callfunc(struct Runner *rnr, const struct CodeOp *op)
 {
-	size_t nargs = op->data.callfunc_nargs;
+	size_t nargs = op->data.func_nargs;
 	assert(rnr->stacktop - rnr->stackbot >= (long)nargs + 1);   // +1 for the function
 	rnr->stacktop -= nargs;
 	Object **argptr = rnr->stacktop;
@@ -309,6 +309,23 @@ static bool run_createfunc(struct Runner *rnr, const struct CodeOp *op)
 		return false;
 
 	*rnr->stacktop++ = (Object *)f;
+	rnr->opidx++;
+	return true;
+}
+
+static bool run_createpartial(struct Runner *rnr, const struct CodeOp *op)
+{
+	FuncObject *f = (FuncObject *) rnr->stacktop[-1];
+	Object **args = rnr->stacktop - 1 - op->data.func_nargs;
+	FuncObject *par = partialfunc_create(rnr->interp, f, args, op->data.func_nargs);
+	if (!par)
+		return false;
+
+	for (long i = -1L - op->data.func_nargs; i < 0; i++)
+		OBJECT_DECREF(rnr->stacktop[i]);
+	rnr->stacktop -= op->data.func_nargs;
+	rnr->stacktop[-1] = (Object *) par;
+
 	rnr->opidx++;
 	return true;
 }
@@ -486,6 +503,7 @@ static bool run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_POP1, run_pop1);
 		BOILERPLATE(CODE_THROW, run_throw);
 		BOILERPLATE(CODE_CREATEFUNC, run_createfunc);
+		BOILERPLATE(CODE_CREATEPARTIAL, run_createpartial);
 		BOILERPLATE(CODE_STORERETVAL, run_storeretval);
 		BOILERPLATE(CODE_SETMETHODS2CLASS, run_setmethods2class);
 		BOILERPLATE(CODE_EH_ADD, run_eh_add);

@@ -74,6 +74,7 @@ def _create_chainmap(fallback_chainmap):
         collections.OrderedDict(), *fallback_chainmap.maps)
 
 
+# note that there is code that uses copy.copy() with Variable objects
 class Variable:
 
     def __init__(self, name, tybe, definition_location, level):
@@ -83,7 +84,8 @@ class Variable:
         self.level = level
 
     def __repr__(self):
-        return '<%s %r>' % (type(self).__name__, self.name)
+        return '<%s %r: level=%d>' % (
+            type(self).__name__, self.name, self.level)
 
 
 class GenericVariable(Variable):

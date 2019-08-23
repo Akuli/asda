@@ -30,6 +30,7 @@ IntConstant = _op_class('IntConstant', ['python_int'])
 BoolConstant = _op_class('BoolConstant', ['python_bool'])
 PushDummy = _op_class('PushDummy', [])
 CreateFunction = _op_class('CreateFunction', ['functype', 'body_opcode'])
+CreatePartialFunction = _op_class('CreatePartialFunction', ['how_many_args'])
 # tuples have an index() method, avoid name clash with misspelling
 GetFromModule = _op_class('GetFromModule', ['compilation', 'indeks'])
 GetBuiltinVar = _op_class('GetBuiltinVar', ['varname'])
@@ -212,6 +213,11 @@ class _OpCoder:
             opcoder.opcode_tree(node.body_root_node)
             self.output.ops.append(CreateFunction(
                 lineno, node.functype, function_opcode))
+            return
+
+        if isinstance(node, decision_tree.CreatePartialFunction):
+            self.output.ops.append(CreatePartialFunction(
+                lineno, node.how_many_args))
             return
 
         raise NotImplementedError(repr(node))

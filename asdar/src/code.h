@@ -27,6 +27,7 @@ enum CodeOpKind {
 	CODE_POP1,
 
 	CODE_CREATEFUNC,
+	CODE_CREATEPARTIAL,
 	CODE_STORERETVAL,
 
 	// EH = Error Handler, see finally.md
@@ -65,7 +66,7 @@ struct CodeAttrData { const struct Type *type; uint16_t index; };
 struct CodeSetMethodsData { const struct TypeAsdaClass *type; uint16_t nmethods; };
 
 typedef union {
-	uint8_t callfunc_nargs;
+	uint16_t func_nargs;
 	uint16_t jump_idx;
 	uint16_t strjoin_nstrs;
 	uint16_t stackbottom_index;

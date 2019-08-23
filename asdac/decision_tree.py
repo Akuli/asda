@@ -43,6 +43,7 @@ is one reason for having a decision tree compile step
 """
 
 import collections
+import copy
 import functools
 import io
 import random
@@ -50,7 +51,7 @@ import pathlib
 import subprocess
 import tempfile
 
-from asdac import common, cooked_ast, utils
+from asdac import common, cooked_ast, objects, utils
 
 
 class Node:
@@ -233,6 +234,18 @@ class CreateFunction(PassThroughNode):
         super().__init__(use_count=0, size_delta=1, **kwargs)
         self.functype = functype
         self.body_root_node = body_root_node
+
+
+# stack should contain the arguments and the function to partial
+# the function should be topmost
+class CreatePartialFunction(PassThroughNode):
+
+    def __init__(self, how_many_args, **kwargs):
+        super().__init__(
+            use_count=(how_many_args + 1),
+            size_delta=-how_many_args,
+            **kwargs)
+        self.how_many_args = how_many_args
 
 
 # you might be thinking of implementing 'return blah' so that it leaves 'blah'
@@ -580,6 +593,18 @@ class _TreeCreator:
         self.local_vars_level = local_vars_level
         self.local_vars_list = local_vars_list
 
+        # closures are implemented with automagically partialling the variables
+        # as function arguments
+        #
+        # the automagically created argument variables have a different level
+        # than the variables being partialled, so they need different variable
+        # objects
+        #
+        # this dict contains those
+        # keys are variables with .level < self.local_vars_level
+        # values are argument variables with .level == self.local_vars_level
+        self.closure_vars = {}
+
         # .set_next_node methods that should be called to make stuff run every
         # time the function is about to early-return
         # used for cleaning up local variables from stack
@@ -608,11 +633,39 @@ class _TreeCreator:
             len(call.args), (call.function.type.returntype is not None),
             location=call.location))
 
-    def _get_varlist_index(self, local_var: cooked_ast.Variable):
+    def _add_to_varlist(self, local_var, *, append=True):
         assert local_var.level == self.local_vars_level
         if local_var not in self.local_vars_list:
-            self.local_vars_list.append(local_var)
-        return self.local_vars_list.index(local_var)
+            if append:
+                self.local_vars_list.append(local_var)
+            else:
+                self.local_vars_list.insert(0, local_var)
+
+    def _add_to_closure_vars(self, nonlocal_var):
+        assert nonlocal_var.level == self.local_vars_level - 1    # TODO
+
+        try:
+            return self.closure_vars[nonlocal_var]
+        except KeyError:
+            local = copy.copy(nonlocal_var)
+            local.level = self.local_vars_level
+            self.closure_vars[nonlocal_var] = local
+            return local
+
+    def _add_var_lookup(self, var, **boilerplate):
+        if var.level == self.local_vars_level:
+            self._add_to_varlist(var)
+            # None is fixed later
+            node = GetFromBottom(None, var, **boilerplate)
+        elif var.level == 0:
+            node = GetBuiltinVar(var.name, **boilerplate)
+        else:
+            # closure variable
+            local = self._add_to_closure_vars(var)
+            self._add_to_varlist(local, append=False)
+            node = GetFromBottom(None, local, **boilerplate)
+
+        self.add_pass_through_node(node)
 
     def do_expression(self, expression):
         assert expression.type is not None
@@ -627,18 +680,7 @@ class _TreeCreator:
                 expression.python_int, **boilerplate))
 
         elif isinstance(expression, cooked_ast.GetVar):
-            if expression.var.level == self.local_vars_level:
-                node = GetFromBottom(
-                    self._get_varlist_index(expression.var), expression.var,
-                    **boilerplate)
-            elif expression.var.level == 0:
-                node = GetBuiltinVar(expression.var.name, **boilerplate)
-            else:
-                print(expression.var)
-                # closure variable
-                raise NotImplementedError
-
-            self.add_pass_through_node(node)
+            self._add_var_lookup(expression.var, **boilerplate)
 
         elif isinstance(expression, (
                 cooked_ast.Plus, cooked_ast.Times,
@@ -690,9 +732,22 @@ class _TreeCreator:
                                    expression.argvars.copy(), [])
             creator.add_pass_through_node(Start(expression.argvars.copy()))
             creator.do_body(expression.body)
-            creator.add_bottom_dummies()
+            creator.clean_up_variable_stuff()
+
+            partialling = creator.get_nonlocal_vars_to_partial()
+            for var in partialling:
+                self._add_var_lookup(var)
+
+            tybe = objects.FunctionType(
+                [var.type for var in partialling] + expression.type.argtypes,
+                expression.type.returntype)
+
             self.add_pass_through_node(CreateFunction(
-                expression.type, creator.root_node, **boilerplate))
+                tybe, creator.root_node, **boilerplate))
+
+            if partialling:
+                self.add_pass_through_node(
+                    CreatePartialFunction(len(partialling)))
 
         else:
             assert False, expression    # pragma: no cover
@@ -712,9 +767,10 @@ class _TreeCreator:
         elif isinstance(statement, cooked_ast.SetVar):
             self.do_expression(statement.value)
             if statement.var.level == self.local_vars_level:
-                node = SetToBottom(
-                    self._get_varlist_index(statement.var), statement.var,
-                    **boilerplate)
+                if statement.var not in self.local_vars_list:
+                    self.local_vars_list.append(statement.var)
+                # None is fixed later
+                node = SetToBottom(None, statement.var, **boilerplate)
             else:
                 # closure variable
                 raise NotImplementedError
@@ -782,13 +838,19 @@ class _TreeCreator:
             assert not isinstance(statement, list), statement
             self.do_statement(statement)
 
-    def add_bottom_dummies(self):
+    def clean_up_variable_stuff(self):
         assert isinstance(self.root_node, Start)
 
-        creator = self.subcreator()
-        creator.add_pass_through_node(Start(self.root_node.argvars))
+        for node in get_all_nodes(self.root_node):
+            if isinstance(node, (SetToBottom, GetFromBottom)):
+                node.index = self.local_vars_list.index(node.var)
 
-        for var in self.local_vars_list[len(self.root_node.argvars):]:
+        closure_argvars = self.local_vars_list[:len(self.closure_vars)]
+        creator = self.subcreator()
+        creator.add_pass_through_node(Start(
+            closure_argvars + self.root_node.argvars))
+
+        for var in self.local_vars_list[len(creator.root_node.argvars):]:
             creator.add_pass_through_node(PushDummy(var))
 
         if self.root_node.next_node is not None:
@@ -810,11 +872,20 @@ class _TreeCreator:
         self.root_node = creator.root_node
         self.set_next_node = creator.set_next_node
 
+    def get_nonlocal_vars_to_partial(self):
+        local2nonlocal = {
+            local: nonl0cal for nonl0cal, local in self.closure_vars.items()}
+        return [local2nonlocal[local]
+                for local in self.local_vars_list[:len(self.closure_vars)]]
+
 
 def create_tree(cooked_statements):
     tree_creator = _TreeCreator(1, [], [])
     tree_creator.add_pass_through_node(Start([]))
+
     tree_creator.do_body(cooked_statements)
-    tree_creator.add_bottom_dummies()
+    tree_creator.clean_up_variable_stuff()
+    assert not tree_creator.get_nonlocal_vars_to_partial()
+
     assert isinstance(tree_creator.root_node, Start)
     return tree_creator.root_node

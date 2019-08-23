@@ -48,6 +48,7 @@
 #define ADD_ERROR_HANDLER 'h'
 #define REMOVE_ERROR_HANDLER 'H'
 #define CREATE_FUNCTION 'f'
+#define CREATE_PARTIAL 'p'
 #define STORE_RETURN_VALUE 'R'
 #define SET_METHODS_TO_CLASS 'S'
 #define END_OF_BODY 'E'
@@ -552,7 +553,14 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 
 	case CALL_FUNCTION:
 		res->kind = CODE_CALLFUNC;
-		return read_bytes(bcr, &res->data.callfunc_nargs, 1);
+		// TODO: use uint16_t for number of arguments to avoid this mess
+		{
+			uint8_t tmp;
+			bool ok = read_bytes(bcr, &tmp, 1);
+			if (ok)
+				res->data.func_nargs = tmp;
+			return ok;
+		}
 	case CALL_CONSTRUCTOR: return read_construction(bcr, res);
 
 	case JUMP:     res->kind = CODE_JUMP;     return read_uint16(bcr, &res->data.jump_idx);
@@ -575,6 +583,9 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 
 	case CREATE_FUNCTION:
 		return read_create_function(bcr, res);
+	case CREATE_PARTIAL:
+		res->kind = CODE_CREATEPARTIAL;
+		return read_uint16(bcr, &res->data.func_nargs);
 
 	case STRING_JOIN:
 		res->kind = CODE_STRJOIN;

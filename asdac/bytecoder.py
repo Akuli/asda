@@ -16,6 +16,7 @@ GET_ATTR = b'.'
 PUSH_DUMMY = b'u'
 GET_FROM_MODULE = b'm'
 CREATE_FUNCTION = b'f'
+CREATE_PARTIAL_FUNCTION = b'p'
 STR_CONSTANT = b'"'
 NON_NEGATIVE_INT_CONSTANT = b'1'
 NEGATIVE_INT_CONSTANT = b'2'
@@ -268,9 +269,14 @@ class _BytecodeWriter:
 
         if isinstance(op, opcoder.CreateFunction):
             assert isinstance(op.functype, objects.FunctionType)
-            self.bytecode.add_byte(TYPE_FUNCTION)
+            self.bytecode.add_byte(CREATE_FUNCTION)
             self.write_type(op.functype)
             self._create_subwriter().run(op.body_opcode)
+            return
+
+        if isinstance(op, opcoder.CreatePartialFunction):
+            self.bytecode.add_byte(CREATE_PARTIAL_FUNCTION)
+            self.bytecode.add_uint16(op.how_many_args)
             return
 
         if isinstance(op, opcoder.GetBuiltinVar):
