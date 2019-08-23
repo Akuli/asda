@@ -1,6 +1,7 @@
 #ifndef RUNNER_H
 #define RUNNER_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include "dynarray.h"
 #include "code.h"

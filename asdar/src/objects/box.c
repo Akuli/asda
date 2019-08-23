@@ -1,5 +1,9 @@
-#include <stdbool.h>
 #include "box.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include "../interp.h"
+#include "../object.h"
+#include "../type.h"
 
 
 static void destroy_box(Object *obj, bool decrefrefs, bool freenonrefs)

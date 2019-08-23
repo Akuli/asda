@@ -1,7 +1,6 @@
 #ifndef INTERP_H
 #define INTERP_H
 
-#include <stdbool.h>
 #include <stddef.h>
 #include "dynarray.h"
 

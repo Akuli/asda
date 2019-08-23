@@ -7,7 +7,6 @@
 #include "code.h"
 #include "dynarray.h"
 #include "interp.h"
-#include "module.h"
 #include "object.h"
 #include "path.h"
 #include "type.h"

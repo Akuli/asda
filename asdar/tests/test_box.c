@@ -1,3 +1,6 @@
+#include <assert.h>
+#include <stddef.h>
+#include <src/object.h>
 #include <src/objects/box.h>
 #include <src/objects/int.h>
 #include "util.h"

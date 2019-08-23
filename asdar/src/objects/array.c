@@ -1,3 +1,5 @@
+#include "array.h"
+#include <stdbool.h>
 #include <stdlib.h>
 #include "../dynarray.h"
 #include "../interp.h"
@@ -6,7 +8,7 @@
 #include "err.h"
 #include "func.h"
 #include "int.h"
-#include "array.h"
+#include "string.h"
 
 static void destroy_array(Object *obj, bool decrefrefs, bool freenonrefs)
 {

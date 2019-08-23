@@ -3,7 +3,6 @@
 #define OBJECTS_ARRAY_H
 
 #include "../dynarray.h"
-#include "../interp.h"
 #include "../object.h"
 #include "../type.h"
 

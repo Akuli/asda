@@ -5,7 +5,6 @@
 #include <string.h>
 #include "code.h"
 #include "interp.h"
-#include "object.h"
 #include "type.h"
 
 const struct Module *module_get(Interp *interp, const char *path)
