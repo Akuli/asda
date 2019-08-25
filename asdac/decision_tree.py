@@ -174,6 +174,26 @@ class GetFromBottom(_BottomNode):
         super().__init__(*args, use_count=0, size_delta=1, **kwargs)
 
 
+class CreateBox(PassThroughNode):
+
+    def __init__(self, **kwargs):
+        super().__init__(use_count=0, size_delta=+1, **kwargs)
+
+
+# stack top should have value to set, and the box (box topmost)
+class SetToBox(PassThroughNode):
+
+    def __init__(self, **kwargs):
+        super().__init__(use_count=2, size_delta=-2, **kwargs)
+
+
+# gets value from box
+class UnBox(PassThroughNode):
+
+    def __init__(self, **kwargs):
+        super().__init__(use_count=1, size_delta=0, **kwargs)
+
+
 class PopOne(PassThroughNode):
 
     def __init__(self, *, is_popping_a_dummy=False, **kwargs):
@@ -590,6 +610,9 @@ class _TreeCreator:
 
     def __init__(self, local_vars_level, local_vars_list, exit_points):
         # from now on, local variables are items in the beginning of the stack
+        #
+        # also the .type attribute of the variables doesn't contain info about
+        # whether the variable is wrapped in a box object or not
         self.local_vars_level = local_vars_level
         self.local_vars_list = local_vars_list
 
@@ -650,13 +673,16 @@ class _TreeCreator:
             self.closure_vars[nonlocal_var] = local
             return local
 
-    def _add_var_lookup(self, var, **boilerplate):
+    # returns whether unboxing is needed
+    def _add_var_lookup_without_unboxing(self, var, **boilerplate) -> bool:
+        if var.level == 0:
+            self.add_pass_through_node(GetBuiltinVar(var.name, **boilerplate))
+            return False
+
         if var.level == self.local_vars_level:
             self._add_to_varlist(var)
             # None is fixed later
             node = GetFromBottom(None, var, **boilerplate)
-        elif var.level == 0:
-            node = GetBuiltinVar(var.name, **boilerplate)
         else:
             # closure variable
             local = self.get_local_closure_var(var)
@@ -664,6 +690,7 @@ class _TreeCreator:
             node = GetFromBottom(None, local, **boilerplate)
 
         self.add_pass_through_node(node)
+        return True
 
     def do_expression(self, expression):
         assert expression.type is not None
@@ -678,7 +705,9 @@ class _TreeCreator:
                 expression.python_int, **boilerplate))
 
         elif isinstance(expression, cooked_ast.GetVar):
-            self._add_var_lookup(expression.var, **boilerplate)
+            var = expression.var    # pep8 line length
+            if self._add_var_lookup_without_unboxing(var, **boilerplate):
+                self.add_pass_through_node(UnBox())
 
         elif isinstance(expression, (
                 cooked_ast.Plus, cooked_ast.Times,
@@ -730,11 +759,12 @@ class _TreeCreator:
                                    expression.argvars.copy(), [])
             creator.add_pass_through_node(Start(expression.argvars.copy()))
             creator.do_body(expression.body)
-            creator.clean_up_variable_stuff()
+            creator.fix_variable_stuff()
 
             partialling = creator.get_nonlocal_vars_to_partial()
             for var in partialling:
-                self._add_var_lookup(var)
+                needs_unbox = self._add_var_lookup_without_unboxing(var)
+                assert needs_unbox
 
             tybe = objects.FunctionType(
                 [var.type for var in partialling] + expression.type.argtypes,
@@ -764,15 +794,10 @@ class _TreeCreator:
 
         elif isinstance(statement, cooked_ast.SetVar):
             self.do_expression(statement.value)
-            if statement.var.level == self.local_vars_level:
-                if statement.var not in self.local_vars_list:
-                    self.local_vars_list.append(statement.var)
-                # None is fixed later
-                node = SetToBottom(None, statement.var, **boilerplate)
-            else:
-                # closure variable
-                raise NotImplementedError
-            self.add_pass_through_node(node)
+            its_a_box = self._add_var_lookup_without_unboxing(
+                statement.var, **boilerplate)
+            assert its_a_box
+            self.add_pass_through_node(SetToBox())
 
         elif isinstance(statement, cooked_ast.IfStatement):
             self.do_expression(statement.cond)
@@ -836,7 +861,7 @@ class _TreeCreator:
             assert not isinstance(statement, list), statement
             self.do_statement(statement)
 
-    def clean_up_variable_stuff(self):
+    def fix_variable_stuff(self):
         assert isinstance(self.root_node, Start)
 
         for node in get_all_nodes(self.root_node):
@@ -847,9 +872,28 @@ class _TreeCreator:
         creator = self.subcreator()
         creator.add_pass_through_node(Start(
             closure_argvars + self.root_node.argvars))
+        assert isinstance(creator.root_node, Start)
 
         for var in self.local_vars_list[len(creator.root_node.argvars):]:
-            creator.add_pass_through_node(PushDummy(var))
+            creator.add_pass_through_node(CreateBox())
+
+        # wrap arguments into new boxes
+        # usually will be optimized away, but is not always with nested
+        # functions, e.g.
+        #
+        #   let create_counter = (Int i) -> functype{() -> void}:
+        #       return () -> void:
+        #           i = i+1
+        #           print(i.to_string())
+        #
+        # this will create a box of i, which is needed in the inner function
+        for index, var in enumerate(self.root_node.argvars,
+                                    start=len(self.closure_vars)):
+            creator.add_pass_through_node(GetFromBottom(index, var))
+            creator.add_pass_through_node(CreateBox())
+            creator.add_pass_through_node(SetToBottom(index, var))
+            creator.add_pass_through_node(GetFromBottom(index, var))
+            creator.add_pass_through_node(SetToBox())
 
         if self.root_node.next_node is not None:
             creator.set_next_node(self.root_node.next_node)
@@ -866,7 +910,6 @@ class _TreeCreator:
         # avoid creating an unreachable node
         self.root_node.set_next_node(None)
 
-        assert isinstance(creator.root_node, Start)
         self.root_node = creator.root_node
         self.set_next_node = creator.set_next_node
 
@@ -882,7 +925,7 @@ def create_tree(cooked_statements):
     tree_creator.add_pass_through_node(Start([]))
 
     tree_creator.do_body(cooked_statements)
-    tree_creator.clean_up_variable_stuff()
+    tree_creator.fix_variable_stuff()
     assert not tree_creator.get_nonlocal_vars_to_partial()
 
     assert isinstance(tree_creator.root_node, Start)

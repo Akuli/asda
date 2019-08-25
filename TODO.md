@@ -1,5 +1,4 @@
-- fix function closures
-    - changing variables
+- optimize boxes
 - fix error handling stufs
 - asdac's bytecode reading stuff is broken
 - simpler import syntax

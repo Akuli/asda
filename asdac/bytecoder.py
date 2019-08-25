@@ -17,6 +17,9 @@ PUSH_DUMMY = b'u'
 GET_FROM_MODULE = b'm'
 CREATE_FUNCTION = b'f'
 CREATE_PARTIAL_FUNCTION = b'p'
+CREATE_BOX = b'0'
+SET_TO_BOX = b'O'
+UNBOX = b'o'
 STR_CONSTANT = b'"'
 NON_NEGATIVE_INT_CONSTANT = b'1'
 NEGATIVE_INT_CONSTANT = b'2'
@@ -379,6 +382,9 @@ class _BytecodeWriter:
             (opcoder.PrefixMinus, PREFIX_MINUS),
             (opcoder.Times, TIMES),
             # (opcoder.Divide, DIVIDE),
+            (opcoder.CreateBox, CREATE_BOX),
+            (opcoder.SetToBox, SET_TO_BOX),
+            (opcoder.UnBox, UNBOX),
             (opcoder.RemoveErrorHandler, REMOVE_ERROR_HANDLER),
             (opcoder.PushFinallyStateOk, PUSH_FINALLY_STATE_OK),
             (opcoder.PushFinallyStateError, PUSH_FINALLY_STATE_ERROR),

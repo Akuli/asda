@@ -11,6 +11,7 @@
 #include "type.h"
 #include "objects/asdainst.h"
 #include "objects/bool.h"
+#include "objects/box.h"
 #include "objects/err.h"
 #include "objects/func.h"
 #include "objects/int.h"
@@ -156,6 +157,40 @@ static bool run_getbottom(struct Runner *rnr, const struct CodeOp *op)
 	Object *val = rnr->stackbot[op->data.stackbottom_index];
 	*rnr->stacktop++ = val;
 	OBJECT_INCREF(val);
+
+	rnr->opidx++;
+	return true;
+}
+
+static bool run_createbox(struct Runner *rnr, const struct CodeOp *op)
+{
+	BoxObject *box = boxobj_new(rnr->interp);
+	if (!box)
+		return false;
+	*rnr->stacktop++ = (Object *) box;
+
+	rnr->opidx++;
+	return true;
+}
+
+static bool run_set2box(struct Runner *rnr, const struct CodeOp *op)
+{
+	BoxObject *box = (BoxObject*) *--rnr->stacktop;
+	Object *val = *--rnr->stacktop;
+	boxobj_set(box, val);
+	OBJECT_DECREF(box);
+	OBJECT_DECREF(val);
+
+	rnr->opidx++;
+	return true;
+}
+
+static bool run_unbox(struct Runner *rnr, const struct CodeOp *op)
+{
+	Object *val = ((BoxObject *) rnr->stacktop[-1])->val;
+	OBJECT_DECREF(rnr->stacktop[-1]);
+	OBJECT_INCREF(val);
+	rnr->stacktop[-1] = val;
 
 	rnr->opidx++;
 	return true;
@@ -491,6 +526,9 @@ static bool run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_GETATTR, run_getattr);
 		BOILERPLATE(CODE_SETBOTTOM, run_setbottom);
 		BOILERPLATE(CODE_GETBOTTOM, run_getbottom);
+		BOILERPLATE(CODE_CREATEBOX, run_createbox);
+		BOILERPLATE(CODE_SET2BOX, run_set2box);
+		BOILERPLATE(CODE_UNBOX, run_unbox);
 		BOILERPLATE(CODE_PUSHDUMMY, run_pushdummy);
 		BOILERPLATE(CODE_GETFROMMODULE, run_getfrommodule);
 		BOILERPLATE(CODE_CALLFUNC, run_callfunc);

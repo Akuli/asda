@@ -22,6 +22,9 @@
 #define GET_BUILTIN_VAR 'U'
 #define SET_TO_BOTTOM 'B'
 #define GET_FROM_BOTTOM 'b'
+#define CREATE_BOX '0'
+#define SET_TO_BOX 'O'
+#define UNBOX 'o'
 #define SET_ATTR ':'
 #define GET_ATTR '.'
 #define PUSH_DUMMY 'u'
@@ -549,6 +552,10 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 
 	case SET_TO_BOTTOM:   res->kind = CODE_SETBOTTOM; return read_uint16(bcr, &res->data.stackbottom_index);
 	case GET_FROM_BOTTOM: res->kind = CODE_GETBOTTOM; return read_uint16(bcr, &res->data.stackbottom_index);
+
+	case CREATE_BOX: res->kind = CODE_CREATEBOX; return true;
+	case SET_TO_BOX: res->kind = CODE_SET2BOX;   return true;
+	case UNBOX:      res->kind = CODE_UNBOX;     return true;
 
 	case CALL_FUNCTION:
 		res->kind = CODE_CALLFUNC;

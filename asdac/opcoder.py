@@ -36,6 +36,9 @@ GetFromModule = _op_class('GetFromModule', ['compilation', 'indeks'])
 GetBuiltinVar = _op_class('GetBuiltinVar', ['varname'])
 SetToBottom = _op_class('SetToBottom', ['indeks'])
 GetFromBottom = _op_class('GetFromBottom', ['indeks'])
+CreateBox = _op_class('CreateBox', [])
+SetToBox = _op_class('SetToBox', [])
+UnBox = _op_class('UnBox', [])
 SetAttr = _op_class('SetAttr', ['type', 'indeks'])
 GetAttr = _op_class('GetAttr', ['type', 'indeks'])
 CallFunction = _op_class('CallFunction', ['nargs'])
@@ -179,6 +182,18 @@ class _OpCoder:
 
         if isinstance(node, decision_tree.GetFromBottom):
             self.output.ops.append(GetFromBottom(lineno, node.index))
+            return
+
+        if isinstance(node, decision_tree.CreateBox):
+            self.output.ops.append(CreateBox(lineno))
+            return
+
+        if isinstance(node, decision_tree.SetToBox):
+            self.output.ops.append(SetToBox(lineno))
+            return
+
+        if isinstance(node, decision_tree.UnBox):
+            self.output.ops.append(UnBox(lineno))
             return
 
         if isinstance(node, decision_tree.GetAttr):

@@ -43,7 +43,10 @@ def _nodes_are_similar(a: decision_tree.Node, b: decision_tree.Node):
     if (
       they_are(decision_tree.Plus) or
       they_are(decision_tree.Times) or
-      they_are(decision_tree.StoreReturnValue)):
+      they_are(decision_tree.StoreReturnValue) or
+      they_are(decision_tree.CreateBox) or
+      they_are(decision_tree.SetToBox) or
+      they_are(decision_tree.UnBox)):
         return True
     if they_are(decision_tree.GetAttr):
         return a.tybe is b.tybe and a.attrname is b.attrname
