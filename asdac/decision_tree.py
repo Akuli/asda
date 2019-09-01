@@ -176,8 +176,9 @@ class GetFromBottom(_BottomNode):
 
 class CreateBox(PassThroughNode):
 
-    def __init__(self, **kwargs):
+    def __init__(self, var, **kwargs):
         super().__init__(use_count=0, size_delta=+1, **kwargs)
+        self.var = var
 
 
 # stack top should have value to set, and the box (box topmost)
@@ -342,7 +343,7 @@ class EqualDecision(TwoWayDecision):
 
 
 def _get_debug_string(node):
-    if isinstance(node, PushDummy):
+    if isinstance(node, (PushDummy, CreateBox)):
         return node.var.name
     if isinstance(node, GetBuiltinVar):
         return node.varname
@@ -480,6 +481,7 @@ def find_merge(nodes, *, callback=(lambda node: node.get_jumps_to())):
             return None
 
 
+# root_node does NOT have to be a Start node
 # TODO: cache result somewhere, but careful with invalidation?
 def get_all_nodes(root_node):
     assert root_node is not None
@@ -554,11 +556,12 @@ def _graphviz_code(root_node, label_extra=''):
         if node in unreachable:
             parts.append('UNREACHABLE')
 
+        for to in node.get_jumps_to():
+            if node not in (ref.objekt for ref in to.jumped_from):
+                parts.append('HAS PROBLEMS with jumped_from stuff')
+
         yield '%s [label="%s"];\n' % (
             _graphviz_id(node), '\n'.join(parts).replace('"', r'\"'))
-
-        for to in node.get_jumps_to():
-            assert node in (ref.objekt for ref in to.jumped_from)
 
         if isinstance(node, CreateFunction):
             color = _random_color()
@@ -875,7 +878,7 @@ class _TreeCreator:
         assert isinstance(creator.root_node, Start)
 
         for var in self.local_vars_list[len(creator.root_node.argvars):]:
-            creator.add_pass_through_node(CreateBox())
+            creator.add_pass_through_node(CreateBox(var))
 
         # wrap arguments into new boxes
         # usually will be optimized away, but is not always with nested
@@ -890,7 +893,7 @@ class _TreeCreator:
         for index, var in enumerate(self.root_node.argvars,
                                     start=len(self.closure_vars)):
             creator.add_pass_through_node(GetFromBottom(index, var))
-            creator.add_pass_through_node(CreateBox())
+            creator.add_pass_through_node(CreateBox(var))
             creator.add_pass_through_node(SetToBottom(index, var))
             creator.add_pass_through_node(GetFromBottom(index, var))
             creator.add_pass_through_node(SetToBox())

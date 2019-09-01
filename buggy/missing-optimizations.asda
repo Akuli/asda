@@ -1,0 +1,14 @@
+# FIXME in asdac: 'a' and 'b', GetFromBottom and PopOne should get optimized away
+let and = (Bool a, Bool b) -> Bool:
+    if a:
+        if b:
+            return TRUE
+    return FALSE
+
+# FIXME in asdac: does not optimize away lel variable's PushDummy
+let lel = () -> void:
+    if TRUE `and` TRUE:
+        print("yay")
+    if TRUE `and` FALSE:
+        print("nay")
+lel()

@@ -1,4 +1,4 @@
-- optimize boxes
+- add box types to automagically partialled functions
 - fix error handling stufs
 - asdac's bytecode reading stuff is broken
 - simpler import syntax

@@ -16,7 +16,7 @@ _function_lists = [
 
     # Check all the things. These functions always return False, because they
     # don't actually optimize anything by changing the nodes etc
-    [#variables.check_variables_set,
+    [variables.check_boxes_set,
      functions.check_for_missing_returns],
 
     # now we can actually optimize
@@ -24,7 +24,7 @@ _function_lists = [
     [copy_pasta.optimize_similar_nodes,
      decisions.optimize_booldecision_before_truefalse,
      variables.optimize_temporary_vars,
-     #variables.optimize_garbage_dummies,
+     variables.optimize_unnecessary_boxes,
      ],
 ]
 

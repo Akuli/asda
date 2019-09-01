@@ -2,35 +2,112 @@ from asdac import common, decision_tree
 
 
 # you can assume that the variable is set after any visited node
-def _check_matching_sets_exist(node, get_node, visited_nodes, start_node):
-    is_initial_argument_value = (
-        node is start_node and get_node.var in start_node.argvars)
+def _check_matching_sets_exist(node, var, error_location, visited_nodes):
+    if not node.jumped_from:
+        assert isinstance(node, decision_tree.Start)
+        if var in node.argvars:
+            return
 
-    if (not node.jumped_from) and (not is_initial_argument_value):
-        # TODO: show variable definition location in error message
+        # TODO: variable definition location in error message
         # TODO: mention this error in spec
         raise common.CompileError(
-            "variable '%s' might not be set" % get_node.var.name,
-            location=get_node.location)
+            "variable '%s' might not be set" % var.name, error_location)
 
     visited_nodes.add(node)
 
     if (
-      isinstance(node, decision_tree.SetToBottom) and
-      node.var is get_node.var):
+      isinstance(node, decision_tree.GetFromBottom) and
+      node.var is var and
+      isinstance(node.next_node, decision_tree.SetToBox)):
         return
 
     for ref in node.jumped_from:
         if ref.objekt not in visited_nodes:
             _check_matching_sets_exist(
-                ref.objekt, get_node, visited_nodes, start_node)
+                ref.objekt, var, error_location, visited_nodes)
 
 
-def check_variables_set(start_node, all_nodes, createfunc_node):
+def check_boxes_set(start_node, all_nodes, createfunc_node):
     for node in all_nodes:
-        if isinstance(node, decision_tree.GetFromBottom):
-            _check_matching_sets_exist(node, node, set(), start_node)
+        if not isinstance(node, decision_tree.UnBox):
+            continue
 
+        for ref in node.jumped_from:
+            assert isinstance(ref.objekt, decision_tree.GetFromBottom)
+            _check_matching_sets_exist(
+                ref.objekt, ref.objekt.var, ref.objekt.location, set())
+
+
+def nexts(node, n):
+    for i in range(n):
+        node = node.next_node
+    return node
+
+
+def _remove_box_if_possible(create_box, start_node):
+    if isinstance(create_box.next_node, decision_tree.SetToBottom):
+        # function arguments are wrapped like this in decision_tree.py
+        assert create_box.next_node.var is create_box.var
+        assert isinstance(nexts(create_box, 2), decision_tree.GetFromBottom)
+        assert isinstance(nexts(create_box, 3), decision_tree.SetToBox)
+        create_box_skipped = nexts(create_box, 4)
+        is_argument = True
+    else:
+        create_box_skipped = create_box.next_node
+        is_argument = False
+
+    sets = set()
+    gets = set()
+
+    for node in decision_tree.get_all_nodes(create_box_skipped):
+        # if this assert fails, you need to add code to handle setting a box
+        # variable
+        assert not (isinstance(node, decision_tree.SetToBottom) and
+                    node.var is create_box.var)
+
+        if not (isinstance(node, decision_tree.GetFromBottom) and
+                node.var is create_box.var):
+            continue
+
+        if isinstance(node.next_node, decision_tree.SetToBox):
+            sets.add(node)
+        elif isinstance(node.next_node, decision_tree.UnBox):
+            gets.add(node)
+        else:
+            # don't know what is being done with this box, maybe it is actually
+            # needed because it's being passed to something that sets stuff
+            # to it
+            #
+            # TODO: handle the case where the box goes to a function as a
+            # closure variable, but the function never sets it
+            return False
+
+    for node in sets:
+        # replace GetFromBottom and SetToBox with SetToBottom
+        new_node = decision_tree.SetToBottom(node.index, node.var,
+                                             location=node.location)
+        new_node.set_next_node(node.next_node.next_node)
+        decision_tree.replace_node(node, new_node)
+
+    for node in gets:
+        # remove UnBox
+        decision_tree.replace_node(node.next_node, node.next_node.next_node)
+
+    if is_argument:
+        added_node = decision_tree.PopOne()
+    else:
+        added_node = decision_tree.PushDummy(create_box.var)
+    added_node.set_next_node(create_box_skipped)
+    decision_tree.replace_node(create_box, added_node)
+
+    return True
+
+
+def optimize_unnecessary_boxes(start_node, all_nodes, createfunc_node):
+    for create_box in all_nodes:
+        if isinstance(create_box, decision_tree.CreateBox):
+            if _remove_box_if_possible(create_box, start_node):
+                return True
     return False
 
 
@@ -113,80 +190,3 @@ def optimize_temporary_vars(root_node, all_nodes, createfunc_node):
                     did_something = True
 
     return did_something
-
-
-def _set_to_list(lizt, index, value):
-    while len(lizt) <= index:
-        lizt.append(None)
-    assert lizt[index] is None
-    lizt[index] = value
-
-
-# lol = list of lists
-def _append_to_inner_list(lol, lol_index, value):
-    while len(lol) <= lol_index:
-        lol.append([])
-    lol[lol_index].append(value)
-
-
-# optimize_away_temporary_vars() leaves unnecessary dummies around
-def optimize_garbage_dummies(root_node, all_nodes, createfunc_node):
-    assert isinstance(root_node, decision_tree.Start)
-
-    # pushes contains PushDummy nodes, or None for arguments
-    pushes = [None] * len(root_node.argvars)
-    pops = []       # PopOne nodes
-    uses = []       # lists of SetToBottom or GetFromBottom
-
-    stack_sizes = decision_tree.get_stack_sizes(root_node)
-
-    for node in all_nodes:
-        if isinstance(node, decision_tree.PushDummy):
-            _set_to_list(pushes, stack_sizes[node], node)
-        elif (isinstance(node, decision_tree.PopOne) and
-              node.is_popping_a_dummy):
-            assert node.size_delta == -1
-            _set_to_list(pops, stack_sizes[node] + node.size_delta, node)
-        elif isinstance(node, (decision_tree.SetToBottom,
-                               decision_tree.GetFromBottom)):
-            _append_to_inner_list(uses, node.index, node)
-
-    # pops may be missing because e.g. infinite loop
-    while len(pops) < len(pushes):
-        pops.append(None)
-    assert len(pushes) == len(pops)
-
-    # some dummies might have no uses
-    while len(uses) < len(pushes):
-        uses.append([])
-    assert len(uses) == len(pops)
-
-    assert all(push is None for push in pushes[:len(root_node.argvars)])
-    assert None not in pushes[len(root_node.argvars):]
-    assert None not in uses
-
-    if all(uses[len(root_node.argvars):]):
-        return False
-
-    # looping with an index because deleting items screws up indexes
-    i = len(root_node.argvars)
-    while i < len(uses):
-        if uses[i]:
-            i += 1
-            continue
-
-        decision_tree.replace_node(pushes[i], pushes[i].next_node)
-        if pops[i] is not None:
-            decision_tree.replace_node(pops[i], pops[i].next_node)
-
-        del pushes[i]
-        del pops[i]
-        del uses[i]
-
-        for use_list in uses[i:]:
-            for use in use_list:
-                use.index -= 1
-                assert use.index >= 0
-
-    assert all(uses[len(root_node.argvars):])
-    return True
