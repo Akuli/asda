@@ -2,7 +2,7 @@ CFLAGS += -std=c99 -Wall -Wextra -Wpedantic -Wconversion -Werror=incompatible-po
 CFLAGS += -Wno-unused-parameter -Wno-address
 #CFLAGS += -Werror=stack-usage=16384   # BUFSIZ is 8192 on my system
 CFLAGS += -g
-CFLAGS += -O0
+CFLAGS += -O3
 LDFLAGS += -lgmp
 IWYUFLAGS += -Xiwyu --no_fwd_decl
 
@@ -83,7 +83,6 @@ graph.png:
 endif
 
 
-# wrap the he
 .PHONY: help
 help:
 	@echo "If you haven't read ./README.md yet, please read it. \

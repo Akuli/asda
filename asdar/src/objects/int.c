@@ -168,7 +168,7 @@ static bool sub_would_overflow(long x, long y) {
 
 /* https://stackoverflow.com/a/7684078 */
 static bool mul_would_overflow(long a, long b) {
-	return (!((b > 0 && a <= INT_MAX / b && a >= INT_MIN / b) || (b == 0) || (b == -1 && a >= -INT_MAX) || (b < -1 && a >= INT_MAX / b && a <= INT_MIN / b)));
+	return (!((b > 0 && a <= LONG_MAX / b && a >= LONG_MIN / b) || (b == 0) || (b == -1 && a >= -LONG_MAX) || (b < -1 && a >= LONG_MAX / b && a <= LONG_MIN / b)));
 }
 
 // there is no mpz_add_si, mpz_sub_si, mpz_mul_si
