@@ -161,6 +161,7 @@ class _OpCoder:
         simple = [
             (decision_tree.Plus, Plus),
             (decision_tree.Times, Times),
+            (decision_tree.PrefixMinus, PrefixMinus),
             (decision_tree.PushDummy, PushDummy),
             (decision_tree.PopOne, PopOne),
             (decision_tree.StoreReturnValue, StoreReturnValue),

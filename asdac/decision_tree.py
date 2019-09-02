@@ -214,6 +214,12 @@ class Times(PassThroughNode):
         super().__init__(use_count=2, size_delta=-1, **kwargs)
 
 
+class PrefixMinus(PassThroughNode):
+
+    def __init__(self, **kwargs):
+        super().__init__(use_count=1, size_delta=0, **kwargs)
+
+
 class GetAttr(PassThroughNode):
 
     def __init__(self, tybe, attrname, **kwargs):
@@ -712,6 +718,10 @@ class _TreeCreator:
             if self._add_var_lookup_without_unboxing(var, **boilerplate):
                 self.add_pass_through_node(UnBox())
 
+        elif isinstance(expression, cooked_ast.PrefixMinus):
+            self.do_expression(expression.prefixed)
+            self.add_pass_through_node(PrefixMinus())
+
         elif isinstance(expression, (
                 cooked_ast.Plus, cooked_ast.Times,
                 cooked_ast.Equal, cooked_ast.NotEqual)):
@@ -723,7 +733,7 @@ class _TreeCreator:
             elif isinstance(expression, cooked_ast.Times):
                 self.add_pass_through_node(Times(**boilerplate))
             else:
-                # push True or False to stack, usually this gets optimized into
+                # push TRUE or FALSE to stack, usually this gets optimized into
                 # something that doesn't involve bool objects at all
                 eq = EqualDecision(**boilerplate)
 
