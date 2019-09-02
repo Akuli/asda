@@ -1,7 +1,7 @@
 import itertools
 
 from asdac import decision_tree
-from asdac.optimizer import copy_pasta, decisions, functions, variables
+from asdac.optimizer import copy_pasta, decisions, functions, popone, variables
 
 
 _function_lists = [
@@ -25,6 +25,7 @@ _function_lists = [
      decisions.optimize_booldecision_before_truefalse,
      variables.optimize_temporary_vars,
      variables.optimize_unnecessary_boxes,
+     popone.optimize_popones,
      ],
 ]
 

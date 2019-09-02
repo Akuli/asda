@@ -1,4 +1,3 @@
-# FIXME in asdac: 'a' and 'b', GetFromBottom and PopOne should get optimized away
 let and = (Bool a, Bool b) -> Bool:
     if a:
         if b:
