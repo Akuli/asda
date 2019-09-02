@@ -30,11 +30,8 @@
 #define PUSH_DUMMY 'u'
 #define GET_FROM_MODULE 'm'
 #define STR_CONSTANT '"'
-#define TRUE_CONSTANT 'T'
-#define FALSE_CONSTANT 'F'
 #define CALL_FUNCTION '('
 #define CALL_CONSTRUCTOR ')'
-#define BOOLNEG '!'
 #define POP_ONE 'P'
 #define JUMP 'K'
 #define JUMPIF 'J'
@@ -537,12 +534,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 		res->kind = CODE_CONSTANT;
 		return read_string_constant(bcr, &res->data.obj);
 
-	case TRUE_CONSTANT:
-	case FALSE_CONSTANT:
-		res->kind = CODE_CONSTANT;
-		res->data.obj = (Object *)boolobj_c2asda(opbyte == TRUE_CONSTANT);
-		return true;
-
 	case PUSH_DUMMY:
 		res->kind = CODE_PUSHDUMMY;
 		return true;
@@ -597,7 +588,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 		res->kind = CODE_STRJOIN;
 		return read_uint16(bcr, &res->data.strjoin_nstrs);
 
-	case BOOLNEG: res->kind = CODE_BOOLNEG; return true;
 	case POP_ONE: res->kind = CODE_POP1; return true;
 
 	case THROW: res->kind = CODE_THROW; return true;

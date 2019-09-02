@@ -263,18 +263,6 @@ static bool run_callconstructor(struct Runner *rnr, const struct CodeOp *op)
 	return true;
 }
 
-static bool run_boolneg(struct Runner *rnr, const struct CodeOp *op)
-{
-	assert(rnr->stacktop > rnr->stackbot);
-	BoolObject **ptr = (BoolObject **)(rnr->stacktop - 1);
-	BoolObject *old = *ptr;
-	*ptr = boolobj_c2asda(!boolobj_asda2c(*ptr));
-	OBJECT_DECREF(old);
-
-	rnr->opidx++;
-	return true;
-}
-
 static bool run_jump(struct Runner *rnr, const struct CodeOp *op)
 {
 	rnr->opidx = op->data.jump_idx;
@@ -533,7 +521,6 @@ static bool run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_GETFROMMODULE, run_getfrommodule);
 		BOILERPLATE(CODE_CALLFUNC, run_callfunc);
 		BOILERPLATE(CODE_CALLCONSTRUCTOR, run_callconstructor);
-		BOILERPLATE(CODE_BOOLNEG, run_boolneg);
 		BOILERPLATE(CODE_JUMP, run_jump);
 		BOILERPLATE(CODE_JUMPIF, run_jumpif);
 		BOILERPLATE(CODE_JUMPIFEQ, run_jumpifeq);

@@ -23,8 +23,6 @@ UNBOX = b'o'
 STR_CONSTANT = b'"'
 NON_NEGATIVE_INT_CONSTANT = b'1'
 NEGATIVE_INT_CONSTANT = b'2'
-TRUE_CONSTANT = b'T'
-FALSE_CONSTANT = b'F'
 CALL_FUNCTION = b'('
 CALL_CONSTRUCTOR = b')'
 STR_JOIN = b'j'
@@ -32,7 +30,6 @@ POP_ONE = b'P'
 STORE_RETURN_VALUE = b'R'
 THROW = b't'
 YIELD = b'Y'
-BOOL_NEGATION = b'!'
 SET_METHODS_TO_CLASS = b'S'
 END_OF_BODY = b'E'
 
@@ -265,11 +262,6 @@ class _BytecodeWriter:
                 self.bytecode.add_big_uint(abs(op.python_int))
             return
 
-        if isinstance(op, opcoder.BoolConstant):
-            self.bytecode.add_byte(
-                TRUE_CONSTANT if op.python_bool else FALSE_CONSTANT)
-            return
-
         if isinstance(op, opcoder.CreateFunction):
             assert isinstance(op.functype, objects.FunctionType)
             self.bytecode.add_byte(CREATE_FUNCTION)
@@ -376,7 +368,6 @@ class _BytecodeWriter:
 
         simple_things = [
             (opcoder.PopOne, POP_ONE),
-            (opcoder.BoolNegation, BOOL_NEGATION),
             (opcoder.Plus, PLUS),
             (opcoder.Minus, MINUS),
             (opcoder.PrefixMinus, PREFIX_MINUS),
