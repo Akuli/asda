@@ -255,6 +255,15 @@ class CallFunction(PassThroughNode):
         self.is_returning = is_returning
 
 
+class CallConstructor(PassThroughNode):
+
+    def __init__(self, tybe, how_many_args, **kwargs):
+        super().__init__(
+            use_count=how_many_args, size_delta=(-how_many_args + 1), **kwargs)
+        self.tybe = tybe
+        self.how_many_args = how_many_args
+
+
 class CreateFunction(PassThroughNode):
 
     def __init__(self, functype, body_root_node, **kwargs):
@@ -720,7 +729,7 @@ class _TreeCreator:
 
         elif isinstance(expression, cooked_ast.PrefixMinus):
             self.do_expression(expression.prefixed)
-            self.add_pass_through_node(PrefixMinus())
+            self.add_pass_through_node(PrefixMinus(**boilerplate))
 
         elif isinstance(expression, (
                 cooked_ast.Plus, cooked_ast.Times,
@@ -755,15 +764,24 @@ class _TreeCreator:
         elif isinstance(expression, cooked_ast.StrJoin):
             for part in expression.parts:
                 self.do_expression(part)
-            self.add_pass_through_node(StrJoin(len(expression.parts)))
+
+            self.add_pass_through_node(StrJoin(
+                len(expression.parts), **boilerplate))
 
         elif isinstance(expression, cooked_ast.CallFunction):
             self.do_function_call(expression)
 
+        elif isinstance(expression, cooked_ast.New):
+            for arg in expression.args:
+                self.do_expression(arg)
+
+            self.add_pass_through_node(CallConstructor(
+                expression.type, len(expression.args), **boilerplate))
+
         elif isinstance(expression, cooked_ast.GetAttr):
             self.do_expression(expression.obj)
             self.add_pass_through_node(GetAttr(
-                expression.obj.type, expression.attrname))
+                expression.obj.type, expression.attrname, **boilerplate))
 
         # TODO: when closures work again, figure out how to do closures
         #       for arguments of the function

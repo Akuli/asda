@@ -214,6 +214,11 @@ class _OpCoder:
                 lineno, node.how_many_args))
             return
 
+        if isinstance(node, decision_tree.CallConstructor):
+            self.output.ops.append(CallConstructor(
+                lineno, node.tybe, node.how_many_args))
+            return
+
         if isinstance(node, decision_tree.StrJoin):
             self.output.ops.append(StrJoin(
                 lineno, node.how_many_strings))
