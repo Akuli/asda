@@ -255,6 +255,14 @@ class CallFunction(PassThroughNode):
         self.is_returning = is_returning
 
 
+class CreateFunction(PassThroughNode):
+
+    def __init__(self, functype, body_root_node, **kwargs):
+        super().__init__(use_count=0, size_delta=1, **kwargs)
+        self.functype = functype
+        self.body_root_node = body_root_node
+
+
 class CallConstructor(PassThroughNode):
 
     def __init__(self, tybe, how_many_args, **kwargs):
@@ -264,12 +272,13 @@ class CallConstructor(PassThroughNode):
         self.how_many_args = how_many_args
 
 
-class CreateFunction(PassThroughNode):
+class SetMethodsToClass(PassThroughNode):
 
-    def __init__(self, functype, body_root_node, **kwargs):
-        super().__init__(use_count=0, size_delta=1, **kwargs)
-        self.functype = functype
-        self.body_root_node = body_root_node
+    def __init__(self, klass, how_many_methods, **kwargs):
+        super().__init__(
+            use_count=how_many_methods, size_delta=-how_many_methods, **kwargs)
+        self.klass = klass
+        self.how_many_methods = how_many_methods
 
 
 # stack should contain the arguments and the function to partial
@@ -883,6 +892,12 @@ class _TreeCreator:
                 self.add_pass_through_node(StoreReturnValue(**boilerplate))
             self.exit_points.append(self.set_next_node)
             self.set_next_node = lambda node: None
+
+        elif isinstance(statement, cooked_ast.SetMethodsToClass):
+            for method in statement.methods:
+                self.do_expression(method)
+            self.add_pass_through_node(SetMethodsToClass(
+                statement.klass, len(statement.methods)))
 
         else:
             assert False, type(statement)     # pragma: no cover

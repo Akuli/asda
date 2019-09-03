@@ -239,6 +239,11 @@ class _OpCoder:
                 lineno, node.how_many_args))
             return
 
+        if isinstance(node, decision_tree.SetMethodsToClass):
+            self.output.ops.append(SetMethodsToClass(
+                lineno, node.klass, node.how_many_methods))
+            return
+
         raise NotImplementedError(repr(node))
 
     def opcode_tree(self, node):
