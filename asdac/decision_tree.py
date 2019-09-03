@@ -740,6 +740,24 @@ class _TreeCreator:
         self.add_pass_through_node(node)
         return True
 
+    def _do_if(self, cond, if_callback, else_callback, **boilerplate):
+        self.do_expression(cond)
+        result = BoolDecision(**boilerplate)
+
+        if_creator = self.subcreator()
+        if_creator.set_next_node = result.set_then
+        if_callback(if_creator)
+
+        else_creator = self.subcreator()
+        else_creator.set_next_node = result.set_otherwise
+        else_callback(else_creator)
+
+        self.set_next_node(result)
+        self.set_next_node = lambda next_node: (
+            if_creator.set_next_node(next_node),
+            else_creator.set_next_node(next_node),
+        )
+
     def do_expression(self, expression):
         assert expression.type is not None
         boilerplate = {'location': expression.location}
@@ -756,6 +774,13 @@ class _TreeCreator:
             var = expression.var    # pep8 line length
             if self._add_var_lookup_without_unboxing(var, **boilerplate):
                 self.add_pass_through_node(UnBox())
+
+        elif isinstance(expression, cooked_ast.IfExpression):
+            self._do_if(
+                expression.cond,
+                lambda creator: creator.do_expression(expression.true_expr),
+                lambda creator: creator.do_expression(expression.false_expr),
+                **boilerplate)
 
         elif isinstance(expression, cooked_ast.PrefixMinus):
             self.do_expression(expression.prefixed)
@@ -869,22 +894,11 @@ class _TreeCreator:
                 statement.obj.type, statement.attrname))
 
         elif isinstance(statement, cooked_ast.IfStatement):
-            self.do_expression(statement.cond)
-            result = BoolDecision(**boilerplate)
-
-            if_creator = self.subcreator()
-            if_creator.set_next_node = result.set_then
-            if_creator.do_body(statement.if_body)
-
-            else_creator = self.subcreator()
-            else_creator.set_next_node = result.set_otherwise
-            else_creator.do_body(statement.else_body)
-
-            self.set_next_node(result)
-            self.set_next_node = lambda next_node: (
-                if_creator.set_next_node(next_node),
-                else_creator.set_next_node(next_node),
-            )
+            self._do_if(
+                statement.cond,
+                lambda creator: creator.do_body(statement.if_body),
+                lambda creator: creator.do_body(statement.else_body),
+                **boilerplate)
 
         elif isinstance(statement, cooked_ast.Loop):
             creator = self.subcreator()
