@@ -214,6 +214,12 @@ class Times(PassThroughNode):
         super().__init__(use_count=2, size_delta=-1, **kwargs)
 
 
+class Minus(PassThroughNode):
+
+    def __init__(self, **kwargs):
+        super().__init__(use_count=2, size_delta=-1, **kwargs)
+
+
 class PrefixMinus(PassThroughNode):
 
     def __init__(self, **kwargs):
@@ -756,7 +762,7 @@ class _TreeCreator:
             self.add_pass_through_node(PrefixMinus(**boilerplate))
 
         elif isinstance(expression, (
-                cooked_ast.Plus, cooked_ast.Times,
+                cooked_ast.Plus, cooked_ast.Minus, cooked_ast.Times,
                 cooked_ast.Equal, cooked_ast.NotEqual)):
             self.do_expression(expression.lhs)
             self.do_expression(expression.rhs)
@@ -765,6 +771,8 @@ class _TreeCreator:
                 self.add_pass_through_node(Plus(**boilerplate))
             elif isinstance(expression, cooked_ast.Times):
                 self.add_pass_through_node(Times(**boilerplate))
+            elif isinstance(expression, cooked_ast.Minus):
+                self.add_pass_through_node(Minus(**boilerplate))
             else:
                 # push TRUE or FALSE to stack, usually this gets optimized into
                 # something that doesn't involve bool objects at all
