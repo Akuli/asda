@@ -201,6 +201,12 @@ class _OpCoder:
                 self.attrib_index(node.tybe, node.attrname)))
             return
 
+        if isinstance(node, decision_tree.SetAttr):
+            self.output.ops.append(SetAttr(
+                lineno, node.tybe,
+                self.attrib_index(node.tybe, node.attrname)))
+            return
+
         if isinstance(node, decision_tree.StrConstant):
             self.output.ops.append(StrConstant(lineno, node.python_string))
             return

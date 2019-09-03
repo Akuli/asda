@@ -220,6 +220,14 @@ class PrefixMinus(PassThroughNode):
         super().__init__(use_count=1, size_delta=0, **kwargs)
 
 
+class SetAttr(PassThroughNode):
+
+    def __init__(self, tybe, attrname, **kwargs):
+        super().__init__(use_count=2, size_delta=-2, **kwargs)
+        self.tybe = tybe
+        self.attrname = attrname
+
+
 class GetAttr(PassThroughNode):
 
     def __init__(self, tybe, attrname, **kwargs):
@@ -838,6 +846,12 @@ class _TreeCreator:
                 statement.var, **boilerplate)
             assert its_a_box
             self.add_pass_through_node(SetToBox())
+
+        elif isinstance(statement, cooked_ast.SetAttr):
+            self.do_expression(statement.value)
+            self.do_expression(statement.obj)
+            self.add_pass_through_node(SetAttr(
+                statement.obj.type, statement.attrname))
 
         elif isinstance(statement, cooked_ast.IfStatement):
             self.do_expression(statement.cond)
