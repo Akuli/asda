@@ -165,6 +165,7 @@ class _OpCoder:
             (decision_tree.PushDummy, PushDummy),
             (decision_tree.PopOne, PopOne),
             (decision_tree.StoreReturnValue, StoreReturnValue),
+            (decision_tree.Throw, Throw),
         ]
         for node_class, op_class in simple:
             if isinstance(node, node_class):

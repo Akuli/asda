@@ -236,6 +236,13 @@ class GetAttr(PassThroughNode):
         self.attrname = attrname
 
 
+# TODO: optimize dead code after Throw? careful with local variable PopOnes
+class Throw(PassThroughNode):
+
+    def __init__(self, **kwargs):
+        super().__init__(use_count=1, size_delta=-1, **kwargs)
+
+
 class StrConstant(PassThroughNode):
 
     def __init__(self, python_string, **kwargs):
@@ -906,6 +913,10 @@ class _TreeCreator:
                 self.add_pass_through_node(StoreReturnValue(**boilerplate))
             self.exit_points.append(self.set_next_node)
             self.set_next_node = lambda node: None
+
+        elif isinstance(statement, cooked_ast.Throw):
+            self.do_expression(statement.value)
+            self.add_pass_through_node(Throw(**boilerplate))
 
         elif isinstance(statement, cooked_ast.SetMethodsToClass):
             for method in statement.methods:

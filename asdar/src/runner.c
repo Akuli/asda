@@ -594,7 +594,8 @@ static void clear_stack(struct Runner *rnr)
 {
 	assert(rnr->stacktop >= rnr->stackbot);
 	for (long i = 0; i < rnr->stacktop - rnr->stackbot; i++)
-		OBJECT_DECREF(rnr->stackbot[i]);
+		if (rnr->stackbot[i])
+			OBJECT_DECREF(rnr->stackbot[i]);
 	rnr->stacktop = rnr->stackbot;
 }
 
