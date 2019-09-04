@@ -7,8 +7,8 @@ import textwrap
 
 import colorama
 
-from . import (bytecoder, common, cooked_ast, decision_tree, opcoder,
-               optimizer, raw_ast)
+from asdac import (bytecoder, common, cooked_ast, decision_tree,
+                   decision_tree_creator, opcoder, optimizer, raw_ast)
 
 
 # TODO: error handling for bytecoder.RecompileFixableError
@@ -45,7 +45,7 @@ def source2bytecode(compilation: common.Compilation):
     compilation.set_export_types(export_types)
 
     compilation.messager(3, "Creating a decision tree")
-    root_node = decision_tree.create_tree(cooked)
+    root_node = decision_tree_creator.create_tree(cooked)
 
     compilation.messager(3, "Optimizing")
     decision_tree.graphviz(root_node, 'before_optimization')
