@@ -50,7 +50,9 @@ def optimize(root_node, createfunc_node):
         # been called subsequently without any of them doing anything
         while did_nothing_count < len(function_list):
             optimizer_function = next(infinite_function_iterator)
+            #print("optimizer: calling", optimizer_function.__name__)
             if optimizer_function(root_node, all_nodes, createfunc_node):
+                #print("optimizer:   -> True")
                 did_something = True
                 did_nothing_count = 0
                 all_nodes = decision_tree.get_all_nodes(root_node)
@@ -60,6 +62,7 @@ def optimize(root_node, createfunc_node):
                     #decision_tree.graphviz(root_node, 'error')
                     raise
             else:
+                #print("optimizer:   -> False")
                 did_nothing_count += 1
 
     return did_something

@@ -242,7 +242,8 @@ class GetAttr(PassThroughNode):
         self.attrname = attrname
 
 
-# TODO: optimize dead code after Throw? careful with local variable PopOnes
+# TODO: optimize dead code after Throw? make sure local variable PopOnes work
+# there is similar handling for returns, maybe reuse that for Throw?
 class Throw(PassThroughNode):
 
     def __init__(self, **kwargs):
@@ -408,7 +409,7 @@ def _get_debug_string(node):
     return None
 
 
-def _clean_unreachable_nodes(unreachable_head):
+def _clean_unreachable_nodes_given_one_of_them(unreachable_head):
     unreachable = set()
     to_visit = collections.deque([unreachable_head])
     did_nothing_count = 0
@@ -444,7 +445,7 @@ def replace_node(old: Node, new: Node):
         ref.set(new)
 
     old.jumped_from.clear()
-    _clean_unreachable_nodes(old)
+    _clean_unreachable_nodes_given_one_of_them(old)
 
 
 # size_dict is like this {node: stack size BEFORE running the node}
@@ -543,8 +544,9 @@ def get_all_nodes(root_node):
     return result
 
 
-# TODO: optimize this?
-def get_unreachable_nodes(reachable_nodes: set):
+# could be optimized more, but not a problem because this is used only for
+# graphviz stuff
+def _get_unreachable_nodes(reachable_nodes: set):
     to_visit = reachable_nodes.copy()
     reachable_and_unreachable = set()
 
@@ -574,7 +576,7 @@ def _graphviz_id(node):
 
 def _graphviz_code(root_node, label_extra=''):
     reachable = get_all_nodes(root_node)
-    unreachable = get_unreachable_nodes(reachable)
+    unreachable = _get_unreachable_nodes(reachable)
     assert not (reachable & unreachable)
 
     try:
@@ -656,7 +658,8 @@ def graphviz(root_node, filename_without_ext):
 # converts cooked ast to a decision tree
 class _TreeCreator:
 
-    def __init__(self, local_vars_level, local_vars_list, exit_points):
+    def __init__(self, local_vars_level, local_vars_list, exit_points,
+                 unreachable_nodes_to_clean_up):
         # from now on, local variables are items in the beginning of the stack
         #
         # also the .type attribute of the variables doesn't contain info about
@@ -682,13 +685,18 @@ class _TreeCreator:
         # not used in non-function tree creators
         self.exit_points = exit_points
 
+        # unreachable nodes are generally bad, so keep list of them and clean
+        # them up before passing to next compile step
+        self.unreachable_nodes_to_clean_up = unreachable_nodes_to_clean_up
+
         # why can't i assign in python lambda without dirty setattr haxor :(
         self.set_next_node = lambda node: setattr(self, 'root_node', node)
         self.root_node = None
 
     def subcreator(self):
         return _TreeCreator(
-            self.local_vars_level, self.local_vars_list, self.exit_points)
+            self.local_vars_level, self.local_vars_list, self.exit_points,
+            self.unreachable_nodes_to_clean_up)
 
     def add_pass_through_node(self, node):
         assert isinstance(node, PassThroughNode)
@@ -844,7 +852,8 @@ class _TreeCreator:
         #       for arguments of the function
         elif isinstance(expression, cooked_ast.CreateFunction):
             creator = _TreeCreator(self.local_vars_level + 1,
-                                   expression.argvars.copy(), [])
+                                   expression.argvars.copy(), [],
+                                   self.unreachable_nodes_to_clean_up)
             creator.add_pass_through_node(Start(expression.argvars.copy()))
             creator.do_body(expression.body)
             creator.fix_variable_stuff()
@@ -934,7 +943,7 @@ class _TreeCreator:
                 self.do_expression(statement.value)
                 self.add_pass_through_node(StoreReturnValue(**boilerplate))
             self.exit_points.append(self.set_next_node)
-            self.set_next_node = lambda node: None
+            self.set_next_node = self.unreachable_nodes_to_clean_up.append
 
         elif isinstance(statement, cooked_ast.Throw):
             self.do_expression(statement.value)
@@ -1014,12 +1023,15 @@ class _TreeCreator:
 
 
 def create_tree(cooked_statements):
-    tree_creator = _TreeCreator(1, [], [])
+    tree_creator = _TreeCreator(1, [], [], [])
     tree_creator.add_pass_through_node(Start([]))
 
     tree_creator.do_body(cooked_statements)
     tree_creator.fix_variable_stuff()
     assert not tree_creator.get_nonlocal_vars_to_partial()
+
+    for node in tree_creator.unreachable_nodes_to_clean_up:
+        _clean_unreachable_nodes_given_one_of_them(node)
 
     assert isinstance(tree_creator.root_node, Start)
     return tree_creator.root_node
