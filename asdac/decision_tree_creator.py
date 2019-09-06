@@ -125,7 +125,7 @@ class _TreeCreator:
             self.add_pass_through_node(decision_tree.StrConstant(
                 expression.python_string, **boilerplate))
 
-        elif isinstance(expression, decision_tree.IntConstant):
+        elif isinstance(expression, cooked_ast.IntConstant):
             self.add_pass_through_node(decision_tree.IntConstant(
                 expression.python_int, **boilerplate))
 
@@ -141,23 +141,22 @@ class _TreeCreator:
                 lambda creator: creator.do_expression(expression.false_expr),
                 **boilerplate)
 
-        elif isinstance(expression, decision_tree.PrefixMinus):
+        elif isinstance(expression, cooked_ast.PrefixMinus):
             self.do_expression(expression.prefixed)
             self.add_pass_through_node(
                 decision_tree.PrefixMinus(**boilerplate))
 
         elif isinstance(expression, (
-                decision_tree.Plus, decision_tree.Minus,
-                decision_tree.Times,
+                cooked_ast.Plus, cooked_ast.Minus, cooked_ast.Times,
                 cooked_ast.Equal, cooked_ast.NotEqual)):
             self.do_expression(expression.lhs)
             self.do_expression(expression.rhs)
 
-            if isinstance(expression, decision_tree.Plus):
+            if isinstance(expression, cooked_ast.Plus):
                 self.add_pass_through_node(decision_tree.Plus(**boilerplate))
-            elif isinstance(expression, decision_tree.Times):
+            elif isinstance(expression, cooked_ast.Times):
                 self.add_pass_through_node(decision_tree.Times(**boilerplate))
-            elif isinstance(expression, decision_tree.Minus):
+            elif isinstance(expression, cooked_ast.Minus):
                 self.add_pass_through_node(decision_tree.Minus(**boilerplate))
             else:
                 # push TRUE or FALSE to stack, usually this gets optimized into
@@ -179,7 +178,7 @@ class _TreeCreator:
                     eq.otherwise.set_next_node(node),
                 )
 
-        elif isinstance(expression, decision_tree.StrJoin):
+        elif isinstance(expression, cooked_ast.StrJoin):
             for part in expression.parts:
                 self.do_expression(part)
 
@@ -203,7 +202,7 @@ class _TreeCreator:
 
         # TODO: when closures work again, figure out how to do closures
         #       for arguments of the function
-        elif isinstance(expression, decision_tree.CreateFunction):
+        elif isinstance(expression, cooked_ast.CreateFunction):
             creator = _TreeCreator(self.local_vars_level + 1,
                                    expression.argvars.copy(), [],
                                    self.unreachable_nodes_to_clean_up)
