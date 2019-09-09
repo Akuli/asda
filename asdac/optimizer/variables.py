@@ -129,13 +129,6 @@ def _sets_and_gets_to_dicts(all_nodes, start_node):
             set2gets[node] = set(_find_gets_for_set(
                 node.next_node, node.var, set()))
 
-            old_stuff = {
-                nodee for nodee in decision_tree.get_all_nodes(node)
-                if isinstance(nodee, decision_tree.GetLocalVar)
-                and nodee.var is node.var
-            }
-            assert set2gets[node].issubset(old_stuff)
-
     get2sets = {}
     for node in all_nodes:
         if isinstance(node, decision_tree.GetLocalVar):
