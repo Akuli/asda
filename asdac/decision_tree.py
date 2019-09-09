@@ -404,82 +404,6 @@ def _get_debug_string(node):
     return None
 
 
-def clean_unreachable_nodes_given_one_of_them(unreachable_head):
-    unreachable = set()
-    to_visit = collections.deque([unreachable_head])
-    did_nothing_count = 0
-
-    # TODO: does this loop terminate if there is a cycle of unreachable nodes?
-    while did_nothing_count < len(to_visit):
-        assert to_visit
-        node = to_visit.popleft()
-
-        if all(ref.objekt in unreachable for ref in node.jumped_from):
-            unreachable.add(node)
-            to_visit.extend(node.get_jumps_to())
-            did_nothing_count = 0
-        else:
-            to_visit.append(node)
-            did_nothing_count += 1
-
-    assert unreachable_head in unreachable
-
-    # now to_visit contains reachable nodes that the unreachable nodes jump to
-    for reachable_node in to_visit:
-        for ref in reachable_node.jumped_from.copy():
-            if ref.objekt in unreachable:
-                reachable_node.jumped_from.remove(ref)
-
-
-# to use this, create the new node and set its .next_node or similar
-# then call this function
-def replace_node(old: Node, new: Node):
-    if new is not None:
-        new.jumped_from.update(old.jumped_from)
-
-    for ref in old.jumped_from:
-        ref.set(new)
-
-    old.jumped_from.clear()
-    clean_unreachable_nodes_given_one_of_them(old)
-
-
-# size_dict is like this {node: stack size BEFORE running the node}
-def _get_stack_sizes_to_dict(node, size, size_dict):
-    assert node is not None
-
-    while True:
-        if node in size_dict:
-            assert size == size_dict[node]
-            return
-
-        size_dict[node] = size
-        size += node.size_delta
-        assert size >= 0
-
-        jumps_to = list(node.get_jumps_to())
-        if not jumps_to:
-            return
-
-        # avoid recursion in the common case because it could be slow
-        node = jumps_to.pop()
-        for other in jumps_to:
-            _get_stack_sizes_to_dict(other, size, size_dict)
-
-
-def get_stack_sizes(root_node):
-    result = {}
-    _get_stack_sizes_to_dict(root_node, 0, result)
-    return result
-
-
-def get_max_stack_size(root_node):
-    return max(
-        max(before, before + node.size_delta)
-        for node, before in get_stack_sizes(root_node).items()
-    )
-
-
 def _items_in_all_sets(sets):
     return functools.reduce(set.intersection, sets)
 
@@ -523,6 +447,42 @@ def find_merge(nodes, *, callback=(lambda node: node.get_jumps_to())):
             return None
 
 
+# size_dict is like this {node: stack size BEFORE running the node}
+def _get_stack_sizes_to_dict(node, size, size_dict):
+    assert node is not None
+
+    while True:
+        if node in size_dict:
+            assert size == size_dict[node]
+            return
+
+        size_dict[node] = size
+        size += node.size_delta
+        assert size >= 0
+
+        jumps_to = list(node.get_jumps_to())
+        if not jumps_to:
+            return
+
+        # avoid recursion in the common case because it could be slow
+        node = jumps_to.pop()
+        for other in jumps_to:
+            _get_stack_sizes_to_dict(other, size, size_dict)
+
+
+def get_stack_sizes(root_node):
+    result = {}
+    _get_stack_sizes_to_dict(root_node, 0, result)
+    return result
+
+
+def get_max_stack_size(root_node):
+    return max(
+        max(before, before + node.size_delta)
+        for node, before in get_stack_sizes(root_node).items()
+    )
+
+
 # root_node does NOT have to be a Start node
 # TODO: cache result somewhere, but careful with invalidation?
 def get_all_nodes(root_node):
@@ -538,6 +498,56 @@ def get_all_nodes(root_node):
             to_visit.update(node.get_jumps_to())
 
     return result
+
+
+# this may be slow
+def clean_all_unreachable_nodes(start_node):
+    reachable_nodes = get_all_nodes(start_node)
+    for node in reachable_nodes:
+        for ref in node.jumped_from.copy():
+            if ref.objekt not in reachable_nodes:
+                ref.set(None)
+                node.jumped_from.remove(ref)
+
+
+def clean_unreachable_nodes_given_one_of_them(unreachable_head):
+    unreachable = set()
+    to_visit = collections.deque([unreachable_head])
+    did_nothing_count = 0
+
+    # TODO: does this loop terminate if there is a cycle of unreachable nodes?
+    while did_nothing_count < len(to_visit):
+        assert to_visit
+        node = to_visit.popleft()
+
+        if all(ref.objekt in unreachable for ref in node.jumped_from):
+            unreachable.add(node)
+            to_visit.extend(node.get_jumps_to())
+            did_nothing_count = 0
+        else:
+            to_visit.append(node)
+            did_nothing_count += 1
+
+    assert unreachable_head in unreachable
+
+    # now to_visit contains reachable nodes that the unreachable nodes jump to
+    for reachable_node in to_visit:
+        for ref in reachable_node.jumped_from.copy():
+            if ref.objekt in unreachable:
+                reachable_node.jumped_from.remove(ref)
+
+
+# to use this, create the new node and set its .next_node or similar
+# then call this function
+def replace_node(old: Node, new: Node):
+    if new is not None:
+        new.jumped_from.update(old.jumped_from)
+
+    for ref in old.jumped_from:
+        ref.set(new)
+
+    old.jumped_from.clear()
+    clean_unreachable_nodes_given_one_of_them(old)
 
 
 # could be optimized more, but not a problem because this is used only for

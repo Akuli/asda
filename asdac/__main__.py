@@ -48,9 +48,9 @@ def source2bytecode(compilation: common.Compilation):
     root_node = decision_tree_creator.create_tree(cooked)
 
     compilation.messager(3, "Optimizing")
-    #decision_tree.graphviz(root_node, 'before_optimization')
+    decision_tree.graphviz(root_node, 'before_optimization')
     optimizer.optimize(root_node, None)
-    #decision_tree.graphviz(root_node, 'after_optimization')
+    decision_tree.graphviz(root_node, 'after_optimization')
 
     compilation.messager(3, "Creating opcode")
     opcode = opcoder.create_opcode(compilation, root_node, export_vars, source)

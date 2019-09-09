@@ -200,11 +200,11 @@ class _TreeCreator:
         elif isinstance(expression, cooked_ast.CreateFunction):
             creator = _TreeCreator(self.local_vars_level + 1,
                                    expression.argvars.copy(),
-                                   self.possibly_unreachable_nodes)
+                                   [])
             creator.add_pass_through_node(decision_tree.Start(
                 expression.argvars.copy()))
             creator.do_body(expression.body)
-            creator.fix_variable_stuff()
+            creator.tree_creation_done()
 
             partialling = creator.get_nonlocal_vars_to_partial()
             for var in partialling:
@@ -319,7 +319,7 @@ class _TreeCreator:
             assert not isinstance(statement, list), statement
             self.do_statement(statement)
 
-    def fix_variable_stuff(self):
+    def tree_creation_done(self):
         assert isinstance(self.root_node, decision_tree.Start)
 
         closure_argvars = self.local_vars_list[:len(self.closure_vars)]
@@ -363,6 +363,11 @@ class _TreeCreator:
         self.root_node = creator.root_node
         self.set_next_node = creator.set_next_node
 
+        # there used to be code that handled this with a less dumb algorithm
+        # than decision_tree.clean_all_unreachable_nodes, but it didn't work in
+        # all corner cases
+        decision_tree.clean_all_unreachable_nodes(self.root_node)
+
     def get_nonlocal_vars_to_partial(self):
         local2nonlocal = {
             local: nonl0cal for nonl0cal, local in self.closure_vars.items()}
@@ -375,12 +380,8 @@ def create_tree(cooked_statements):
     tree_creator.add_pass_through_node(decision_tree.Start([]))
 
     tree_creator.do_body(cooked_statements)
-    tree_creator.fix_variable_stuff()
+    tree_creator.tree_creation_done()
     assert not tree_creator.get_nonlocal_vars_to_partial()
-
-    for node in tree_creator.possibly_unreachable_nodes:
-        if not node.jumped_from:
-            decision_tree.clean_unreachable_nodes_given_one_of_them(node)
 
     assert isinstance(tree_creator.root_node, decision_tree.Start)
     return tree_creator.root_node

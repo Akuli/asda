@@ -126,8 +126,11 @@ def _sets_and_gets_to_dicts(all_nodes, start_node):
     for node in all_nodes:
         if isinstance(node, decision_tree.SetLocalVar):
             assert node not in set2gets
-            set2gets[node] = set(_find_gets_for_set(
-                node.next_node, node.var, set()))
+            if node.next_node is None:
+                set2gets[node] = set()
+            else:
+                set2gets[node] = set(_find_gets_for_set(
+                    node.next_node, node.var, set()))
 
     get2sets = {}
     for node in all_nodes:
