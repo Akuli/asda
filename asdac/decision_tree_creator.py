@@ -8,8 +8,7 @@ from asdac import cooked_ast, decision_tree, objects
 
 class _TreeCreator:
 
-    def __init__(self, local_vars_level, local_vars_list,
-                 possibly_unreachable_nodes):
+    def __init__(self, local_vars_level, local_vars_list):
         # the .type attribute of the variables doesn't contain info about
         # whether the variable is wrapped in a box object or not
         #
@@ -31,18 +30,12 @@ class _TreeCreator:
         # values are argument variables with .level == self.local_vars_level
         self.closure_vars = {}
 
-        # unreachable nodes are generally bad, so keep list of them and clean
-        # them up before passing to next compile step
-        self.possibly_unreachable_nodes = possibly_unreachable_nodes
-
         # why can't i assign in python lambda without dirty setattr haxor :(
         self.set_next_node = lambda node: setattr(self, 'root_node', node)
         self.root_node = None
 
     def subcreator(self):
-        return _TreeCreator(
-            self.local_vars_level, self.local_vars_list,
-            self.possibly_unreachable_nodes)
+        return _TreeCreator(self.local_vars_level, self.local_vars_list)
 
     def add_pass_through_node(self, node):
         assert isinstance(node, decision_tree.PassThroughNode)
@@ -199,8 +192,7 @@ class _TreeCreator:
         #       for arguments of the function
         elif isinstance(expression, cooked_ast.CreateFunction):
             creator = _TreeCreator(self.local_vars_level + 1,
-                                   expression.argvars.copy(),
-                                   [])
+                                   expression.argvars.copy())
             creator.add_pass_through_node(decision_tree.Start(
                 expression.argvars.copy()))
             creator.do_body(expression.body)
@@ -297,9 +289,11 @@ class _TreeCreator:
                 self.add_pass_through_node(
                     decision_tree.StoreReturnValue(**boilerplate))
 
-            # the next node might still be somehow reachable, because multiple
-            # nodes can jump to the same node
-            self.set_next_node = self.possibly_unreachable_nodes.append
+            # the next node might or might not become unreachable, because
+            # multiple nodes can jump to the same node
+            #
+            # if it becomes unreachable, tree_creation_done() cleans it up
+            self.set_next_node = lambda node: None
 
         elif isinstance(statement, cooked_ast.Throw):
             self.do_expression(statement.value)
@@ -376,7 +370,7 @@ class _TreeCreator:
 
 
 def create_tree(cooked_statements):
-    tree_creator = _TreeCreator(1, [], [])
+    tree_creator = _TreeCreator(1, [])
     tree_creator.add_pass_through_node(decision_tree.Start([]))
 
     tree_creator.do_body(cooked_statements)
