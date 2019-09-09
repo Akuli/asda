@@ -4,6 +4,7 @@ from asdac import decision_tree
 from asdac.optimizer import copy_pasta, decisions, functions, popone, variables
 
 
+# FIXME: some optimizations commented out and broken
 _function_lists = [
     # do functions first, because an entire CreateFunction node can get
     # optimized away if the function is never used, but is good to get error
@@ -25,6 +26,7 @@ _function_lists = [
      decisions.optimize_booldecision_before_truefalse,
      variables.optimize_temporary_vars,
      variables.optimize_unnecessary_boxes,
+     variables.optimize_variable_assigned_to_itself,
      popone.optimize_popones,
      ],
 ]
@@ -50,9 +52,7 @@ def optimize(root_node, createfunc_node):
         # been called subsequently without any of them doing anything
         while did_nothing_count < len(function_list):
             optimizer_function = next(infinite_function_iterator)
-            #print("optimizer: calling", optimizer_function.__name__)
             if optimizer_function(root_node, all_nodes, createfunc_node):
-                #print("optimizer:   -> True")
                 did_something = True
                 did_nothing_count = 0
                 all_nodes = decision_tree.get_all_nodes(root_node)
@@ -62,7 +62,6 @@ def optimize(root_node, createfunc_node):
                     #decision_tree.graphviz(root_node, 'error')
                     raise
             else:
-                #print("optimizer:   -> False")
                 did_nothing_count += 1
 
     return did_something

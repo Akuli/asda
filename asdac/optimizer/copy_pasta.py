@@ -33,10 +33,8 @@ def _nodes_are_similar(a: decision_tree.Node, b: decision_tree.Node):
     if they_are(decision_tree.GetBuiltinVar):
         return a.varname == b.varname
     if (
-      they_are(decision_tree.SetToBottom) or
-      they_are(decision_tree.GetFromBottom)):
-        if a.var is b.var:
-            assert a.index == b.index
+      they_are(decision_tree.SetLocalVar) or
+      they_are(decision_tree.GetLocalVar)):
         return a.var == b.var
     if they_are(decision_tree.PopOne):
         return a.is_popping_a_dummy == b.is_popping_a_dummy

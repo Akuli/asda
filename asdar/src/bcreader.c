@@ -20,14 +20,13 @@
 
 #define SET_LINENO 'L'
 #define GET_BUILTIN_VAR 'U'
-#define SET_TO_BOTTOM 'B'
-#define GET_FROM_BOTTOM 'b'
+#define SET_LOCAL_VAR 'B'
+#define GET_LOCAL_VAR 'b'
 #define CREATE_BOX '0'
 #define SET_TO_BOX 'O'
 #define UNBOX 'o'
 #define SET_ATTR ':'
 #define GET_ATTR '.'
-#define PUSH_DUMMY 'u'
 #define GET_FROM_MODULE 'm'
 #define STR_CONSTANT '"'
 #define CALL_FUNCTION '('
@@ -534,15 +533,11 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 		res->kind = CODE_CONSTANT;
 		return read_string_constant(bcr, &res->data.obj);
 
-	case PUSH_DUMMY:
-		res->kind = CODE_PUSHDUMMY;
-		return true;
-
 	case GET_BUILTIN_VAR:
 		return read_get_builtin_var(bcr, res);
 
-	case SET_TO_BOTTOM:   res->kind = CODE_SETBOTTOM; return read_uint16(bcr, &res->data.stackbottom_index);
-	case GET_FROM_BOTTOM: res->kind = CODE_GETBOTTOM; return read_uint16(bcr, &res->data.stackbottom_index);
+	case SET_LOCAL_VAR: res->kind = CODE_SETLOCAL; return read_uint16(bcr, &res->data.localvaridx);
+	case GET_LOCAL_VAR: res->kind = CODE_GETLOCAL; return read_uint16(bcr, &res->data.localvaridx);
 
 	case CREATE_BOX: res->kind = CODE_CREATEBOX; return true;
 	case SET_TO_BOX: res->kind = CODE_SET2BOX;   return true;
@@ -625,6 +620,8 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 
 static bool read_body(struct BcReader *bcr, struct Code *code)
 {
+	if (!read_uint16(bcr, &code->nlocalvars))
+		return false;
 	if (!read_uint16(bcr, &code->maxstacksz))
 		return false;
 

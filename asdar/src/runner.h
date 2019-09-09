@@ -13,6 +13,7 @@ struct RunnerFinallyState;
 
 struct Runner {
 	Object *retval;
+	Object **locals;
 	Object **stackbot;
 	Object **stacktop;
 

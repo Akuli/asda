@@ -9,11 +9,10 @@ from . import common, objects, opcoder
 SET_LINENO = b'L'
 
 GET_BUILTIN_VAR = b'U'
-SET_TO_BOTTOM = b'B'
-GET_FROM_BOTTOM = b'b'
+SET_LOCAL_VAR = b'B'    # B for historical reasons
+GET_LOCAL_VAR = b'b'
 SET_ATTR = b':'
 GET_ATTR = b'.'
-PUSH_DUMMY = b'u'
 GET_FROM_MODULE = b'm'
 CREATE_FUNCTION = b'f'
 CREATE_PARTIAL_FUNCTION = b'p'
@@ -356,13 +355,13 @@ class _BytecodeWriter:
             self.bytecode.add_uint16(op.how_many_methods)
             return
 
-        if isinstance(op, opcoder.SetToBottom):
-            self.bytecode.add_byte(SET_TO_BOTTOM)
+        if isinstance(op, opcoder.SetLocalVar):
+            self.bytecode.add_byte(SET_LOCAL_VAR)
             self.bytecode.add_uint16(op.indeks)
             return
 
-        if isinstance(op, opcoder.GetFromBottom):
-            self.bytecode.add_byte(GET_FROM_BOTTOM)
+        if isinstance(op, opcoder.GetLocalVar):
+            self.bytecode.add_byte(GET_LOCAL_VAR)
             self.bytecode.add_uint16(op.indeks)
             return
 
@@ -382,7 +381,6 @@ class _BytecodeWriter:
             (opcoder.DiscardFinallyState, DISCARD_FINALLY_STATE),
             (opcoder.ApplyFinallyState, APPLY_FINALLY_STATE),
             (opcoder.Throw, THROW),
-            (opcoder.PushDummy, PUSH_DUMMY),
         ]
 
         for klass, byte in simple_things:
@@ -401,6 +399,7 @@ class _BytecodeWriter:
             else:
                 i += 1
 
+        self.bytecode.add_uint16(opcode.how_many_local_vars)
         self.bytecode.add_uint16(opcode.max_stack_size)
 
         for op in opcode.ops:

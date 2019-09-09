@@ -110,7 +110,8 @@ class Node:
         debug_string = _get_debug_string(self)
         if debug_string is None:
             return super().__repr__()
-        return '<%s: %s>' % (type(self).__name__, debug_string)
+        return '<%s: %s, at %#x>' % (type(self).__name__, debug_string,
+                                     id(self))
 
 
 # a node that can be used like:
@@ -137,14 +138,6 @@ class Start(PassThroughNode):
         self.argvars = argvars
 
 
-class PushDummy(PassThroughNode):
-
-    # the variable object is used for debugging and error messages
-    def __init__(self, var, **kwargs):
-        super().__init__(use_count=0, size_delta=1, **kwargs)
-        self.var = var
-
-
 class GetBuiltinVar(PassThroughNode):
 
     def __init__(self, varname, **kwargs):
@@ -152,22 +145,20 @@ class GetBuiltinVar(PassThroughNode):
         self.varname = varname
 
 
-class _BottomNode(PassThroughNode):
+class _LocalVarNode(PassThroughNode):
 
-    # the var is used for debugging and error messages
-    def __init__(self, index, var, **kwargs):
+    def __init__(self, var, **kwargs):
         super().__init__(**kwargs)
-        self.index = index
         self.var = var
 
 
-class SetToBottom(_BottomNode):
+class SetLocalVar(_LocalVarNode):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, use_count=1, size_delta=-1, **kwargs)
 
 
-class GetFromBottom(_BottomNode):
+class GetLocalVar(_LocalVarNode):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, use_count=0, size_delta=1, **kwargs)
@@ -175,9 +166,8 @@ class GetFromBottom(_BottomNode):
 
 class CreateBox(PassThroughNode):
 
-    def __init__(self, var, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(use_count=0, size_delta=+1, **kwargs)
-        self.var = var
 
 
 # stack top should have value to set, and the box (box topmost)
@@ -196,9 +186,8 @@ class UnBox(PassThroughNode):
 
 class PopOne(PassThroughNode):
 
-    def __init__(self, *, is_popping_a_dummy=False, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(use_count=1, size_delta=-1, **kwargs)
-        self.is_popping_a_dummy = is_popping_a_dummy
 
 
 class Plus(PassThroughNode):
@@ -241,8 +230,7 @@ class GetAttr(PassThroughNode):
         self.attrname = attrname
 
 
-# TODO: optimize dead code after Throw? make sure local variable PopOnes work
-# there is similar handling for returns, maybe reuse that for Throw?
+# TODO: optimize dead code after Throw? maybe similarly to Return?
 class Throw(PassThroughNode):
 
     def __init__(self, **kwargs):
@@ -278,10 +266,13 @@ class CallFunction(PassThroughNode):
 
 class CreateFunction(PassThroughNode):
 
-    def __init__(self, functype, body_root_node, **kwargs):
+    # local_argvars should be a list of Variable objects of arguments that the
+    # function body uses
+    def __init__(self, functype, body_root_node, local_argvars, **kwargs):
         super().__init__(use_count=0, size_delta=1, **kwargs)
         self.functype = functype
         self.body_root_node = body_root_node
+        self.local_argvars = local_argvars
 
 
 class CallConstructor(PassThroughNode):
@@ -341,6 +332,10 @@ class CreatePartialFunction(PassThroughNode):
 #
 # The solution is to store the return value into a special place outside the
 # stack before local variables are popped off.
+#
+# TODO: variables no longer work like they did when i wrote the above stuff
+#       maybe it's time to get rid of this now?
+#       or will this be useful for implementing exceptions?
 class StoreReturnValue(PassThroughNode):
 
     def __init__(self, **kwargs):
@@ -388,23 +383,24 @@ class EqualDecision(TwoWayDecision):
 
 
 def _get_debug_string(node):
-    if isinstance(node, (PushDummy, CreateBox)):
-        return node.var.name
     if isinstance(node, GetBuiltinVar):
         return node.varname
-    if isinstance(node, (SetToBottom, GetFromBottom)):
-        return 'varname %r, index %d' % (node.var.name, node.index)
+    if isinstance(node, (SetLocalVar, GetLocalVar)):
+        return 'var name %r' % node.var.name
     if isinstance(node, GetAttr):
         return node.tybe.name + '.' + node.attrname
     if isinstance(node, IntConstant):
         return str(node.python_int)
     if isinstance(node, StrConstant):
         return repr(node.python_string)
-    if isinstance(node, CallFunction):
+    if isinstance(node, (CallFunction, CallConstructor)):
+        if isinstance(node, CallConstructor):
+            prefix = 'type %s, ' % node.tybe.name
+        else:
+            prefix = ''
+
         n = node.how_many_args
-        return '%d arg%s' % (n, 's' * int(n != 1))
-    if isinstance(node, PopOne) and node.is_popping_a_dummy:
-        return "is popping a dummy"
+        return prefix + '%d arg%s' % (n, 's' * int(n != 1))
     return None
 
 
@@ -413,6 +409,7 @@ def clean_unreachable_nodes_given_one_of_them(unreachable_head):
     to_visit = collections.deque([unreachable_head])
     did_nothing_count = 0
 
+    # TODO: does this loop terminate if there is a cycle of unreachable nodes?
     while did_nothing_count < len(to_visit):
         assert to_visit
         node = to_visit.popleft()
@@ -598,6 +595,7 @@ def _graphviz_code(root_node, label_extra=''):
             parts.append(debug_string)
         parts.append('size_delta=' + str(node.size_delta))
         parts.append('use_count=' + str(node.use_count))
+        parts.append('id=%#x' % id(node))
 
         if node in unreachable:
             parts.append('UNREACHABLE')

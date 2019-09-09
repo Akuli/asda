@@ -19,7 +19,7 @@ def _skip_unnecessary_nodes(node):
         return True
 
     if isinstance(node, (
-            decision_tree.GetBuiltinVar, decision_tree.GetFromBottom,
+            decision_tree.GetBuiltinVar, decision_tree.GetLocalVar,
             decision_tree.CreateBox, decision_tree.StrConstant,
             decision_tree.IntConstant, decision_tree.CreateFunction)):
         assert node.use_count == 0

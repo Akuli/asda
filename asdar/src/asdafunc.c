@@ -17,11 +17,8 @@ static bool run(
 	if (!runner_init(rnr, interp, code))
 		return false;
 
-	assert(nargs <= code->maxstacksz);
-	assert(rnr->stacktop == rnr->stackbot);
-
-	memcpy(rnr->stackbot, args, sizeof(args[0]) * nargs);
-	rnr->stacktop += nargs;
+	assert(nargs <= code->nlocalvars);
+	memcpy(rnr->locals, args, sizeof(args[0]) * nargs);
 	for (size_t i = 0; i < nargs; i++)
 		OBJECT_INCREF(args[i]);
 

@@ -16,7 +16,7 @@ def _check_matching_sets_exist(node, var, error_location, visited_nodes):
     visited_nodes.add(node)
 
     if (
-      isinstance(node, decision_tree.GetFromBottom) and
+      isinstance(node, decision_tree.GetLocalVar) and
       node.var is var and
       isinstance(node.next_node, decision_tree.SetToBox)):
         return
@@ -33,7 +33,7 @@ def check_boxes_set(start_node, all_nodes, createfunc_node):
             continue
 
         for ref in node.jumped_from:
-            assert isinstance(ref.objekt, decision_tree.GetFromBottom)
+            assert isinstance(ref.objekt, decision_tree.GetLocalVar)
             _check_matching_sets_exist(
                 ref.objekt, ref.objekt.var, ref.objekt.location, set())
 
@@ -45,28 +45,20 @@ def nexts(node, n):
 
 
 def _remove_box_if_possible(create_box, start_node):
-    if isinstance(create_box.next_node, decision_tree.SetToBottom):
-        # function arguments are wrapped like this in decision_tree.py
-        assert create_box.next_node.var is create_box.var
-        assert isinstance(nexts(create_box, 2), decision_tree.GetFromBottom)
-        assert isinstance(nexts(create_box, 3), decision_tree.SetToBox)
-        create_box_skipped = nexts(create_box, 4)
-        is_argument = True
-    else:
-        create_box_skipped = create_box.next_node
-        is_argument = False
+    assert isinstance(create_box.next_node, decision_tree.SetLocalVar)
+    box_var = create_box.next_node.var
 
     sets = set()
     gets = set()
 
-    for node in decision_tree.get_all_nodes(create_box_skipped):
+    for node in decision_tree.get_all_nodes(create_box.next_node.next_node):
         # if this assert fails, you need to add code to handle setting a box
         # variable
-        assert not (isinstance(node, decision_tree.SetToBottom) and
-                    node.var is create_box.var)
+        assert not (isinstance(node, decision_tree.SetLocalVar) and
+                    node.var is box_var)
 
-        if not (isinstance(node, decision_tree.GetFromBottom) and
-                node.var is create_box.var):
+        if not (isinstance(node, decision_tree.GetLocalVar) and
+                node.var is box_var):
             continue
 
         if isinstance(node.next_node, decision_tree.SetToBox):
@@ -83,9 +75,8 @@ def _remove_box_if_possible(create_box, start_node):
             return False
 
     for node in sets:
-        # replace GetFromBottom and SetToBox with SetToBottom
-        new_node = decision_tree.SetToBottom(node.index, node.var,
-                                             location=node.location)
+        # replace GetLocalVar and SetToBox with SetLocalVar
+        new_node = decision_tree.SetLocalVar(node.var, location=node.location)
         new_node.set_next_node(node.next_node.next_node)
         decision_tree.replace_node(node, new_node)
 
@@ -93,13 +84,7 @@ def _remove_box_if_possible(create_box, start_node):
         # remove UnBox
         decision_tree.replace_node(node.next_node, node.next_node.next_node)
 
-    if is_argument:
-        added_node = decision_tree.PopOne()
-    else:
-        added_node = decision_tree.PushDummy(create_box.var)
-    added_node.set_next_node(create_box_skipped)
-    decision_tree.replace_node(create_box, added_node)
-
+    decision_tree.replace_node(create_box, create_box.next_node.next_node)
     return True
 
 
@@ -111,19 +96,23 @@ def optimize_unnecessary_boxes(start_node, all_nodes, createfunc_node):
     return False
 
 
-def _find_gets_for_set(set_node):
-    # TODO: handle assigning to the same variable multiple times
-    return (node for node in decision_tree.get_all_nodes(set_node)
-            if isinstance(node, decision_tree.GetFromBottom)
-            and node.var is set_node.var)
+def _find_gets_for_set(node: decision_tree.Node, var, visited_nodes):
+    visited_nodes.add(node)
+
+    if isinstance(node, decision_tree.GetLocalVar) and node.var is var:
+        yield node
+    if isinstance(node, decision_tree.SetLocalVar) and node.var is var:
+        return
+
+    for other_node in node.get_jumps_to():
+        if other_node not in visited_nodes:
+            yield from _find_gets_for_set(other_node, var, visited_nodes)
 
 
 def _find_sets_for_var(node, var, visited_nodes):
     visited_nodes.add(node)
 
-    if (
-      isinstance(node, decision_tree.SetToBottom) and
-      node.var is var):
+    if isinstance(node, decision_tree.SetLocalVar) and node.var is var:
         yield node
         return
 
@@ -135,13 +124,21 @@ def _find_sets_for_var(node, var, visited_nodes):
 def _sets_and_gets_to_dicts(all_nodes, start_node):
     set2gets = {}
     for node in all_nodes:
-        if isinstance(node, decision_tree.SetToBottom):
+        if isinstance(node, decision_tree.SetLocalVar):
             assert node not in set2gets
-            set2gets[node] = set(_find_gets_for_set(node))
+            set2gets[node] = set(_find_gets_for_set(
+                node.next_node, node.var, set()))
+
+            old_stuff = {
+                nodee for nodee in decision_tree.get_all_nodes(node)
+                if isinstance(nodee, decision_tree.GetLocalVar)
+                and nodee.var is node.var
+            }
+            assert set2gets[node].issubset(old_stuff)
 
     get2sets = {}
     for node in all_nodes:
-        if isinstance(node, decision_tree.GetFromBottom):
+        if isinstance(node, decision_tree.GetLocalVar):
             assert node not in get2sets
             get2sets[node] = set(_find_sets_for_var(node, node.var, set()))
             # get2sets[node] may be empty for function arguments
@@ -150,9 +147,9 @@ def _sets_and_gets_to_dicts(all_nodes, start_node):
 
 
 def _optimize_set_once_get_once(set_node, get_node):
-    if set_node.next_node is get_node and len(get_node.jumped_from) == 1:
+    if set_node.next_node is get_node:
         # used immediately after set
-        assert [ref.objekt for ref in get_node.jumped_from] == [set_node]
+        assert set_node in (ref.objekt for ref in get_node.jumped_from)
         decision_tree.replace_node(set_node, get_node.next_node)
         return True
 
@@ -166,7 +163,6 @@ def _optimize_set_once_get_once(set_node, get_node):
 def optimize_temporary_vars(root_node, all_nodes, createfunc_node):
     assert isinstance(root_node, decision_tree.Start)
     set2gets, get2sets = _sets_and_gets_to_dicts(all_nodes, root_node)
-    did_something = False
 
     for set_node, gets in set2gets.items():
         if not gets:
@@ -175,18 +171,30 @@ def optimize_temporary_vars(root_node, all_nodes, createfunc_node):
                   % set_node.var.name)
 
             # replace SetToBottom with ignoring the value
-            # TODO: mark some things as side-effect-free and implement
-            #       optimizing PopOne
+            # PopOne is likely to get optimized away
             ignore_value = decision_tree.PopOne()
             ignore_value.set_next_node(set_node.next_node)
             decision_tree.replace_node(set_node, ignore_value)
-            did_something = True
+            return True
 
         if len(gets) == 1 and set_node.var not in root_node.argvars:
             [get_node] = gets
             if len(get2sets[get_node]) == 1:
                 assert get2sets[get_node] == {set_node}
                 if _optimize_set_once_get_once(set_node, get_node):
-                    did_something = True
+                    return True
 
-    return did_something
+    return False
+
+
+def optimize_variable_assigned_to_itself(
+        root_node, all_nodes, createfunc_node):
+    for node in all_nodes:
+        if (
+          isinstance(node, decision_tree.GetLocalVar) and
+          isinstance(node.next_node, decision_tree.SetLocalVar) and
+          node.var is node.next_node.var):
+            decision_tree.replace_node(node, node.next_node.next_node)
+            return True
+
+    return False

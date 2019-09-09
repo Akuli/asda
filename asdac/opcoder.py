@@ -27,14 +27,13 @@ def _op_class(name, fields):
 # all types are cooked_ast types
 StrConstant = _op_class('StrConstant', ['python_string'])
 IntConstant = _op_class('IntConstant', ['python_int'])
-PushDummy = _op_class('PushDummy', [])
 CreateFunction = _op_class('CreateFunction', ['functype', 'body_opcode'])
 CreatePartialFunction = _op_class('CreatePartialFunction', ['how_many_args'])
 # tuples have an index() method, avoid name clash with misspelling
 GetFromModule = _op_class('GetFromModule', ['compilation', 'indeks'])
 GetBuiltinVar = _op_class('GetBuiltinVar', ['varname'])
-SetToBottom = _op_class('SetToBottom', ['indeks'])
-GetFromBottom = _op_class('GetFromBottom', ['indeks'])
+SetLocalVar = _op_class('SetLocalVar', ['indeks'])
+GetLocalVar = _op_class('GetLocalVar', ['indeks'])
 CreateBox = _op_class('CreateBox', [])
 SetToBox = _op_class('SetToBox', [])
 UnBox = _op_class('UnBox', [])
@@ -90,6 +89,7 @@ class OpCode:
     def __init__(self, max_stack_size):
         self.ops = []
         self.max_stack_size = max_stack_size
+        self.how_many_local_vars = None      # is fixed later
 
     def _get_all_ops(self):
         # i wish python had pointer objects or something :(
@@ -120,6 +120,7 @@ class _OpCoder:
         self.output = output_opcode
         self.compilation = compilation
         self.line_start_offsets = line_start_offsets
+        self.local_vars = []    # FIXME: Function arguments
 
         # keys are opcoded nodes, values are JumpMarker objects
         #
@@ -152,6 +153,14 @@ class _OpCoder:
         assert isinstance(tybe.attributes, collections.OrderedDict)
         return list(tybe.attributes.keys()).index(name)
 
+    def local_var_index(self, var):
+        # O(n) lookup, but number of local variables is usually small
+        try:
+            return self.local_vars.index(var)
+        except ValueError:
+            self.local_vars.append(var)
+            return len(self.local_vars) - 1
+
     def opcode_passthroughnode(self, node):
         lineno = self._lineno(node.location)
 
@@ -163,7 +172,6 @@ class _OpCoder:
             (decision_tree.Times, Times),
             (decision_tree.Minus, Minus),
             (decision_tree.PrefixMinus, PrefixMinus),
-            (decision_tree.PushDummy, PushDummy),
             (decision_tree.PopOne, PopOne),
             (decision_tree.StoreReturnValue, StoreReturnValue),
             (decision_tree.Throw, Throw),
@@ -177,12 +185,14 @@ class _OpCoder:
             self.output.ops.append(GetBuiltinVar(lineno, node.varname))
             return
 
-        if isinstance(node, decision_tree.SetToBottom):
-            self.output.ops.append(SetToBottom(lineno, node.index))
+        if isinstance(node, decision_tree.SetLocalVar):
+            self.output.ops.append(SetLocalVar(
+                lineno, self.local_var_index(node.var)))
             return
 
-        if isinstance(node, decision_tree.GetFromBottom):
-            self.output.ops.append(GetFromBottom(lineno, node.index))
+        if isinstance(node, decision_tree.GetLocalVar):
+            self.output.ops.append(GetLocalVar(
+                lineno, self.local_var_index(node.var)))
             return
 
         if isinstance(node, decision_tree.CreateBox):
@@ -237,7 +247,10 @@ class _OpCoder:
                 decision_tree.get_max_stack_size(node.body_root_node))
             opcoder = _OpCoder(
                 function_opcode, self.compilation, self.line_start_offsets)
+            opcoder.local_vars.extend(node.local_argvars)
             opcoder.opcode_tree(node.body_root_node)
+            function_opcode.how_many_local_vars = len(opcoder.local_vars)
+
             self.output.ops.append(CreateFunction(
                 lineno, node.functype, function_opcode))
             return
@@ -340,7 +353,9 @@ def create_opcode(compilation, root_node, export_vars, source_code):
         offset += len(line)
 
     output = OpCode(decision_tree.get_max_stack_size(root_node))
-    _OpCoder(output, compilation, line_start_offsets).opcode_tree(root_node)
+    opcoder = _OpCoder(output, compilation, line_start_offsets)
+    opcoder.opcode_tree(root_node)
+    output.how_many_local_vars = len(opcoder.local_vars)
 
     import pprint; pprint.pprint(output.ops)
     output.fix_none_linenos()

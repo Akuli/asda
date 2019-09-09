@@ -1,4 +1,3 @@
-# no integers yet :(
 let weird_stuff = (Bool a, Bool b, Bool c) -> void:
     if a:
         print("One")

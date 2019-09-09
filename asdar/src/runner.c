@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 #include "asdafunc.h"
 #include "code.h"
 #include "dynarray.h"
@@ -34,11 +35,17 @@ struct RunnerFinallyState {
 
 bool runner_init(struct Runner *rnr, Interp *interp, const struct Code *code)
 {
-	if (code->maxstacksz == 0)
-		rnr->stackbot = NULL;
-	else if (!( rnr->stackbot = malloc(sizeof(rnr->stackbot[0]) * code->maxstacksz) )) {
-		errobj_set_nomem(interp);
-		return false;
+	size_t n = (size_t)code->nlocalvars + (size_t)code->maxstacksz;
+	if (n == 0)
+		rnr->locals = rnr->stackbot = NULL;
+	else {
+		if (!( rnr->locals = malloc(sizeof(rnr->locals[0]) * n) )) {
+			errobj_set_nomem(interp);
+			return false;
+		}
+
+		memset(rnr->locals, 0, sizeof(rnr->locals[0]) * code->nlocalvars);
+		rnr->stackbot = rnr->locals + code->nlocalvars;
 	}
 
 	// from now on, everything will succeed
@@ -65,7 +72,12 @@ void runner_free(const struct Runner *rnr)
 	assert(rnr->ehstack.len == 0);
 	assert(rnr->fsstack.len == 0);
 
-	free(rnr->stackbot);
+	// locals and stack are part of same block
+	for (Object **ptr = rnr->locals; ptr < rnr->stackbot; ptr++)
+		if (*ptr)
+			OBJECT_DECREF(*ptr);
+	free(rnr->locals);     
+
 	free(rnr->ehstack.ptr);
 	free(rnr->fsstack.ptr);
 }
@@ -138,25 +150,22 @@ static bool run_getattr(struct Runner *rnr, const struct CodeOp *op)
 	return true;
 }
 
-static bool run_setbottom(struct Runner *rnr, const struct CodeOp *op)
+static bool run_setlocal(struct Runner *rnr, const struct CodeOp *op)
 {
-	assert(rnr->stacktop > rnr->stackbot);
-	assert(op->data.stackbottom_index < rnr->stacktop - rnr->stackbot);
-	if (rnr->stackbot[op->data.stackbottom_index])
-		OBJECT_DECREF(rnr->stackbot[op->data.stackbottom_index]);
-	rnr->stackbot[op->data.stackbottom_index] = *--rnr->stacktop;
+	Object **ptr = &rnr->locals[op->data.localvaridx];
+	if (*ptr)
+		OBJECT_DECREF(*ptr);
+	*ptr = *--rnr->stacktop;
 
 	rnr->opidx++;
 	return true;
 }
 
-static bool run_getbottom(struct Runner *rnr, const struct CodeOp *op)
+static bool run_getlocal(struct Runner *rnr, const struct CodeOp *op)
 {
-	assert(op->data.stackbottom_index < rnr->stacktop - rnr->stackbot);
-	assert(rnr->stackbot[op->data.stackbottom_index]);
-	Object *val = rnr->stackbot[op->data.stackbottom_index];
-	*rnr->stacktop++ = val;
+	Object *val = rnr->locals[op->data.localvaridx];
 	OBJECT_INCREF(val);
+	*rnr->stacktop++ = val;
 
 	rnr->opidx++;
 	return true;
@@ -191,14 +200,6 @@ static bool run_unbox(struct Runner *rnr, const struct CodeOp *op)
 	OBJECT_DECREF(rnr->stacktop[-1]);
 	OBJECT_INCREF(val);
 	rnr->stacktop[-1] = val;
-
-	rnr->opidx++;
-	return true;
-}
-
-static bool run_pushdummy(struct Runner *rnr, const struct CodeOp *op)
-{
-	*rnr->stacktop++ = NULL;
 
 	rnr->opidx++;
 	return true;
@@ -319,8 +320,7 @@ static bool run_strjoin(struct Runner *rnr, const struct CodeOp *op)
 static bool run_pop1(struct Runner *rnr, const struct CodeOp *op)
 {
 	Object *obj = *--rnr->stacktop;
-	if (obj)
-		OBJECT_DECREF(obj);
+	OBJECT_DECREF(obj);
 	rnr->opidx++;
 	return true;
 }
@@ -512,12 +512,11 @@ static bool run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_CONSTANT, run_constant);
 		BOILERPLATE(CODE_SETATTR, run_setattr);
 		BOILERPLATE(CODE_GETATTR, run_getattr);
-		BOILERPLATE(CODE_SETBOTTOM, run_setbottom);
-		BOILERPLATE(CODE_GETBOTTOM, run_getbottom);
+		BOILERPLATE(CODE_SETLOCAL, run_setlocal);
+		BOILERPLATE(CODE_GETLOCAL, run_getlocal);
 		BOILERPLATE(CODE_CREATEBOX, run_createbox);
 		BOILERPLATE(CODE_SET2BOX, run_set2box);
 		BOILERPLATE(CODE_UNBOX, run_unbox);
-		BOILERPLATE(CODE_PUSHDUMMY, run_pushdummy);
 		BOILERPLATE(CODE_GETFROMMODULE, run_getfrommodule);
 		BOILERPLATE(CODE_CALLFUNC, run_callfunc);
 		BOILERPLATE(CODE_CALLCONSTRUCTOR, run_callconstructor);
@@ -594,8 +593,7 @@ static void clear_stack(struct Runner *rnr)
 {
 	assert(rnr->stacktop >= rnr->stackbot);
 	for (long i = 0; i < rnr->stacktop - rnr->stackbot; i++)
-		if (rnr->stackbot[i])
-			OBJECT_DECREF(rnr->stackbot[i]);
+		OBJECT_DECREF(rnr->stackbot[i]);
 	rnr->stacktop = rnr->stackbot;
 }
 

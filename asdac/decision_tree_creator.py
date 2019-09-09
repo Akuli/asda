@@ -8,12 +8,14 @@ from asdac import cooked_ast, decision_tree, objects
 
 class _TreeCreator:
 
-    def __init__(self, local_vars_level, local_vars_list, exit_points,
-                 unreachable_nodes_to_clean_up):
-        # from now on, local variables are items in the beginning of the stack
-        #
-        # also the .type attribute of the variables doesn't contain info about
+    def __init__(self, local_vars_level, local_vars_list,
+                 possibly_unreachable_nodes):
+        # the .type attribute of the variables doesn't contain info about
         # whether the variable is wrapped in a box object or not
+        #
+        # TODO: is there a nicer way to do the local_vars_list attribute?
+        #       now it contains two kinds of things, FIRST argument vars and
+        #       THEN other local vars
         self.local_vars_level = local_vars_level
         self.local_vars_list = local_vars_list
 
@@ -29,15 +31,9 @@ class _TreeCreator:
         # values are argument variables with .level == self.local_vars_level
         self.closure_vars = {}
 
-        # .set_next_node methods that should be called to make stuff run every
-        # time the function is about to early-return
-        # used for cleaning up local variables from stack
-        # not used in non-function tree creators
-        self.exit_points = exit_points
-
         # unreachable nodes are generally bad, so keep list of them and clean
         # them up before passing to next compile step
-        self.unreachable_nodes_to_clean_up = unreachable_nodes_to_clean_up
+        self.possibly_unreachable_nodes = possibly_unreachable_nodes
 
         # why can't i assign in python lambda without dirty setattr haxor :(
         self.set_next_node = lambda node: setattr(self, 'root_node', node)
@@ -45,8 +41,8 @@ class _TreeCreator:
 
     def subcreator(self):
         return _TreeCreator(
-            self.local_vars_level, self.local_vars_list, self.exit_points,
-            self.unreachable_nodes_to_clean_up)
+            self.local_vars_level, self.local_vars_list,
+            self.possibly_unreachable_nodes)
 
     def add_pass_through_node(self, node):
         assert isinstance(node, decision_tree.PassThroughNode)
@@ -88,13 +84,12 @@ class _TreeCreator:
 
         if var.level == self.local_vars_level:
             self._add_to_varlist(var)
-            # None is fixed later
-            node = decision_tree.GetFromBottom(None, var, **boilerplate)
+            node = decision_tree.GetLocalVar(var, **boilerplate)
         else:
             # closure variable
             local = self.get_local_closure_var(var)
             self._add_to_varlist(local, append=False)
-            node = decision_tree.GetFromBottom(None, local, **boilerplate)
+            node = decision_tree.GetLocalVar(local, **boilerplate)
 
         self.add_pass_through_node(node)
         return True
@@ -204,8 +199,8 @@ class _TreeCreator:
         #       for arguments of the function
         elif isinstance(expression, cooked_ast.CreateFunction):
             creator = _TreeCreator(self.local_vars_level + 1,
-                                   expression.argvars.copy(), [],
-                                   self.unreachable_nodes_to_clean_up)
+                                   expression.argvars.copy(),
+                                   self.possibly_unreachable_nodes)
             creator.add_pass_through_node(decision_tree.Start(
                 expression.argvars.copy()))
             creator.do_body(expression.body)
@@ -220,8 +215,11 @@ class _TreeCreator:
                 [var.type for var in partialling] + expression.type.argtypes,
                 expression.type.returntype)
 
+            local_argvars = [
+                creator.closure_vars[non_local] for non_local in partialling
+            ] + expression.argvars
             self.add_pass_through_node(decision_tree.CreateFunction(
-                tybe, creator.root_node, **boilerplate))
+                tybe, creator.root_node, local_argvars, **boilerplate))
 
             if partialling:
                 self.add_pass_through_node(
@@ -249,7 +247,7 @@ class _TreeCreator:
             assert its_a_box
             self.add_pass_through_node(decision_tree.SetToBox())
 
-        elif isinstance(statement, decision_tree.SetAttr):
+        elif isinstance(statement, cooked_ast.SetAttr):
             self.do_expression(statement.value)
             self.do_expression(statement.obj)
             self.add_pass_through_node(decision_tree.SetAttr(
@@ -298,14 +296,16 @@ class _TreeCreator:
                 self.do_expression(statement.value)
                 self.add_pass_through_node(
                     decision_tree.StoreReturnValue(**boilerplate))
-            self.exit_points.append(self.set_next_node)
-            self.set_next_node = self.unreachable_nodes_to_clean_up.append
 
-        elif isinstance(statement, decision_tree.Throw):
+            # the next node might still be somehow reachable, because multiple
+            # nodes can jump to the same node
+            self.set_next_node = self.possibly_unreachable_nodes.append
+
+        elif isinstance(statement, cooked_ast.Throw):
             self.do_expression(statement.value)
             self.add_pass_through_node(decision_tree.Throw(**boilerplate))
 
-        elif isinstance(statement, decision_tree.SetMethodsToClass):
+        elif isinstance(statement, cooked_ast.SetMethodsToClass):
             for method in statement.methods:
                 self.do_expression(method)
             self.add_pass_through_node(decision_tree.SetMethodsToClass(
@@ -322,11 +322,6 @@ class _TreeCreator:
     def fix_variable_stuff(self):
         assert isinstance(self.root_node, decision_tree.Start)
 
-        for node in decision_tree.get_all_nodes(self.root_node):
-            if isinstance(node, (decision_tree.SetToBottom,
-                                 decision_tree.GetFromBottom)):
-                node.index = self.local_vars_list.index(node.var)
-
         closure_argvars = self.local_vars_list[:len(self.closure_vars)]
         creator = self.subcreator()
         creator.add_pass_through_node(decision_tree.Start(
@@ -334,7 +329,8 @@ class _TreeCreator:
         assert isinstance(creator.root_node, decision_tree.Start)
 
         for var in self.local_vars_list[len(creator.root_node.argvars):]:
-            creator.add_pass_through_node(decision_tree.CreateBox(var))
+            creator.add_pass_through_node(decision_tree.CreateBox())
+            creator.add_pass_through_node(decision_tree.SetLocalVar(var))
 
         # wrap arguments into new boxes
         # usually will be optimized away, but is not always with nested
@@ -346,26 +342,20 @@ class _TreeCreator:
         #           print(i.to_string())
         #
         # this will create a box of i, which is needed in the inner function
-        for index, var in enumerate(self.root_node.argvars,
-                                    start=len(self.closure_vars)):
-            add = creator.add_pass_through_node     # pep8 line length
-            add(decision_tree.GetFromBottom(index, var))
-            add(decision_tree.CreateBox(var))
-            add(decision_tree.SetToBottom(index, var))
-            add(decision_tree.GetFromBottom(index, var))
-            add(decision_tree.SetToBox())
+        #
+        # TODO: put the boxes to different variable and fix the types
+        #       currently there is no type for a box, so "box of T" variables
+        #       have type T
+        for var in self.root_node.argvars:
+            creator.add_pass_through_node(decision_tree.GetLocalVar(var))
+            creator.add_pass_through_node(decision_tree.CreateBox())
+            creator.add_pass_through_node(decision_tree.SetLocalVar(var))
+            creator.add_pass_through_node(decision_tree.GetLocalVar(var))
+            creator.add_pass_through_node(decision_tree.SetToBox())
 
         if self.root_node.next_node is not None:
             creator.set_next_node(self.root_node.next_node)
             creator.set_next_node = self.set_next_node
-
-        for index, var in enumerate(self.local_vars_list):
-            pop = decision_tree.PopOne(is_popping_a_dummy=True)
-            if index == 0:      # first time
-                for func in creator.exit_points:
-                    func(pop)
-                creator.exit_points.clear()
-            creator.add_pass_through_node(pop)
 
         # avoid creating an unreachable node
         self.root_node.set_next_node(None)
@@ -381,15 +371,16 @@ class _TreeCreator:
 
 
 def create_tree(cooked_statements):
-    tree_creator = _TreeCreator(1, [], [], [])
+    tree_creator = _TreeCreator(1, [], [])
     tree_creator.add_pass_through_node(decision_tree.Start([]))
 
     tree_creator.do_body(cooked_statements)
     tree_creator.fix_variable_stuff()
     assert not tree_creator.get_nonlocal_vars_to_partial()
 
-    for node in tree_creator.unreachable_nodes_to_clean_up:
-        decision_tree.clean_unreachable_nodes_given_one_of_them(node)
+    for node in tree_creator.possibly_unreachable_nodes:
+        if not node.jumped_from:
+            decision_tree.clean_unreachable_nodes_given_one_of_them(node)
 
     assert isinstance(tree_creator.root_node, decision_tree.Start)
     return tree_creator.root_node
