@@ -7,10 +7,10 @@
 #include "code.h"
 #include "dynarray.h"
 #include "interp.h"
+#include "module.h"
 #include "object.h"
 #include "path.h"
 #include "type.h"
-#include "objects/bool.h"
 #include "objects/err.h"
 #include "objects/int.h"
 #include "objects/string.h"
@@ -191,12 +191,12 @@ bool bcreader_readasdabytes(struct BcReader *bcr)
 	return false;
 }
 
-char *bcreader_readsourcepath(struct BcReader *bcr)
+bool bcreader_readsourcepath(struct BcReader *bcr)
 {
 	char *res;
 	if (!read_path(bcr, &res))
 		return NULL;
-	bcr->srcpath = res;
+	bcr->module->srcpath = res;
 	return res;
 }
 
@@ -220,7 +220,7 @@ bool bcreader_readimports(struct BcReader *bcr)
 	}
 
 	for (size_t i=0; i < nimports; i++)
-		if (!read_path(bcr, bcr->imports + i)) {
+		if (!read_path(bcr, &bcr->imports[i])) {
 			for (size_t k=0; k<i; k++)
 				free(bcr->imports[k]);
 			free(bcr->imports);
@@ -290,7 +290,7 @@ static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowv
 		uint16_t i;
 		if (!read_uint16(bcr, &i))
 			return false;
-		*typ = bcr->typelist[i];
+		*typ = bcr->module->types[i];
 		assert(*typ);
 		return true;
 	}
@@ -356,33 +356,33 @@ static struct Type *read_typelist_item(struct BcReader *bcr)
 	}
 }
 
-struct Type **bcreader_readtypelist(struct BcReader *bcr)
+bool bcreader_readtypelist(struct BcReader *bcr)
 {
 	unsigned char b;
 	if (!read_bytes(bcr, &b, 1))
-		return NULL;
+		return false;
 	if (b != (unsigned char)TYPE_LIST_SECTION) {
 		errobj_set(bcr->interp, &errobj_type_value, "expected type list section, got wrong byte: %B", b);
-		return NULL;
+		return false;
 	}
 
 	uint16_t n;
 	if (!read_uint16(bcr, &n))
-		return NULL;
+		return false;
 
-	if (!( bcr->typelist = malloc(sizeof(bcr->typelist[0]) * ( n + 1U )) ))
-		return NULL;
+	if (!( bcr->module->types = malloc(sizeof(bcr->module->types[0]) * ( n + 1U )) ))
+		return false;
 
 	for (uint16_t i = 0; i < n; i++)
-		if (!( bcr->typelist[i] = read_typelist_item(bcr) )) {
+		if (!( bcr->module->types[i] = read_typelist_item(bcr) )) {
 			for (uint16_t k = 0; k < i; k++)
-				type_destroy(bcr->typelist[k]);
-			free(bcr->typelist);
-			return NULL;
+				type_destroy(bcr->module->types[k]);
+			free(bcr->module->types);
+			return false;
 		}
 
-	bcr->typelist[n] = NULL;
-	return bcr->typelist;
+	bcr->module->types[n] = NULL;
+	return true;
 }
 
 
@@ -683,7 +683,7 @@ static bool read_body(struct BcReader *bcr, struct Code *code)
 	dynarray_shrink2fit(&ops);
 	code->ops = ops.ptr;
 	code->nops = ops.len;
-	code->srcpath = bcr->srcpath;
+	code->srcpath = bcr->module->srcpath;
 	return true;
 
 error:

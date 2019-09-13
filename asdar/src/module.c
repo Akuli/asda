@@ -6,6 +6,7 @@
 #include "code.h"
 #include "interp.h"
 #include "type.h"
+#include "object.h"
 
 const struct Module *module_get(Interp *interp, const char *path)
 {

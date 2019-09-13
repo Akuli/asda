@@ -2,8 +2,10 @@
 #define MODULE_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include "code.h"
 #include "interp.h"
+#include "object.h"
 
 struct Module {
 	// see interp->basedir comments for more details about the paths

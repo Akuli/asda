@@ -84,7 +84,7 @@ typedef union {
 struct CodeOp {
 	enum CodeOpKind kind;
 	CodeData data;
-	uint32_t lineno;
+	unsigned long lineno;
 };
 
 // dumps to stdout

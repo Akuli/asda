@@ -45,7 +45,9 @@ def nexts(node, n):
 
 
 def _remove_box_if_possible(create_box, start_node):
-    assert isinstance(create_box.next_node, decision_tree.SetLocalVar)
+    if not isinstance(create_box.next_node, decision_tree.SetLocalVar):
+        return False
+
     box_var = create_box.next_node.var
 
     sets = set()
