@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include "object.h"
 
-void codeop_debug(const struct CodeOp *op)
+void codeop_debug(struct CodeOp op)
 {
-	switch(op->kind) {
+	switch(op.kind) {
 	#define BOILERPLATE(KIND) case KIND: puts(#KIND); break;
 		BOILERPLATE(CODE_CONSTANT);
 		BOILERPLATE(CODE_SETATTR);
@@ -44,19 +44,19 @@ void codeop_debug(const struct CodeOp *op)
 	}
 }
 
-void codeop_destroy(const struct CodeOp *op)
+void codeop_destroy(struct CodeOp op)
 {
-	switch(op->kind) {
+	switch(op.kind) {
 	case CODE_CONSTANT:
-		OBJECT_DECREF(op->data.obj);
+		OBJECT_DECREF(op.data.obj);
 		break;
 
 	case CODE_EH_ADD:
-		free(op->data.errhnd.arr);
+		free(op.data.errhnd.arr);
 		break;
 
 	case CODE_CREATEFUNC:
-		code_destroy(&op->data.createfunc.code);
+		code_destroy(op.data.createfunc.code);
 		break;
 
 	default:
@@ -64,9 +64,9 @@ void codeop_destroy(const struct CodeOp *op)
 	}
 }
 
-void code_destroy(const struct Code *code)
+void code_destroy(struct Code code)
 {
-	for (size_t i = 0; i < code->nops; i++)
-		codeop_destroy(&code->ops[i]);
-	free(code->ops);
+	for (size_t i = 0; i < code.nops; i++)
+		codeop_destroy(code.ops[i]);
+	free(code.ops);
 }

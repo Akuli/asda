@@ -37,6 +37,8 @@ GetLocalVar = _op_class('GetLocalVar', ['indeks'])
 CreateBox = _op_class('CreateBox', [])
 SetToBox = _op_class('SetToBox', [])
 UnBox = _op_class('UnBox', [])
+ExportObject = _op_class('ExportObject', ['indeks'])
+GetFromModule = _op_class('GetFromModule', ['other_compilation', 'name'])
 SetAttr = _op_class('SetAttr', ['type', 'indeks'])
 GetAttr = _op_class('GetAttr', ['type', 'indeks'])
 CallFunction = _op_class('CallFunction', ['nargs'])
@@ -207,6 +209,16 @@ class _OpCoder:
             self.output.ops.append(UnBox(lineno))
             return
 
+        if isinstance(node, decision_tree.ExportObject):
+            index = list(self.compilation.export_types.keys()).index(node.name)
+            self.output.ops.append(ExportObject(lineno, index))
+            return
+
+        if isinstance(node, decision_tree.GetFromModule):
+            self.output.ops.append(GetFromModule(
+                lineno, node.other_compilation, node.name))
+            return
+
         if isinstance(node, decision_tree.GetAttr):
             self.output.ops.append(GetAttr(
                 lineno, node.tybe,
@@ -343,9 +355,7 @@ class _OpCoder:
                 raise NotImplementedError(repr(node))
 
 
-def create_opcode(compilation, root_node, export_vars, source_code):
-    assert not export_vars      # TODO
-
+def create_opcode(compilation, root_node, source_code):
     line_start_offsets = []
     offset = 0
     for line in io.StringIO(source_code):

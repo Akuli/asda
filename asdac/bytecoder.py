@@ -54,6 +54,8 @@ PUSH_FINALLY_STATE_JUMP = b'7'
 APPLY_FINALLY_STATE = b'A'
 DISCARD_FINALLY_STATE = b'D'
 
+EXPORT_OBJECT = b'x'
+
 
 # these are used when bytecoding a type
 TYPE_ASDA_CLASS = b'a'
@@ -322,13 +324,6 @@ class _BytecodeWriter:
             # already handled in run()
             return
 
-        if isinstance(op, opcoder.GetFromModule):
-            self.bytecode.add_byte(GET_FROM_MODULE)
-            self.bytecode.add_uint16(
-                self.compilation.imports.index(op.compilation))
-            self.bytecode.add_uint16(op.indeks)
-            return
-
         # FIXME: is very outdated
 #        if isinstance(op, opcoder.AddErrorHandler):
 #            self.bytecode.add_byte(ADD_ERROR_HANDLER)
@@ -363,6 +358,19 @@ class _BytecodeWriter:
         if isinstance(op, opcoder.GetLocalVar):
             self.bytecode.add_byte(GET_LOCAL_VAR)
             self.bytecode.add_uint16(op.indeks)
+            return
+
+        if isinstance(op, opcoder.ExportObject):
+            self.bytecode.add_byte(EXPORT_OBJECT)
+            self.bytecode.add_uint16(op.indeks)
+            return
+
+        if isinstance(op, opcoder.GetFromModule):
+            self.bytecode.add_byte(GET_FROM_MODULE)
+            self.bytecode.add_uint16(
+                self.compilation.imports.index(op.other_compilation))
+            self.bytecode.add_uint16(
+                list(op.other_compilation.export_types.keys()).index(op.name))
             return
 
         simple_things = [
@@ -413,10 +421,13 @@ class _BytecodeWriter:
         for path in paths:
             self.write_path(path)
 
-    def write_export_section(self, exports):
+    def write_first_export_section(self, exports):
         assert isinstance(exports, collections.OrderedDict)
         self.bytecode.add_byte(EXPORT_SECTION)
-        self.bytecode.add_uint32(len(exports))
+        self.bytecode.add_uint16(len(exports))
+
+    def write_second_export_section(self, exports):
+        self.write_first_export_section(exports)
         for name, tybe in exports.items():
             self.bytecode.write_string(name)
             self.write_type(tybe)
@@ -426,11 +437,12 @@ class _BytecodeWriter:
 #   1.  the bytes b'asda\xA5\xDA'  (note how 5 looks like S, lol)
 #   2.  source path string, relative to the dirname of the compiled path
 #   3.  first import section: compiled file paths for the interpreter
-#   4.  list of types used in the opcode
-#   5.  opcode
-#   6.  list of imports, source file paths, for the compiler
-#   7.  list of exports, names and types, for the compiler
-#   8.  number of bytes before part 4, as an uint32.
+#   4.  first export section: number of exports
+#   5.  list of types used in the opcode
+#   6.  opcode
+#   7.  second import section: source file paths, for the compiler
+#   8.  second export section: names and types, for the compiler
+#   9.  number of bytes before part 4, as an uint32.
 #       The compiler uses this to efficiently read imports and exports.
 #
 # all paths are relative to the bytecode file's directory and have '/' as
@@ -444,7 +456,8 @@ def create_bytecode(compilation, opcode):
 
     writer.write_import_section(
         [impcomp.compiled_path for impcomp in compilation.imports])
-    import_section_bytes = output.get_bytes()
+    writer.write_first_export_section(compilation.export_types)
+    first_import_export_bytes = output.get_bytes()
 
     writer.run(opcode)
     opcode_bytes = output.get_bytes()
@@ -452,7 +465,7 @@ def create_bytecode(compilation, opcode):
     writer.write_type_list()
     type_list_bytes = output.get_bytes()
 
-    result = (b'asda\xA5\xDA' + source_path_bytes + import_section_bytes +
+    result = (b'asda\xA5\xDA' + source_path_bytes + first_import_export_bytes +
               type_list_bytes + opcode_bytes)
     seek_index = len(result)   # _BytecodeReader reads this with seek
     output.add_uint32(seek_index)
@@ -460,7 +473,7 @@ def create_bytecode(compilation, opcode):
 
     writer.write_import_section(
         [impcomp.source_path for impcomp in compilation.imports])
-    writer.write_export_section(compilation.export_types)
+    writer.write_second_export_section(compilation.export_types)
     return result + output.get_bytes() + seek_index_u32
 
 
@@ -568,7 +581,7 @@ class _BytecodeReader:
             self.error("the file doesn't seem to have a valid export section")
 
         result = collections.OrderedDict()
-        how_many = self.read_uint32()
+        how_many = self.read_uint16()
         for junk in range(how_many):
             name = self.read_string()
             tybe = self.read_type(name_hint=name)

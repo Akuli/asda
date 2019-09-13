@@ -12,13 +12,14 @@ def _astclass(name, fields):
 StrConstant = _astclass('StrConstant', ['python_string'])
 StrJoin = _astclass('StrJoin', ['parts'])  # there are always >=2 parts
 IntConstant = _astclass('IntConstant', ['python_int'])
-GetVar = _astclass('GetVar', ['var', 'level'])
-SetVar = _astclass('SetVar', ['var', 'level', 'value'])
+GetVar = _astclass('GetVar', ['var'])
+SetVar = _astclass('SetVar', ['var', 'value'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
 SetAttr = _astclass('SetAttr', ['obj', 'attrname', 'value'])
-GetFromModule = _astclass('GetFromModule', ['compilation', 'name'])
+GetFromModule = _astclass('GetFromModule', ['other_compilation', 'name'])
 CreateFunction = _astclass('CreateFunction', ['argvars', 'body'])
 CreateLocalVar = _astclass('CreateLocalVar', ['var'])
+ExportObject = _astclass('ExportObject', ['name', 'value'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
 Return = _astclass('Return', ['value'])    # value can be None
 Throw = _astclass('Throw', ['value'])
@@ -108,7 +109,8 @@ BUILTIN_GENERIC_VARS = collections.OrderedDict([
 
 class _Chef:
 
-    def __init__(self, parent_chef, is_function=False, returntype=None):
+    def __init__(self, parent_chef, export_types,
+                 is_function=False, returntype=None):
         if is_function:
             self.is_function = True
             self.returntype = returntype
@@ -147,11 +149,12 @@ class _Chef:
             self.generic_vars = _create_chainmap(parent_chef.generic_vars)
             self.generic_types = _create_chainmap(parent_chef.generic_types)
 
-        # keys are strings, values are Variable objects
-        self.export_vars = collections.OrderedDict()
+        # keys are strings, values are type objects
+        self.export_types = export_types
 
     def _create_subchef(self):
-        return _Chef(self, self.is_function, self.returntype)
+        return _Chef(self, self.export_types,
+                     self.is_function, self.returntype)
 
     # there are multiple different kind of names:
     #   * types
@@ -295,8 +298,7 @@ class _Chef:
                         list(map(self.cook_type, raw_expression.generics)),
                         raw_expression.location)
 
-                return GetVar(
-                    raw_expression.location, tybe, var, chef.level)
+                return GetVar(raw_expression.location, tybe, var)
 
             assert raw_expression.generics is None, (
                 "sorry, import and generics don't work together yet")
@@ -320,7 +322,7 @@ class _Chef:
             chef = self.get_chef_for_varname(
                 'this', False, raw_expression.location)
             return GetVar(raw_expression.location, chef.vars['this'].type,
-                          chef.vars['this'], chef.level)
+                          chef.vars['this'])
 
         if isinstance(raw_expression, raw_ast.StrJoin):
             return StrJoin(
@@ -447,7 +449,7 @@ class _Chef:
                 assert not isinstance(var, str)
                 self._check_assign_type(
                     "'%s'" % varname, var.type, value, raw.location)
-                return SetVar(raw.location, None, var, chef.level, value)
+                return SetVar(raw.location, None, var, value)
 
             if chef.parent_chef is None:
                 # 'this = lel' fails in raw_ast.py
@@ -492,7 +494,7 @@ class _Chef:
             value_chef = self
         else:
             # TODO: figure out whether this should use self._create_subchef
-            value_chef = _Chef(self)
+            value_chef = _Chef(self, self.export_types)
             generic_markers = collections.OrderedDict(
                 (name, objects.GenericMarker(name))
                 for name, location in raw.generics
@@ -506,17 +508,20 @@ class _Chef:
 
         if raw.generics is None:
             var = Variable(raw.varname, value.type, raw.location, self.level)
+            target_chef.vars[raw.varname] = var
+            result = [
+                CreateLocalVar(raw.location, None, var),
+                SetVar(raw.location, None, var, value),
+            ]
+
             if raw.export:
                 target_chef._check_can_export(raw.location)
-                target_chef.export_vars[raw.varname] = var
-                return [
-                    SetVar(raw.location, None, var, target_chef.level, value)]
+                target_chef.export_types[raw.varname] = var.type
+                result.append(ExportObject(
+                    raw.location, None,
+                    var.name, GetVar(raw.location, var.type, var)))
 
-            target_chef.vars[raw.varname] = var
-            return [
-                CreateLocalVar(raw.location, None, var),
-                SetVar(raw.location, None, var, target_chef.level, value),
-            ]
+            return result
 
         assert not raw.export, "sorry, cannot export generic variables yet :("
 
@@ -526,7 +531,7 @@ class _Chef:
         target_chef.generic_vars[raw.varname] = var
         return [
             CreateLocalVar(raw.location, None, var),
-            SetVar(raw.location, None, var, target_chef.level,
+            SetVar(raw.location, None, var,
                    _replace_generic_markers_with_object(
                         value, list(generic_markers.values()))),
         ]
@@ -557,7 +562,7 @@ class _Chef:
         else:
             returntype = self.cook_type(raw_returntype)
 
-        subchef = _Chef(self, True, returntype)
+        subchef = _Chef(self, self.export_types, True, returntype)
         subchef.level += 1
         subchef.vars.update(dict(zip(argnames, argvars)))
         functype = objects.FunctionType(argtypes, returntype)
@@ -816,14 +821,13 @@ class _Chef:
 
 
 def cook(compilation, raw_ast_statements, import_compilation_dict):
-    builtin_chef = _Chef(None)
+    builtin_chef = _Chef(None, None)     # TODO: is this needed?
 
-    file_chef = _Chef(builtin_chef)
+    export_types = collections.OrderedDict()
+    file_chef = _Chef(builtin_chef, export_types)
     file_chef.level += 1
     file_chef.import_compilations = import_compilation_dict
     cooked_statements = file_chef.cook_body(
         raw_ast_statements, new_subchef=False)
 
-    export_types = collections.OrderedDict([
-        (name, var.type) for name, var in file_chef.export_vars.items()])
-    return (cooked_statements, file_chef.export_vars, export_types)
+    return (cooked_statements, export_types)

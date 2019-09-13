@@ -122,6 +122,10 @@ class _TreeCreator:
             if self._add_var_lookup_without_unboxing(var, **boilerplate):
                 self.add_pass_through_node(decision_tree.UnBox())
 
+        elif isinstance(expression, cooked_ast.GetFromModule):
+            self.add_pass_through_node(decision_tree.GetFromModule(
+                expression.other_compilation, expression.name, **boilerplate))
+
         elif isinstance(expression, cooked_ast.IfExpression):
             self._do_if(
                 expression.cond,
@@ -224,7 +228,13 @@ class _TreeCreator:
         boilerplate = {'location': statement.location}
 
         if isinstance(statement, cooked_ast.CreateLocalVar):
+            # currently not used, but may be useful in the future
             pass
+
+        elif isinstance(statement, cooked_ast.ExportObject):
+            self.do_expression(statement.value)
+            self.add_pass_through_node(
+                decision_tree.ExportObject(statement.name, **boilerplate))
 
         elif isinstance(statement, cooked_ast.CallFunction):
             self.do_function_call(statement)

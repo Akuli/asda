@@ -164,6 +164,21 @@ class GetLocalVar(_LocalVarNode):
         super().__init__(*args, use_count=0, size_delta=1, **kwargs)
 
 
+class ExportObject(PassThroughNode):
+
+    def __init__(self, name, **kwargs):
+        super().__init__(use_count=1, size_delta=-1, **kwargs)
+        self.name = name
+
+
+class GetFromModule(PassThroughNode):
+
+    def __init__(self, other_compilation, name, **kwargs):
+        super().__init__(use_count=0, size_delta=1, **kwargs)
+        self.other_compilation = other_compilation
+        self.name = name
+
+
 class CreateBox(PassThroughNode):
 
     def __init__(self, **kwargs):

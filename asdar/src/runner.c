@@ -205,16 +205,27 @@ static bool run_unbox(struct Runner *rnr, const struct CodeOp *op)
 	return true;
 }
 
+static bool run_exportobject(struct Runner *rnr, const struct CodeOp *op)
+{
+	if (*op->data.modmemberptr)
+		OBJECT_DECREF(*op->data.modmemberptr);
+	*op->data.modmemberptr = *--rnr->stacktop;
+
+	rnr->opidx++;
+	return true;
+}
+
 static bool run_getfrommodule(struct Runner *rnr, const struct CodeOp *op)
 {
 	Object *val = *op->data.modmemberptr;
 	if (!val) {
+		// TODO: include module path and member name in error message
 		errobj_set(rnr->interp, &errobj_type_variable, "value of an exported variable hasn't been set");
 		return false;
 	}
-
 	OBJECT_INCREF(val);
 	*rnr->stacktop++ = val;
+
 	rnr->opidx++;
 	return true;
 }
@@ -517,6 +528,7 @@ static bool run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_CREATEBOX, run_createbox);
 		BOILERPLATE(CODE_SET2BOX, run_set2box);
 		BOILERPLATE(CODE_UNBOX, run_unbox);
+		BOILERPLATE(CODE_EXPORTOBJECT, run_exportobject);
 		BOILERPLATE(CODE_GETFROMMODULE, run_getfrommodule);
 		BOILERPLATE(CODE_CALLFUNC, run_callfunc);
 		BOILERPLATE(CODE_CALLCONSTRUCTOR, run_callconstructor);

@@ -40,7 +40,7 @@ def source2bytecode(compilation: common.Compilation):
 
     # TODO: better message for cooking?
     compilation.messager(3, "Creating typed AST")
-    cooked, export_vars, export_types = cooked_ast.cook(
+    cooked, export_types = cooked_ast.cook(
         compilation, raw, import_compilation_dict)
     compilation.set_export_types(export_types)
 
@@ -50,10 +50,10 @@ def source2bytecode(compilation: common.Compilation):
     compilation.messager(3, "Optimizing")
     decision_tree.graphviz(root_node, 'before_optimization')
     optimizer.optimize(root_node, None)
-    decision_tree.graphviz(root_node, 'after_optimization')
+    #decision_tree.graphviz(root_node, 'after_optimization')
 
     compilation.messager(3, "Creating opcode")
-    opcode = opcoder.create_opcode(compilation, root_node, export_vars, source)
+    opcode = opcoder.create_opcode(compilation, root_node, source)
 
     compilation.messager(3, "Creating bytecode")
     bytecode = bytecoder.create_bytecode(compilation, opcode)

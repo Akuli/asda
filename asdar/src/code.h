@@ -16,6 +16,7 @@ enum CodeOpKind {
 	CODE_CREATEBOX,
 	CODE_SET2BOX,
 	CODE_UNBOX,
+	CODE_EXPORTOBJECT,
 	CODE_GETFROMMODULE,
 	CODE_CALLFUNC,
 	CODE_CALLCONSTRUCTOR,
@@ -87,13 +88,13 @@ struct CodeOp {
 };
 
 // dumps to stdout
-void codeop_debug(const struct CodeOp *op);
+void codeop_debug(struct CodeOp op);
 
 // destroys op, doesn't free it
-void codeop_destroy(const struct CodeOp *op);
+void codeop_destroy(struct CodeOp op);
 
-// doesn't free code itself, but frees all contents nicely
-void code_destroy(const struct Code *code);
+// frees the contents of the code struct nicely
+void code_destroy(struct Code code);
 
 
 #endif   // CODE_H

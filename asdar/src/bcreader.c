@@ -16,6 +16,7 @@
 #include "objects/string.h"
 
 #define IMPORT_SECTION 'i'
+#define EXPORT_SECTION 'e'
 #define TYPE_LIST_SECTION 'y'
 
 #define SET_LINENO 'L'
@@ -25,6 +26,7 @@
 #define CREATE_BOX '0'
 #define SET_TO_BOX 'O'
 #define UNBOX 'o'
+#define EXPORT_OBJECT 'x'
 #define SET_ATTR ':'
 #define GET_ATTR '.'
 #define GET_FROM_MODULE 'm'
@@ -64,12 +66,13 @@
 #define TYPEBYTE_VOID 'v'
 
 
-struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname)
+struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname, struct Module *mod)
 {
 	struct BcReader res = {0};  // most things to 0 for bcreader_destroy() and stuff
 	res.interp = interp;
 	res.in = in;
 	res.indirname = indirname;
+	res.module = mod;
 	res.lineno = 1;
 	return res;
 }
@@ -203,7 +206,7 @@ bool bcreader_readimports(struct BcReader *bcr)
 	if (!read_bytes(bcr, &b, 1))
 		goto error;
 	if (b != IMPORT_SECTION) {
-		errobj_set(bcr->interp, &errobj_type_value, "expected import section, got %B", b);
+		errobj_set(bcr->interp, &errobj_type_value, "expected first import section, got %B", b);
 		goto error;
 	}
 
@@ -230,6 +233,29 @@ bool bcreader_readimports(struct BcReader *bcr)
 error:
 	bcr->imports = NULL;
 	return false;
+}
+
+bool bcreader_readexports(struct BcReader *bcr)
+{
+	unsigned char b;
+	if (!read_bytes(bcr, &b, 1))
+		return false;
+	if (b != EXPORT_SECTION) {
+		errobj_set(bcr->interp, &errobj_type_value, "expected first export section, got %B", b);
+		return false;
+	}
+
+	uint16_t tmp;
+	if (!read_uint16(bcr, &tmp))
+		return false;
+	bcr->module->nexports = (size_t)tmp;
+
+	if (tmp == 0)
+		bcr->module->exports = NULL;
+	else if (!( bcr->module->exports = calloc(tmp, sizeof(bcr->module->exports[0])) ))
+		return false;
+
+	return true;
 }
 
 
@@ -507,23 +533,27 @@ static bool read_create_function(struct BcReader *bcr, struct CodeOp *res)
 	return read_body(bcr, &res->data.createfunc.code);
 }
 
-// TODO
-static Object **get_module_member_pointer(struct BcReader *bcr)
+static Object **get_module_member_pointer(struct BcReader *bcr, bool thismodule)
 {
-/*
-	uint16_t modidx, membidx;
-	if (!read_uint16(bcr, &modidx))
-		return NULL;
-	if (!read_uint16(bcr, &membidx))
+	const struct Module *mod;
+	if (thismodule)
+		mod = bcr->module;
+	else {
+		// the module has been imported already when this runs
+		// TODO: call module_get less times?
+		uint16_t modidx;
+		if (!read_uint16(bcr, &modidx))
+			return NULL;
+		mod = module_get(bcr->interp, bcr->imports[modidx]);
+	}
+	assert(mod);
+
+	uint16_t i;
+	if (!read_uint16(bcr, &i))
 		return NULL;
 
-	// the module has been imported already when this runs
-	// TODO: call module_get less times?
-	const struct Module *mod = module_get(bcr->interp, bcr->imports[modidx]);
-	assert(mod);
-	return mod->scope->locals + membidx;
-*/
-	assert(0);
+	assert(i < mod->nexports);
+	return &mod->exports[i];
 }
 
 static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *res)
@@ -542,6 +572,13 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case CREATE_BOX: res->kind = CODE_CREATEBOX; return true;
 	case SET_TO_BOX: res->kind = CODE_SET2BOX;   return true;
 	case UNBOX:      res->kind = CODE_UNBOX;     return true;
+
+	case EXPORT_OBJECT:
+		res->kind = CODE_EXPORTOBJECT;
+		return !!( res->data.modmemberptr = get_module_member_pointer(bcr, true) );
+	case GET_FROM_MODULE:
+		res->kind = CODE_GETFROMMODULE;
+		return !!( res->data.modmemberptr = get_module_member_pointer(bcr, false) );
 
 	case CALL_FUNCTION:
 		res->kind = CODE_CALLFUNC;
@@ -568,10 +605,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case SET_ATTR:
 		res->kind = CODE_SETATTR;
 		return read_attribute(bcr, res);
-
-	case GET_FROM_MODULE:
-		res->kind = CODE_GETFROMMODULE;
-		return !!( res->data.modmemberptr = get_module_member_pointer(bcr) );
 
 	case CREATE_FUNCTION:
 		return read_create_function(bcr, res);
@@ -642,7 +675,7 @@ static bool read_body(struct BcReader *bcr, struct Code *code)
 		if (!read_op(bcr, ob, &val))
 			goto error;
 		if (!dynarray_push(bcr->interp, &ops, val)) {
-			codeop_destroy(&val);
+			codeop_destroy(val);
 			goto error;
 		}
 	}
@@ -655,13 +688,23 @@ static bool read_body(struct BcReader *bcr, struct Code *code)
 
 error:
 	for (size_t i = 0; i < ops.len; ++i)
-		codeop_destroy(&ops.ptr[i]);
+		codeop_destroy(ops.ptr[i]);
 	free(ops.ptr);
 	return false;
 }
 
 bool bcreader_readcodepart(struct BcReader *bcr, struct Code *code)
 {
-	// TODO: check byte after body
-	return read_body(bcr, code);
+	if (!read_body(bcr, code))
+		return false;
+
+	unsigned char b;
+	read_bytes(bcr, &b, 1);
+	if (b != IMPORT_SECTION) {
+		errobj_set(bcr->interp, &errobj_type_value, "expected second import section, got %B", b);
+		code_destroy(*code);
+		return false;
+	}
+
+	return true;
 }

@@ -8,20 +8,23 @@
 #include <stdio.h>
 #include "code.h"
 #include "interp.h"
+#include "module.h"
 
 
 struct BcReader {
 	Interp *interp;
 	FILE *in;
 	const char *indirname;   // relative to interp->basedir, must NOT free() until bc reader no longer needed
+	struct Module *module;
 	uint32_t lineno;
 	char *srcpath;
 	char **imports;          // NULL terminated
+	size_t nexports;
 	struct Type **typelist;  // the return value of bcreader_readtypelist
 };
 
 // never fails
-struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname);
+struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname, struct Module *mod);
 
 // does not do anything to things passed as arguments to bcreader_new
 void bcreader_destroy(const struct BcReader *bcr);
@@ -35,6 +38,9 @@ char *bcreader_readsourcepath(struct BcReader *bcr);
 
 // puts a mallocced array of mallocced strings to bcr->imports
 bool bcreader_readimports(struct BcReader *bcr);
+
+// sets bcr->module->nexports and allocates bcr->module->exports
+bool bcreader_readexports(struct BcReader *bcr);
 
 // if this returns non-NULL, the return value is a NULL-terminated array
 // each item must be type_destroy()ed and the array must be free()d

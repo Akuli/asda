@@ -20,7 +20,8 @@ static void destroy_types(struct Type **types)
 	free(types);
 }
 
-static bool read_bytecode_file(Interp *interp, const char *bcpath, char **srcpath, struct Code *code, struct Type ***types)
+// this cleans up everything that it puts to the mod
+static bool read_bytecode_file(Interp *interp, const char *bcpath, struct Module *mod)
 {
 	assert(bcpath[0]);
 
@@ -49,14 +50,17 @@ static bool read_bytecode_file(Interp *interp, const char *bcpath, char **srcpat
 	}
 	free(fullbcpath);
 
-	struct BcReader bcr = bcreader_new(interp, f, dir);
-	*srcpath = NULL;
+	struct BcReader bcr = bcreader_new(interp, f, dir, mod);
+	mod->srcpath = NULL;
+	mod->exports = NULL;
 
 	if (!bcreader_readasdabytes(&bcr))
 		goto error;
-	if (!( *srcpath = bcreader_readsourcepath(&bcr) ))
+	if (!( mod->srcpath = bcreader_readsourcepath(&bcr) ))
 		goto error;
 	if (!bcreader_readimports(&bcr))
+		goto error;
+	if (!bcreader_readexports(&bcr))
 		goto error;
 
 	// TODO: handle import cycles
@@ -64,11 +68,11 @@ static bool read_bytecode_file(Interp *interp, const char *bcpath, char **srcpat
 		if (!module_get(interp, bcr.imports[i]) && !import(interp, bcr.imports[i]))
 			goto error;
 
-	if (!( *types = bcreader_readtypelist(&bcr) ))
+	if (!( mod->types = bcreader_readtypelist(&bcr) ))
 		goto error;
 
-	if (!bcreader_readcodepart(&bcr, code)) {
-		destroy_types(*types);
+	if (!bcreader_readcodepart(&bcr, &mod->code)) {
+		destroy_types(mod->types);
 		goto error;
 	}
 
@@ -79,8 +83,9 @@ static bool read_bytecode_file(Interp *interp, const char *bcpath, char **srcpat
 	return true;
 
 error:
-	bcreader_destroy(&bcr);
-	free(*srcpath);
+	bcreader_destroy(&bcr);   // frees bcr.imports and the contents
+	free(mod->srcpath);
+	free(mod->exports);
 	free(dir);
 	fclose(f);
 	return false;
@@ -100,17 +105,20 @@ static bool run(Interp *interp, const struct Code *code)
 bool import(Interp *interp, const char *path)
 {
 	struct Module *mod = malloc(sizeof(*mod));
-	if (!mod)
+	if (!mod) {
+		errobj_set_nomem(interp);
 		return false;
+	}
 
 	mod->bcpath = malloc(strlen(path) + 1);
 	if (!mod->bcpath) {
 		free(mod);
+		errobj_set_nomem(interp);
 		return false;
 	}
 	strcpy(mod->bcpath, path);
 
-	if (!read_bytecode_file(interp, path, &mod->srcpath, &mod->code, &mod->types)) {
+	if (!read_bytecode_file(interp, path, mod)) {
 		free(mod->bcpath);
 		free(mod);
 		return false;
