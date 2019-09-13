@@ -122,7 +122,7 @@ class _OpCoder:
         self.output = output_opcode
         self.compilation = compilation
         self.line_start_offsets = line_start_offsets
-        self.local_vars = []    # FIXME: Function arguments
+        self.local_vars = []
 
         # keys are opcoded nodes, values are JumpMarker objects
         #
