@@ -8,6 +8,7 @@
 #include <string.h>
 #include "err.h"
 #include "func.h"
+#include "int.h"
 #include "../utf8.h"
 #include "../interp.h"
 #include "../object.h"
@@ -337,10 +338,19 @@ static bool tostring_cfunc(Interp *interp, struct ObjData data,
 }
 FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &stringobj_type });
 
+static bool getlength_cfunc(Interp *interp, struct ObjData data,
+	Object *const *args, size_t nargs, Object **result)
+{
+	StringObject *s = (StringObject *) args[0];
+	return !!( *result = (Object*)intobj_new_long(interp, (long) s->len) );
+}
+FUNCOBJ_COMPILETIMECREATE(getlength, &stringobj_type, { &stringobj_type });
+
 static struct TypeAttr attrs[] = {
 	{ TYPE_ATTR_METHOD, &uppercase },
 	{ TYPE_ATTR_METHOD, &lowercase },
 	{ TYPE_ATTR_METHOD, &tostring },
+	{ TYPE_ATTR_METHOD, &getlength },
 };
 
 const struct Type stringobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, NULL, attrs, sizeof(attrs)/sizeof(attrs[0]));

@@ -160,6 +160,7 @@ def _fill_builtin_types_ordered_dict():
     BUILTIN_TYPES['Str'].add_method('uppercase', [], BUILTIN_TYPES['Str'])
     BUILTIN_TYPES['Str'].add_method('lowercase', [], BUILTIN_TYPES['Str'])
     BUILTIN_TYPES['Str'].add_method('to_string', [], BUILTIN_TYPES['Str'])
+    BUILTIN_TYPES['Str'].add_method('get_length', [], BUILTIN_TYPES['Int'])
     BUILTIN_TYPES['Int'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 
     create_and_add('Error', objekt)
