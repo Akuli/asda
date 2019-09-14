@@ -1,9 +1,12 @@
+# converts decision tree to bytes that can be written to file
+
+import bisect
 import collections
 import functools
 import io
 import os
 
-from . import common, objects, opcoder
+from asdac import common, decision_tree, objects
 
 
 SET_LINENO = b'L'
@@ -80,91 +83,120 @@ def _bit_storing_size(n):
     return -((-n) // 8)
 
 
-class _ByteCode:
+def _local_vars_to_list(start_node, local_vars_list):
+    for node in decision_tree.get_all_nodes(start_node):
+        if isinstance(node, (decision_tree.SetLocalVar,
+                             decision_tree.GetLocalVar)):
+            # O(n) 'not in' check but there shouldn't be many local vars
+            if node.var not in local_vars_list:
+                local_vars_list.append(node.var)
 
-    def __init__(self):
-        self.byte_array = bytearray()
-        self.current_lineno = 1
 
-    # clears the byte array
-    def get_bytes(self):
-        result = bytes(self.byte_array)
-        self.byte_array.clear()
-        return result
+def _attribute_name_to_index(tybe, name):
+    assert isinstance(tybe.attributes, collections.OrderedDict)
+    return list(tybe.attributes.keys()).index(name)
 
-    # writes an unsigned little-endian integer
-    def _add_uint(self, bits, number):
-        r"""
-        >>> bc = _ByteCode()
-        >>> bc.add_uint16(1)
-        >>> bc.get_bytes()
-        b'\x01\x00'
-        """
-        assert bits % 8 == 0 and 0 < bits <= 64, bits
+
+# sometimes it's necessary to change an uint after adding it to bytecode
+class _UintInByteCode:
+
+    def __init__(self, byte_array, offset, size):
+        self._byte_array = byte_array
+        self._offset = offset
+        self._size = size
+
+    def set(self, number):
         try:
-            self.byte_array.extend(number.to_bytes(bits // 8, 'little'))
+            bytez = number.to_bytes(self._size, 'little')
         except OverflowError:
             raise common.CompileError(
                 "this number does not fit in an unsigned %d-bit integer: %d"
-                % (bits, number))
+                % (self._size * 8, number))
 
-    add_uint8 = functools.partialmethod(_add_uint, 8)
-    add_uint16 = functools.partialmethod(_add_uint, 16)
-    add_uint32 = functools.partialmethod(_add_uint, 32)
-
-    def add_big_uint(self, abs_value):
-        assert abs_value >= 0
-        size = _bit_storing_size(abs_value.bit_length())
-        self.add_uint32(size)
-        self.byte_array.extend(abs_value.to_bytes(size, 'little'))
-
-    def add_byte(self, byte):
-        if isinstance(byte, int):
-            self.byte_array.append(byte)
-        else:
-            assert len(byte) == 1
-            self.byte_array.extend(byte)
-
-    def write_string(self, string):
-        utf8 = string.encode('utf-8')
-        self.add_uint32(len(utf8))
-        self.byte_array.extend(utf8)
-
-    def set_lineno(self, lineno):
-        if lineno != self.current_lineno:
-            self.byte_array.extend(SET_LINENO)
-            self.add_uint32(lineno)
-            self.current_lineno = lineno
+        self._byte_array[self._offset:self._offset+self._size] = bytez
 
 
-class _BytecodeWriter:
+class _ByteCodeCreator:
 
-    def __init__(self, bytecode, compilation, type_list):
-        self.bytecode = bytecode
+    def __init__(self, byte_array, compilation, line_start_offsets,
+                 current_lineno, type_list):
+        self.byte_array = byte_array
         self.compilation = compilation
+        self.line_start_offsets = line_start_offsets
+        self.current_lineno = current_lineno
 
         # when the interpreter imports the bytecode file, it creates things
         # that represent these types, and looks up these types by index
         self.type_list = type_list
 
-        # the bytecode doesn't contain jump markers, and it instead jumps by
-        # index, it turns out to be much easier to figure out the indexes
-        # beforehand
-        self.jumpmarker2index = {}
+        self.local_vars = []
+        self.op_index = 0       # number of ops written so far, for jumps
+        self.jump_cache = {}    # keys are nodes, values are op_index values
 
-    def _create_subwriter(self):
-        return _BytecodeWriter(self.bytecode, self.compilation, self.type_list)
+    def _write_uint(self, bits, number):
+        r"""
+        >>> bc = _ByteCode()
+        >>> bc.write_uint16(1)
+        >>> bc.get_bytes()
+        b'\x01\x00'
+        """
+        assert bits % 8 == 0 and 0 < bits <= 64, bits
+
+        result = _UintInByteCode(
+            self.byte_array, len(self.byte_array), bits // 8)
+        result.set(number)   # this makes self.byte_array longer
+        return result
+
+    write_uint8 = functools.partialmethod(_write_uint, 8)
+    write_uint16 = functools.partialmethod(_write_uint, 16)
+    write_uint32 = functools.partialmethod(_write_uint, 32)
+
+    def write_big_uint(self, abs_value):
+        assert abs_value >= 0
+        size = _bit_storing_size(abs_value.bit_length())
+        self.write_uint32(size)
+        self.byte_array.extend(abs_value.to_bytes(size, 'little'))
+
+    def write_string(self, string):
+        utf8 = string.encode('utf-8')
+        self.write_uint32(len(utf8))
+        self.byte_array.extend(utf8)
 
     def write_path(self, path):
         relative2 = self.compilation.compiled_path.parent
         relative_path = common.relpath(path, relative2)
-        # os.path.normcase replaces / with \ on windows, but we actually want /
-        # for this to make the compiled bytecodes cross-platform
-        #
-        # TODO: delete normcase and assert that the path is lowercase, because
-        #       it is lowercased elsewhere
-        self.bytecode.write_string(
-            os.path.normcase(str(relative_path)).replace(os.sep, '/'))
+
+        # asda-compiled/whatever.asdac should always be in lowercase, and other
+        # code should ensure that
+        assert str(relative_path).islower()
+
+        # forward slash to make the compiled bytecodes cross-platform
+        self.write_string(str(relative_path).replace(os.sep, '/'))
+
+    # returns line number so that 1 means first line
+    def _set_lineno(self, location):
+        if location is None:
+            return
+
+        #    >>> offsets = [0, 4, 10]
+        #    >>> bisect.bisect(offsets, 0)
+        #    1
+        #    >>> bisect.bisect(offsets, 3)
+        #    1
+        #    >>> bisect.bisect(offsets, 4)
+        #    2
+        #    >>> bisect.bisect(offsets, 8)
+        #    2
+        #    >>> bisect.bisect(offsets, 9)
+        #    2
+        #    >>> bisect.bisect(offsets, 10)
+        #    3
+        assert location.compilation == self.compilation
+        lineno = bisect.bisect(self.line_start_offsets, location.offset)
+        if lineno != self.current_lineno:
+            self.byte_array.extend(SET_LINENO)
+            self.write_uint32(lineno)
+            self.current_lineno = lineno
 
     def _is_builtin_generic_type(self, tybe):
         return (
@@ -197,240 +229,315 @@ class _BytecodeWriter:
     def write_type(self, tybe, *, allow_void=False):
         if tybe is None:
             assert allow_void
-            self.bytecode.add_byte(TYPE_VOID)
+            self.byte_array.extend(TYPE_VOID)
             return
 
         self._ensure_type_is_in_type_list_if_needed(tybe)
 
         if tybe in self.type_list:
-            self.bytecode.add_byte(TYPE_FROM_LIST)
-            self.bytecode.add_uint16(self.type_list.index(tybe))
+            self.byte_array.extend(TYPE_FROM_LIST)
+            self.write_uint16(self.type_list.index(tybe))
         elif tybe in objects.BUILTIN_TYPES.values():
             names = list(objects.BUILTIN_TYPES)
-            self.bytecode.add_byte(TYPE_BUILTIN)
-            self.bytecode.add_uint8(names.index(tybe.name))
+            self.byte_array.extend(TYPE_BUILTIN)
+            self.write_uint8(names.index(tybe.name))
         elif self._is_builtin_generic_type(tybe):
             # interpreter doesn't know anything about generic types
             # it has all built-in types in the same array
             # generics are there last
             lizt = list(objects.BUILTIN_GENERIC_TYPES.values())
             index = lizt.index(tybe.original_generic)
-            self.bytecode.add_byte(TYPE_BUILTIN)
-            self.bytecode.add_uint8(len(objects.BUILTIN_TYPES) + index)
+            self.byte_array.extend(TYPE_BUILTIN)
+            self.write_uint8(len(objects.BUILTIN_TYPES) + index)
         else:
             assert False, tybe      # pragma: no cover
 
-    # use this after run()
+    # call this after run()
     def write_type_list(self):
-        self.bytecode.add_byte(TYPE_LIST_SECTION)
-        self.bytecode.add_uint16(len(self.type_list))
+        self.byte_array.extend(TYPE_LIST_SECTION)
+        self.write_uint16(len(self.type_list))
+
         for tybe in self.type_list:
             if isinstance(tybe, objects.FunctionType):
-                self.bytecode.add_byte(TYPE_FUNCTION)
+                self.byte_array.extend(TYPE_FUNCTION)
                 self.write_type(tybe.returntype, allow_void=True)
 
-                self.bytecode.add_uint8(len(tybe.argtypes))
+                self.write_uint8(len(tybe.argtypes))
                 for argtype in tybe.argtypes:
                     self.write_type(argtype)
 
             elif isinstance(tybe, objects.UserDefinedClass):
-                self.bytecode.add_byte(TYPE_ASDA_CLASS)
-                self.bytecode.add_uint16(len(tybe.constructor_argtypes))
-                self.bytecode.add_uint16(
+                self.byte_array.extend(TYPE_ASDA_CLASS)
+                self.write_uint16(len(tybe.constructor_argtypes))
+                self.write_uint16(
                     len(tybe.attributes) - len(tybe.constructor_argtypes))
 
             else:   # pragma: no cover
                 raise NotImplementedError(repr(tybe))
 
-    def write_op(self, op):
-        self.bytecode.set_lineno(op.lineno)
+    def write_opbyte(self, byte):
+        assert len(byte) == 1
+        self.byte_array.extend(byte)
+        self.op_index += 1
 
-        if isinstance(op, opcoder.StrConstant):
-            self.bytecode.add_byte(STR_CONSTANT)
-            self.bytecode.write_string(op.python_string)
+    def write_pass_through_node(self, node):
+        if isinstance(node, decision_tree.StrConstant):
+            self.write_opbyte(STR_CONSTANT)
+            self.write_string(node.python_string)
             return
 
-        if isinstance(op, opcoder.IntConstant):
-            if op.python_int >= 0:
-                self.bytecode.add_byte(NON_NEGATIVE_INT_CONSTANT)
-                self.bytecode.add_big_uint(op.python_int)
+        if isinstance(node, decision_tree.IntConstant):
+            if node.python_int >= 0:
+                self.write_opbyte(NON_NEGATIVE_INT_CONSTANT)
+                self.write_big_uint(node.python_int)
             else:
                 # currently this code never runs because -2 is parsed as the
                 # prefix minus operator applied to the non-negative integer
                 # constant 2, but i'm planning on adding an optimizer that
                 # would output it as a thing that needs this code
-                self.bytecode.add_byte(NEGATIVE_INT_CONSTANT)
-                self.bytecode.add_big_uint(abs(op.python_int))
+                self.write_opbyte(NEGATIVE_INT_CONSTANT)
+                self.write_big_uint(abs(node.python_int))
             return
 
-        if isinstance(op, opcoder.CreateFunction):
-            assert isinstance(op.functype, objects.FunctionType)
-            self.bytecode.add_byte(CREATE_FUNCTION)
-            self.write_type(op.functype)
-            self._create_subwriter().run(op.body_opcode)
+        if isinstance(node, decision_tree.CreateFunction):
+            assert isinstance(node.functype, objects.FunctionType)
+            self.write_opbyte(CREATE_FUNCTION)
+            self.write_type(node.functype)
+
+            creator = _ByteCodeCreator(
+                self.byte_array, self.compilation, self.line_start_offsets,
+                self.current_lineno, self.type_list)
+            creator.local_vars.extend(node.local_argvars)
+            creator.run(node.body_root_node)
             return
 
-        if isinstance(op, opcoder.CreatePartialFunction):
-            self.bytecode.add_byte(CREATE_PARTIAL_FUNCTION)
-            self.bytecode.add_uint16(op.how_many_args)
+        if isinstance(node, decision_tree.CreatePartialFunction):
+            self.write_opbyte(CREATE_PARTIAL_FUNCTION)
+            self.write_uint16(node.how_many_args)
             return
 
-        if isinstance(op, opcoder.GetBuiltinVar):
-            self.bytecode.add_byte(GET_BUILTIN_VAR)
+        if isinstance(node, decision_tree.GetBuiltinVar):
+            self.write_opbyte(GET_BUILTIN_VAR)
             names = list(objects.BUILTIN_VARS.keys())
-            self.bytecode.add_uint8(names.index(op.varname))
+            self.write_uint8(names.index(node.varname))
             return
 
-        if isinstance(op, opcoder.CallFunction):
-            self.bytecode.add_byte(CALL_FUNCTION)
-            self.bytecode.add_uint8(op.nargs)       # TODO: bigger than uint8
+        if isinstance(node, decision_tree.CallFunction):
+            self.write_opbyte(CALL_FUNCTION)
+            self.write_uint8(node.how_many_args)  # TODO: bigger than u8
             return
 
-        if isinstance(op, opcoder.CallConstructor):
-            self.bytecode.add_byte(CALL_CONSTRUCTOR)
-            self.write_type(op.tybe)
-            self.bytecode.add_uint8(op.nargs)   # TODO: bigger than uint8
+        if isinstance(node, decision_tree.CallConstructor):
+            self.write_opbyte(CALL_CONSTRUCTOR)
+            self.write_type(node.tybe)
+            self.write_uint8(node.how_many_args)  # TODO: bigger than u8
             return
 
-        if isinstance(op, opcoder.StoreReturnValue):
-            self.bytecode.add_byte(STORE_RETURN_VALUE)
+        if isinstance(node, decision_tree.StoreReturnValue):
+            self.write_opbyte(STORE_RETURN_VALUE)
             return
 
-        if isinstance(op, (opcoder.Jump, opcoder.JumpIf, opcoder.JumpIfEqual)):
-            if isinstance(op, opcoder.Jump):
-                self.bytecode.add_byte(JUMP)
-            elif isinstance(op, opcoder.JumpIf):
-                self.bytecode.add_byte(JUMP_IF)
-            elif isinstance(op, opcoder.JumpIfEqual):
-                self.bytecode.add_byte(JUMP_IF_EQUAL)
-            else:  # pragma: no cover
-                raise RuntimeError
-            self.bytecode.add_uint16(self.jumpmarker2index[op.marker])
+        if isinstance(node, (decision_tree.GetAttr, decision_tree.SetAttr)):
+            self.write_opbyte(
+                GET_ATTR if isinstance(node, decision_tree.GetAttr) else SET_ATTR)
+            self.write_type(node.tybe)
+            self.write_uint16(
+                _attribute_name_to_index(node.tybe, node.attrname))
             return
 
-        if isinstance(op, (opcoder.GetAttr, opcoder.SetAttr)):
-            self.bytecode.add_byte(
-                GET_ATTR if isinstance(op, opcoder.GetAttr) else SET_ATTR)
-            self.write_type(op.type)
-            self.bytecode.add_uint16(op.indeks)
-            return
-
-        if isinstance(op, opcoder.StrJoin):
-            self.bytecode.add_byte(STR_JOIN)
-            self.bytecode.add_uint16(op.how_many_parts)
-            return
-
-        if isinstance(op, opcoder.JumpMarker):
-            # already handled in run()
+        if isinstance(node, decision_tree.StrJoin):
+            self.write_opbyte(STR_JOIN)
+            self.write_uint16(node.how_many_strings)
             return
 
         # FIXME: is very outdated
-#        if isinstance(op, opcoder.AddErrorHandler):
-#            self.bytecode.add_byte(ADD_ERROR_HANDLER)
-#            self.bytecode.add_uint16(len(op.items))
-#            for jumpto_marker, errortype, errorvarlevel, errorvar in op.items:
+#        if isinstance(node, decision_tree.AddErrorHandler):
+#            self.write_opbyte(ADD_ERROR_HANDLER)
+#            self.write_uint16(len(node.items))
+#            for jumpto_marker, errortype, errorvarlevel, errorvar in node.items:
 #                self.write_type(errortype)
-#                self.bytecode.add_uint16(
+#                self.write_uint16(
 #                    varlists[errorvarlevel].index(errorvar))
-#                self.bytecode.add_uint16(self.jumpmarker2index[jumpto_marker])
+#                self.write_uint16(self.jumpmarker2index[jumpto_marker])
 #            return
 #
-        if isinstance(op, opcoder.PushFinallyStateReturn):
-            self.bytecode.add_byte(PUSH_FINALLY_STATE_VALUE_RETURN)
+#        if isinstance(node, decision_tree.PushFinallyStateReturn):
+#            self.write_opbyte(PUSH_FINALLY_STATE_VALUE_RETURN)
+#            return
+#
+#        if isinstance(node, decision_tree.PushFinallyStateJump):
+#            self.write_opbyte(PUSH_FINALLY_STATE_JUMP)
+#            self.write_uint16(self.jumpmarker2index[node.index])
+#            return
+
+        if isinstance(node, decision_tree.SetMethodsToClass):
+            self.write_opbyte(SET_METHODS_TO_CLASS)
+            self.write_type(node.klass)
+            self.write_uint16(node.how_many_methods)
             return
 
-        if isinstance(op, opcoder.PushFinallyStateJump):
-            self.bytecode.add_byte(PUSH_FINALLY_STATE_JUMP)
-            self.bytecode.add_uint16(self.jumpmarker2index[op.index])
+        if isinstance(node, decision_tree.SetLocalVar):
+            self.write_opbyte(SET_LOCAL_VAR)
+            self.write_uint16(self.local_vars.index(node.var))
             return
 
-        if isinstance(op, opcoder.SetMethodsToClass):
-            self.bytecode.add_byte(SET_METHODS_TO_CLASS)
-            self.write_type(op.klass)
-            self.bytecode.add_uint16(op.how_many_methods)
+        if isinstance(node, decision_tree.GetLocalVar):
+            self.write_opbyte(GET_LOCAL_VAR)
+            self.write_uint16(self.local_vars.index(node.var))
             return
 
-        if isinstance(op, opcoder.SetLocalVar):
-            self.bytecode.add_byte(SET_LOCAL_VAR)
-            self.bytecode.add_uint16(op.indeks)
+        if isinstance(node, decision_tree.ExportObject):
+            self.write_opbyte(EXPORT_OBJECT)
+            index = list(self.compilation.export_types.keys()).index(node.name)
+            self.write_uint16(index)
             return
 
-        if isinstance(op, opcoder.GetLocalVar):
-            self.bytecode.add_byte(GET_LOCAL_VAR)
-            self.bytecode.add_uint16(op.indeks)
-            return
-
-        if isinstance(op, opcoder.ExportObject):
-            self.bytecode.add_byte(EXPORT_OBJECT)
-            self.bytecode.add_uint16(op.indeks)
-            return
-
-        if isinstance(op, opcoder.GetFromModule):
-            self.bytecode.add_byte(GET_FROM_MODULE)
-            self.bytecode.add_uint16(
-                self.compilation.imports.index(op.other_compilation))
-            self.bytecode.add_uint16(
-                list(op.other_compilation.export_types.keys()).index(op.name))
+        if isinstance(node, decision_tree.GetFromModule):
+            self.write_opbyte(GET_FROM_MODULE)
+            self.write_uint16(
+                self.compilation.imports.index(node.other_compilation))
+            self.write_uint16(
+                list(node.other_compilation.export_types.keys()).index(node.name))
             return
 
         simple_things = [
-            (opcoder.PopOne, POP_ONE),
-            (opcoder.Plus, PLUS),
-            (opcoder.Minus, MINUS),
-            (opcoder.PrefixMinus, PREFIX_MINUS),
-            (opcoder.Times, TIMES),
-            # (opcoder.Divide, DIVIDE),
-            (opcoder.CreateBox, CREATE_BOX),
-            (opcoder.SetToBox, SET_TO_BOX),
-            (opcoder.UnBox, UNBOX),
-            (opcoder.RemoveErrorHandler, REMOVE_ERROR_HANDLER),
-            (opcoder.PushFinallyStateOk, PUSH_FINALLY_STATE_OK),
-            (opcoder.PushFinallyStateError, PUSH_FINALLY_STATE_ERROR),
-            (opcoder.DiscardFinallyState, DISCARD_FINALLY_STATE),
-            (opcoder.ApplyFinallyState, APPLY_FINALLY_STATE),
-            (opcoder.Throw, THROW),
+            (decision_tree.PopOne, POP_ONE),
+            (decision_tree.Plus, PLUS),
+            (decision_tree.Minus, MINUS),
+            (decision_tree.PrefixMinus, PREFIX_MINUS),
+            (decision_tree.Times, TIMES),
+            # (decision_tree.Divide, DIVIDE),
+            (decision_tree.CreateBox, CREATE_BOX),
+            (decision_tree.SetToBox, SET_TO_BOX),
+            (decision_tree.UnBox, UNBOX),
+#            (decision_tree.RemoveErrorHandler, REMOVE_ERROR_HANDLER),
+#            (decision_tree.PushFinallyStateOk, PUSH_FINALLY_STATE_OK),
+#            (decision_tree.PushFinallyStateError, PUSH_FINALLY_STATE_ERROR),
+#            (decision_tree.DiscardFinallyState, DISCARD_FINALLY_STATE),
+#            (decision_tree.ApplyFinallyState, APPLY_FINALLY_STATE),
+            (decision_tree.Throw, THROW),
         ]
 
         for klass, byte in simple_things:
-            if isinstance(op, klass):
-                self.bytecode.add_byte(byte)
+            if isinstance(node, klass):
+                self.write_opbyte(byte)
                 return
 
-        assert False, op        # pragma: no cover
+        assert False, node        # pragma: no cover
 
-    # don't call this more than once because jumpmarker2index
-    def run(self, opcode):
-        i = 0       # no, enumerate() does not work for this
-        for op in opcode.ops:
-            if isinstance(op, opcoder.JumpMarker):
-                self.jumpmarker2index[op] = i
+    def write_2_way_decision(self, node):
+        # this does not output the same bytecode twice
+        # for example, consider this code
+        #
+        #    a
+        #    if b:
+        #        c
+        #    else:
+        #        d
+        #    e
+        #
+        # it creates a tree like this
+        #
+        #     a
+        #     |
+        #     b
+        #    / \
+        #   c   d
+        #    \ /
+        #     e
+        #
+        # and opcode like this
+        #
+        #    a
+        #    b
+        #    if b is true, jump to then_marker
+        #    d
+        #    e
+        #    jump to done_marker
+        #    then_marker
+        #    c
+        #    jump to e
+        #    done_marker
+        #
+        # the 'jump to e' part gets added by jump_cache stuff, because e has
+        # already gotten opcoded once and can be reused
+        #
+        # this is not ideal, could be pseudo-optimized to do less jumps, but
+        # that's likely not a bottleneck so why bother
+
+        if isinstance(node, decision_tree.BoolDecision):
+            self.write_opbyte(JUMP_IF)
+        elif isinstance(node, decision_tree.EqualDecision):
+            self.write_opbyte(JUMP_IF_EQUAL)
+        else:  # pragma: no cover
+            raise RuntimeError
+        then_jump = self.write_uint16(0)
+
+        self.write_tree(node.otherwise)
+
+        self.write_opbyte(JUMP)
+        done_jump = self.write_uint16(0)
+
+        then_jump.set(self.op_index)
+        self.write_tree(node.then)
+        done_jump.set(self.op_index)
+
+    def write_tree(self, node):
+        while node is not None:
+            if node in self.jump_cache:
+                self.write_opbyte(JUMP)
+                self.write_uint16(self.jump_cache[node])
+                return
+
+            if len(node.jumped_from) > 1:
+                self.jump_cache[node] = self.op_index
+
+            if isinstance(node, decision_tree.PassThroughNode):
+                self.write_pass_through_node(node)
+                node = node.next_node
+            elif isinstance(node, decision_tree.TwoWayDecision):
+                self.write_2_way_decision(node)
+                return
             else:
-                i += 1
+                raise NotImplementedError("omg " + repr(node))
 
-        self.bytecode.add_uint16(opcode.how_many_local_vars)
-        self.bytecode.add_uint16(opcode.max_stack_size)
-
-        for op in opcode.ops:
-            self.write_op(op)
-        self.bytecode.add_byte(END_OF_BODY)
+    def run(self, start_node):
+        _local_vars_to_list(start_node, self.local_vars)
+        self.write_uint16(len(self.local_vars))
+        self.write_uint16(decision_tree.get_max_stack_size(start_node))
+        self.write_tree(start_node.next_node)
+        self.write_opbyte(END_OF_BODY)
 
     # this can be used to write either one of the two import sections
     def write_import_section(self, paths):
-        self.bytecode.add_byte(IMPORT_SECTION)
-        self.bytecode.add_uint16(len(paths))
+        self.byte_array.extend(IMPORT_SECTION)
+        self.write_uint16(len(paths))
         for path in paths:
             self.write_path(path)
 
     def write_first_export_section(self, exports):
         assert isinstance(exports, collections.OrderedDict)
-        self.bytecode.add_byte(EXPORT_SECTION)
-        self.bytecode.add_uint16(len(exports))
+        self.byte_array.extend(EXPORT_SECTION)
+        self.write_uint16(len(exports))
 
     def write_second_export_section(self, exports):
         self.write_first_export_section(exports)
         for name, tybe in exports.items():
-            self.bytecode.write_string(name)
+            self.write_string(name)
             self.write_type(tybe)
+
+
+def _swap_bytes(byte_array, start, middle):
+    """Swaps byte_array[start:middle] and byte_array[middle:] with each other.
+
+    >>> b = bytearray(b'ABCde1234')
+    >>> _swap_bytes(b, 3, 5)
+    >>> b
+    bytearray(b'ABC1234de')
+    """
+    temp = byte_array[middle:]
+    del byte_array[middle:]
+    byte_array[start:start] = temp
 
 
 # structure of a bytecode file:
@@ -442,162 +549,42 @@ class _BytecodeWriter:
 #   6.  opcode
 #   7.  second import section: source file paths, for the compiler
 #   8.  second export section: names and types, for the compiler
-#   9.  number of bytes before part 4, as an uint32.
+#   9.  number of bytes in opcode and everything before it, as an uint32.
 #       The compiler uses this to efficiently read imports and exports.
 #
 # all paths are relative to the bytecode file's directory and have '/' as
 # the separator
-def create_bytecode(compilation, opcode):
-    output = _ByteCode()
-    writer = _BytecodeWriter(output, compilation, [])
+def create_bytecode(compilation, start_node, source_code):
+    line_start_offsets = []
+    offset = 0
+    for line in io.StringIO(source_code):
+        line_start_offsets.append(offset)
+        offset += len(line)
 
-    writer.write_path(compilation.source_path)
-    source_path_bytes = output.get_bytes()
+    creator = _ByteCodeCreator(
+        bytearray(), compilation, line_start_offsets, 1, [])
 
-    writer.write_import_section(
+    creator.byte_array.extend(b'asda\xA5\xDA')
+    creator.write_path(compilation.source_path)
+
+    creator.write_import_section(
         [impcomp.compiled_path for impcomp in compilation.imports])
-    writer.write_first_export_section(compilation.export_types)
-    first_import_export_bytes = output.get_bytes()
+    creator.write_first_export_section(compilation.export_types)
 
-    writer.run(opcode)
-    opcode_bytes = output.get_bytes()
+    # interpreter wants type list before body opcode
+    # it is much easier to create the opcode before the type list
+    # so we do that and swap them afterwards
+    start = len(creator.byte_array)
+    creator.run(start_node)
+    middle = len(creator.byte_array)
+    creator.write_type_list()
+    _swap_bytes(creator.byte_array, start, middle)
+    after_opcode = len(creator.byte_array)
 
-    writer.write_type_list()
-    type_list_bytes = output.get_bytes()
-
-    result = (b'asda\xA5\xDA' + source_path_bytes + first_import_export_bytes +
-              type_list_bytes + opcode_bytes)
-    seek_index = len(result)   # _BytecodeReader reads this with seek
-    output.add_uint32(seek_index)
-    seek_index_u32 = output.get_bytes()
-
-    writer.write_import_section(
+    creator.write_import_section(
         [impcomp.source_path for impcomp in compilation.imports])
-    writer.write_second_export_section(compilation.export_types)
-    return result + output.get_bytes() + seek_index_u32
+    creator.write_second_export_section(compilation.export_types)
 
+    creator.write_uint32(after_opcode)
 
-class RecompileFixableError(Exception):
-    """Raised for errors that can be fixed by recompiling a file.
-
-    They happen when reading bytecode files, not when writing them.
-    """
-
-    def __init__(self, compilation, message):
-        self.compilation = compilation
-        self.message = message
-
-    def __str__(self):
-        return '%s (%r)' % (self.message, self.compilation)
-
-
-# FIXME: this is HORRIBLY OUTDATED needs lot of updating
-class _BytecodeReader:
-
-    def __init__(self, compilation, file):
-        self.compilation = compilation
-        self.file = file
-
-    def error(self, message):
-        raise RecompileFixableError(self.compilation, message)
-
-    # errors on unexpected eof
-    def _read(self, size):
-        result = self.file.read(size)
-        if len(result) != size:
-            self.error("the bytecode file seems to be truncated")
-        return result
-
-    def _read_uint(self, size):
-        assert size % 8 == 0 and 0 < size <= 64, size
-        return int.from_bytes(self._read(size // 8), 'little')
-
-    read_uint8 = functools.partialmethod(_read_uint, 8)
-    read_uint16 = functools.partialmethod(_read_uint, 16)
-    read_uint32 = functools.partialmethod(_read_uint, 32)
-
-    def read_string(self):
-        length = self.read_uint32()
-        utf8 = self._read(length)
-
-        try:
-            return utf8.decode('utf-8')
-        except UnicodeDecodeError:
-            bad = utf8.decode('utf-8', errors='replace')
-            self.error("the file contains a string of invalid utf-8: " + bad)
-
-    def read_path(self):
-        relative_path = self.read_string().replace('/', os.sep)
-        relative_to = self.compilation.compiled_path.parent
-        assert relative_to.is_absolute()
-        return common.resolve_dotdots(relative_to / relative_path)
-
-    def read_type(self, *, name_hint='<unknown name>'):
-        byte = self._read(1)
-
-        if byte == TYPE_BUILTIN:
-            index = self.read_uint8()
-            return list(objects.BUILTIN_TYPES.values())[index]
-
-        if byte == TYPE_FUNCTION:
-            returntype = self.read_type()
-            nargs = self.read_uint8()
-            argtypes = [self.read_type() for junk in range(nargs)]
-            return objects.FunctionType(argtypes, returntype)
-
-        if byte == TYPE_GENERATOR:
-            item_type = self.read_type()
-            return objects.GeneratorType(item_type)
-
-        if byte == TYPE_VOID:
-            return None
-
-        self.error("invalid type byte %r" % byte)
-
-    def check_asda_part(self):
-        if self.file.read(4) != b'asda':
-            self.error("the file is not an asda bytecode file")
-
-    def seek_to_end_sections(self):
-        self.file.seek(-32//8, io.SEEK_END)
-        new_seek_pos = self.read_uint32()
-        self.file.seek(new_seek_pos)
-
-    # returns a list of absolute source file paths
-    # TODO: can this return compilation objects instead?
-    def read_second_import_section(self):
-        if self._read(1) != IMPORT_SECTION:
-            self.error(
-                "the file doesn't seem to have a valid second import section")
-
-        result = []
-        how_many = self.read_uint16()
-        for junk in range(how_many):
-            result.append(self.read_path())
-        return result
-
-    def read_export_section(self):
-        if self._read(1) != EXPORT_SECTION:
-            self.error("the file doesn't seem to have a valid export section")
-
-        result = collections.OrderedDict()
-        how_many = self.read_uint16()
-        for junk in range(how_many):
-            name = self.read_string()
-            tybe = self.read_type(name_hint=name)
-            result[name] = tybe
-        return result
-
-
-def read_imports_and_exports(compilation):
-    with compilation.messager.indented(3, "Reading the compiled file..."):
-        with compilation.compiled_path.open('rb') as file:
-            reader = _BytecodeReader(compilation, file)
-            reader.check_asda_part()
-            reader.seek_to_end_sections()
-            imports = reader.read_second_import_section()
-            exports = reader.read_export_section()
-            compilation.messager(4, "Imported files: " + (
-                ', '.join(map(common.path_string, imports)) or '(none)'))
-
-    return (imports, exports)
+    return creator.byte_array
