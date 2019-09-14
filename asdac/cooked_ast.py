@@ -98,6 +98,13 @@ class GenericVariable(Variable):
         super().__init__(*args, **kwargs)
         self.generic_markers = generic_markers
 
+    def __repr__(self):
+        return "<%s '%s[%s]': level=%d>" % (
+            type(self).__name__,
+            self.name,
+            ', '.join(marker.name for marker in self.generic_markers),
+            self.level)
+
 
 BUILTIN_VARS = collections.OrderedDict([
     (name, Variable(name, tybe, None, 0))

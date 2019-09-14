@@ -44,6 +44,20 @@ void module_add(Interp *interp, struct Module *mod)
 }
 
 
+// asda classes may refer to objects that are instances of other asda classes
+// in this way, an asda class may depend on another asda class, so that destroying order matters
+// there's no good way to figure out what the correct destroying order should be
+// the solution is to remove the dependency
+static void set_methods_to_null(struct TypeAsdaClass *tac)
+{
+	for (size_t i = 0; i < tac->nattrs; i++) {
+		if (tac->attrs[i].kind == TYPE_ATTR_METHOD && tac->attrs[i].method) {
+			OBJECT_DECREF((Object *) tac->attrs[i].method);
+			tac->attrs[i].method = NULL;
+		}
+	}
+}
+
 static void destroy_most_things(const struct Module *mod)
 {
 	if (!mod)
@@ -57,6 +71,10 @@ static void destroy_most_things(const struct Module *mod)
 		if (mod->exports[i])
 			OBJECT_DECREF(mod->exports[i]);
 	free(mod->exports);
+
+	for (size_t i = 0; mod->types[i]; i++)
+		if (mod->types[i]->kind == TYPE_ASDACLASS)
+			set_methods_to_null((struct TypeAsdaClass *) mod->types[i]);
 
 	destroy_most_things(mod->left);
 	destroy_most_things(mod->right);

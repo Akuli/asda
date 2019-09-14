@@ -212,6 +212,14 @@ class _ByteCodeCreator:
           self._is_builtin_generic_type(tybe)):
             return
 
+        if isinstance(tybe, objects.GenericMarker):
+            # these are written as Object, because interpreter doesn't know
+            # anything about generics
+            #
+            # TODO: there is code that replaces generic markers with Object in
+            #       other files too, is it needed?
+            return
+
         if isinstance(tybe, objects.FunctionType):
             for argtype in tybe.argtypes:
                 self._ensure_type_is_in_type_list_if_needed(argtype)
@@ -250,6 +258,8 @@ class _ByteCodeCreator:
             index = lizt.index(tybe.original_generic)
             self.byte_array.extend(TYPE_BUILTIN)
             self.write_uint8(len(objects.BUILTIN_TYPES) + index)
+        elif isinstance(tybe, objects.GenericMarker):
+            self.write_type(objects.BUILTIN_TYPES['Object'])
         else:
             assert False, tybe      # pragma: no cover
 
