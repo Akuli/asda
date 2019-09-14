@@ -1,0 +1,131 @@
+# inefficient and type-hard-coded Str to Str hash table implementation
+
+
+let not = (Bool b) -> Bool:
+    if b:
+        return FALSE
+    return TRUE
+
+let and = (Bool a, Bool b) -> Bool:
+    if a:
+        if b:
+            return TRUE
+    return FALSE
+
+let or = (Bool a, Bool b) -> Bool:
+    return not(not(a) `and` not(b))
+
+# loop breaks when callback returns TRUE
+let foreach_with_break[T] = (Array[T] array, functype{(T) -> Bool} callback) -> void:
+    for let i = 0; i != (array.get_length()); i = i+1:
+        if callback(array.get(i)):
+            return
+
+let foreach[T] = (Array[T] array, functype{(T) -> void} callback) -> void:
+    foreach_with_break[T](array, (T item) -> Bool:
+        callback(item)
+        return FALSE
+    )
+
+let is_negative = (Int i) -> Bool:
+    return "{i}" == "-{-i}"
+
+let modulo = (Int value, Int mod) -> Int:
+    if mod == 0 `or` is_negative(mod):
+        throw new ValueError("modulo should be positive, but it's {mod}")
+
+    while not(is_negative(value)):
+        value = value - mod
+    while is_negative(value):
+        value = value + mod
+
+    return value
+
+let hash = (Str s) -> Int:
+    return s.get_length()    # lol
+
+
+# no generic classes yet :(
+# cannot do Optional[T] or HashTable[K, V], need to make hard-coded Str to Str hash table
+
+
+class OptionalStr(Str value, Bool is_null):
+    method get() -> Str:
+        if this.is_null:
+            throw new ValueError("null.get() called")
+        return this.value
+
+let null = new OptionalStr("", TRUE)
+let not_null = (Str value) -> OptionalStr:
+    return new OptionalStr(value, FALSE)
+
+
+class Item(Str key, Str value, Int key_hash):
+    void
+
+
+class HashTable(Array[Array[Item]] buckets):
+
+    method set(Str key, Str value) -> void:
+        let key_hash = hash(key)
+        let bucket = this.buckets.get(key_hash `modulo` this.buckets.get_length())
+
+        let found = FALSE
+        foreach_with_break[Item](bucket, (Item item) -> Bool:
+            if (item.key) == key:
+                item.value = value
+                found = TRUE
+                return TRUE
+            return FALSE
+        )
+
+        if not(found):
+            bucket.push(new Item(key, value, key_hash))
+
+    method get(Str key) -> Str:
+        let bucket = this.buckets.get(hash(key) `modulo` this.buckets.get_length())
+
+        let result = null
+        foreach_with_break[Item](bucket, (Item item) -> Bool:
+            if (item.key) == key:
+                result = not_null(item.value)
+                return TRUE
+            return FALSE
+        )  # FIXME: assert error in compiler if you indent this same level with 'if'
+
+        return result.get()
+
+    method keys() -> Array[Str]:
+        let result = new Array[Str]()
+        foreach[Array[Item]](this.buckets, (Array[Item] bucket) -> void:
+            foreach[Item](bucket, (Item item) -> void:
+                result.push(item.key)
+            )
+        )
+        return result
+
+
+let create_buckets = (Int bucket_count) -> Array[Array[Item]]:
+    let result = new Array[Array[Item]]()
+    for let i = 0; i != bucket_count; i = i+1:
+        result.push(new Array[Item]())
+    return result
+
+
+let example_usage = () -> void:
+    let hashtable = new HashTable(create_buckets(8))
+    let long_string = "foofoofoofoofoofoofoofoo"
+
+    hashtable.set(long_string, "old value of long key")
+    hashtable.set(long_string, "new value of long key")
+    hashtable.set("foo", "hello")
+
+    print(hashtable.get(long_string))
+    print(hashtable.get("foo"))
+
+    print("All the keys and values are:")
+    foreach[Str](hashtable.keys(), (Str key) -> void:
+        print("  {key} --> {hashtable.get(key)}")
+    )
+
+example_usage()
