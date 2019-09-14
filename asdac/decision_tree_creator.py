@@ -133,6 +133,20 @@ class _TreeCreator:
                 lambda creator: creator.do_expression(expression.false_expr),
                 **boilerplate)
 
+        elif isinstance(expression, cooked_ast.BoolNegation):
+            self.do_expression(expression.value)
+
+            # this is dumb, but usually gets optimized a lot
+            decision = decision_tree.BoolDecision(**boilerplate)
+            decision.set_then(decision_tree.GetBuiltinVar('FALSE'))
+            decision.set_otherwise(decision_tree.GetBuiltinVar('TRUE'))
+
+            self.set_next_node(decision)
+            self.set_next_node = lambda node: (
+                decision.then.set_next_node(node),
+                decision.otherwise.set_next_node(node),
+            )
+
         elif isinstance(expression, cooked_ast.PrefixMinus):
             self.do_expression(expression.prefixed)
             self.add_pass_through_node(
@@ -140,7 +154,7 @@ class _TreeCreator:
 
         elif isinstance(expression, (
                 cooked_ast.Plus, cooked_ast.Minus, cooked_ast.Times,
-                cooked_ast.Equal, cooked_ast.NotEqual)):
+                cooked_ast.StrEqual, cooked_ast.IntEqual)):
             self.do_expression(expression.lhs)
             self.do_expression(expression.rhs)
 
@@ -153,16 +167,12 @@ class _TreeCreator:
             else:
                 # push TRUE or FALSE to stack, usually this gets optimized into
                 # something that doesn't involve bool objects at all
-                eq = decision_tree.EqualDecision(**boilerplate)
-
-                if isinstance(expression, cooked_ast.Equal):
-                    eq.set_then(decision_tree.GetBuiltinVar('TRUE'))
-                    eq.set_otherwise(decision_tree.GetBuiltinVar('FALSE'))
-                elif isinstance(expression, cooked_ast.NotEqual):
-                    eq.set_then(decision_tree.GetBuiltinVar('FALSE'))
-                    eq.set_otherwise(decision_tree.GetBuiltinVar('TRUE'))
+                if isinstance(expression, cooked_ast.IntEqual):
+                    eq = decision_tree.IntEqualDecision(**boilerplate)
                 else:
-                    raise RuntimeError("wuut")      # pragma: no cover
+                    eq = decision_tree.StrEqualDecision(**boilerplate)
+                eq.set_then(decision_tree.GetBuiltinVar('TRUE'))
+                eq.set_otherwise(decision_tree.GetBuiltinVar('FALSE'))
 
                 self.set_next_node(eq)
                 self.set_next_node = lambda node: (

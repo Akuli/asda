@@ -255,6 +255,13 @@ bool stringobj_toutf8(StringObject *obj, const char **val, size_t *len)
 	return true;
 }
 
+bool stringobj_eq(StringObject *a, StringObject *b)
+{
+	if (a->len != b->len)
+		return false;
+	return memcmp(a->val, b->val, a->len * sizeof(a->val[0])) == 0;
+}
+
 StringObject *stringobj_join(Interp *interp, StringObject *const *strs, size_t nstrs)
 {
 	if(nstrs == 0)

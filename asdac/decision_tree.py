@@ -391,7 +391,13 @@ class BoolDecision(TwoWayDecision):
         super().__init__(use_count=1, size_delta=-1, **kwargs)
 
 
-class EqualDecision(TwoWayDecision):
+class IntEqualDecision(TwoWayDecision):
+
+    def __init__(self, **kwargs):
+        super().__init__(use_count=2, size_delta=-2, **kwargs)
+
+
+class StrEqualDecision(TwoWayDecision):
 
     def __init__(self, **kwargs):
         super().__init__(use_count=2, size_delta=-2, **kwargs)

@@ -72,6 +72,9 @@ strings that have interp==NULL (i.e. strings created at compile time)
 */
 bool stringobj_toutf8(StringObject *obj, const char **val, size_t *len);
 
+// checks if strings are equal
+bool stringobj_eq(StringObject *a, StringObject *b);
+
 // joins all da strings
 StringObject *stringobj_join(Interp *interp, StringObject *const *strs, size_t nstrs);
 

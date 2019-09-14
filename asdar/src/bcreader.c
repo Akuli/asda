@@ -35,8 +35,9 @@
 #define CALL_CONSTRUCTOR ')'
 #define POP_ONE 'P'
 #define JUMP 'K'
-#define JUMPIF 'J'
-#define JUMPIFEQ '='
+#define JUMP_IF 'J'
+#define JUMP_IF_EQ_INT '='
+#define JUMP_IF_EQ_STR 'q'
 #define STRING_JOIN 'j'
 #define NON_NEGATIVE_INT_CONSTANT '1'
 #define NEGATIVE_INT_CONSTANT '2'
@@ -592,9 +593,10 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 		}
 	case CALL_CONSTRUCTOR: return read_construction(bcr, res);
 
-	case JUMP:     res->kind = CODE_JUMP;     return read_uint16(bcr, &res->data.jump_idx);
-	case JUMPIF:   res->kind = CODE_JUMPIF;   return read_uint16(bcr, &res->data.jump_idx);
-	case JUMPIFEQ: res->kind = CODE_JUMPIFEQ; return read_uint16(bcr, &res->data.jump_idx);
+	case JUMP:           res->kind = CODE_JUMP;         return read_uint16(bcr, &res->data.jump_idx);
+	case JUMP_IF:        res->kind = CODE_JUMPIF;       return read_uint16(bcr, &res->data.jump_idx);
+	case JUMP_IF_EQ_INT: res->kind = CODE_JUMPIFEQ_INT; return read_uint16(bcr, &res->data.jump_idx);
+	case JUMP_IF_EQ_STR: res->kind = CODE_JUMPIFEQ_STR; return read_uint16(bcr, &res->data.jump_idx);
 
 	case NON_NEGATIVE_INT_CONSTANT:
 	case NEGATIVE_INT_CONSTANT:

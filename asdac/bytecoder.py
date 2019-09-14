@@ -37,7 +37,8 @@ END_OF_BODY = b'E'
 
 JUMP = b'K'
 JUMP_IF = b'J'
-JUMP_IF_EQUAL = b'='
+JUMP_IF_INT_EQUAL = b'='
+JUMP_IF_STR_EQUAL = b'q'
 
 PLUS = b'+'
 MINUS = b'-'
@@ -468,8 +469,10 @@ class _ByteCodeCreator:
 
         if isinstance(node, decision_tree.BoolDecision):
             self.write_opbyte(JUMP_IF)
-        elif isinstance(node, decision_tree.EqualDecision):
-            self.write_opbyte(JUMP_IF_EQUAL)
+        elif isinstance(node, decision_tree.IntEqualDecision):
+            self.write_opbyte(JUMP_IF_INT_EQUAL)
+        elif isinstance(node, decision_tree.StrEqualDecision):
+            self.write_opbyte(JUMP_IF_STR_EQUAL)
         else:  # pragma: no cover
             raise RuntimeError
         then_jump = self.write_uint16(0)

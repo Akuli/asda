@@ -293,12 +293,27 @@ static bool run_jumpif(struct Runner *rnr, const struct CodeOp *op)
 	return true;
 }
 
-static bool run_jumpifeq(struct Runner *rnr, const struct CodeOp *op)
+static bool run_jumpifeq_int(struct Runner *rnr, const struct CodeOp *op)
 {
 	IntObject *x = (IntObject *)*--rnr->stacktop;
 	IntObject *y = (IntObject *)*--rnr->stacktop;
 
 	if (intobj_cmp(x, y) == 0)
+		rnr->opidx = op->data.jump_idx;
+	else
+		rnr->opidx++;
+
+	OBJECT_DECREF(x);
+	OBJECT_DECREF(y);
+	return true;
+}
+
+static bool run_jumpifeq_str(struct Runner *rnr, const struct CodeOp *op)
+{
+	StringObject *x = (StringObject *)*--rnr->stacktop;
+	StringObject *y = (StringObject *)*--rnr->stacktop;
+
+	if (stringobj_eq(x, y))
 		rnr->opidx = op->data.jump_idx;
 	else
 		rnr->opidx++;
@@ -534,7 +549,8 @@ static bool run_one_op(struct Runner *rnr, const struct CodeOp *op)
 		BOILERPLATE(CODE_CALLCONSTRUCTOR, run_callconstructor);
 		BOILERPLATE(CODE_JUMP, run_jump);
 		BOILERPLATE(CODE_JUMPIF, run_jumpif);
-		BOILERPLATE(CODE_JUMPIFEQ, run_jumpifeq);
+		BOILERPLATE(CODE_JUMPIFEQ_INT, run_jumpifeq_int);
+		BOILERPLATE(CODE_JUMPIFEQ_STR, run_jumpifeq_str);
 		BOILERPLATE(CODE_STRJOIN, run_strjoin);
 		BOILERPLATE(CODE_POP1, run_pop1);
 		BOILERPLATE(CODE_THROW, run_throw);

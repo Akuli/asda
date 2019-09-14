@@ -38,8 +38,11 @@ Minus = _astclass('Minus', ['lhs', 'rhs'])
 PrefixMinus = _astclass('PrefixMinus', ['prefixed'])
 Times = _astclass('Times', ['lhs', 'rhs'])
 # Divide = _astclass('Divide', ['lhs', 'rhs'])
-Equal = _astclass('Equal', ['lhs', 'rhs'])
-NotEqual = _astclass('NotEqual', ['lhs', 'rhs'])
+IntEqual = _astclass('IntEqual', ['lhs', 'rhs'])
+StrEqual = _astclass('StrEqual', ['lhs', 'rhs'])
+
+# equalities are wrapped in this for '!=' operator
+BoolNegation = _astclass('BoolNegation', ['value'])
 
 
 # this is a somewhat evil function
@@ -351,29 +354,33 @@ class _Chef:
                     "sorry, division is not supported yet :(",
                     raw_expression.location)
 
-            # TODO: add == for at least Str and Bool
-            if lhs.type is not objects.BUILTIN_TYPES['Int']:
-                problem = lhs.location
-            elif rhs.type is not objects.BUILTIN_TYPES['Int']:
-                problem = rhs.location
+            if raw_expression.operator == '!=':
+                fake_operator = '=='
             else:
-                problem = None
+                fake_operator = raw_expression.operator
 
-            if problem is not None:
+            # TODO: add == for at least Bool
+            try:
+                b = objects.BUILTIN_TYPES       # pep8 line length
+                klass, tybe = {
+                    (b['Int'], '+', b['Int']): (Plus, b['Int']),
+                    (b['Int'], '-', b['Int']): (Minus, b['Int']),
+                    (b['Int'], '*', b['Int']): (Times, b['Int']),
+                    (b['Int'], '==', b['Int']): (IntEqual, b['Bool']),
+                    (b['Str'], '==', b['Str']): (StrEqual, b['Bool']),
+                }[(lhs.type, fake_operator, rhs.type)]
+            except KeyError:
                 raise common.CompileError(
-                    "expected Int %s Int, got %s %s %s"
-                    % (raw_expression.operator, lhs.type.name,
-                       raw_expression.operator, rhs.type.name),
-                    problem)
+                    "wrong types: %s %s %s" % (
+                        raw_expression.operator, lhs.type.name,
+                        raw_expression.operator, rhs.type.name))
 
-            klass, tybe = {
-                '+': (Plus, objects.BUILTIN_TYPES['Int']),
-                '-': (Minus, objects.BUILTIN_TYPES['Int']),
-                '*': (Times, objects.BUILTIN_TYPES['Int']),
-                '==': (Equal, objects.BUILTIN_TYPES['Bool']),
-                '!=': (NotEqual, objects.BUILTIN_TYPES['Bool']),
-            }[raw_expression.operator]
-            return klass(raw_expression.location, tybe, lhs, rhs)
+            result = klass(raw_expression.location, tybe, lhs, rhs)
+            if raw_expression.operator == '!=':
+                result = BoolNegation(
+                    raw_expression.location, objects.BUILTIN_TYPES['Bool'],
+                    result)
+            return result
 
         if isinstance(raw_expression, raw_ast.IfExpression):
             cond = self.cook_expression(raw_expression.cond)

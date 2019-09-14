@@ -50,6 +50,20 @@ class Type:
         # remember to set this to True if you change .generic_types
         self.undo_generics_may_do_something = False
 
+    def __eq__(self, other):
+        if not isinstance(other, Type):
+            return NotImplemented
+
+        if self.generic_types:
+            return (self.generic_types == other.generic_types and
+                    self.original_generic == other.original_generic)
+        return (self is other)
+
+    def __hash__(self):
+        if self.generic_types:
+            return hash(tuple(self.generic_types) + (self.original_generic,))
+        return super().__hash__()
+
     @property
     def name(self):
         if self.generic_types:
@@ -221,8 +235,8 @@ T = GenericMarker('T')
 
 array = Type('Array', BUILTIN_TYPES['Object'])
 array.generic_types.append(T)
-array.constructor_argtypes = []
 array.undo_generics_may_do_something = True
+array.constructor_argtypes = []
 array.add_method('get_length', [], BUILTIN_TYPES['Int'])
 array.add_method('push', [T], None)
 array.add_method('pop', [], T)
