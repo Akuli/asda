@@ -496,6 +496,7 @@ class _ByteCodeCreator:
             if len(node.jumped_from) > 1:
                 self.jump_cache[node] = self.op_index
 
+            self._set_lineno(node.location)
             if isinstance(node, decision_tree.PassThroughNode):
                 self.write_pass_through_node(node)
                 node = node.next_node

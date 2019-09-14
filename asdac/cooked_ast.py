@@ -372,8 +372,8 @@ class _Chef:
             except KeyError:
                 raise common.CompileError(
                     "wrong types: %s %s %s" % (
-                        raw_expression.operator, lhs.type.name,
-                        raw_expression.operator, rhs.type.name))
+                        lhs.type.name, raw_expression.operator, rhs.type.name),
+                    lhs.location + rhs.location)
 
             result = klass(raw_expression.location, tybe, lhs, rhs)
             if raw_expression.operator == '!=':
