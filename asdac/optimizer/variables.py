@@ -98,7 +98,7 @@ def optimize_unnecessary_boxes(start_node, all_nodes, createfunc_node):
     return False
 
 
-def _find_gets_for_set(node: decision_tree.Node, var, visited_nodes):
+def _find_gets_for_set(node, var, visited_nodes):
     visited_nodes.add(node)
 
     if isinstance(node, decision_tree.GetLocalVar) and node.var is var:
@@ -123,25 +123,14 @@ def _find_sets_for_var(node, var, visited_nodes):
             yield from _find_sets_for_var(ref.objekt, var, visited_nodes)
 
 
-def _sets_and_gets_to_dicts(all_nodes, start_node):
-    set2gets = {}
+def _find_sets_and_their_gets(all_nodes):
     for node in all_nodes:
         if isinstance(node, decision_tree.SetLocalVar):
-            assert node not in set2gets
             if node.next_node is None:
-                set2gets[node] = set()
+                yield (node, set())
             else:
-                set2gets[node] = set(_find_gets_for_set(
-                    node.next_node, node.var, set()))
-
-    get2sets = {}
-    for node in all_nodes:
-        if isinstance(node, decision_tree.GetLocalVar):
-            assert node not in get2sets
-            get2sets[node] = set(_find_sets_for_var(node, node.var, set()))
-            # get2sets[node] may be empty for function arguments
-
-    return (set2gets, get2sets)
+                yield (node, set(
+                    _find_gets_for_set(node.next_node, node.var, set())))
 
 
 def _optimize_set_once_get_once(set_node, get_node):
@@ -160,9 +149,11 @@ def _optimize_set_once_get_once(set_node, get_node):
 
 def optimize_temporary_vars(root_node, all_nodes, createfunc_node):
     assert isinstance(root_node, decision_tree.Start)
-    set2gets, get2sets = _sets_and_gets_to_dicts(all_nodes, root_node)
 
-    for set_node, gets in set2gets.items():
+    # 'blah in argvars' runs slightly but measurably faster than list lookups
+    argvars = set(root_node.argvars)
+
+    for set_node, gets in _find_sets_and_their_gets(all_nodes):
         if not gets:
             # TODO: warnings should be printed MUCH more nicely
             print("warning: value of variable '%s' is set, but never used"
@@ -175,10 +166,12 @@ def optimize_temporary_vars(root_node, all_nodes, createfunc_node):
             decision_tree.replace_node(set_node, ignore_value)
             return True
 
-        if len(gets) == 1 and set_node.var not in root_node.argvars:
+        if len(gets) == 1 and set_node.var not in argvars:
             [get_node] = gets
-            if len(get2sets[get_node]) == 1:
-                assert get2sets[get_node] == {set_node}
+            set_nodes = set(_find_sets_for_var(get_node, get_node.var, set()))
+
+            if len(set_nodes) == 1:
+                assert set_nodes == {set_node}
                 if _optimize_set_once_get_once(set_node, get_node):
                     return True
 
