@@ -339,7 +339,8 @@ class _ByteCodeCreator:
 
         if isinstance(node, (decision_tree.GetAttr, decision_tree.SetAttr)):
             self.write_opbyte(
-                GET_ATTR if isinstance(node, decision_tree.GetAttr) else SET_ATTR)
+                GET_ATTR if isinstance(node, decision_tree.GetAttr)
+                else SET_ATTR)
             self.write_type(node.tybe)
             self.write_uint16(
                 _attribute_name_to_index(node.tybe, node.attrname))
@@ -397,7 +398,7 @@ class _ByteCodeCreator:
             self.write_uint16(
                 self.compilation.imports.index(node.other_compilation))
             self.write_uint16(
-                list(node.other_compilation.export_types.keys()).index(node.name))
+                list(node.other_compilation.export_types).index(node.name))
             return
 
         simple_things = [

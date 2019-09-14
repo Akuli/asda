@@ -1,4 +1,4 @@
-from asdac import cooked_ast, decision_tree
+from asdac import decision_tree
 
 
 # handles e.g. loops and ifs with TRUE or FALSE as a condition
@@ -28,6 +28,6 @@ def optimize_booldecision_before_truefalse(
           node.then.varname == 'TRUE' and
           node.otherwise.varname == 'FALSE' and
           node.then.next_node is node.otherwise.next_node):
-            decision_tree.replace_node(decision, decision.then.next_node)
+            decision_tree.replace_node(node, node.then.next_node)
             return True
     return False

@@ -1,10 +1,19 @@
-import bisect
 import collections
 import functools
 import io
 import os
 
-from . import common, decision_tree, objects, opcoder
+from . import common, objects
+
+
+TYPE_ASDA_CLASS = b'a'
+TYPE_BUILTIN = b'b'
+TYPE_FUNCTION = b'f'
+TYPE_VOID = b'v'
+TYPE_FROM_LIST = b'l'
+
+IMPORT_SECTION = b'i'
+EXPORT_SECTION = b'e'
 
 
 class RecompileFixableError(Exception):
@@ -74,10 +83,6 @@ class _BytecodeReader:
             nargs = self.read_uint8()
             argtypes = [self.read_type() for junk in range(nargs)]
             return objects.FunctionType(argtypes, returntype)
-
-        if byte == TYPE_GENERATOR:
-            item_type = self.read_type()
-            return objects.GeneratorType(item_type)
 
         if byte == TYPE_VOID:
             return None

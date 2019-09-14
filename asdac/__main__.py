@@ -8,7 +8,7 @@ import textwrap
 import colorama
 
 from asdac import (bytecoder, bytecode_reader, common, cooked_ast,
-                   decision_tree, decision_tree_creator, optimizer, raw_ast)
+                   decision_tree_creator, optimizer, raw_ast)
 
 
 # TODO: error handling for bytecode_reader.RecompileFixableError
@@ -149,8 +149,8 @@ class CompileManager:
                 if self._compiled_is_up2date_with_source(compilation):
                     # there is a chance that nothing needs to be compiled
                     # but can't be sure yet
-                    imports, export_types = bytecode_reader.read_imports_and_exports(
-                        compilation)
+                    imports, export_types = (
+                        bytecode_reader.read_imports_and_exports(compilation))
                     self._compile_imports(compilation, imports)
                     import_compilations = [self.source_path_2_compilation[path]
                                            for path in imports]

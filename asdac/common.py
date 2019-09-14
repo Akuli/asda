@@ -111,8 +111,7 @@ class Compilation:
         return compiled_dir / pathlib.Path(*map(handle_part, relative_c.parts))
 
     def __repr__(self):
-        #return '<%s of %s>' % (type(self).__name__, self.source_path)
-        return '<%s>' % type(self).__name__
+        return '<%s of %s>' % (type(self).__name__, self.source_path)
 
     def open_source_file(self):
         # see docs/syntax.md
@@ -153,7 +152,6 @@ class Location:
         self.length = length
 
     def __repr__(self):
-#        return '<%s>' % type(self).__name__
         result = 'Location offset=%r length=%r' % (self.offset, self.length)
         try:
             result += ': ' + repr(self.get_source()[1])

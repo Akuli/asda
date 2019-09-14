@@ -65,8 +65,8 @@ class Type:
 
         result = self._undo_generics_internal(type_dict)
         if self.generic_types and result.original_generic is None:
-                assert result is not self
-                result.original_generic = self
+            assert result is not self
+            result.original_generic = self
         return result
 
     def _undo_generics_internal(self, type_dict):
