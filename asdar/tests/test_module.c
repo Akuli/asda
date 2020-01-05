@@ -31,6 +31,9 @@ static struct Module *create_test_module(Interp *interp, const char *name)
 	assert(mod->types);
 	mod->types[0] = NULL;
 
+	mod->exports = NULL;
+	mod->nexports = 0;
+
 	mod->runok = true;
 
 	return mod;
