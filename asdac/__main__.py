@@ -7,10 +7,11 @@ import textwrap
 
 import colorama
 
-from . import bytecoder, common, cooked_ast, opcoder, raw_ast
+from asdac import (bytecoder, bytecode_reader, common, cooked_ast,
+                   decision_tree_creator, optimizer, raw_ast)
 
 
-# TODO: error handling for bytecoder.RecompileFixableError
+# TODO: error handling for bytecode_reader.RecompileFixableError
 def source2bytecode(compilation: common.Compilation):
     """Compiles a file.
 
@@ -23,13 +24,14 @@ def source2bytecode(compilation: common.Compilation):
         from step 2 and the values are Compilation objects.
     5.  Finally, you're done with using this function :D
     """
-    compilation.messager(0, "Compiling...")
+    compilation.messager(0, 'Compiling to "%s"...' % common.path_string(
+        compilation.compiled_path))
 
-    compilation.messager(3, "Reading the source file...")
+    compilation.messager(3, "Reading the source file")
     with compilation.open_source_file() as file:
         source = file.read()
 
-    compilation.messager(3, "Parsing...")
+    compilation.messager(3, "Parsing")
     raw, imports = raw_ast.parse(compilation, source)
     import_compilation_dict = yield imports
     assert import_compilation_dict.keys() == set(imports)
@@ -37,18 +39,23 @@ def source2bytecode(compilation: common.Compilation):
         import_compilation_dict[path] for path in imports])
 
     # TODO: better message for cooking?
-    compilation.messager(3, "Processing the parsed AST...")
-    cooked, export_vars, export_types = cooked_ast.cook(
+    compilation.messager(3, "Creating typed AST")
+    cooked, export_types = cooked_ast.cook(
         compilation, raw, import_compilation_dict)
     compilation.set_export_types(export_types)
 
-    compilation.messager(3, "Creating opcode...")
-    opcode = opcoder.create_opcode(compilation, cooked, export_vars, source)
+    compilation.messager(3, "Creating a decision tree")
+    root_node = decision_tree_creator.create_tree(cooked)
 
-    compilation.messager(3, "Creating bytecode...")
-    bytecode = bytecoder.create_bytecode(compilation, opcode)
+    compilation.messager(3, "Optimizing")
+    #decision_tree.graphviz(root_node, 'before_optimization')
+    optimizer.optimize(root_node, None)
+    #decision_tree.graphviz(root_node, 'after_optimization')
 
-    compilation.messager(3, 'Writing bytecode to "%s"...' % common.path_string(
+    compilation.messager(3, "Creating bytecode")
+    bytecode = bytecoder.create_bytecode(compilation, root_node, source)
+
+    compilation.messager(3, 'Writing bytecode to "%s"' % common.path_string(
         compilation.compiled_path))
     # if you change this, make sure that the last step before opening the
     # output file does NOT produce an iterator, so that if something fails, an
@@ -142,8 +149,8 @@ class CompileManager:
                 if self._compiled_is_up2date_with_source(compilation):
                     # there is a chance that nothing needs to be compiled
                     # but can't be sure yet
-                    imports, export_types = bytecoder.read_imports_and_exports(
-                        compilation)
+                    imports, export_types = (
+                        bytecode_reader.read_imports_and_exports(compilation))
                     self._compile_imports(compilation, imports)
                     import_compilations = [self.source_path_2_compilation[path]
                                            for path in imports]
@@ -224,7 +231,6 @@ def main():
         '--compiled-dir', default='asda-compiled',
         help="directory for compiled asda files, default is ./asda-compiled")
     parser.add_argument(
-        # TODO: respect this flag
         '--always-recompile', action='store_true', default=False,
         help=("always compile all files, even if they have already been "
               "compiled and the compiled files are newer than the source "

@@ -252,10 +252,15 @@ Now you can open `graph.png` in an image viewer to see the results.
 
 I use `include-what-you-use` with this project. You can download and compile IWYU like this:
 
-1. Add LLVM 8 stuff to your `sources.list` from https://apt.llvm.org and
-   install the stuff:
+1. Add LLVM 8 stuff to your `sources.list` from https://apt.llvm.org:
 
         $ sudo nano /etc/apt/sources.list
+
+    Go to https://apt.llvm.org, find an apt key adding command near the
+    bottom of the page, and add the APT key with the command.
+
+    Install the stuff:
+
         $ sudo apt update
         $ sudo apt install llvm-8-dev libclang-8-dev clang-8
 

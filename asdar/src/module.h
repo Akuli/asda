@@ -2,17 +2,20 @@
 #define MODULE_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include "code.h"
 #include "interp.h"
-#include "objects/scope.h"
+#include "object.h"
 
 struct Module {
-	// see interp->basedir comments for more details about the path
+	// see interp->basedir comments for more details about the paths
 	// srcpath and bcpath are relative to interp->basedir
 	char *srcpath;       // path of source file
 	char *bcpath;        // path of compiled bytecode file
-	ScopeObject *scope;  // a subscope of the built-in scope
 	struct Code code;    // loaded from bcpath
+
+	Object **exports;    // may contain NULLs even for fully loaded modules, can export inside 'if'
+	size_t nexports;
 	struct Type **types; // type_destroy()ed when the module is destroyed, NULL terminated
 
 	// binary search tree for looking up modules by bcpath quickly
@@ -36,7 +39,8 @@ const struct Module *module_get(Interp *interp, const char *path);
 // mod should be allocated with malloc() and have everything except ->left and ->right set
 // this cannot fail, but this asserts that a module with the same name doesn't exist
 // these will be done eventually:
-//   - mod->scope will be decreffed
+//   - each object of mod->exports will be free()d
+//   - mod->exports will be freed
 //   - mod->code will be destroyed
 //   - mod->srcpath will be freed
 //   - mod->bcpath will be freed

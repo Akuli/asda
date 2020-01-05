@@ -50,6 +50,20 @@ class Type:
         # remember to set this to True if you change .generic_types
         self.undo_generics_may_do_something = False
 
+    def __eq__(self, other):
+        if not isinstance(other, Type):
+            return NotImplemented
+
+        if self.generic_types:
+            return (self.generic_types == other.generic_types and
+                    self.original_generic == other.original_generic)
+        return (self is other)
+
+    def __hash__(self):
+        if self.generic_types:
+            return hash(tuple(self.generic_types) + (self.original_generic,))
+        return super().__hash__()
+
     @property
     def name(self):
         if self.generic_types:
@@ -65,8 +79,8 @@ class Type:
 
         result = self._undo_generics_internal(type_dict)
         if self.generic_types and result.original_generic is None:
-                assert result is not self
-                result.original_generic = self
+            assert result is not self
+            result.original_generic = self
         return result
 
     def _undo_generics_internal(self, type_dict):
@@ -146,6 +160,7 @@ def _fill_builtin_types_ordered_dict():
     BUILTIN_TYPES['Str'].add_method('uppercase', [], BUILTIN_TYPES['Str'])
     BUILTIN_TYPES['Str'].add_method('lowercase', [], BUILTIN_TYPES['Str'])
     BUILTIN_TYPES['Str'].add_method('to_string', [], BUILTIN_TYPES['Str'])
+    BUILTIN_TYPES['Str'].add_method('get_length', [], BUILTIN_TYPES['Int'])
     BUILTIN_TYPES['Int'].add_method('to_string', [], BUILTIN_TYPES['Str'])
 
     create_and_add('Error', objekt)
@@ -221,8 +236,8 @@ T = GenericMarker('T')
 
 array = Type('Array', BUILTIN_TYPES['Object'])
 array.generic_types.append(T)
-array.constructor_argtypes = []
 array.undo_generics_may_do_something = True
+array.constructor_argtypes = []
 array.add_method('get_length', [], BUILTIN_TYPES['Int'])
 array.add_method('push', [T], None)
 array.add_method('pop', [], T)
@@ -231,6 +246,8 @@ array.add_method('get', [BUILTIN_TYPES['Int']], T)
 BUILTIN_GENERIC_TYPES = collections.OrderedDict([
     ('Array', array),
 ])
+
+# TODO: handle built-in generic vars in rest of asdac
 BUILTIN_GENERIC_VARS = collections.OrderedDict([
     # TODO: delete this, it's here only because tests use it and not actually
     # implemented anywhere

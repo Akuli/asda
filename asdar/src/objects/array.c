@@ -1,3 +1,5 @@
+#include "array.h"
+#include <stdbool.h>
 #include <stdlib.h>
 #include "../dynarray.h"
 #include "../interp.h"
@@ -6,7 +8,7 @@
 #include "err.h"
 #include "func.h"
 #include "int.h"
-#include "array.h"
+#include "string.h"
 
 static void destroy_array(Object *obj, bool decrefrefs, bool freenonrefs)
 {
@@ -68,8 +70,10 @@ static bool get_cfunc(Interp *interp, struct ObjData data, Object *const *args, 
 
 	if (i->spilled || i->val.lon < 0 || i->val.lon >= (long)arr->da.len) {
 		StringObject *istr = intobj_tostrobj(interp, i);
-		if (istr)   // an error has been already set if intobj_tostrobj() failed
+		if (istr) {   // an error has been already set if intobj_tostrobj() failed
 			errobj_set(interp, &errobj_type_value, "cannot do get element %S from an array of length %zu", istr, arr->da.len);
+			OBJECT_DECREF(istr);
+		}
 		return false;
 	}
 

@@ -8,82 +8,40 @@
 #include "object.h"
 #include "runner.h"
 #include "type.h"
-#include "objects/err.h"
 #include "objects/func.h"
-#include "objects/scope.h"
 
-struct AsdaFunctionData {
-	ScopeObject *defscope;
-	const struct Code *code;
-};
-
-static void destroy_asdafunc_data(void *vpdata, bool decrefrefs, bool freenonrefs)
+static bool run(
+	Interp *interp, const struct Code *code, struct Runner *rnr,
+	Object *const *args, size_t nargs)
 {
-	// code is not destroyed, reason explained in asdafunc.h
-	if(decrefrefs)
-		OBJECT_DECREF( ((struct AsdaFunctionData*)vpdata)->defscope );
-	if(freenonrefs)
-		free(vpdata);
-}
+	if (!runner_init(rnr, interp, code))
+		return false;
 
-static enum RunnerResult
-run(Interp *interp, const struct AsdaFunctionData *afd, struct Runner *rnr, Object *const *args, size_t nargs)
-{
-	ScopeObject *sco = scopeobj_newsub(interp, afd->defscope, afd->code->nlocalvars);
-	if(!sco)
-		return RUNNER_ERROR;
-
-	assert(nargs <= afd->code->nlocalvars);
-	memcpy(sco->locals, args, sizeof(args[0]) * nargs);
+	assert(nargs <= code->nlocalvars);
+	memcpy(rnr->locals, args, sizeof(args[0]) * nargs);
 	for (size_t i = 0; i < nargs; i++)
 		OBJECT_INCREF(args[i]);
 
-	runner_init(rnr, interp, sco, afd->code);
-	OBJECT_DECREF(sco);
-
-	enum RunnerResult res = runner_run(rnr);
+	bool ok = runner_run(rnr);
 	runner_free(rnr);
-	return res;
+	return ok;
 }
 
 static bool asda_function_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
 	struct Runner rnr;
 
-	switch (run(interp, data.val, &rnr, args, nargs)) {
-		case RUNNER_VALUERETURN:
-			*result = rnr.retval;
-			return true;
-
-		case RUNNER_VOIDRETURN:
-			*result = NULL;
-			return true;
-
-		case RUNNER_ERROR:
-			return false;
-
-		case RUNNER_DIDNTRETURN:
-			// compiler adds a didn't return error to end of returning functions
-			assert(0);
-	}
-
-	// never runs, silences compiler warning
-	assert(0);
-	return false;
+	if (!run(interp, data.val, &rnr, args, nargs))
+		return false;
+	*result = rnr.retval;
+	return true;
 }
 
-FuncObject *asdafunc_create(Interp *interp, ScopeObject *defscope, const struct TypeFunc *type, const struct Code *code)
+FuncObject *asdafunc_create(Interp *interp, const struct TypeFunc *type, const struct Code *code)
 {
-	struct AsdaFunctionData *afd = malloc(sizeof(*afd));
-	if(!afd) {
-		errobj_set_nomem(interp);
-		return NULL;
-	}
-
-	afd->defscope = defscope;
-	OBJECT_INCREF(defscope);
-	afd->code = code;
-
-	struct ObjData od = { .val = afd, .destroy = destroy_asdafunc_data };
+	// BE CAREFUL to not modify the code in the rest of this file
+	// od.val is non-const void* pointer but code is const pointer
+	// this is simpler than wrapping the code inside a one-element struct
+	struct ObjData od = { .val = (void *)code, .destroy = NULL };
 	return funcobj_new(interp, type, asda_function_cfunc, od);
 }

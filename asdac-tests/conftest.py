@@ -5,7 +5,7 @@ import types
 import pytest
 
 from asdac import (common, tokenizer, string_parser, raw_ast, cooked_ast,
-                   opcoder, bytecoder)
+                   decision_tree, opcoder, bytecoder)
 
 
 # the following url is on 2 lines because pep8 line length
@@ -73,6 +73,10 @@ def compiler():
 
         assert not export_types
         return cooked
+
+    def create_tree(code):
+        cooked = cooked_parse(code)     # changes compilation
+        return decision_tree.create_tree(cooked)
 
     def opcode(code):
         cooked = cooked_parse(code)     # changes compilation

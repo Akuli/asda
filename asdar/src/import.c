@@ -12,16 +12,19 @@
 #include "runner.h"
 #include "type.h"
 #include "objects/err.h"
-#include "objects/scope.h"
 
 static void destroy_types(struct Type **types)
 {
+	if (!types)
+		return;
+
 	for (size_t i = 0; types[i]; i++)
 		type_destroy(types[i]);
 	free(types);
 }
 
-static bool read_bytecode_file(Interp *interp, const char *bcpath, char **srcpath, struct Code *code, struct Type ***types)
+// this cleans up everything that it puts to the mod
+static bool read_bytecode_file(Interp *interp, const char *bcpath, struct Module *mod)
 {
 	assert(bcpath[0]);
 
@@ -50,28 +53,26 @@ static bool read_bytecode_file(Interp *interp, const char *bcpath, char **srcpat
 	}
 	free(fullbcpath);
 
-	struct BcReader bcr = bcreader_new(interp, f, dir);
-	*srcpath = NULL;
+	struct BcReader bcr = bcreader_new(interp, f, dir, mod);
+	mod->srcpath = NULL;
+	mod->exports = NULL;
+	mod->types = NULL;
 
-	if (!bcreader_readasdabytes(&bcr))
+	if (!bcreader_readasdabytes(&bcr) ||
+		!bcreader_readsourcepath(&bcr) ||
+		!bcreader_readimports(&bcr) ||
+		!bcreader_readexports(&bcr))
+	{
 		goto error;
-	if (!( *srcpath = bcreader_readsourcepath(&bcr) ))
-		goto error;
-	if (!bcreader_readimports(&bcr))
-		goto error;
+	}
 
 	// TODO: handle import cycles
 	for (size_t i = 0; bcr.imports[i]; i++)
 		if (!module_get(interp, bcr.imports[i]) && !import(interp, bcr.imports[i]))
 			goto error;
 
-	if (!( *types = bcreader_readtypelist(&bcr) ))
+	if (!bcreader_readtypelist(&bcr) || !bcreader_readcodepart(&bcr, &mod->code))
 		goto error;
-
-	if (!bcreader_readcodepart(&bcr, code)) {
-		destroy_types(*types);
-		goto error;
-	}
 
 	// srcpath not freed here, the code needs it
 	bcreader_destroy(&bcr);
@@ -80,59 +81,49 @@ static bool read_bytecode_file(Interp *interp, const char *bcpath, char **srcpat
 	return true;
 
 error:
-	bcreader_destroy(&bcr);
-	free(*srcpath);
+	bcreader_destroy(&bcr);   // frees bcr.imports and the contents
+	destroy_types(mod->types);
+	free(mod->srcpath);
+	free(mod->exports);
 	free(dir);
 	fclose(f);
 	return false;
 }
 
-static bool run(Interp *interp, ScopeObject *scope, const struct Code *code)
+static bool run(Interp *interp, const struct Code *code)
 {
 	struct Runner rnr;
-	runner_init(&rnr, interp, scope, code);
-	enum RunnerResult res = runner_run(&rnr);
-	runner_free(&rnr);
-
-	switch(res) {
-	case RUNNER_DIDNTRETURN:
-		return true;
-	case RUNNER_ERROR:
+	if (!runner_init(&rnr, interp, code))
 		return false;
-	default:
-		assert(0);  // asda compiler shouldn't allow doing anything else
-	}
+	bool ok = runner_run(&rnr);
+	assert(!rnr.retval);
+	runner_free(&rnr);
+	return ok;
 }
 
 bool import(Interp *interp, const char *path)
 {
 	struct Module *mod = malloc(sizeof(*mod));
-	if (!mod)
+	if (!mod) {
+		errobj_set_nomem(interp);
 		return false;
+	}
 
 	mod->bcpath = malloc(strlen(path) + 1);
 	if (!mod->bcpath) {
 		free(mod);
+		errobj_set_nomem(interp);
 		return false;
 	}
 	strcpy(mod->bcpath, path);
 
-	if (!read_bytecode_file(interp, path, &mod->srcpath, &mod->code, &mod->types)) {
+	if (!read_bytecode_file(interp, path, mod)) {
 		free(mod->bcpath);
 		free(mod);
 		return false;
 	}
 
-	if (!( mod->scope = scopeobj_newsub(interp, interp->builtinscope, mod->code.nlocalvars) )) {
-		code_destroy(&mod->code);
-		destroy_types(mod->types);
-		free(mod->srcpath);
-		free(mod->bcpath);
-		free(mod);
-		return false;
-	}
-
-	mod->runok = run(interp, mod->scope, &mod->code);
+	mod->runok = run(interp, &mod->code);
 	module_add(interp, mod);
 	return mod->runok;
 }

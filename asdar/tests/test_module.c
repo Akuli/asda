@@ -6,7 +6,6 @@
 #include <src/interp.h>
 #include <src/module.h>
 #include <src/type.h>
-#include <src/objects/scope.h>
 #include "util.h"
 
 static struct Module *create_test_module(Interp *interp, const char *name)
@@ -21,19 +20,19 @@ static struct Module *create_test_module(Interp *interp, const char *name)
 	strcpy(mod->srcpath, name);
 	strcpy(mod->bcpath, name);
 
-	mod->scope = scopeobj_newsub(interp, interp->builtinscope, 24);
-	assert(mod->scope);
-
 	mod->code = (struct Code){
 		.srcpath = mod->srcpath,
 		.ops = NULL,
 		.nops = 0,
-		.nlocalvars = 24,
+		.maxstacksz = 42,
 	};
 
 	mod->types = malloc(1 * sizeof(mod->types[0]));
 	assert(mod->types);
 	mod->types[0] = NULL;
+
+	mod->exports = NULL;
+	mod->nexports = 0;
 
 	mod->runok = true;
 

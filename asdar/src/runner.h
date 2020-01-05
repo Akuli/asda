@@ -1,47 +1,40 @@
 #ifndef RUNNER_H
 #define RUNNER_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include "dynarray.h"
 #include "code.h"
 #include "interp.h"
 #include "object.h"
-#include "objects/scope.h"
 
 // don't use this outside runner.c
 struct RunnerFinallyState;
 
 struct Runner {
 	Object *retval;
+	Object **locals;
+	Object **stackbot;
+	Object **stacktop;
 
 	// don't access rest of these directly
 	Interp *interp;
-	ScopeObject *scope;
-	DynArray(Object*) stack;
 	DynArray(struct CodeErrHnd) ehstack;            // see finally.md
 	DynArray(struct RunnerFinallyState) fsstack;    // see finally.md
 	size_t opidx;
 	const struct Code *code;
 };
 
-// never fails
 // increfs the scope as needed
 // never frees the bc
-void runner_init(struct Runner *rnr, Interp *interp, ScopeObject *scope, const struct Code *code);
+// don't call runner_free when this fails
+bool runner_init(struct Runner *rnr, Interp *interp, const struct Code *code);
 
-// never fails
+// never fails, doesn't touch ->retval
 void runner_free(const struct Runner *rnr);
 
-enum RunnerResult {
-	RUNNER_VOIDRETURN,
-	RUNNER_VALUERETURN,
-	RUNNER_DIDNTRETURN,
-	RUNNER_ERROR,
-};
-
-// must not be called multiple times
-// if returns RUNNER_VALUERETURN, caller may use rnr->retval and must decref it eventually
-enum RunnerResult runner_run(struct Runner *rnr);
+// must NOT be called multiple times with same runner
+bool runner_run(struct Runner *rnr);
 
 
 #endif   // RUNNER_H

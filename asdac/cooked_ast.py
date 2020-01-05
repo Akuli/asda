@@ -12,16 +12,16 @@ def _astclass(name, fields):
 StrConstant = _astclass('StrConstant', ['python_string'])
 StrJoin = _astclass('StrJoin', ['parts'])  # there are always >=2 parts
 IntConstant = _astclass('IntConstant', ['python_int'])
-GetVar = _astclass('GetVar', ['var', 'level'])
-SetVar = _astclass('SetVar', ['var', 'level', 'value'])
+GetVar = _astclass('GetVar', ['var'])
+SetVar = _astclass('SetVar', ['var', 'value'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
 SetAttr = _astclass('SetAttr', ['obj', 'attrname', 'value'])
-GetFromModule = _astclass('GetFromModule', ['compilation', 'name'])
+GetFromModule = _astclass('GetFromModule', ['other_compilation', 'name'])
 CreateFunction = _astclass('CreateFunction', ['argvars', 'body'])
 CreateLocalVar = _astclass('CreateLocalVar', ['var'])
+ExportObject = _astclass('ExportObject', ['name', 'value'])
 CallFunction = _astclass('CallFunction', ['function', 'args'])
-VoidReturn = _astclass('VoidReturn', [])
-ValueReturn = _astclass('ValueReturn', ['value'])
+Return = _astclass('Return', ['value'])    # value can be None
 Throw = _astclass('Throw', ['value'])
 IfStatement = _astclass('IfStatement', ['cond', 'if_body', 'else_body'])
 IfExpression = _astclass('IfExpression', ['cond', 'true_expr', 'false_expr'])
@@ -38,8 +38,11 @@ Minus = _astclass('Minus', ['lhs', 'rhs'])
 PrefixMinus = _astclass('PrefixMinus', ['prefixed'])
 Times = _astclass('Times', ['lhs', 'rhs'])
 # Divide = _astclass('Divide', ['lhs', 'rhs'])
-Equal = _astclass('Equal', ['lhs', 'rhs'])
-NotEqual = _astclass('NotEqual', ['lhs', 'rhs'])
+IntEqual = _astclass('IntEqual', ['lhs', 'rhs'])
+StrEqual = _astclass('StrEqual', ['lhs', 'rhs'])
+
+# equalities are wrapped in this for '!=' operator
+BoolNegation = _astclass('BoolNegation', ['value'])
 
 
 # this is a somewhat evil function
@@ -75,38 +78,49 @@ def _create_chainmap(fallback_chainmap):
         collections.OrderedDict(), *fallback_chainmap.maps)
 
 
+# note that there is code that uses copy.copy() with Variable objects
 class Variable:
 
-    def __init__(self, name, tybe, definition_location):
+    def __init__(self, name, tybe, definition_location, level):
         self.name = name
         self.type = tybe
         self.definition_location = definition_location    # can be None
+        self.level = level
 
     def __repr__(self):
-        return '<%s %r>' % (type(self).__name__, self.name)
+        return '<%s %r: level=%d>' % (
+            type(self).__name__, self.name, self.level)
 
 
 class GenericVariable(Variable):
 
-    def __init__(self, generic_markers, *args):
-        super().__init__(*args)
+    def __init__(self, generic_markers, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.generic_markers = generic_markers
+
+    def __repr__(self):
+        return "<%s '%s[%s]': level=%d>" % (
+            type(self).__name__,
+            self.name,
+            ', '.join(marker.name for marker in self.generic_markers),
+            self.level)
 
 
 BUILTIN_VARS = collections.OrderedDict([
-    (name, Variable(name, tybe, None))
+    (name, Variable(name, tybe, None, 0))
     for name, tybe in objects.BUILTIN_VARS.items()
 ])
 
 BUILTIN_GENERIC_VARS = collections.OrderedDict([
-    (name, GenericVariable(generic_types, name, tybe, None))
+    (name, GenericVariable(generic_types, name, tybe, None, 0))
     for name, (tybe, generic_types) in objects.BUILTIN_GENERIC_VARS.items()
 ])
 
 
 class _Chef:
 
-    def __init__(self, parent_chef, is_function=False, returntype=None):
+    def __init__(self, parent_chef, export_types,
+                 is_function=False, returntype=None):
         if is_function:
             self.is_function = True
             self.returntype = returntype
@@ -145,11 +159,12 @@ class _Chef:
             self.generic_vars = _create_chainmap(parent_chef.generic_vars)
             self.generic_types = _create_chainmap(parent_chef.generic_types)
 
-        # keys are strings, values are Variable objects
-        self.export_vars = collections.OrderedDict()
+        # keys are strings, values are type objects
+        self.export_types = export_types
 
     def _create_subchef(self):
-        return _Chef(self, self.is_function, self.returntype)
+        return _Chef(self, self.export_types,
+                     self.is_function, self.returntype)
 
     # there are multiple different kind of names:
     #   * types
@@ -293,8 +308,7 @@ class _Chef:
                         list(map(self.cook_type, raw_expression.generics)),
                         raw_expression.location)
 
-                return GetVar(
-                    raw_expression.location, tybe, var, chef.level)
+                return GetVar(raw_expression.location, tybe, var)
 
             assert raw_expression.generics is None, (
                 "sorry, import and generics don't work together yet")
@@ -318,7 +332,7 @@ class _Chef:
             chef = self.get_chef_for_varname(
                 'this', False, raw_expression.location)
             return GetVar(raw_expression.location, chef.vars['this'].type,
-                          chef.vars['this'], chef.level)
+                          chef.vars['this'])
 
         if isinstance(raw_expression, raw_ast.StrJoin):
             return StrJoin(
@@ -347,29 +361,33 @@ class _Chef:
                     "sorry, division is not supported yet :(",
                     raw_expression.location)
 
-            # TODO: add == for at least Str and Bool
-            if lhs.type is not objects.BUILTIN_TYPES['Int']:
-                problem = lhs.location
-            elif rhs.type is not objects.BUILTIN_TYPES['Int']:
-                problem = rhs.location
+            if raw_expression.operator == '!=':
+                fake_operator = '=='
             else:
-                problem = None
+                fake_operator = raw_expression.operator
 
-            if problem is not None:
+            # TODO: add == for at least Bool
+            try:
+                b = objects.BUILTIN_TYPES       # pep8 line length
+                klass, tybe = {
+                    (b['Int'], '+', b['Int']): (Plus, b['Int']),
+                    (b['Int'], '-', b['Int']): (Minus, b['Int']),
+                    (b['Int'], '*', b['Int']): (Times, b['Int']),
+                    (b['Int'], '==', b['Int']): (IntEqual, b['Bool']),
+                    (b['Str'], '==', b['Str']): (StrEqual, b['Bool']),
+                }[(lhs.type, fake_operator, rhs.type)]
+            except KeyError:
                 raise common.CompileError(
-                    "expected Int %s Int, got %s %s %s"
-                    % (raw_expression.operator, lhs.type.name,
-                       raw_expression.operator, rhs.type.name),
-                    problem)
+                    "wrong types: %s %s %s" % (
+                        lhs.type.name, raw_expression.operator, rhs.type.name),
+                    lhs.location + rhs.location)
 
-            klass, tybe = {
-                '+': (Plus, objects.BUILTIN_TYPES['Int']),
-                '-': (Minus, objects.BUILTIN_TYPES['Int']),
-                '*': (Times, objects.BUILTIN_TYPES['Int']),
-                '==': (Equal, objects.BUILTIN_TYPES['Bool']),
-                '!=': (NotEqual, objects.BUILTIN_TYPES['Bool']),
-            }[raw_expression.operator]
-            return klass(raw_expression.location, tybe, lhs, rhs)
+            result = klass(raw_expression.location, tybe, lhs, rhs)
+            if raw_expression.operator == '!=':
+                result = BoolNegation(
+                    raw_expression.location, objects.BUILTIN_TYPES['Bool'],
+                    result)
+            return result
 
         if isinstance(raw_expression, raw_ast.IfExpression):
             cond = self.cook_expression(raw_expression.cond)
@@ -436,11 +454,16 @@ class _Chef:
         # TODO: should this use get_chef_for_varname?
         while True:
             if varname in chef.vars.maps[0]:
+                if chef.level == 0:
+                    raise common.CompileError(
+                        "cannot set built-in variable '%s'" % varname,
+                        raw.location)
+
                 var = chef.vars.maps[0][varname]
                 assert not isinstance(var, str)
                 self._check_assign_type(
                     "'%s'" % varname, var.type, value, raw.location)
-                return SetVar(raw.location, None, var, chef.level, value)
+                return SetVar(raw.location, None, var, value)
 
             if chef.parent_chef is None:
                 # 'this = lel' fails in raw_ast.py
@@ -458,7 +481,7 @@ class _Chef:
         except KeyError:
             raise common.CompileError(
                 "%s objects have no '%s' attribute" % (
-                    obj.type.name, raw_expression.attrname),
+                    obj.type.name, raw.attrname),
                 raw.location)
         if not attr.settable:
             raise common.CompileError(
@@ -485,7 +508,7 @@ class _Chef:
             value_chef = self
         else:
             # TODO: figure out whether this should use self._create_subchef
-            value_chef = _Chef(self)
+            value_chef = _Chef(self, self.export_types)
             generic_markers = collections.OrderedDict(
                 (name, objects.GenericMarker(name))
                 for name, location in raw.generics
@@ -498,28 +521,31 @@ class _Chef:
         value = value_chef.cook_expression(raw.value)
 
         if raw.generics is None:
+            var = Variable(raw.varname, value.type, raw.location, self.level)
+            target_chef.vars[raw.varname] = var
+            result = [
+                CreateLocalVar(raw.location, None, var),
+                SetVar(raw.location, None, var, value),
+            ]
+
             if raw.export:
                 target_chef._check_can_export(raw.location)
-                var = Variable(raw.varname, value.type, raw.location)
-                target_chef.export_vars[raw.varname] = var
-                return [
-                    SetVar(raw.location, None, var, target_chef.level, value)]
+                target_chef.export_types[raw.varname] = var.type
+                result.append(ExportObject(
+                    raw.location, None,
+                    var.name, GetVar(raw.location, var.type, var)))
 
-            var = Variable(raw.varname, value.type, raw.location)
-            target_chef.vars[raw.varname] = var
-            return [
-                CreateLocalVar(raw.location, None, var),
-                SetVar(raw.location, None, var, target_chef.level, value),
-            ]
+            return result
 
         assert not raw.export, "sorry, cannot export generic variables yet :("
 
-        var = GenericVariable(list(generic_markers.values()),
-                              raw.varname, value.type, raw.location)
+        var = GenericVariable(
+            list(generic_markers.values()), raw.varname, value.type,
+            raw.location, self.level)
         target_chef.generic_vars[raw.varname] = var
         return [
             CreateLocalVar(raw.location, None, var),
-            SetVar(raw.location, None, var, target_chef.level,
+            SetVar(raw.location, None, var,
                    _replace_generic_markers_with_object(
                         value, list(generic_markers.values()))),
         ]
@@ -534,21 +560,23 @@ class _Chef:
         if this_type is not None:
             argnames.append('this')
             argtypes.append(this_type)
-            argvars.append(Variable('this', this_type, raw.location))
+            argvars.append(Variable(
+                'this', this_type, raw.location, self.level + 1))
 
         for raw_argtype, argname, argnameloc in raw_args:
             argtype = self.cook_type(raw_argtype)
             self._check_name_not_exist(argname, argnameloc)
             argnames.append(argname)
             argtypes.append(argtype)
-            argvars.append(Variable(argname, argtype, argnameloc))
+            argvars.append(Variable(
+                argname, argtype, argnameloc, self.level + 1))
 
         if raw_returntype is None:
             returntype = None
         else:
             returntype = self.cook_type(raw_returntype)
 
-        subchef = _Chef(self, True, returntype)
+        subchef = _Chef(self, self.export_types, True, returntype)
         subchef.level += 1
         subchef.vars.update(dict(zip(argnames, argvars)))
         functype = objects.FunctionType(argtypes, returntype)
@@ -565,7 +593,7 @@ class _Chef:
                 raise common.CompileError(
                     "cannot return a value from a void function",
                     raw.value.location)
-            return VoidReturn(raw.location, None)
+            return Return(raw.location, None, None)
         if raw.value is None:
             raise common.CompileError("missing return value", raw.location)
 
@@ -575,7 +603,7 @@ class _Chef:
                 ("should return %s, not %s"
                  % (self.returntype.name, value.type.name)),
                 value.location)
-        return ValueReturn(raw.location, None, value)
+        return Return(raw.location, None, value)
 
     def cook_throw(self, raw):
         value = self.cook_expression(raw.value)
@@ -618,7 +646,7 @@ class _Chef:
     #           else:
     #               body4
     #
-    # TODO: use functools.reduce
+    # TODO: use functools.reduce?
     def cook_if_statement(self, raw):
         raw_cond, raw_if_body = raw.ifs[0]
         cond = self.cook_expression(raw_cond)
@@ -680,7 +708,8 @@ class _Chef:
             cooked_errortype = self.cook_type(errortype)
 
             catch_chef = self._create_subchef()
-            errorvar = Variable(varname, cooked_errortype, varname_location)
+            errorvar = Variable(varname, cooked_errortype, varname_location,
+                                self.level)
             catch_chef.vars[varname] = errorvar
             cooked_catch_body = catch_chef.cook_body(
                 catch_body, new_subchef=False)
@@ -798,21 +827,21 @@ class _Chef:
 
     def cook_body(self, raw_statements, *, new_subchef=True):
         if new_subchef:
-            return self._create_subchef().cook_body(raw_statements, new_subchef=False)
+            return self._create_subchef().cook_body(
+                raw_statements, new_subchef=False)
 
         flatten = itertools.chain.from_iterable
         return list(flatten(map(self.cook_statement, raw_statements)))
 
 
 def cook(compilation, raw_ast_statements, import_compilation_dict):
-    builtin_chef = _Chef(None)
+    builtin_chef = _Chef(None, None)     # TODO: is this needed?
 
-    file_chef = _Chef(builtin_chef)
+    export_types = collections.OrderedDict()
+    file_chef = _Chef(builtin_chef, export_types)
     file_chef.level += 1
     file_chef.import_compilations = import_compilation_dict
     cooked_statements = file_chef.cook_body(
         raw_ast_statements, new_subchef=False)
 
-    export_types = collections.OrderedDict([
-        (name, var.type) for name, var in file_chef.export_vars.items()])
-    return (cooked_statements, file_chef.export_vars, export_types)
+    return (cooked_statements, export_types)

@@ -6,10 +6,9 @@
 #include "gc.h"
 #include "object.h"
 #include "objects/int.h"
-#include "objects/scope.h"
 
 
-bool interp_init(Interp *interp, const char *argv0)
+void interp_init(Interp *interp, const char *argv0)
 {
 	interp->argv0 = argv0;
 	interp->objliststart = NULL;
@@ -19,14 +18,10 @@ bool interp_init(Interp *interp, const char *argv0)
 
 	memset(interp->intcache, 0, sizeof(interp->intcache));  // not strictly standard compliant but simpler than a loop
 	dynarray_init(&interp->stack);
-
-	return !!( interp->builtinscope = scopeobj_newglobal(interp) );
 }
 
 void interp_destroy(Interp *interp)
 {
-	if (interp->builtinscope)
-		OBJECT_DECREF(interp->builtinscope);
 	for (size_t i = 0; i < sizeof(interp->intcache)/sizeof(interp->intcache[0]); i++)
 		if (interp->intcache[i])
 			OBJECT_DECREF(interp->intcache[i]);

@@ -906,7 +906,8 @@ class _AsdaParser:
             _duplicate_check(method_infos, 'method')
             _duplicate_check(arg_infos + method_infos, 'argument or method')
 
-            return Class(name.location, name.value, args, methods)
+            return Class(class_location + name.location,
+                         name.value, args, methods)
 
         result = self.parse_1line_statement(it_should_be='a statement')
 
