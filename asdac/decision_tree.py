@@ -56,7 +56,7 @@ from asdac import utils
 class Node:
     """
     size_delta tells how many objects this node pushes to the stack (positive)
-    and pops from stack (negative). For example, if your function pops two
+    and pops from stack (negative). For example, if your node pops two
     objects, does something with them, and pushes the result to the stack, you
     should set size_delta to -2 + 1 = -1.
 

@@ -72,7 +72,6 @@ class Type:
         return self._name
 
     # override _undo_generics_internal instead of overriding this
-    # always returns a copy
     def undo_generics(self, type_dict):
         if not self.undo_generics_may_do_something:
             return self
@@ -131,6 +130,8 @@ class FunctionType(Type):
 
         return (self.argtypes == other.argtypes and
                 self.returntype == other.returntype)
+
+    # FIXME: missing __hash__?
 
     def _undo_generics_internal(self, type_dict):
         result = super()._undo_generics_internal(type_dict)
