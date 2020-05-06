@@ -1,9 +1,4 @@
-- these example files don't compile:
-    - examples/catch.asda
-    - examples/finally.asda
-    - examples/export.asda
-    - examples/import.asda
-
+- some example files don't compile, they are in `examples/broken`
 - when all example files compile, make sure that they run
 - asdac's bytecode reading stuff is broken
 - simpler import syntax
@@ -16,6 +11,10 @@
     print(module2:lel)
     ```
 
+    (I have no idea what I've been thinking when I wrote the above example code)
+
+- reimplement try,catch,finally in a LOT simpler way... I have an idea
+- maybe the interpreter shouldn't know anything about types, other than how to decref?
 - add yields back, were removed in b0e0fbb because they hadn't been
   maintained in a while and would have made the code more complicated
 - add a way to forward-declare variables for e.g. functions that call each other?
