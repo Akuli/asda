@@ -5,10 +5,6 @@
 #include "objects/string.h"
 
 
-// TODO: porcupine autocompletion: trying to make more room for stuff on left
-//       side, resets when completion popup goes away
-// TODO: porcupine autocompletion: window may go partially off screen
-
 #define DEBUG(...) printf(__VA_ARGS__)
 
 static bool print_string(Interp *interp, StringObject *str)
