@@ -1,4 +1,4 @@
-#include "runner.h"
+#include "run.h"
 #include <stdio.h>
 #include "code.h"
 #include "objects/err.h"
@@ -22,7 +22,7 @@ static bool print_string(Interp *interp, StringObject *str)
 	return true;
 }
 
-bool runner_run(Interp *interp, size_t startidx)
+bool run(Interp *interp, size_t startidx)
 {
 	DEBUG("how much code: %zu\n", interp->code.len);
 	DEBUG("how much objstack: %zu\n", interp->objstack.len);

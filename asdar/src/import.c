@@ -54,7 +54,7 @@ bool import(Interp *interp, const char *bcpath)
 
 	// TODO: handle import cycles
 
-	runner_run(interp, (size_t)mainidx);
+	run(interp, (size_t)mainidx);
 
 	// srcpath not freed here, the code needs it
 	bcreader_destroy(&bcr);

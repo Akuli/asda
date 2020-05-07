@@ -1,5 +1,5 @@
-#ifndef RUNNER_H
-#define RUNNER_H
+#ifndef run_H
+#define run_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -8,7 +8,7 @@
 #include "interp.h"
 #include "object.h"
 
-bool runner_run(Interp *interp, size_t startidx);
+bool run(Interp *interp, size_t startidx);
 
 
-#endif   // RUNNER_H
+#endif   // run_H
