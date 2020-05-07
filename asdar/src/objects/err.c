@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "func.h"
 #include "string.h"
 #include "../interp.h"
 #include "../object.h"
@@ -65,16 +64,16 @@ static ErrObject *compile_time_created_errors[] = { &nomemerr };
 
 void errobj_set_obj(Interp *interp, ErrObject *err)
 {
-	if (err->ownstack)     // may happen if same error is thrown twice
-		free(err->stack);
+	const char *s;
+	size_t len;
+	if (!stringobj_toutf8(err->msgstr, &s, &len)) {
+		s = "<could not get string>";
+		len = strlen(s);
+	}
 
-	err->stack = interp->stack.ptr;
-	err->stacklen = interp->stack.len;
-	err->ownstack = false;
-
-	assert(!interp->err);
-	interp->err = err;
-	OBJECT_INCREF(err);
+	// TODO: nicer error handling
+	printf("OMG ERROR WTF: %.*s\n", (int)len, s);
+	abort();
 }
 
 void errobj_set_nomem(Interp *interp)
@@ -162,33 +161,7 @@ static void freeing_cb(void)
 
 void errobj_beginhandling(Interp *interp, ErrObject *err)
 {
-	if (!freeing_cb_added) {
-		// not much can be done if the atexit fails, other than try again later
-		atexit(freeing_cb);
-		freeing_cb_added = true;
-	}
-
-	// check that error has been thrown, and this function hasn't been called after the throw
-	assert(err->stack == interp->stack.ptr);
-	assert(!err->ownstack);
-
-	err->ownstack = true;
-
-	if (err->stacklen == 0)
-		goto set_empty_stack;
-
-	struct InterpStackItem *stackcp = malloc(sizeof(stackcp[0]) * err->stacklen);
-	if (!stackcp)
-		goto set_empty_stack;   // not ideal, but better than being unable to handle the error at all
-
-	memcpy(stackcp, interp->stack.ptr, sizeof(stackcp[0]) * err->stacklen);
-	err->stack = stackcp;
-	return;
-
-set_empty_stack:
-	err->stack = NULL;
-	err->stacklen = 0;
-	err->ownstack = true;
+	assert(0);   // TODO
 }
 
 
@@ -227,42 +200,8 @@ static bool print_source_line(const char *path, size_t lineno)
 
 void errobj_printstack(Interp *interp, ErrObject *err)
 {
-	assert(!interp->err);
-	fprintf(stderr, "asda error: ");   // TODO: include type name somehow
-
-	// TODO: create a stringobj_toutf8 that doesn't do mallocs?
-	const char *msg;
-	size_t len;
-	if (stringobj_toutf8(err->msgstr, &msg, &len)) {
-		fwrite(msg, 1, len, stderr);
-		fprintf(stderr, "\n");
-	} else {
-		assert(interp->err == &nomemerr);
-		OBJECT_DECREF(interp->err);
-		interp->err = NULL;
-		fprintf(stderr, "(ran out of memory while trying to print error message)\n");
-	}
-
-	for (long i = (long)err->stacklen - 1; i >= 0; i--) {
-		struct InterpStackItem it = err->stack[i];
-
-		// TODO: figure out how to do this without symlink issues and ".."
-		char *fullpath = path_concat_dotdot(interp->basedir, it.srcpath);
-
-		const char *word = (i == (long)err->stacklen - 1) ? "in" : "by";
-		if (fullpath)
-			fprintf(stderr, "  %s file \"%s\"", word, fullpath);
-		else
-			fprintf(stderr, "  %s file \"%s\" (could not get full path)", word, it.srcpath);
-		fprintf(stderr, ", line %zu\n    ", it.lineno);
-
-		if (!print_source_line(fullpath, it.lineno))
-			printf("(error while reading source file)\n");
-
-		free(fullpath);
-	}
+	assert(0);   // TODO
 }
-
 
 static bool tostring_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
@@ -271,14 +210,16 @@ static bool tostring_cfunc(Interp *interp, struct ObjData data, Object *const *a
 	*result = (Object *)s;
 	return true;
 }
-FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &errobj_type_error });
+/*FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &errobj_type_error });
 
 static struct TypeAttr attrs[] = {
 	{ TYPE_ATTR_METHOD, &tostring },
 };
+*/
 
 #define BOILERPLATE(NAME, BASE, CONSTRUCTOR) \
-	const struct Type NAME = TYPE_BASIC_COMPILETIMECREATE((BASE), (CONSTRUCTOR), attrs, sizeof(attrs)/sizeof(attrs[0]))
+	const struct Type NAME = TYPE_BASIC_COMPILETIMECREATE((BASE), (CONSTRUCTOR), \
+		/*attrs*/NULL, /*sizeof(attrs)/sizeof(attrs[0])*/0)
 BOILERPLATE(errobj_type_error, NULL, NULL);
 BOILERPLATE(errobj_type_nomem, &errobj_type_error, NULL);
 BOILERPLATE(errobj_type_variable, &errobj_type_error, error_string_constructor);

@@ -50,7 +50,7 @@ import pathlib
 import subprocess
 import tempfile
 
-from asdac import utils
+from asdac import cooked_ast, utils
 
 
 class Node:
@@ -143,25 +143,6 @@ class GetBuiltinVar(PassThroughNode):
     def __init__(self, varname, **kwargs):
         super().__init__(use_count=0, size_delta=1, **kwargs)
         self.varname = varname
-
-
-class _LocalVarNode(PassThroughNode):
-
-    def __init__(self, var, **kwargs):
-        super().__init__(**kwargs)
-        self.var = var
-
-
-class SetLocalVar(_LocalVarNode):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, use_count=1, size_delta=-1, **kwargs)
-
-
-class GetLocalVar(_LocalVarNode):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, use_count=0, size_delta=1, **kwargs)
 
 
 class ExportObject(PassThroughNode):
@@ -268,26 +249,16 @@ class IntConstant(PassThroughNode):
 
 class CallFunction(PassThroughNode):
 
-    def __init__(self, how_many_args, is_returning, **kwargs):
-        use_count = 1 + how_many_args   # function object + arguments
-        super().__init__(
-            use_count=use_count,
-            size_delta=(-use_count + int(bool(is_returning))),
-            **kwargs)
-
+    def __init__(self, function: cooked_ast.Function,
+                 how_many_args, is_returning, **kwargs):
+        self.function = function
         self.how_many_args = how_many_args
         self.is_returning = is_returning
 
-
-class CreateFunction(PassThroughNode):
-
-    # local_argvars should be a list of Variable objects of arguments that the
-    # function body uses
-    def __init__(self, functype, body_root_node, local_argvars, **kwargs):
-        super().__init__(use_count=0, size_delta=1, **kwargs)
-        self.functype = functype
-        self.body_root_node = body_root_node
-        self.local_argvars = local_argvars
+        super().__init__(
+            use_count=how_many_args,
+            size_delta=(-how_many_args + int(bool(is_returning))),
+            **kwargs)
 
 
 class CallConstructor(PassThroughNode):
@@ -406,8 +377,6 @@ class StrEqualDecision(TwoWayDecision):
 def _get_debug_string(node):
     if isinstance(node, GetBuiltinVar):
         return node.varname
-    if isinstance(node, (SetLocalVar, GetLocalVar)):
-        return 'var name %r' % node.var.name
     if isinstance(node, GetAttr):
         return node.tybe.name + '.' + node.attrname
     if isinstance(node, IntConstant):
@@ -638,15 +607,15 @@ def _graphviz_code(root_node, label_extra=''):
         yield '%s [label="%s"];\n' % (
             _graphviz_id(node), '\n'.join(parts).replace('"', r'\"'))
 
-        if isinstance(node, CreateFunction):
-            color = _random_color()
-            yield 'subgraph cluster%s {\n' % _graphviz_id(node)
-            yield 'style=filled;\n'
-            yield 'color="%s";\n' % color
-            yield from _graphviz_code(node.body_root_node, "FUNCTION BODY")
-            yield '}\n'
-            yield '%s [style=filled, fillcolor="%s"];' % (
-                _graphviz_id(node), color)
+#        if isinstance(node, CreateFunction):
+#            color = _random_color()
+#            yield 'subgraph cluster%s {\n' % _graphviz_id(node)
+#            yield 'style=filled;\n'
+#            yield 'color="%s";\n' % color
+#            yield from _graphviz_code(node.body_root_node, "FUNCTION BODY")
+#            yield '}\n'
+#            yield '%s [style=filled, fillcolor="%s"];' % (
+#                _graphviz_id(node), color)
 
         if isinstance(node, TwoWayDecision):
             # color 'then' with green, 'otherwise' with red

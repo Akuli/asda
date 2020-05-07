@@ -6,34 +6,27 @@ import functools
 import io
 import os
 
-from asdac import common, decision_tree, objects
+from asdac import common, cooked_ast, decision_tree, objects
 
 
 SET_LINENO = b'L'
 
 GET_BUILTIN_VAR = b'U'
-SET_LOCAL_VAR = b'B'    # B for historical reasons
-GET_LOCAL_VAR = b'b'
 SET_ATTR = b':'
 GET_ATTR = b'.'
 GET_FROM_MODULE = b'm'
-CREATE_FUNCTION = b'f'
-CREATE_PARTIAL_FUNCTION = b'p'
-CREATE_BOX = b'0'
-SET_TO_BOX = b'O'
-UNBOX = b'o'
+FUNCTION_BEGINS = b'f'
 STR_CONSTANT = b'"'
 NON_NEGATIVE_INT_CONSTANT = b'1'
 NEGATIVE_INT_CONSTANT = b'2'
-CALL_FUNCTION = b'('
-CALL_CONSTRUCTOR = b')'
+CALL_BUILTIN_FUNCTION = b'b'
+CALL_THIS_FILE_FUNCTION = b'('
 STR_JOIN = b'j'
 POP_ONE = b'P'
-STORE_RETURN_VALUE = b'R'
 THROW = b't'
 YIELD = b'Y'
 SET_METHODS_TO_CLASS = b'S'
-END_OF_BODY = b'E'
+RETURN = b'r'
 
 JUMP = b'K'
 JUMP_IF = b'J'
@@ -46,27 +39,13 @@ PREFIX_MINUS = b'_'
 TIMES = b'*'
 # DIVIDE = b'/'
 
-ADD_ERROR_HANDLER = b'h'
-REMOVE_ERROR_HANDLER = b'H'
-
-PUSH_FINALLY_STATE_OK = b'3'
-PUSH_FINALLY_STATE_ERROR = b'4'
-# b'5' skipped for historical reasons
-PUSH_FINALLY_STATE_VALUE_RETURN = b'6'
-PUSH_FINALLY_STATE_JUMP = b'7'
-
-APPLY_FINALLY_STATE = b'A'
-DISCARD_FINALLY_STATE = b'D'
-
 EXPORT_OBJECT = b'x'
-
 
 # these are used when bytecoding a type
 TYPE_ASDA_CLASS = b'a'
 TYPE_BUILTIN = b'b'
 TYPE_FUNCTION = b'f'
 TYPE_VOID = b'v'
-TYPE_FROM_LIST = b'l'
 
 IMPORT_SECTION = b'i'
 EXPORT_SECTION = b'e'
@@ -82,15 +61,6 @@ def _bit_storing_size(n):
     3
     """
     return -((-n) // 8)
-
-
-def _local_vars_to_list(start_node, local_vars_list):
-    for node in decision_tree.get_all_nodes(start_node):
-        if isinstance(node, (decision_tree.SetLocalVar,
-                             decision_tree.GetLocalVar)):
-            # O(n) 'not in' check but there shouldn't be many local vars
-            if node.var not in local_vars_list:
-                local_vars_list.append(node.var)
 
 
 def _attribute_name_to_index(tybe, name):
@@ -119,20 +89,21 @@ class _UintInByteCode:
 
 class _ByteCodeCreator:
 
-    def __init__(self, byte_array, compilation, line_start_offsets,
-                 current_lineno, type_list):
+    def __init__(self, byte_array, compilation,
+                 line_start_offsets, current_lineno, argvars):
         self.byte_array = byte_array
         self.compilation = compilation
         self.line_start_offsets = line_start_offsets
         self.current_lineno = current_lineno
+        self.argvars = argvars
+        self.stack_sizes = {}
 
-        # when the interpreter imports the bytecode file, it creates things
-        # that represent these types, and looks up these types by index
-        self.type_list = type_list
+        # because functions may need to be referred to before they are written
+        self.function_references = {}   # Function --> uint16 in byte code
+        self.function_definitions = {}  # Function --> value to set to uint16
 
-        self.local_vars = []
-        self.op_index = 0       # number of ops written so far, for jumps
-        self.jump_cache = {}    # keys are nodes, values are op_index values
+        self.op_index = 0     # number of ops written so far, file specific
+        self.jump_cache = {}  # keys are nodes, values are op_index values
 
     def _write_uint(self, bits, number):
         r"""
@@ -204,49 +175,16 @@ class _ByteCodeCreator:
             tybe.original_generic is not None and
             tybe.original_generic in objects.BUILTIN_GENERIC_TYPES.values())
 
-    def _ensure_type_is_in_type_list_if_needed(self, tybe):
-        assert tybe is not None
-        if (
-          tybe in self.type_list or
-          tybe in objects.BUILTIN_TYPES.values() or
-          self._is_builtin_generic_type(tybe)):
-            return
-
-        if isinstance(tybe, objects.GenericMarker):
-            # these are written as Object, because interpreter doesn't know
-            # anything about generics
-            #
-            # TODO: there is code that replaces generic markers with Object in
-            #       other files too, is it needed?
-            return
-
-        if isinstance(tybe, objects.FunctionType):
-            for argtype in tybe.argtypes:
-                self._ensure_type_is_in_type_list_if_needed(argtype)
-            if tybe.returntype is not None:
-                self._ensure_type_is_in_type_list_if_needed(tybe.returntype)
-        elif isinstance(tybe, objects.UserDefinedClass):
-            # TODO: remember to change this when argtypes and class members
-            #       become different things
-            for argtybe in tybe.constructor_argtypes:
-                self._ensure_type_is_in_type_list_if_needed(argtybe)
-        else:
-            assert False, tybe      # pragma: no cover
-
-        self.type_list.append(tybe)
-
     def write_type(self, tybe, *, allow_void=False):
         if tybe is None:
             assert allow_void
             self.byte_array.extend(TYPE_VOID)
             return
 
-        self._ensure_type_is_in_type_list_if_needed(tybe)
+        assert (tybe in objects.BUILTIN_TYPES.values() or
+                self._is_builtin_generic_type(tybe))
 
-        if tybe in self.type_list:
-            self.byte_array.extend(TYPE_FROM_LIST)
-            self.write_uint16(self.type_list.index(tybe))
-        elif tybe in objects.BUILTIN_TYPES.values():
+        if tybe in objects.BUILTIN_TYPES.values():
             names = list(objects.BUILTIN_TYPES)
             self.byte_array.extend(TYPE_BUILTIN)
             self.write_uint8(names.index(tybe.name))
@@ -262,29 +200,6 @@ class _ByteCodeCreator:
             self.write_type(objects.BUILTIN_TYPES['Object'])
         else:
             assert False, tybe      # pragma: no cover
-
-    # call this after run()
-    def write_type_list(self):
-        self.byte_array.extend(TYPE_LIST_SECTION)
-        self.write_uint16(len(self.type_list))
-
-        for tybe in self.type_list:
-            if isinstance(tybe, objects.FunctionType):
-                self.byte_array.extend(TYPE_FUNCTION)
-                self.write_type(tybe.returntype, allow_void=True)
-
-                self.write_uint8(len(tybe.argtypes))
-                for argtype in tybe.argtypes:
-                    self.write_type(argtype)
-
-            elif isinstance(tybe, objects.UserDefinedClass):
-                self.byte_array.extend(TYPE_ASDA_CLASS)
-                self.write_uint16(len(tybe.constructor_argtypes))
-                self.write_uint16(
-                    len(tybe.attributes) - len(tybe.constructor_argtypes))
-
-            else:   # pragma: no cover
-                raise NotImplementedError(repr(tybe))
 
     def write_opbyte(self, byte):
         assert len(byte) == 1
@@ -310,23 +225,6 @@ class _ByteCodeCreator:
                 self.write_big_uint(abs(node.python_int))
             return
 
-        if isinstance(node, decision_tree.CreateFunction):
-            assert isinstance(node.functype, objects.FunctionType)
-            self.write_opbyte(CREATE_FUNCTION)
-            self.write_type(node.functype)
-
-            creator = _ByteCodeCreator(
-                self.byte_array, self.compilation, self.line_start_offsets,
-                self.current_lineno, self.type_list)
-            creator.local_vars.extend(node.local_argvars)
-            creator.run(node.body_root_node)
-            return
-
-        if isinstance(node, decision_tree.CreatePartialFunction):
-            self.write_opbyte(CREATE_PARTIAL_FUNCTION)
-            self.write_uint16(node.how_many_args)
-            return
-
         if isinstance(node, decision_tree.GetBuiltinVar):
             self.write_opbyte(GET_BUILTIN_VAR)
             names = list(objects.BUILTIN_VARS.keys())
@@ -334,18 +232,18 @@ class _ByteCodeCreator:
             return
 
         if isinstance(node, decision_tree.CallFunction):
-            self.write_opbyte(CALL_FUNCTION)
-            self.write_uint8(node.how_many_args)  # TODO: bigger than u8
-            return
+            if node.function.kind == cooked_ast.FunctionKind.BUILTIN:
+                self.write_opbyte(CALL_BUILTIN_FUNCTION)
+                # TODO: identify the function somehow instead of assuming that
+                #       it's print
+            elif node.function.kind == cooked_ast.FunctionKind.FILE:
+                self.write_opbyte(CALL_THIS_FILE_FUNCTION)
+                refs = self.function_references.setdefault(node.function, [])
+                refs.append(self.write_uint16(0))
+            else:
+                raise NotImplementedError
 
-        if isinstance(node, decision_tree.CallConstructor):
-            self.write_opbyte(CALL_CONSTRUCTOR)
-            self.write_type(node.tybe)
-            self.write_uint8(node.how_many_args)  # TODO: bigger than u8
-            return
-
-        if isinstance(node, decision_tree.StoreReturnValue):
-            self.write_opbyte(STORE_RETURN_VALUE)
+            self.write_uint16(node.how_many_args)
             return
 
         if isinstance(node, (decision_tree.GetAttr, decision_tree.SetAttr)):
@@ -362,56 +260,6 @@ class _ByteCodeCreator:
             self.write_uint16(node.how_many_strings)
             return
 
-        # FIXME: is very outdated
-#        if isinstance(node, decision_tree.AddErrorHandler):
-#            self.write_opbyte(ADD_ERROR_HANDLER)
-#            self.write_uint16(len(node.items))
-#            for jumpto_marker, errortype, errorvarlevel, errorvar in node.items:
-#                self.write_type(errortype)
-#                self.write_uint16(
-#                    varlists[errorvarlevel].index(errorvar))
-#                self.write_uint16(self.jumpmarker2index[jumpto_marker])
-#            return
-#
-#        if isinstance(node, decision_tree.PushFinallyStateReturn):
-#            self.write_opbyte(PUSH_FINALLY_STATE_VALUE_RETURN)
-#            return
-#
-#        if isinstance(node, decision_tree.PushFinallyStateJump):
-#            self.write_opbyte(PUSH_FINALLY_STATE_JUMP)
-#            self.write_uint16(self.jumpmarker2index[node.index])
-#            return
-
-        if isinstance(node, decision_tree.SetMethodsToClass):
-            self.write_opbyte(SET_METHODS_TO_CLASS)
-            self.write_type(node.klass)
-            self.write_uint16(node.how_many_methods)
-            return
-
-        if isinstance(node, decision_tree.SetLocalVar):
-            self.write_opbyte(SET_LOCAL_VAR)
-            self.write_uint16(self.local_vars.index(node.var))
-            return
-
-        if isinstance(node, decision_tree.GetLocalVar):
-            self.write_opbyte(GET_LOCAL_VAR)
-            self.write_uint16(self.local_vars.index(node.var))
-            return
-
-        if isinstance(node, decision_tree.ExportObject):
-            self.write_opbyte(EXPORT_OBJECT)
-            index = list(self.compilation.export_types.keys()).index(node.name)
-            self.write_uint16(index)
-            return
-
-        if isinstance(node, decision_tree.GetFromModule):
-            self.write_opbyte(GET_FROM_MODULE)
-            self.write_uint16(
-                self.compilation.imports.index(node.other_compilation))
-            self.write_uint16(
-                list(node.other_compilation.export_types).index(node.name))
-            return
-
         simple_things = [
             (decision_tree.PopOne, POP_ONE),
             (decision_tree.Plus, PLUS),
@@ -419,15 +267,6 @@ class _ByteCodeCreator:
             (decision_tree.PrefixMinus, PREFIX_MINUS),
             (decision_tree.Times, TIMES),
             # (decision_tree.Divide, DIVIDE),
-            (decision_tree.CreateBox, CREATE_BOX),
-            (decision_tree.SetToBox, SET_TO_BOX),
-            (decision_tree.UnBox, UNBOX),
-#            (decision_tree.RemoveErrorHandler, REMOVE_ERROR_HANDLER),
-#            (decision_tree.PushFinallyStateOk, PUSH_FINALLY_STATE_OK),
-#            (decision_tree.PushFinallyStateError, PUSH_FINALLY_STATE_ERROR),
-#            (decision_tree.DiscardFinallyState, DISCARD_FINALLY_STATE),
-#            (decision_tree.ApplyFinallyState, APPLY_FINALLY_STATE),
-            (decision_tree.Throw, THROW),
         ]
 
         for klass, byte in simple_things:
@@ -496,7 +335,7 @@ class _ByteCodeCreator:
         self.write_tree(node.then)
         done_jump.set(self.op_index)
 
-    def write_tree(self, node):
+    def write_tree(self, node: decision_tree.Node):
         while node is not None:
             if node in self.jump_cache:
                 self.write_opbyte(JUMP)
@@ -516,30 +355,23 @@ class _ByteCodeCreator:
             else:
                 raise NotImplementedError("omg " + repr(node))
 
-    def run(self, start_node):
-        _local_vars_to_list(start_node, self.local_vars)
-        self.write_uint16(len(self.local_vars))
+        self.write_opbyte(RETURN)
+
+    def write_function_opcode(self, function: cooked_ast.Function, start_node):
+        assert function.kind == cooked_ast.FunctionKind.FILE
+        self.function_definitions[function] = self.op_index
+
+        op_count = self.write_uint16(0)
+        old_op_index = self.op_index
+        self.write_opbyte(FUNCTION_BEGINS)
         self.write_uint16(decision_tree.get_max_stack_size(start_node))
         self.write_tree(start_node.next_node)
-        self.write_opbyte(END_OF_BODY)
+        op_count.set(self.op_index - old_op_index)
 
-    # this can be used to write either one of the two import sections
-    def write_import_section(self, paths):
-        self.byte_array.extend(IMPORT_SECTION)
-        self.write_uint16(len(paths))
-        for path in paths:
-            self.write_path(path)
-
-    def write_first_export_section(self, exports):
-        assert isinstance(exports, collections.OrderedDict)
-        self.byte_array.extend(EXPORT_SECTION)
-        self.write_uint16(len(exports))
-
-    def write_second_export_section(self, exports):
-        self.write_first_export_section(exports)
-        for name, tybe in exports.items():
-            self.write_string(name)
-            self.write_type(tybe)
+    def fix_function_references(self):
+        for func, refs in self.function_references.items():
+            for ref in refs:
+                ref.set(self.function_definitions[func])
 
 
 def _swap_bytes(byte_array, start, middle):
@@ -558,48 +390,33 @@ def _swap_bytes(byte_array, start, middle):
 # structure of a bytecode file:
 #   1.  the bytes b'asda\xA5\xDA'  (note how 5 looks like S, lol)
 #   2.  source path string, relative to the dirname of the compiled path
-#   3.  first import section: compiled file paths for the interpreter
-#   4.  first export section: number of exports
-#   5.  list of types used in the opcode
-#   6.  opcode
-#   7.  second import section: source file paths, for the compiler
-#   8.  second export section: names and types, for the compiler
-#   9.  number of bytes in opcode and everything before it, as an uint32.
-#       The compiler uses this to efficiently read imports and exports.
+#   3.  opcode of each function
 #
 # all paths are relative to the bytecode file's directory and have '/' as
 # the separator
-def create_bytecode(compilation, start_node, source_code):
+def create_bytecode(compilation, function_trees, source_code):
     line_start_offsets = []
     offset = 0
     for line in io.StringIO(source_code):
         line_start_offsets.append(offset)
         offset += len(line)
 
+    # make sure that main is first
+    funclist = sorted(function_trees.keys(),
+                      key=(lambda f: 1 if f.is_main else 2))
+    assert funclist[0].is_main
+    if len(funclist) >= 2:
+        assert not funclist[1].is_main
+
     creator = _ByteCodeCreator(
         bytearray(), compilation, line_start_offsets, 1, [])
 
     creator.byte_array.extend(b'asda\xA5\xDA')
     creator.write_path(compilation.source_path)
+    creator.write_uint16(len(function_trees))
 
-    creator.write_import_section(
-        [impcomp.compiled_path for impcomp in compilation.imports])
-    creator.write_first_export_section(compilation.export_types)
-
-    # interpreter wants type list before body opcode
-    # it is much easier to create the opcode before the type list
-    # so we do that and swap them afterwards
-    start = len(creator.byte_array)
-    creator.run(start_node)
-    middle = len(creator.byte_array)
-    creator.write_type_list()
-    _swap_bytes(creator.byte_array, start, middle)
-    after_opcode = len(creator.byte_array)
-
-    creator.write_import_section(
-        [impcomp.source_path for impcomp in compilation.imports])
-    creator.write_second_export_section(compilation.export_types)
-
-    creator.write_uint32(after_opcode)
+    for func in funclist:
+        creator.write_function_opcode(func, function_trees[func])
+    creator.fix_function_references()
 
     return creator.byte_array

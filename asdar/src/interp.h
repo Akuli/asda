@@ -5,16 +5,10 @@
 #include "dynarray.h"
 
 // forward declarations needed because many things need an Interp
+struct CodeOp;
 struct Object;
 struct ErrObject;
 struct IntObject;
-struct Module;
-
-
-struct InterpStackItem {
-	const char *srcpath;   // relative to interp->basedir
-	size_t lineno;
-};
 
 typedef struct Interp {
 	const char *argv0;
@@ -22,12 +16,6 @@ typedef struct Interp {
 	// the only object created at runtime that has ->prev == NULL
 	// all (not yet destroyed) runtime created objects can be found from here with ->next
 	struct Object *objliststart;
-
-	// see objects/err.h
-	struct ErrObject *err;
-
-	// don't access this directly, use functions in module.h instead
-	struct Module *firstmod;
 
 	/*
 	paths of imported modules are treated relative to this
@@ -52,9 +40,26 @@ typedef struct Interp {
 	// optimization for Int objects, contains integers 0, 1, 2, ...
 	struct IntObject* intcache[20];
 
-	// runner.c adds an item to this when the stuff runs
+	// pointers into the code dynarray
+	// assumes that interp->code.ptr isn't reallocated while running, e.g. nothing imported while running
+	// runner.c adds an item to this when functions are ran
 	// items from this are displayed in error messages (aka stack traces)
-	DynArray(struct InterpStackItem) stack;
+	DynArray(const struct CodeOp *) callstack;
+
+	// this is for local variables and arguments
+	DynArray(struct Object *) objstack;
+
+	// see objects/err.h
+	DynArray(struct ErrObject *) errstack;
+
+	// code being ran, from all imported modules
+	DynArray(struct CodeOp) code;
+
+	// indexes into the code
+	size_t mainidx;
+
+	// always sorted by CodeFuncInfo.startptr for binary seraching
+	//DynArray(struct CodeFuncInfo *) funcinfo;
 } Interp;
 
 

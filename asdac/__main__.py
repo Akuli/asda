@@ -45,15 +45,15 @@ def source2bytecode(compilation: common.Compilation):
     compilation.set_export_types(export_types)
 
     compilation.messager(3, "Creating a decision tree")
-    root_node = decision_tree_creator.create_tree(cooked)
+    function_trees = decision_tree_creator.create_tree(cooked)
 
     compilation.messager(3, "Optimizing")
     #decision_tree.graphviz(root_node, 'before_optimization')
-    optimizer.optimize(root_node, None)
+    optimizer.optimize(function_trees)
     #decision_tree.graphviz(root_node, 'after_optimization')
 
     compilation.messager(3, "Creating bytecode")
-    bytecode = bytecoder.create_bytecode(compilation, root_node, source)
+    bytecode = bytecoder.create_bytecode(compilation, function_trees, source)
 
     compilation.messager(3, 'Writing bytecode to "%s"' % common.path_string(
         compilation.compiled_path))

@@ -1,4 +1,4 @@
-CFLAGS += -std=c99 -Wall -Wextra -Wpedantic -Wconversion -Werror=incompatible-pointer-types -Werror=implicit-function-declaration
+CFLAGS += -std=c99 -Wall -Wextra -Wpedantic -Wconversion -Werror=incompatible-pointer-types -Werror=implicit-function-declaration -Werror=int-conversion
 CFLAGS += -Wno-unused-parameter -Wno-address
 #CFLAGS += -Werror=stack-usage=16384   # BUFSIZ is 8192 on my system
 CFLAGS += -g

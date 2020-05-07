@@ -43,7 +43,7 @@ def _skip_unnecessary_nodes(node):
     return False
 
 
-def optimize_popones(start_node, all_nodes, createfunc_node):
+def optimize_popones(start_node, all_nodes, function):
     for node in all_nodes:
         if _skip_unnecessary_nodes(node):
             # all_nodes is no longer an up to date list of nodes, need to stop

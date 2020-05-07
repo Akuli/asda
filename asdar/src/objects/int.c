@@ -11,7 +11,6 @@
 #include "../object.h"
 #include "../type.h"
 #include "err.h"
-#include "func.h"
 #include "int.h"
 #include "string.h"
 
@@ -315,14 +314,4 @@ const char *intobj_tocstr(Interp *interp, IntObject *x)
 	return ok ? res : NULL;
 }
 
-static bool tostring_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
-{
-	IntObject *x = (IntObject *)args[0];
-	return !!( *result = (Object *) intobj_tostrobj(interp, x) );
-}
-FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &intobj_type });
-
-static struct TypeAttr attrs[] = {
-	{ TYPE_ATTR_METHOD, &tostring },
-};
-const struct Type intobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, NULL, attrs, sizeof(attrs)/sizeof(attrs[0]));
+const struct Type intobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, NULL, NULL, 0);

@@ -126,9 +126,8 @@ class Compilation:
         self.state = CompilationState.IMPORTS_KNOWN
         self.imports = import_compilations
 
-    def set_export_types(self, export_types):
+    def set_export_types(self, export_types: collections.OrderedDict):
         assert self.state == CompilationState.IMPORTS_KNOWN
-        assert isinstance(export_types, collections.OrderedDict)
         self.state = CompilationState.EXPORTS_KNOWN
         self.export_types = export_types
 

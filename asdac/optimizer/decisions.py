@@ -2,8 +2,7 @@ from asdac import decision_tree
 
 
 # handles e.g. loops and ifs with TRUE or FALSE as a condition
-def optimize_truefalse_before_booldecision(root_node, all_nodes,
-                                           createfunc_node):
+def optimize_truefalse_before_booldecision(root_node, all_nodes, function):
     for node in all_nodes:
         if (
           isinstance(node, decision_tree.GetBuiltinVar) and
@@ -18,8 +17,7 @@ def optimize_truefalse_before_booldecision(root_node, all_nodes,
     return False
 
 
-def optimize_booldecision_before_truefalse(
-        root_node, all_nodes, createfunc_node):
+def optimize_booldecision_before_truefalse(root_node, all_nodes, function):
     for node in all_nodes:
         if (
           isinstance(node, decision_tree.BoolDecision) and

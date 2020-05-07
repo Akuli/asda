@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include "import.h"
 #include "interp.h"
-#include "module.h"
 #include "object.h"
 #include "path.h"
 #include "objects/err.h"
@@ -35,20 +34,10 @@ int main(int argc, char **argv)
 		goto error;
 
 	free(basedir);
-	module_destroyall(&interp);
 	interp_destroy(&interp);
 
 	return 0;
 
 error:
-	assert(1);   // because c syntax
-	ErrObject *e = interp.err;
-	interp.err = NULL;
-	errobj_printstack(&interp, e);
-	OBJECT_DECREF(e);
-
-	module_destroyall(&interp);
-	interp_destroy(&interp);
-	free(basedir);
-	return 1;
+	assert(0 );    // TODO
 }

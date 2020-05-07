@@ -2,7 +2,7 @@ import collections
 import itertools
 import os
 
-from . import common, string_parser, tokenizer
+from asdac import common, string_parser, tokenizer
 
 
 def _astclass(name, fields):
@@ -28,7 +28,7 @@ SetVar = _astclass('SetVar', ['varname', 'value'])
 GetAttr = _astclass('GetAttr', ['obj', 'attrname'])
 SetAttr = _astclass('SetAttr', ['obj', 'attrname', 'value'])
 FuncCall = _astclass('FuncCall', ['function', 'args'])
-FuncDefinition = _astclass('FuncDefinition', ['header', 'body'])
+FuncDefinition = _astclass('FuncDefinition', ['name', 'header', 'body'])
 Return = _astclass('Return', ['value'])
 Throw = _astclass('Throw', ['value'])
 VoidStatement = _astclass('VoidStatement', [])
@@ -79,7 +79,7 @@ class _TokenIterator:
     def peek(self):
         return self.copy().next_token()
 
-    def next_token(self):
+    def next_token(self) -> tokenizer.Token:
         try:
             return next(self._iterator)
         except StopIteration:
@@ -475,10 +475,11 @@ class _AsdaParser:
                     paren_count -= 1
 
             if (not copy.eof()) and copy.next_token().value == '->':
-                location, *header = self.parse_function_header(
-                    self.parse_argument_definition)
-                body = self.parse_block()
-                return FuncDefinition(location, tuple(header), body)
+                raise NotImplementedError("no lambda functions :(")
+#                location, *header = self.parse_function_header(
+#                    self.parse_argument_definition)
+#                body = self.parse_block()
+#                return FuncDefinition(location, tuple(header), body)
 
             else:
                 # parentheses are being used for precedence here
@@ -694,6 +695,21 @@ class _AsdaParser:
             raise common.CompileError(
                 "cannot import here, only at beginning of file",
                 self.tokens.peek().location)
+
+        if self.tokens.peek().value == 'function':
+            function_keyword = self.tokens.next_token()
+
+            name = self.tokens.next_token()
+            if name.type != 'ID':
+                raise common.CompileError(
+                    "should be the name of the function", name.location)
+
+            junky_location, *header = self.parse_function_header(
+                self.parse_argument_definition)
+            body = self.parse_block(consume_newline=False)
+            return FuncDefinition(
+                function_keyword.location + name.location, name.value,
+                tuple(header), body)
 
         result = self.parse_expression(it_should_be=it_should_be)
 

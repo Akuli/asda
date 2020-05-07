@@ -3,32 +3,18 @@
 
 import collections
 import copy
+import typing
 
 from asdac import cooked_ast, decision_tree, objects
 
 
+# the .type attribute of the variables doesn't contain info about
+# whether the variable is wrapped in a box object or not
+
 class _TreeCreator:
 
-    def __init__(self, level, local_vars, closure_vars):
-        # the .type attribute of the variables doesn't contain info about
-        # whether the variable is wrapped in a box object or not
-        self.level = level
-        self.local_vars = local_vars
-
-        # closures are implemented with automagically partialling the variables
-        # as function arguments
-        #
-        # the automagically created argument variables have a different level
-        # than the variables being partialled, so they need different variable
-        # objects
-        #
-        # this dict contains those
-        # keys are variables with .level < self.level
-        # values are argument variables with .level == self.level
-        #
-        # doesn't really need to be ordered, just needs to be consistent
-        assert isinstance(closure_vars, collections.OrderedDict)
-        self.closure_vars = closure_vars
+    def __init__(self):
+        self.local_vars = local_vars = {}
 
         # why can't i assign in python lambda without dirty setattr haxor :(
         self.set_next_node = lambda node: setattr(self, 'root_node', node)
@@ -43,13 +29,12 @@ class _TreeCreator:
         self.set_next_node = node.set_next_node
 
     def do_function_call(self, call):
-        self.do_expression(call.function)
         for arg in call.args:
             self.do_expression(arg)
 
         self.add_pass_through_node(decision_tree.CallFunction(
-            len(call.args), (call.function.type.returntype is not None),
-            location=call.location))
+            call.function, len(call.args),
+            (call.function.returntype is not None), location=call.location))
 
     def get_local_closure_var(self, nonlocal_var):
         try:
@@ -62,22 +47,7 @@ class _TreeCreator:
 
     # returns whether unboxing is needed
     def _add_var_lookup_without_unboxing(self, var, **boilerplate) -> bool:
-        if var.level == 0:
-            self.add_pass_through_node(
-                decision_tree.GetBuiltinVar(var.name, **boilerplate))
-            return False
-
-        if var.level == self.level:
-            self.local_vars.add(var)
-            node = decision_tree.GetLocalVar(var, **boilerplate)
-        else:
-            # closure variable
-            local = self.get_local_closure_var(var)
-            self.local_vars.add(local)
-            node = decision_tree.GetLocalVar(local, **boilerplate)
-
-        self.add_pass_through_node(node)
-        return True
+        raise NotImplementedError
 
     def _do_if(self, cond, if_callback, else_callback, **boilerplate):
         self.do_expression(cond)
@@ -194,37 +164,6 @@ class _TreeCreator:
             self.add_pass_through_node(decision_tree.GetAttr(
                 expression.obj.type, expression.attrname, **boilerplate))
 
-        # TODO: when closures work again, figure out how to do closures
-        #       for arguments of the function
-        elif isinstance(expression, cooked_ast.CreateFunction):
-            creator = _TreeCreator(
-                self.level + 1,
-                set(expression.argvars),
-                collections.OrderedDict())
-
-            creator.add_pass_through_node(decision_tree.Start(
-                expression.argvars.copy()))
-            creator.do_body(expression.body)
-            creator.tree_creation_done()
-
-            partialling = creator.closure_vars.keys()
-            for var in partialling:
-                needs_unbox = self._add_var_lookup_without_unboxing(var)
-                assert needs_unbox
-
-            tybe = objects.FunctionType(
-                [var.type for var in partialling] + expression.type.argtypes,
-                expression.type.returntype)
-
-            local_argvars = (
-                list(creator.closure_vars.values()) + expression.argvars)
-            self.add_pass_through_node(decision_tree.CreateFunction(
-                tybe, creator.root_node, local_argvars, **boilerplate))
-
-            if partialling:
-                self.add_pass_through_node(
-                    decision_tree.CreatePartialFunction(len(partialling)))
-
         else:
             assert False, expression    # pragma: no cover
 
@@ -234,11 +173,6 @@ class _TreeCreator:
         if isinstance(statement, cooked_ast.CreateLocalVar):
             # currently not used, but may be useful in the future
             pass
-
-        elif isinstance(statement, cooked_ast.ExportObject):
-            self.do_expression(statement.value)
-            self.add_pass_through_node(
-                decision_tree.ExportObject(statement.name, **boilerplate))
 
         elif isinstance(statement, cooked_ast.CallFunction):
             self.do_function_call(statement)
@@ -252,12 +186,6 @@ class _TreeCreator:
                 statement.var, **boilerplate)
             assert its_a_box
             self.add_pass_through_node(decision_tree.SetToBox())
-
-        elif isinstance(statement, cooked_ast.SetAttr):
-            self.do_expression(statement.value)
-            self.do_expression(statement.obj)
-            self.add_pass_through_node(decision_tree.SetAttr(
-                statement.obj.type, statement.attrname))
 
         elif isinstance(statement, cooked_ast.IfStatement):
             self._do_if(
@@ -309,16 +237,6 @@ class _TreeCreator:
             # if it becomes unreachable, tree_creation_done() cleans it up
             self.set_next_node = lambda node: None
 
-        elif isinstance(statement, cooked_ast.Throw):
-            self.do_expression(statement.value)
-            self.add_pass_through_node(decision_tree.Throw(**boilerplate))
-
-        elif isinstance(statement, cooked_ast.SetMethodsToClass):
-            for method in statement.methods:
-                self.do_expression(method)
-            self.add_pass_through_node(decision_tree.SetMethodsToClass(
-                statement.klass, len(statement.methods)))
-
         else:
             assert False, type(statement)     # pragma: no cover
 
@@ -327,63 +245,23 @@ class _TreeCreator:
             assert not isinstance(statement, list), statement
             self.do_statement(statement)
 
-    def tree_creation_done(self):
-        assert isinstance(self.root_node, decision_tree.Start)
 
-        closure_argvars = list(self.closure_vars.values())
-        creator = self.subcreator()
-        creator.add_pass_through_node(decision_tree.Start(
-            closure_argvars + self.root_node.argvars))
-        assert isinstance(creator.root_node, decision_tree.Start)
+def create_tree(cooked_funcdefs: typing.List[cooked_ast.FuncDefinition]):
+    function_trees = {}
+    for funcdef in cooked_funcdefs:
+        creator = _TreeCreator()
 
-        for var in self.local_vars - set(creator.root_node.argvars):
-            creator.add_pass_through_node(decision_tree.CreateBox())
-            creator.add_pass_through_node(decision_tree.SetLocalVar(var))
-
-        # wrap arguments into new boxes
-        # usually will be optimized away, but is not always with nested
-        # functions, e.g.
-        #
-        #   let create_counter = (Int i) -> functype{() -> void}:
-        #       return () -> void:
-        #           i = i+1
-        #           print(i.to_string())
-        #
-        # this will create a box of i, which is needed in the inner function
-        #
-        # TODO: put the boxes to different variable and fix the types
-        #       currently there is no type for a box, so "box of T" variables
-        #       have type T
-        for var in self.root_node.argvars:
-            creator.add_pass_through_node(decision_tree.GetLocalVar(var))
-            creator.add_pass_through_node(decision_tree.CreateBox())
-            creator.add_pass_through_node(decision_tree.SetLocalVar(var))
-            creator.add_pass_through_node(decision_tree.GetLocalVar(var))
-            creator.add_pass_through_node(decision_tree.SetToBox())
-
-        if self.root_node.next_node is not None:
-            creator.set_next_node(self.root_node.next_node)
-            creator.set_next_node = self.set_next_node
-
-        # avoid creating an unreachable node
-        self.root_node.set_next_node(None)
-
-        self.root_node = creator.root_node
-        self.set_next_node = creator.set_next_node
+        creator.add_pass_through_node(
+            decision_tree.Start(funcdef.function.argvars.copy()))
+        creator.do_body(funcdef.body)
 
         # there used to be code that handled this with a less dumb algorithm
-        # than decision_tree.clean_all_unreachable_nodes, but it didn't work in
-        # all corner cases
-        decision_tree.clean_all_unreachable_nodes(self.root_node)
+        # than clean_all_unreachable_nodes, but it didn't work in corner cases
+        decision_tree.clean_all_unreachable_nodes(creator.root_node)
 
+        assert isinstance(creator.root_node, decision_tree.Start)
+        function_trees[funcdef.function] = creator.root_node
 
-def create_tree(cooked_statements):
-    tree_creator = _TreeCreator(1, set(), collections.OrderedDict())
-    tree_creator.add_pass_through_node(decision_tree.Start([]))
+        decision_tree.graphviz(creator.root_node, funcdef.function.name)
 
-    tree_creator.do_body(cooked_statements)
-    tree_creator.tree_creation_done()
-    assert not tree_creator.closure_vars
-
-    assert isinstance(tree_creator.root_node, decision_tree.Start)
-    return tree_creator.root_node
+    return function_trees

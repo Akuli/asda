@@ -6,7 +6,6 @@
 #include "../object.h"
 #include "../type.h"
 #include "err.h"
-#include "func.h"
 #include "int.h"
 #include "string.h"
 
@@ -36,7 +35,7 @@ static bool length_cfunc(Interp *interp, struct ObjData data, Object *const *arg
 	ArrayObject *arr = (ArrayObject *)args[0];
 	return !!( *result = (Object *) intobj_new_long(interp, (long)arr->da.len) );
 }
-FUNCOBJ_COMPILETIMECREATE(length, &intobj_type, { &arrayobj_type });
+//FUNCOBJ_COMPILETIMECREATE(length, &intobj_type, { &arrayobj_type });
 
 static bool push_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
@@ -47,7 +46,7 @@ static bool push_cfunc(Interp *interp, struct ObjData data, Object *const *args,
 	}
 	return false;
 }
-FUNCOBJ_COMPILETIMECREATE(push, NULL, { &arrayobj_type, &type_object });
+//FUNCOBJ_COMPILETIMECREATE(push, NULL, { &arrayobj_type, &type_object });
 
 static bool pop_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
@@ -61,7 +60,7 @@ static bool pop_cfunc(Interp *interp, struct ObjData data, Object *const *args, 
 	*result = dynarray_pop(&arr->da);
 	return true;
 }
-FUNCOBJ_COMPILETIMECREATE(pop, &type_object, { &arrayobj_type });
+//FUNCOBJ_COMPILETIMECREATE(pop, &type_object, { &arrayobj_type });
 
 static bool get_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
 {
@@ -81,13 +80,16 @@ static bool get_cfunc(Interp *interp, struct ObjData data, Object *const *args, 
 	OBJECT_INCREF(*result);
 	return true;
 }
-FUNCOBJ_COMPILETIMECREATE(get, &type_object, { &arrayobj_type, &intobj_type });
+//FUNCOBJ_COMPILETIMECREATE(get, &type_object, { &arrayobj_type, &intobj_type });
 
+/*
 static struct TypeAttr attrs[] = {
 	{ TYPE_ATTR_METHOD, &length },
 	{ TYPE_ATTR_METHOD, &push },
 	{ TYPE_ATTR_METHOD, &pop },
 	{ TYPE_ATTR_METHOD, &get },
 };
+*/
 
-const struct Type arrayobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, array_constructor, attrs, sizeof(attrs)/sizeof(attrs[0]));
+const struct Type arrayobj_type = TYPE_BASIC_COMPILETIMECREATE(
+	NULL, array_constructor, /*attrs*/NULL, /*sizeof(attrs)/sizeof(attrs[0])*/0);

@@ -37,7 +37,6 @@ struct TypeAttr {
 
 enum TypeKind {
 	TYPE_BASIC,
-	TYPE_FUNC,
 	TYPE_ASDACLASS,  // TODO: combine this with TYPE_BASIC
 };
 
@@ -50,16 +49,6 @@ enum TypeKind {
 
 struct Type {
 	HEAD
-};
-
-// types of functions are TypeFunc structs
-// 'struct TypeFunc *' can be casted to 'struct Type *'
-// look up "common initial members" if you are not familiar with this technique
-struct TypeFunc {
-	HEAD
-	const struct Type **argtypes;
-	size_t nargtypes;
-	const struct Type *rettype;   // NULL for void functions
 };
 
 /*
@@ -90,20 +79,6 @@ struct TypeAsdaClass {
 	.attrs = (ATTRS), \
 	.nattrs = (NATTRS), \
 }
-
-// the "..." is argument types, in braces
-#define TYPE_FUNC_COMPILETIMECREATE(VARNAME, RETTYPE, ...) \
-	static const struct Type *VARNAME##_argtypes[] = __VA_ARGS__; \
-	static const struct TypeFunc VARNAME = { \
-		.kind = TYPE_FUNC, \
-		.base = &type_object, \
-		.constructor = NULL, \
-		.attrs = NULL, \
-		.nattrs = 0, \
-		.argtypes = VARNAME##_argtypes, \
-		.nargtypes = sizeof(VARNAME##_argtypes)/sizeof(VARNAME##_argtypes[0]), \
-		.rettype = (RETTYPE), \
-	}
 
 
 // the Object base-class-of-everything type

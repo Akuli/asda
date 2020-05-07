@@ -1,4 +1,5 @@
 import collections
+import typing
 
 import more_itertools
 import regex
@@ -29,7 +30,7 @@ _KEYWORDS = {
     'if', 'then', 'elif', 'else',
     'while', 'for', 'do',
     'void',
-    'return',
+    'function', 'return',
     'outer', 'export', 'let',
     'import', 'as',
     'throw', 'catch', 'try', 'finally',
@@ -250,7 +251,7 @@ def _remove_colons(tokens):
             yield token1
 
 
-def tokenize(compilation, code, *, initial_offset=0):
+def tokenize(compilation, code, *, initial_offset=0) -> typing.Iterable[Token]:
     assert initial_offset >= 0
     tokens = _raw_tokenize(compilation, code, initial_offset)
     tokens = _match_parens(tokens)

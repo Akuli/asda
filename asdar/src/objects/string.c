@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "err.h"
-#include "func.h"
 #include "int.h"
 #include "../utf8.h"
 #include "../interp.h"
@@ -320,14 +319,14 @@ static bool uppercase_cfunc(Interp *interp, struct ObjData data,
 {
 	return !!( *result = (Object *)change_case(interp, (StringObject *)args[0], true) );
 }
-FUNCOBJ_COMPILETIMECREATE(uppercase, &stringobj_type, { &stringobj_type });
+//FUNCOBJ_COMPILETIMECREATE(uppercase, &stringobj_type, { &stringobj_type });
 
 static bool lowercase_cfunc(Interp *interp, struct ObjData data,
 	Object *const *args, size_t nargs, Object **result)
 {
 	return !!( *result = (Object *)change_case(interp, (StringObject *)args[0], false) );
 }
-FUNCOBJ_COMPILETIMECREATE(lowercase, &stringobj_type, { &stringobj_type });
+//FUNCOBJ_COMPILETIMECREATE(lowercase, &stringobj_type, { &stringobj_type });
 
 static bool tostring_cfunc(Interp *interp, struct ObjData data,
 	Object *const *args, size_t nargs, Object **result)
@@ -336,7 +335,7 @@ static bool tostring_cfunc(Interp *interp, struct ObjData data,
 	*result = args[0];
 	return true;
 }
-FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &stringobj_type });
+//FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &stringobj_type });
 
 static bool getlength_cfunc(Interp *interp, struct ObjData data,
 	Object *const *args, size_t nargs, Object **result)
@@ -344,13 +343,14 @@ static bool getlength_cfunc(Interp *interp, struct ObjData data,
 	StringObject *s = (StringObject *) args[0];
 	return !!( *result = (Object*)intobj_new_long(interp, (long) s->len) );
 }
-FUNCOBJ_COMPILETIMECREATE(getlength, &stringobj_type, { &stringobj_type });
+//FUNCOBJ_COMPILETIMECREATE(getlength, &stringobj_type, { &stringobj_type });
 
-static struct TypeAttr attrs[] = {
+/*static struct TypeAttr attrs[] = {
 	{ TYPE_ATTR_METHOD, &uppercase },
 	{ TYPE_ATTR_METHOD, &lowercase },
 	{ TYPE_ATTR_METHOD, &tostring },
 	{ TYPE_ATTR_METHOD, &getlength },
 };
-
-const struct Type stringobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, NULL, attrs, sizeof(attrs)/sizeof(attrs[0]));
+*/
+const struct Type stringobj_type = TYPE_BASIC_COMPILETIMECREATE(
+	NULL, NULL, /*attrs*/NULL, /*sizeof(attrs)/sizeof(attrs[0])*/0);
