@@ -1,5 +1,6 @@
 import collections
 import re
+import typing
 
 from asdac import common
 
@@ -35,20 +36,27 @@ _PARSING_REGEX = '|'.join(
 #     ('string', '\n', some location),
 #     ('string', 'b', some location)]
 #
-# but it doesn't matter, or if it does it's probably time to write other
-# optimizing code as well, and this can become a part of that then
-def parse(string, string_location):
+# but that should get optimized away later
+def parse(
+        string: str,
+        string_location: common.Location,
+) -> typing.Iterator[typing.Tuple[
+    str,                # 'string' or 'code'. TODO: use enums
+    str,                # code or string contents
+    common.Location,
+]]:
     # this assumes that the string is one-line
     assert '\n' not in string       # but may contain '\\n', aka r'\n'
     assert len(string) == string_location.length
 
-    def create_location(start_offset, end_offset):
+    def create_location(start_offset: int, end_offset: int) -> common.Location:
         return common.Location(
             string_location.compilation, string_location.offset + start_offset,
             end_offset - start_offset)
 
     for match in re.finditer(_PARSING_REGEX, string):
         kind = match.lastgroup
+        assert kind is not None     # mypy notices this assert, nice
         value = match.group(kind)
 
         if kind == 'escape':

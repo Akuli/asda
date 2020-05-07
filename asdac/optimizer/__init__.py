@@ -5,15 +5,21 @@ from asdac import cooked_ast, decision_tree
 from asdac.optimizer import copy_pasta, decisions, functions, popone, variables
 
 
-# FIXME: some optimizations commented out and broken
-_optimizer_lists = [
+_optimizer_lists: typing.List[typing.List[typing.Callable[
+    [
+        decision_tree.Start,                # root node
+        typing.Set[decision_tree.Node],    # all nodes
+        cooked_ast.Function,                # which function we are optimizing
+    ],
+    bool,   # did it actually do something?
+]]] = [
     # start by optimizing gently so that other things e.g. understand that
     # a loop like 'while TRUE' never ends
     [decisions.optimize_truefalse_before_booldecision],
 
     # Check all the things. These functions always return False, because they
     # don't actually optimize anything by changing the nodes etc
-    [variables.check_boxes_set,
+    [#variables.check_boxes_set,
      functions.check_for_missing_returns],
 
     # now we can actually optimize
@@ -31,14 +37,14 @@ _optimizer_lists = [
 
 
 # there used to be lots of jumped_from bugs, if there are any then this errors
-def _check_jumped_froms(all_nodes):
+def _check_jumped_froms(all_nodes: typing.Set[decision_tree.Node]) -> None:
     for node in all_nodes:
         for ref in node.jumped_from:
             assert ref.objekt in all_nodes
 
 
 def optimize(function_trees: typing.Dict[
-        cooked_ast.Function, decision_tree.Start]):
+        cooked_ast.Function, decision_tree.Start]) -> None:
 
     # optimize each function
     for function, root_node in function_trees.items():

@@ -49,8 +49,9 @@ import random
 import pathlib
 import subprocess
 import tempfile
+import typing
 
-from asdac import cooked_ast, utils
+from asdac import common, cooked_ast, utils
 
 
 class Node:
@@ -64,7 +65,11 @@ class Node:
     the above example, it should be 2.
     """
 
-    def __init__(self, *, use_count, size_delta, location=None):
+    def __init__(
+            self, *,
+            use_count: int,
+            size_delta: int,
+            location: typing.Optional[common.Location] = None):
         self.use_count = use_count
         self.size_delta = size_delta
 
@@ -75,12 +80,14 @@ class Node:
         # contains AttributeReferences
         # number of elements has nothing to do with the type of the node
         # more than 1 means e.g. beginning of loop, 0 means unreachable code
-        self.jumped_from = set()
+        self.jumped_from: typing.Set[
+            utils.AttributeReference[typing.Optional[Node]]] = set()
 
         # should be None for nodes created by the compiler
         self.location = location
 
-    def get_jumps_to_including_nones(self):
+    def get_jumps_to_including_nones(
+            self) -> typing.Iterable[typing.Optional['Node']]:
         """Return iterable of nodes that may be ran after running this node.
 
         If execution (of the function or file) may end at this node, the
@@ -88,25 +95,31 @@ class Node:
         """
         raise NotImplementedError
 
-    def get_jumps_to(self):
+    def get_jumps_to(self) -> typing.Iterable['Node']:
         """Return iterable of nodes that may be ran after running this node."""
         return (node for node in self.get_jumps_to_including_nones()
                 if node is not None)
 
-    def change_jump_to(self, ref, new):
-        if ref.get() is not None:
-            ref.get().jumped_from.remove(ref)
+    def change_jump_to(
+            self,
+            ref: utils.AttributeReference[typing.Optional[Node]],
+            new: typing.Optional[Node]) -> None:
+        old = ref.get()
+        if old is not None:
+            old.jumped_from.remove(ref)
 
         ref.set(new)
+        assert ref.get() is new
+
         if new is not None:
             # can't jump to Start, avoids special cases
             # but you can jump to the node after the Start node
-            assert not isinstance(ref.get(), Start)
+            assert not isinstance(new, Start)
 
-            assert ref not in ref.get().jumped_from
-            ref.get().jumped_from.add(ref)
+            assert ref not in new.jumped_from
+            new.jumped_from.add(ref)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         debug_string = _get_debug_string(self)
         if debug_string is None:
             return super().__repr__()
@@ -118,14 +131,15 @@ class Node:
 #    something --> this node --> something
 class PassThroughNode(Node):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: typing.Any):
         super().__init__(**kwargs)
-        self.next_node = None
+        self.next_node: typing.Optional[Node] = None
 
-    def get_jumps_to_including_nones(self):
+    def get_jumps_to_including_nones(
+            self) -> typing.List[typing.Optional[Node]]:
         return [self.next_node]
 
-    def set_next_node(self, next_node):
+    def set_next_node(self, next_node: Node) -> None:
         self.change_jump_to(
             utils.AttributeReference(self, 'next_node'), next_node)
 
@@ -133,116 +147,74 @@ class PassThroughNode(Node):
 # execution begins here, having this avoids weird special cases
 class Start(PassThroughNode):
 
-    def __init__(self, argvars, **kwargs):
+    def __init__(
+            self, argvars: typing.List[cooked_ast.Variable],
+            **kwargs: typing.Any):
         super().__init__(use_count=0, size_delta=len(argvars), **kwargs)
         self.argvars = argvars
 
 
 class GetBuiltinVar(PassThroughNode):
 
-    def __init__(self, varname, **kwargs):
+    def __init__(self, varname: str, **kwargs: typing.Any):
         super().__init__(use_count=0, size_delta=1, **kwargs)
         self.varname = varname
 
 
 class ExportObject(PassThroughNode):
 
-    def __init__(self, name, **kwargs):
+    def __init__(self, name: str, **kwargs: typing.Any):
         super().__init__(use_count=1, size_delta=-1, **kwargs)
         self.name = name
 
 
-class GetFromModule(PassThroughNode):
-
-    def __init__(self, other_compilation, name, **kwargs):
-        super().__init__(use_count=0, size_delta=1, **kwargs)
-        self.other_compilation = other_compilation
-        self.name = name
-
-
-class CreateBox(PassThroughNode):
-
-    def __init__(self, **kwargs):
-        super().__init__(use_count=0, size_delta=+1, **kwargs)
-
-
-# stack top should have value to set, and the box (box topmost)
-class SetToBox(PassThroughNode):
-
-    def __init__(self, **kwargs):
-        super().__init__(use_count=2, size_delta=-2, **kwargs)
-
-
-# gets value from box
-class UnBox(PassThroughNode):
-
-    def __init__(self, **kwargs):
-        super().__init__(use_count=1, size_delta=0, **kwargs)
-
-
 class PopOne(PassThroughNode):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: typing.Any):
         super().__init__(use_count=1, size_delta=-1, **kwargs)
 
 
 class Plus(PassThroughNode):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: typing.Any):
         super().__init__(use_count=2, size_delta=-1, **kwargs)
 
 
 class Times(PassThroughNode):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: typing.Any):
         super().__init__(use_count=2, size_delta=-1, **kwargs)
 
 
 class Minus(PassThroughNode):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: typing.Any):
         super().__init__(use_count=2, size_delta=-1, **kwargs)
 
 
 class PrefixMinus(PassThroughNode):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: typing.Any):
         super().__init__(use_count=1, size_delta=0, **kwargs)
-
-
-class SetAttr(PassThroughNode):
-
-    def __init__(self, tybe, attrname, **kwargs):
-        super().__init__(use_count=2, size_delta=-2, **kwargs)
-        self.tybe = tybe
-        self.attrname = attrname
-
-
-class GetAttr(PassThroughNode):
-
-    def __init__(self, tybe, attrname, **kwargs):
-        super().__init__(use_count=1, size_delta=0, **kwargs)
-        self.tybe = tybe
-        self.attrname = attrname
 
 
 # TODO: optimize dead code after Throw? maybe similarly to Return?
 class Throw(PassThroughNode):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: typing.Any):
         super().__init__(use_count=1, size_delta=-1, **kwargs)
 
 
 class StrConstant(PassThroughNode):
 
-    def __init__(self, python_string, **kwargs):
+    def __init__(self, python_string: str, **kwargs: typing.Any):
         super().__init__(use_count=0, size_delta=1, **kwargs)
         self.python_string = python_string
 
 
 class IntConstant(PassThroughNode):
 
-    def __init__(self, python_int, **kwargs):
+    def __init__(self, python_int: int, **kwargs: typing.Any):
         super().__init__(use_count=0, size_delta=1, **kwargs)
         self.python_int = python_int
 
@@ -250,7 +222,7 @@ class IntConstant(PassThroughNode):
 class CallFunction(PassThroughNode):
 
     def __init__(self, function: cooked_ast.Function,
-                 how_many_args, is_returning, **kwargs):
+                 how_many_args: int, is_returning: bool, **kwargs: typing.Any):
         self.function = function
         self.how_many_args = how_many_args
         self.is_returning = is_returning
@@ -261,36 +233,8 @@ class CallFunction(PassThroughNode):
             **kwargs)
 
 
-class CallConstructor(PassThroughNode):
-
-    def __init__(self, tybe, how_many_args, **kwargs):
-        super().__init__(
-            use_count=how_many_args, size_delta=(-how_many_args + 1), **kwargs)
-        self.tybe = tybe
-        self.how_many_args = how_many_args
-
-
-class SetMethodsToClass(PassThroughNode):
-
-    def __init__(self, klass, how_many_methods, **kwargs):
-        super().__init__(
-            use_count=how_many_methods, size_delta=-how_many_methods, **kwargs)
-        self.klass = klass
-        self.how_many_methods = how_many_methods
-
-
-# stack should contain the arguments and the function to partial
-# the function should be topmost
-class CreatePartialFunction(PassThroughNode):
-
-    def __init__(self, how_many_args, **kwargs):
-        super().__init__(
-            use_count=(how_many_args + 1),
-            size_delta=-how_many_args,
-            **kwargs)
-        self.how_many_args = how_many_args
-
-
+# TODO: read my wall of text, does it still apply?
+#
 # you might be thinking of implementing 'return blah' so that it leaves 'blah'
 # on the stack and exits the function, but I thought about that for about 30
 # minutes straight and it turned out to be surprisingly complicated
@@ -318,19 +262,11 @@ class CreatePartialFunction(PassThroughNode):
 #
 # The solution is to store the return value into a special place outside the
 # stack before local variables are popped off.
-#
-# TODO: variables no longer work like they did when i wrote the above stuff
-#       maybe it's time to get rid of this now?
-#       or will this be useful for implementing exceptions?
-class StoreReturnValue(PassThroughNode):
-
-    def __init__(self, **kwargs):
-        super().__init__(use_count=1, size_delta=-1, **kwargs)
 
 
 class StrJoin(PassThroughNode):
 
-    def __init__(self, how_many_strings, **kwargs):
+    def __init__(self, how_many_strings: int, **kwargs: typing.Any):
         super().__init__(
             use_count=how_many_strings, size_delta=(-how_many_strings + 1),
             **kwargs)
@@ -339,62 +275,60 @@ class StrJoin(PassThroughNode):
 
 class TwoWayDecision(Node):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: typing.Any):
         super().__init__(**kwargs)
-        self.then = None
-        self.otherwise = None
+        self.then: typing.Optional[Node] = None
+        self.otherwise: typing.Optional[Node] = None
 
-    def get_jumps_to_including_nones(self):
+    def get_jumps_to_including_nones(
+            self) -> typing.List[typing.Optional[Node]]:
         return [self.then, self.otherwise]
 
-    def set_then(self, value):
+    def set_then(self, value: typing.Optional[Node]) -> None:
         self.change_jump_to(
             utils.AttributeReference(self, 'then'), value)
 
-    def set_otherwise(self, value):
+    def set_otherwise(self, value: typing.Optional[Node]) -> None:
         self.change_jump_to(
             utils.AttributeReference(self, 'otherwise'), value)
 
 
 class BoolDecision(TwoWayDecision):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: typing.Any):
         super().__init__(use_count=1, size_delta=-1, **kwargs)
 
 
 class IntEqualDecision(TwoWayDecision):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: typing.Any):
         super().__init__(use_count=2, size_delta=-2, **kwargs)
 
 
 class StrEqualDecision(TwoWayDecision):
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: typing.Any):
         super().__init__(use_count=2, size_delta=-2, **kwargs)
 
 
-def _get_debug_string(node):
+def _get_debug_string(node: Node) -> typing.Optional[str]:
     if isinstance(node, GetBuiltinVar):
         return node.varname
-    if isinstance(node, GetAttr):
-        return node.tybe.name + '.' + node.attrname
     if isinstance(node, IntConstant):
         return str(node.python_int)
     if isinstance(node, StrConstant):
         return repr(node.python_string)
-    if isinstance(node, (CallFunction, CallConstructor)):
-        if isinstance(node, CallConstructor):
-            prefix = 'type %s, ' % node.tybe.name
-        else:
-            prefix = ''
-
-        n = node.how_many_args
-        return prefix + '%d arg%s' % (n, 's' * int(n != 1))
+    if isinstance(node, CallFunction):
+        return (
+            node.function.get_string()
+            + ', ' + ('%d args' % node.how_many_args))
     return None
 
 
-def _items_in_all_sets(sets):
+T = typing.TypeVar('T')
+
+
+def _items_in_all_sets(sets: typing.Iterable[typing.Set[T]]) -> typing.Set[T]:
     return functools.reduce(set.intersection, sets)
 
 
@@ -409,7 +343,12 @@ def _items_in_all_sets(sets):
 # TODO: better algorithm? i found this
 # https://www.hackerrank.com/topics/lowest-common-ancestor
 # but doesn't seem to handle cyclic graphs?
-def find_merge(nodes, *, callback=(lambda node: node.get_jumps_to())):
+def find_merge(
+    nodes: typing.Iterable[Node],
+    *,
+    callback: typing.Callable[
+        [Node], typing.Iterable[Node]] = lambda n: n.get_jumps_to(),
+) -> typing.Optional[Node]:
     # {node: set of other nodes reachable from the node}
     reachable_dict = {node: {node} for node in nodes}
 
@@ -438,7 +377,10 @@ def find_merge(nodes, *, callback=(lambda node: node.get_jumps_to())):
 
 
 # size_dict is like this {node: stack size BEFORE running the node}
-def _get_stack_sizes_to_dict(node, size, size_dict):
+def _get_stack_sizes_to_dict(
+        node: Node,
+        size: int,
+        size_dict: typing.Dict[Node, int]) -> None:
     assert node is not None
 
     while True:
@@ -460,13 +402,13 @@ def _get_stack_sizes_to_dict(node, size, size_dict):
             _get_stack_sizes_to_dict(other, size, size_dict)
 
 
-def get_stack_sizes(root_node):
-    result = {}
+def get_stack_sizes(root_node: Node) -> typing.Dict[Node, int]:
+    result: typing.Dict[Node, int] = {}
     _get_stack_sizes_to_dict(root_node, 0, result)
     return result
 
 
-def get_max_stack_size(root_node):
+def get_max_stack_size(root_node: Node) -> int:
     return max(
         max(before, before + node.size_delta)
         for node, before in get_stack_sizes(root_node).items()
@@ -475,7 +417,7 @@ def get_max_stack_size(root_node):
 
 # root_node does NOT have to be a Start node
 # TODO: cache result somewhere, but careful with invalidation?
-def get_all_nodes(root_node):
+def get_all_nodes(root_node: Node) -> typing.Set[Node]:
     assert root_node is not None
 
     result = set()
@@ -491,7 +433,7 @@ def get_all_nodes(root_node):
 
 
 # this may be slow
-def clean_all_unreachable_nodes(start_node):
+def clean_all_unreachable_nodes(start_node: Start) -> None:
     reachable_nodes = get_all_nodes(start_node)
     for node in reachable_nodes:
         for ref in node.jumped_from.copy():
@@ -500,7 +442,7 @@ def clean_all_unreachable_nodes(start_node):
                 node.jumped_from.remove(ref)
 
 
-def clean_unreachable_nodes_given_one_of_them(unreachable_head):
+def clean_unreachable_nodes_given_one_of_them(unreachable_head: Node) -> None:
     unreachable = set()
     to_visit = collections.deque([unreachable_head])
     did_nothing_count = 0
@@ -529,7 +471,7 @@ def clean_unreachable_nodes_given_one_of_them(unreachable_head):
 
 # to use this, create the new node and set its .next_node or similar
 # then call this function
-def replace_node(old: Node, new: Node):
+def replace_node(old: Node, new: typing.Optional[Node]) -> None:
     if new is not None:
         new.jumped_from.update(old.jumped_from)
 
@@ -542,7 +484,8 @@ def replace_node(old: Node, new: Node):
 
 # could be optimized more, but not a problem because this is used only for
 # graphviz stuff
-def _get_unreachable_nodes(reachable_nodes: set):
+def _get_unreachable_nodes(
+        reachable_nodes: typing.Set[Node]) -> typing.Set[Node]:
     to_visit = reachable_nodes.copy()
     reachable_and_unreachable = set()
 
@@ -552,12 +495,13 @@ def _get_unreachable_nodes(reachable_nodes: set):
             continue
 
         reachable_and_unreachable.add(node)
-        to_visit.update(ref.objekt for ref in node.jumped_from)
+        to_visit.update(
+            typing.cast(Node, ref.objekt) for ref in node.jumped_from)
 
     return reachable_and_unreachable - reachable_nodes
 
 
-def _random_color():
+def _random_color() -> str:
     rgb = (0, 0, 0)
     while sum(rgb)/len(rgb) < 0x80:   # too dark, create new color
         rgb = (random.randint(0x00, 0xff),
@@ -566,15 +510,18 @@ def _random_color():
     return '#%02x%02x%02x' % rgb
 
 
-def _graphviz_id(node):
+def _graphviz_id(node: Node) -> str:
     return 'node' + str(id(node))
 
 
-def _graphviz_code(root_node, label_extra=''):
+def _graphviz_code(
+        root_node: Node,
+        label_extra: str = '') -> typing.Iterator[str]:
     reachable = get_all_nodes(root_node)
     unreachable = _get_unreachable_nodes(reachable)
     assert not (reachable & unreachable)
 
+    max_stack_size: typing.Union[str, int]
     try:
         max_stack_size = get_max_stack_size(root_node)
     except AssertionError:
@@ -631,7 +578,7 @@ def _graphviz_code(root_node, label_extra=''):
 
 
 # for debugging, displays a visual representation of the tree
-def graphviz(root_node, filename_without_ext):
+def graphviz(root_node: Node, filename_without_ext: str) -> None:
     path = pathlib.Path(tempfile.gettempdir()) / 'asdac'
     path.mkdir(parents=True, exist_ok=True)
     png = path / (filename_without_ext + '.png')
@@ -639,7 +586,9 @@ def graphviz(root_node, filename_without_ext):
     # overwrites the png file if it exists
     dot = subprocess.Popen(['dot', '-o', str(png), '-T', 'png'],
                            stdin=subprocess.PIPE)
-    dot_stdin = io.TextIOWrapper(dot.stdin)
+    raw_stdin = dot.stdin
+    assert raw_stdin is not None
+    dot_stdin = io.TextIOWrapper(raw_stdin)
     dot_stdin.write('digraph {\n')
     dot_stdin.writelines(_graphviz_code(root_node))
     dot_stdin.write('}\n')

@@ -1,22 +1,14 @@
+# type: ignore
+
+# TODO: get rid of this or make this code typed
 import collections
 import itertools
 import os
 
+import attr
+
 from asdac import common, string_parser, tokenizer
 
-
-def _astclass(name, fields):
-    return collections.namedtuple(name, ['location'] + fields)
-
-
-# the "header" of the function is the "(Blah b) -> Blah" part
-# it is represented as (args, returntype) tuple
-# args are (tybe, name, location) tuples
-# returntype is None for "-> void"
-
-# GetType's generics is a list of other GetTypes, or None
-GetType = _astclass('GetType', ['name', 'generics'])
-FuncType = _astclass('FuncType', ['header'])
 
 Integer = _astclass('Integer', ['python_int'])
 String = _astclass('String', ['python_string'])
@@ -960,7 +952,7 @@ class _AsdaParser:
             yield self.parse_statement(allow_classes=True)
 
 
-def parse(compilation, code):
+def parse(compilation: common.Compilation, code: str):
     parser = _AsdaParser(compilation, tokenizer.tokenize(compilation, code),
                          collections.OrderedDict())
     parser.parse_imports()

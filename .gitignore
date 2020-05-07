@@ -4,6 +4,7 @@ asda-compiled/
 htmlcov/
 .coverage
 env/
+.mypy_cache/
 
 asdar/asdar
 asdar/obj/

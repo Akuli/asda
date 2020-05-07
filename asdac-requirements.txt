@@ -2,3 +2,5 @@ more_itertools
 regex
 pytest
 colorama
+mypy
+attrs

@@ -13,22 +13,24 @@ from asdac import cooked_ast, decision_tree, objects
 
 class _TreeCreator:
 
-    def __init__(self):
-        self.local_vars = local_vars = {}
+    def __init__(
+            self, local_vars: typing.Dict[str, cooked_ast.Variable]) -> None:
+        self.local_vars = local_vars
 
         # why can't i assign in python lambda without dirty setattr haxor :(
-        self.set_next_node = lambda node: setattr(self, 'root_node', node)
-        self.root_node = None
+        self.set_next_node: typing.Callable[[decision_tree.Node], None] = (
+            lambda node: setattr(self, 'root_node', node))
+        self.root_node: typing.Optional[decision_tree.Node] = None
 
-    def subcreator(self):
-        return _TreeCreator(self.level, self.local_vars, self.closure_vars)
+    def subcreator(self) -> '_TreeCreator':
+        return _TreeCreator(self.local_vars)
 
-    def add_pass_through_node(self, node):
+    def add_pass_through_node(self, node: decision_tree.Node) -> None:
         assert isinstance(node, decision_tree.PassThroughNode)
         self.set_next_node(node)
         self.set_next_node = node.set_next_node
 
-    def do_function_call(self, call):
+    def do_function_call(self, call: cooked_ast.CallFunction) -> None:
         for arg in call.args:
             self.do_expression(arg)
 
@@ -36,20 +38,12 @@ class _TreeCreator:
             call.function, len(call.args),
             (call.function.returntype is not None), location=call.location))
 
-    def get_local_closure_var(self, nonlocal_var):
-        try:
-            return self.closure_vars[nonlocal_var]
-        except KeyError:
-            local = copy.copy(nonlocal_var)
-            local.level = self.level
-            self.closure_vars[nonlocal_var] = local
-            return local
-
-    # returns whether unboxing is needed
-    def _add_var_lookup_without_unboxing(self, var, **boilerplate) -> bool:
-        raise NotImplementedError
-
-    def _do_if(self, cond, if_callback, else_callback, **boilerplate):
+    def _do_if(
+            self,
+            cond: cooked_ast.Expression,
+            if_callback: typing.Callable[['_TreeCreator'], None],
+            else_callback: typing.Callable[['_TreeCreator'], None],
+            **boilerplate: typing.Any) -> None:
         self.do_expression(cond)
         result = decision_tree.BoolDecision(**boilerplate)
 
@@ -61,13 +55,15 @@ class _TreeCreator:
         else_creator.set_next_node = result.set_otherwise
         else_callback(else_creator)
 
-        self.set_next_node(result)
-        self.set_next_node = lambda next_node: (
-            if_creator.set_next_node(next_node),
-            else_creator.set_next_node(next_node),
-        )
+        def set_next_node_to_both(next_node: decision_tree.Node) -> None:
+            if_creator.set_next_node(next_node)
+            else_creator.set_next_node(next_node)
+            return None
 
-    def do_expression(self, expression):
+        self.set_next_node(result)
+        self.set_next_node = set_next_node_to_both
+
+    def do_expression(self, expression: cooked_ast.Expression) -> None:
         assert expression.type is not None
         boilerplate = {'location': expression.location}
 
@@ -80,67 +76,15 @@ class _TreeCreator:
                 expression.python_int, **boilerplate))
 
         elif isinstance(expression, cooked_ast.GetVar):
-            var = expression.var    # pep8 line length
-            if self._add_var_lookup_without_unboxing(var, **boilerplate):
-                self.add_pass_through_node(decision_tree.UnBox())
-
-        elif isinstance(expression, cooked_ast.GetFromModule):
-            self.add_pass_through_node(decision_tree.GetFromModule(
-                expression.other_compilation, expression.name, **boilerplate))
+            raise NotImplementedError
 
         elif isinstance(expression, cooked_ast.IfExpression):
+            expression2 = expression    # mypy is fucking around with me
             self._do_if(
                 expression.cond,
-                lambda creator: creator.do_expression(expression.true_expr),
-                lambda creator: creator.do_expression(expression.false_expr),
+                lambda creator: creator.do_expression(expression2.true_expr),
+                lambda creator: creator.do_expression(expression2.false_expr),
                 **boilerplate)
-
-        elif isinstance(expression, cooked_ast.BoolNegation):
-            self.do_expression(expression.value)
-
-            # this is dumb, but usually gets optimized a lot
-            decision = decision_tree.BoolDecision(**boilerplate)
-            decision.set_then(decision_tree.GetBuiltinVar('FALSE'))
-            decision.set_otherwise(decision_tree.GetBuiltinVar('TRUE'))
-
-            self.set_next_node(decision)
-            self.set_next_node = lambda node: (
-                decision.then.set_next_node(node),
-                decision.otherwise.set_next_node(node),
-            )
-
-        elif isinstance(expression, cooked_ast.PrefixMinus):
-            self.do_expression(expression.prefixed)
-            self.add_pass_through_node(
-                decision_tree.PrefixMinus(**boilerplate))
-
-        elif isinstance(expression, (
-                cooked_ast.Plus, cooked_ast.Minus, cooked_ast.Times,
-                cooked_ast.StrEqual, cooked_ast.IntEqual)):
-            self.do_expression(expression.lhs)
-            self.do_expression(expression.rhs)
-
-            if isinstance(expression, cooked_ast.Plus):
-                self.add_pass_through_node(decision_tree.Plus(**boilerplate))
-            elif isinstance(expression, cooked_ast.Times):
-                self.add_pass_through_node(decision_tree.Times(**boilerplate))
-            elif isinstance(expression, cooked_ast.Minus):
-                self.add_pass_through_node(decision_tree.Minus(**boilerplate))
-            else:
-                # push TRUE or FALSE to stack, usually this gets optimized into
-                # something that doesn't involve bool objects at all
-                if isinstance(expression, cooked_ast.IntEqual):
-                    eq = decision_tree.IntEqualDecision(**boilerplate)
-                else:
-                    eq = decision_tree.StrEqualDecision(**boilerplate)
-                eq.set_then(decision_tree.GetBuiltinVar('TRUE'))
-                eq.set_otherwise(decision_tree.GetBuiltinVar('FALSE'))
-
-                self.set_next_node(eq)
-                self.set_next_node = lambda node: (
-                    eq.then.set_next_node(node),
-                    eq.otherwise.set_next_node(node),
-                )
 
         elif isinstance(expression, cooked_ast.StrJoin):
             for part in expression.parts:
@@ -152,46 +96,24 @@ class _TreeCreator:
         elif isinstance(expression, cooked_ast.CallFunction):
             self.do_function_call(expression)
 
-        elif isinstance(expression, cooked_ast.New):
-            for arg in expression.args:
-                self.do_expression(arg)
-
-            self.add_pass_through_node(decision_tree.CallConstructor(
-                expression.type, len(expression.args), **boilerplate))
-
-        elif isinstance(expression, cooked_ast.GetAttr):
-            self.do_expression(expression.obj)
-            self.add_pass_through_node(decision_tree.GetAttr(
-                expression.obj.type, expression.attrname, **boilerplate))
-
         else:
             assert False, expression    # pragma: no cover
 
-    def do_statement(self, statement):
+    def do_statement(self, statement: cooked_ast.Statement) -> None:
         boilerplate = {'location': statement.location}
 
-        if isinstance(statement, cooked_ast.CreateLocalVar):
-            # currently not used, but may be useful in the future
-            pass
-
-        elif isinstance(statement, cooked_ast.CallFunction):
+        if isinstance(statement, cooked_ast.CallFunction):
             self.do_function_call(statement)
             if statement.type is not None:
                 # not a void function, ignore return value
                 self.add_pass_through_node(decision_tree.PopOne(**boilerplate))
 
-        elif isinstance(statement, cooked_ast.SetVar):
-            self.do_expression(statement.value)
-            its_a_box = self._add_var_lookup_without_unboxing(
-                statement.var, **boilerplate)
-            assert its_a_box
-            self.add_pass_through_node(decision_tree.SetToBox())
-
         elif isinstance(statement, cooked_ast.IfStatement):
+            statement2 = statement    # fuck you mypy
             self._do_if(
                 statement.cond,
-                lambda creator: creator.do_body(statement.if_body),
-                lambda creator: creator.do_body(statement.else_body),
+                lambda creator: creator.do_body(statement2.if_body),
+                lambda creator: creator.do_body(statement2.else_body),
                 **boilerplate)
 
         elif isinstance(statement, cooked_ast.Loop):
@@ -219,17 +141,17 @@ class _TreeCreator:
             end_decision.set_then(creator.root_node)
             creator.set_next_node(end_decision)
 
+            def set_next_node_everywhere(node: decision_tree.Node) -> None:
+                beginning_decision.set_otherwise(node)
+                end_decision.set_otherwise(node)
+
+            assert creator.root_node is not None
             self.set_next_node(creator.root_node)
-            self.set_next_node = lambda node: (
-                beginning_decision.set_otherwise(node),
-                end_decision.set_otherwise(node),
-            )
+            self.set_next_node = set_next_node_everywhere
 
         elif isinstance(statement, cooked_ast.Return):
             if statement.value is not None:
-                self.do_expression(statement.value)
-                self.add_pass_through_node(
-                    decision_tree.StoreReturnValue(**boilerplate))
+                raise NotImplementedError
 
             # the next node might or might not become unreachable, because
             # multiple nodes can jump to the same node
@@ -240,26 +162,28 @@ class _TreeCreator:
         else:
             assert False, type(statement)     # pragma: no cover
 
-    def do_body(self, statements):
+    def do_body(self, statements: typing.List[cooked_ast.Statement]) -> None:
         for statement in statements:
             assert not isinstance(statement, list), statement
             self.do_statement(statement)
 
 
-def create_tree(cooked_funcdefs: typing.List[cooked_ast.FuncDefinition]):
+def create_tree(
+    cooked_funcdefs: typing.List[cooked_ast.FuncDefinition]
+) -> typing.Dict[cooked_ast.Function, decision_tree.Start]:
     function_trees = {}
     for funcdef in cooked_funcdefs:
-        creator = _TreeCreator()
+        creator = _TreeCreator({})
 
         creator.add_pass_through_node(
             decision_tree.Start(funcdef.function.argvars.copy()))
         creator.do_body(funcdef.body)
 
+        assert isinstance(creator.root_node, decision_tree.Start)
+
         # there used to be code that handled this with a less dumb algorithm
         # than clean_all_unreachable_nodes, but it didn't work in corner cases
         decision_tree.clean_all_unreachable_nodes(creator.root_node)
-
-        assert isinstance(creator.root_node, decision_tree.Start)
         function_trees[funcdef.function] = creator.root_node
 
         decision_tree.graphviz(creator.root_node, funcdef.function.name)

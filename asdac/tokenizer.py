@@ -1,8 +1,9 @@
 import collections
 import typing
 
+import attr
 import more_itertools
-import regex
+import regex    # type: ignore
 
 from . import common, string_parser
 
@@ -39,12 +40,19 @@ _KEYWORDS = {
 }
 
 
-Token = collections.namedtuple('Token', ['type', 'value', 'location'])
+@attr.s(auto_attribs=True)
+class Token:
+    type: str      # TODO: enum
+    value: str
+    location: common.Location
 
 
 # tabs are disallowed because they aren't used for indentation and you can use
 # "\t" to get a string that contains a tab
-def _tab_check(compilation, code, initial_offset):
+def _tab_check(
+        compilation: common.Compilation,
+        code: str,
+        initial_offset: int) -> None:
     try:
         first_tab = initial_offset + code.index('\t')
     except ValueError:
@@ -54,7 +62,10 @@ def _tab_check(compilation, code, initial_offset):
                               common.Location(compilation, first_tab, 1))
 
 
-def _raw_tokenize(compilation, code, initial_offset):
+def _raw_tokenize(
+        compilation: common.Compilation,
+        code: str,
+        initial_offset: int) -> typing.Iterable[Token]:
     _tab_check(compilation, code, initial_offset)
 
     # remember this part of this code, because many other things rely on this
@@ -90,7 +101,7 @@ def _raw_tokenize(compilation, code, initial_offset):
         yield Token(token_type, value, location)
 
 
-def _match_parens(tokens):
+def _match_parens(tokens: typing.Iterable[Token]) -> typing.Iterable[Token]:
     lparens = list('([{')
     rparens = list(')]}')
     lparen2rparen = dict(zip(lparens, rparens))
@@ -122,7 +133,8 @@ def _match_parens(tokens):
             stack[-1].location)
 
 
-def _handle_indents_and_dedents_and_unwanted_whitespace(tokens):
+def _handle_indents_and_dedents_and_unwanted_whitespace(
+        tokens: typing.Iterable[Token]) -> typing.Iterable[Token]:
     # this code took a while to figure out... don't ask me to comment it more
     space_ignore_stack = [False]
     indent_levels = [0]
@@ -211,7 +223,7 @@ def _handle_indents_and_dedents_and_unwanted_whitespace(tokens):
 #
 # x:y looks up the exported thing 'y' from a module 'x', but x:y as a whole is
 # a MODULEFUL_ID token, there is no colon token involved in that
-def _check_colons(tokens):
+def _check_colons(tokens: typing.Iterable[Token]) -> typing.Iterable[Token]:
     staggered = more_itertools.stagger(tokens, offsets=(-2, -1, 0))
     token1 = token2 = token3 = None
 
@@ -236,14 +248,16 @@ def _check_colons(tokens):
 
     # corner case: file may end with ':'
     if token2 is not None and token2.value == ':':
+        assert token3 is not None
         raise common.CompileError("unexpected end of file", token3.location)
 
 
 # to make rest of the code simpler, 'colon \n indent' sequences are
 # replaced with just indents
-def _remove_colons(tokens):
+def _remove_colons(tokens: typing.Iterable[Token]) -> typing.Iterable[Token]:
     staggered = more_itertools.stagger(tokens, offsets=(0, 1, 2), longest=True)
     for token1, token2, token3 in staggered:
+        assert token1 is not None
         # that is, ignore some stuff that comes before indents
         if (
           (token2 is None or token2.type != 'INDENT') and
@@ -251,7 +265,11 @@ def _remove_colons(tokens):
             yield token1
 
 
-def tokenize(compilation, code, *, initial_offset=0) -> typing.Iterable[Token]:
+def tokenize(
+        compilation: common.Compilation,
+        code: str,
+        *,
+        initial_offset: int = 0) -> typing.Iterable[Token]:
     assert initial_offset >= 0
     tokens = _raw_tokenize(compilation, code, initial_offset)
     tokens = _match_parens(tokens)

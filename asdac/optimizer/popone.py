@@ -1,27 +1,34 @@
 # optimizes away unnecessary nodes
 
-from asdac import decision_tree
+import typing
+
+from asdac import cooked_ast, decision_tree
 
 
 # TODO:
 #    CreateFunction
 #    CreatePartialFunction
 #    StrJoin
-def _skip_unnecessary_nodes(node):
+#    everything that is currently commented out
+def _skip_unnecessary_nodes(node: decision_tree.Node) -> bool:
     if not (isinstance(node, decision_tree.PassThroughNode) and
             isinstance(node.next_node, decision_tree.PopOne)):
         return False
 
-    if isinstance(node, (decision_tree.UnBox, decision_tree.GetAttr)):
-        # e.g. pop the box instead of an unboxed value
-        # will likely get optimized more when this function is called again
-        decision_tree.replace_node(node, node.next_node)
-        return True
+#    if isinstance(node, (decision_tree.UnBox, decision_tree.GetAttr)):
+#        # e.g. pop the box instead of an unboxed value
+#        # will likely get optimized more when this function is called again
+#        decision_tree.replace_node(node, node.next_node)
+#        return True
 
     if isinstance(node, (
-            decision_tree.GetBuiltinVar, decision_tree.GetLocalVar,
-            decision_tree.CreateBox, decision_tree.StrConstant,
-            decision_tree.IntConstant, decision_tree.CreateFunction)):
+                decision_tree.GetBuiltinVar,
+#                decision_tree.GetLocalVar,
+#                decision_tree.CreateBox,
+                decision_tree.StrConstant,
+                decision_tree.IntConstant,
+#                decision_tree.CreateFunction,
+            )):
         assert node.use_count == 0
         assert node.size_delta == 1
 
@@ -43,7 +50,10 @@ def _skip_unnecessary_nodes(node):
     return False
 
 
-def optimize_popones(start_node, all_nodes, function):
+def optimize_popones(
+        start_node: decision_tree.Start,
+        all_nodes: typing.Set[decision_tree.Node],
+        function: cooked_ast.Function) -> bool:
     for node in all_nodes:
         if _skip_unnecessary_nodes(node):
             # all_nodes is no longer an up to date list of nodes, need to stop

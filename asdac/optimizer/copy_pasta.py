@@ -22,45 +22,41 @@
 # good, because then the "optimization" would add jumps to the opcode
 
 import itertools
+import typing
 
-from asdac import decision_tree
+from asdac import cooked_ast, decision_tree
 
 
-def _nodes_are_similar(a: decision_tree.Node, b: decision_tree.Node):
-    def they_are(klass):
+def _nodes_are_similar(a: decision_tree.Node, b: decision_tree.Node) -> bool:
+    def they_are(klass: type) -> bool:
         return isinstance(a, klass) and isinstance(b, klass)
 
     if they_are(decision_tree.GetBuiltinVar):
-        return a.varname == b.varname
+        return a.varname == b.varname                           # type: ignore
     if (
-      they_are(decision_tree.SetLocalVar) or
-      they_are(decision_tree.GetLocalVar)):
-        return a.var == b.var
-    if they_are(decision_tree.PopOne):
-        return a.is_popping_a_dummy == b.is_popping_a_dummy
-    if (
+      they_are(decision_tree.PopOne) or
       they_are(decision_tree.Plus) or
-      they_are(decision_tree.Times) or
-      they_are(decision_tree.StoreReturnValue) or
-      they_are(decision_tree.CreateBox) or
-      they_are(decision_tree.SetToBox) or
-      they_are(decision_tree.UnBox)):
+      they_are(decision_tree.Times)):
         return True
-    if they_are(decision_tree.GetAttr):
-        return a.tybe is b.tybe and a.attrname is b.attrname
+#    if they_are(decision_tree.GetAttr):
+#        return a.tybe is b.tybe and a.attrname is b.attrname    # type: ignore
     if they_are(decision_tree.StrConstant):
-        return a.python_string == b.python_string
+        return a.python_string == b.python_string               # type: ignore
     if they_are(decision_tree.IntConstant):
-        return a.python_int == b.python_int
+        return a.python_int == b.python_int                     # type: ignore
     if they_are(decision_tree.CallFunction):
-        return (a.how_many_args == b.how_many_args and
-                a.is_returning == b.is_returning)
+        return (a.function == b.function and                    # type: ignore
+                a.how_many_args == b.how_many_args and          # type: ignore
+                a.is_returning == b.is_returning)               # type: ignore
     if they_are(decision_tree.StrJoin):
-        return a.how_many_strings == b.how_many_strings
+        return a.how_many_strings == b.how_many_strings         # type: ignore
     return False
 
 
-def optimize_similar_nodes(start_node, all_nodes, createfunc_node):
+def optimize_similar_nodes(
+        start_node: decision_tree.Start,
+        all_nodes: typing.Set[decision_tree.Node],
+        function: cooked_ast.Function) -> bool:
     for node in all_nodes:
         jumped_from = (
             ref.objekt for ref in node.jumped_from

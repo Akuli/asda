@@ -4,26 +4,17 @@ import pathlib
 import re
 import sys
 import textwrap
+import typing
 
-import colorama
+import colorama     # type: ignore
 
-from asdac import (bytecoder, bytecode_reader, common, cooked_ast,
-                   decision_tree_creator, optimizer, raw_ast)
+from asdac import (bytecoder, common, cooked_ast, decision_tree_creator,
+                   optimizer, raw_ast)
 
 
 # TODO: error handling for bytecode_reader.RecompileFixableError
-def source2bytecode(compilation: common.Compilation):
-    """Compiles a file.
-
-    Should be used like this:
-    1.  Call this function. It does nothing and returns a generator.
-    2.  Call next(the_generator). That returns a list of source file names that
-        the file being compiled imports.
-    3.  Compile the imported files.
-    4.  Call the_generator.send(a dict) where the dict's keys are the paths
-        from step 2 and the values are Compilation objects.
-    5.  Finally, you're done with using this function :D
-    """
+def source2bytecode(compilation: common.Compilation) -> None:
+    """Compiles a file and saves to compilation.compiled_path"""
     compilation.messager(0, 'Compiling to "%s"...' % common.path_string(
         compilation.compiled_path))
 
@@ -32,17 +23,13 @@ def source2bytecode(compilation: common.Compilation):
         source = file.read()
 
     compilation.messager(3, "Parsing")
-    raw, imports = raw_ast.parse(compilation, source)
-    import_compilation_dict = yield imports
-    assert import_compilation_dict.keys() == set(imports)
-    compilation.set_imports([
-        import_compilation_dict[path] for path in imports])
+    raw = typing.cast(
+        typing.List[typing.Any],
+        typing.cast(typing.Any, raw_ast).parse(compilation, source))
 
     # TODO: better message for cooking?
     compilation.messager(3, "Creating typed AST")
-    cooked, export_types = cooked_ast.cook(
-        compilation, raw, import_compilation_dict)
-    compilation.set_export_types(export_types)
+    cooked = cooked_ast.cook(compilation, raw)
 
     compilation.messager(3, "Creating a decision tree")
     function_trees = decision_tree_creator.create_tree(cooked)
@@ -67,72 +54,26 @@ def source2bytecode(compilation: common.Compilation):
         outfile.write(bytecode)
 
     compilation.set_done()
-    yield export_types
 
 
 class CompileManager:
 
-    def __init__(self, compiled_dir, messager, always_recompile):
+    def __init__(
+            self,
+            compiled_dir: pathlib.Path,
+            messager: common.Messager):
         self.compiled_dir = compiled_dir
         self.messager = messager
-        self.always_recompile = always_recompile
-
-        # remains False forever if all compiled files are up to date
-        self.something_was_compiled = False
 
         # {compilation.source_path: compilation}
-        self.source_path_2_compilation = {}
+        self.source_path_2_compilation: typing.Dict[
+            pathlib.Path, common.Compilation
+        ] = {}
 
-    # there are 2 kinds of up to datenesses to consider:
-    #   * has the source file been modified since the previous compilation?
-    #   * have the files that are imported been recompiled, or will they need
-    #     to be recompiled since the previous compilation?
-
-    def _compiled_is_up2date_with_source(self, compilation):
-        try:
-            compiled_mtime = compilation.compiled_path.stat().st_mtime
-        except FileNotFoundError:
-            compilation.messager(3, (
-                "Compiled file not found. Need to recompile."))
-            return False
-
-        if compiled_mtime < compilation.source_path.stat().st_mtime:
-            compilation.messager(3, (
-                "The source file is newer than the compiled file. "
-                "Need to recompile."))
-            return False
-
-        compilation.messager(3, (
-            "The compiled file is newer than the source file."))
-        return True
-
-    def _compiled_is_up2date_with_imports(self, compilation,
-                                          import_compilations):
-        compilation_mtime = compilation.compiled_path.stat().st_mtime
-        for import_ in import_compilations:
-            if compilation_mtime < import_.compiled_path.stat().st_mtime:
-                compilation.messager(3, (
-                    '"%s" is older than "%s". Need to recompile.' % (
-                        common.path_string(compilation.compiled_path),
-                        common.path_string(import_.compiled_path))))
-                return False
-
-        compilation.messager(3, (
-            'No imported files have been recompiled after compiling "%s".' % (
-                common.path_string(compilation.compiled_path))))
-        return True
-
-    def _compile_imports(self, compilation, imported_paths):
-        for path in imported_paths:
-            with compilation.messager.indented(2, (
-                    '"%s" is imported. ' "Making sure that it's compiled."
-                    % common.path_string(path))):
-                self.compile(path)
-
-    def compile(self, source_path):
+    def compile(self, source_path: pathlib.Path) -> None:
         if source_path in self.source_path_2_compilation:
             compilation = self.source_path_2_compilation[source_path]
-            assert compilation.state == common.CompilationState.DONE
+            assert compilation.done
             compilation.messager(
                 2, ('This has been compiled already (to "%s"). Not compiling '
                     'again.' % common.path_string(compilation.compiled_path)))
@@ -141,45 +82,14 @@ class CompileManager:
         compilation = common.Compilation(source_path, self.compiled_dir,
                                          self.messager)
 
-        if not self.always_recompile:
-            with compilation.messager.indented(
-                    2, ('Checking if this needs to be compiled to "%s"...'
-                        % common.path_string(compilation.compiled_path))):
-
-                if self._compiled_is_up2date_with_source(compilation):
-                    # there is a chance that nothing needs to be compiled
-                    # but can't be sure yet
-                    imports, export_types = (
-                        bytecode_reader.read_imports_and_exports(compilation))
-                    self._compile_imports(compilation, imports)
-                    import_compilations = [self.source_path_2_compilation[path]
-                                           for path in imports]
-
-                    # now we can check
-                    if self._compiled_is_up2date_with_imports(
-                            compilation, import_compilations):
-                        compilation.messager(1, "No need to recompile.")
-                        compilation.set_imports(import_compilations)
-                        compilation.set_export_types(export_types)
-                        compilation.set_done()
-                        self.source_path_2_compilation[source_path] = (
-                            compilation)
-                        return
-
         self.source_path_2_compilation[source_path] = compilation
-
-        generator = source2bytecode(compilation)
-        depends_on = next(generator)
-        self._compile_imports(compilation, depends_on)
-
-        generator.send({
-            path: self.source_path_2_compilation[path]
-            for path in depends_on
-        })
+        source2bytecode(compilation)
         self.something_was_compiled = True
 
 
-def report_compile_error(error, red_function):
+def report_compile_error(
+        error: common.CompileError,
+        red_function: typing.Callable[[str], str]) -> None:
     eprint = functools.partial(print, file=sys.stderr)
 
     if error.location is None:
@@ -214,15 +124,17 @@ def report_compile_error(error, red_function):
     eprint(textwrap.indent(gonna_print, ' ' * 4))
 
 
-def make_red(string):
-    return colorama.Fore.RED + string + colorama.Fore.RESET
+def make_red(string: str) -> str:
+    red_begins = typing.cast(str, colorama.Fore.RED)
+    red_ends = typing.cast(str, colorama.Fore.RESET)
+    return red_begins + string + red_ends
 
 
-def path_from_user(string):
+def path_from_user(string: str) -> pathlib.Path:
     return common.resolve_dotdots(pathlib.Path(string).absolute())
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'infiles', nargs=argparse.ONE_OR_MORE, help="source code files")
@@ -230,11 +142,6 @@ def main():
         # argparse.FileType('wb') would open the file even if compiling fails
         '--compiled-dir', default='asda-compiled',
         help="directory for compiled asda files, default is ./asda-compiled")
-    parser.add_argument(
-        '--always-recompile', action='store_true', default=False,
-        help=("always compile all files, even if they have already been "
-              "compiled and the compiled files are newer than the source "
-              "files"))
     parser.add_argument(
         '--color', choices=['auto', 'always', 'never'], default='auto',
         help="should error messages be displayed with colors?")
@@ -277,8 +184,7 @@ def main():
     else:
         red_function = lambda string: string    # noqa
 
-    compile_manager = CompileManager(compiled_dir, messager,
-                                     args.always_recompile)
+    compile_manager = CompileManager(compiled_dir, messager)
     try:
         for path in args.infiles:
             compile_manager.compile(path)
@@ -287,11 +193,7 @@ def main():
         sys.exit(1)
 
     for compilation in compile_manager.source_path_2_compilation.values():
-        assert compilation.state == common.CompilationState.DONE, compilation
-
-    if not compile_manager.something_was_compiled:
-        messager(0, ("Nothing was compiled because the source files haven't "
-                     "changed since the previous compilation."))
+        assert compilation.done, compilation
 
 
 if __name__ == '__main__':      # pragma: no cover
