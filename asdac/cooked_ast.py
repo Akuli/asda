@@ -18,14 +18,14 @@ class FunctionKind(enum.Enum):
 
 # all variables are local variables for now.
 # note that there is code that uses copy.copy() with Variable objects
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class Variable:
     name: str
     type: objects.Type
     kind: VariableKind
     definition_location: typing.Optional[common.Location]
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class Function:
     name: str
     argvars: typing.List[Variable]
@@ -39,11 +39,11 @@ class Function:
             self.argvars[0].type.name + ' ' + self.argvars[0].name))
             
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class Statement:
     location: common.Location
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class Expression(Statement):
     location: common.Location
     # this is optional because a function might return void (nothing reasonable
@@ -53,53 +53,53 @@ class Expression(Statement):
     # why bother?
     type: typing.Optional[objects.Type]
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class StrConstant(Expression):
     python_string: str
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class StrJoin(Expression):
     parts: typing.List[Expression]
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class IntConstant(Expression):
     python_int: int
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class GetVar(Expression):
     var: Variable
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class SetVar(Statement):
     var: Variable
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class FuncDefinition(Statement):
     function: Function
     body: typing.List[Statement]
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class CallFunction(Expression, Statement):
     function: Function
     args: typing.List[Expression]
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class Return(Statement):
     value: typing.Optional[Expression]
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class IfStatement(Statement):
     cond: Expression
     if_body: typing.List[Statement]
     else_body: typing.List[Statement]
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class IfExpression(Expression):
     cond: Expression
     true_expr: Expression
     false_expr: Expression
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class Loop(Statement):
     pre_cond: Expression
     post_cond: Expression
@@ -295,6 +295,7 @@ def cook(
 ) -> typing.List[FuncDefinition]:
     chef = FileChef()
 
+    print(raw_statements)
     for funcdef in raw_statements:
         assert isinstance(funcdef, typing.cast(typing.Any, raw_ast).FuncDefinition)
         chef.discover_function(funcdef)

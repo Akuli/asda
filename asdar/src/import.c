@@ -8,7 +8,7 @@
 #include "code.h"
 #include "interp.h"
 #include "path.h"
-#include "runner.h"
+#include "run.h"
 #include "type.h"
 #include "objects/err.h"
 

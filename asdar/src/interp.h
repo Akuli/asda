@@ -55,9 +55,6 @@ typedef struct Interp {
 	// code being ran, from all imported modules
 	DynArray(struct CodeOp) code;
 
-	// indexes into the code
-	size_t mainidx;
-
 	// always sorted by CodeFuncInfo.startptr for binary seraching
 	//DynArray(struct CodeFuncInfo *) funcinfo;
 } Interp;

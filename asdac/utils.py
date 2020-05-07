@@ -15,7 +15,8 @@ class AttributeReference(typing.Generic[T]):
         # uses hypothetical c-style & operator
         return '&' + repr(self.objekt) + '.' + self.attribute
 
-    def __eq__(self, other: typing.Any) -> typing.Union[bool, NotImplemented]:
+    def __eq__(self, other: typing.Any) -> typing.Union[
+            bool, 'NotImplemented']:
         if not isinstance(other, AttributeReference):
             return NotImplemented
         return (self.objekt, self.attribute) == (other.objekt, other.attribute)

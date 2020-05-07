@@ -102,8 +102,8 @@ class Node:
 
     def change_jump_to(
             self,
-            ref: utils.AttributeReference[typing.Optional[Node]],
-            new: typing.Optional[Node]) -> None:
+            ref: utils.AttributeReference[typing.Optional['Node']],
+            new: typing.Optional['Node']) -> None:
         old = ref.get()
         if old is not None:
             old.jumped_from.remove(ref)

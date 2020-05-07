@@ -15,7 +15,6 @@ void interp_init(Interp *interp, const char *argv0)
 	interp->argv0 = argv0;
 	interp->objliststart = NULL;
 	interp->basedir = NULL;
-	interp->mainidx = (size_t)(-1);
 
 	memset(interp->intcache, 0, sizeof(interp->intcache));  // not strictly standard compliant but simpler than a loop
 

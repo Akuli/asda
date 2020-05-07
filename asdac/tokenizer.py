@@ -40,7 +40,7 @@ _KEYWORDS = {
 }
 
 
-@attr.s(auto_attribs=True)
+@attr.s(auto_attribs=True, cmp=False)
 class Token:
     type: str      # TODO: enum
     value: str

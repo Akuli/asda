@@ -10,6 +10,10 @@ import attr
 from asdac import common, string_parser, tokenizer
 
 
+def _astclass(name, fields):
+    return collections.namedtuple(name, ['location'] + fields)
+
+
 Integer = _astclass('Integer', ['python_int'])
 String = _astclass('String', ['python_string'])
 StrJoin = _astclass('StrJoin', ['parts'])
@@ -277,13 +281,9 @@ class _PrecedenceHandler:
 
 class _AsdaParser:
 
-    def __init__(self, compilation, token_generator, import_paths):
-        # order matters, because modules may have import time side-effects (ew)
-        assert isinstance(import_paths, collections.OrderedDict)
-
+    def __init__(self, compilation, token_generator):
         self.compilation = compilation
         self.tokens = _TokenIterator(token_generator)
-        self.import_paths = import_paths
 
     def _handle_string_literal(self, string, location, allow_curly_braces):
         assert len(string) >= 2 and string[0] == '"' and string[-1] == '"'
@@ -306,8 +306,7 @@ class _AsdaParser:
                     part_location.compilation, value,
                     initial_offset=part_location.offset)
 
-                parser = _AsdaParser(
-                    self.compilation, tokens, self.import_paths)
+                parser = _AsdaParser(self.compilation, tokens)
 
                 if parser.tokens.eof():
                     raise common.CompileError(
@@ -513,15 +512,9 @@ class _AsdaParser:
                 location = token.location
 
             if token.type == 'MODULEFUL_ID':
-                module, name = token.value.split(':')
-                try:
-                    module_path = self.import_paths[module]
-                except KeyError as e:
-                    raise common.CompileError(
-                        "nothing has been imported as %s" % module) from e
-            else:
-                module_path = None
-                name = token.value
+                raise NotImplementedError
+            module_path = None
+            name = token.value
 
             return GetVar(location, module_path, name, generics)
 
@@ -953,8 +946,7 @@ class _AsdaParser:
 
 
 def parse(compilation: common.Compilation, code: str):
-    parser = _AsdaParser(compilation, tokenizer.tokenize(compilation, code),
-                         collections.OrderedDict())
+    parser = _AsdaParser(compilation, tokenizer.tokenize(compilation, code))
     parser.parse_imports()
     statements = list(parser.parse_file())    # must not be lazy iterator
-    return (statements, list(parser.import_paths.values()))
+    return statements
