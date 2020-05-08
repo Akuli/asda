@@ -51,7 +51,9 @@ import subprocess
 import tempfile
 import typing
 
-from asdac import common, cooked_ast, utils
+from asdac import utils
+from asdac.common import Location
+from asdac.objects import Function, Variable
 
 
 class Node:
@@ -69,7 +71,7 @@ class Node:
             self, *,
             use_count: int,
             size_delta: int,
-            location: typing.Optional[common.Location] = None):
+            location: typing.Optional[Location] = None):
         self.use_count = use_count
         self.size_delta = size_delta
 
@@ -148,7 +150,8 @@ class PassThroughNode(Node):
 class Start(PassThroughNode):
 
     def __init__(
-            self, argvars: typing.List[cooked_ast.Variable],
+            self,
+            argvars: typing.List[Variable],
             **kwargs: typing.Any):
         super().__init__(use_count=0, size_delta=len(argvars), **kwargs)
         self.argvars = argvars
@@ -221,7 +224,7 @@ class IntConstant(PassThroughNode):
 
 class CallFunction(PassThroughNode):
 
-    def __init__(self, function: cooked_ast.Function,
+    def __init__(self, function: Function,
                  how_many_args: int, is_returning: bool, **kwargs: typing.Any):
         self.function = function
         self.how_many_args = how_many_args

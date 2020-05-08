@@ -2,7 +2,7 @@
 
 import typing
 
-from asdac import cooked_ast, decision_tree
+from asdac import decision_tree, objects
 
 
 # TODO:
@@ -53,7 +53,7 @@ def _skip_unnecessary_nodes(node: decision_tree.Node) -> bool:
 def optimize_popones(
         start_node: decision_tree.Start,
         all_nodes: typing.Set[decision_tree.Node],
-        function: cooked_ast.Function) -> bool:
+        function: objects.Function) -> bool:
     for node in all_nodes:
         if _skip_unnecessary_nodes(node):
             # all_nodes is no longer an up to date list of nodes, need to stop

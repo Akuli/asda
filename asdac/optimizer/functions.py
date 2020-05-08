@@ -1,11 +1,11 @@
 import typing
 
-from asdac import common, cooked_ast, decision_tree, optimizer
+from asdac import common, decision_tree, optimizer, objects
 
 
 # FIXME: functions that return a value must always do that, check it here
 def check_for_missing_returns(
-        root_node: decision_tree.Start,
+        start_node: decision_tree.Start,
         all_nodes: typing.Set[decision_tree.Node],
-        function: cooked_ast.Function) -> bool:
+        function: objects.Function) -> bool:
     return False

@@ -24,7 +24,7 @@
 import itertools
 import typing
 
-from asdac import cooked_ast, decision_tree
+from asdac import decision_tree, objects
 
 
 def _nodes_are_similar(a: decision_tree.Node, b: decision_tree.Node) -> bool:
@@ -56,7 +56,7 @@ def _nodes_are_similar(a: decision_tree.Node, b: decision_tree.Node) -> bool:
 def optimize_similar_nodes(
         start_node: decision_tree.Start,
         all_nodes: typing.Set[decision_tree.Node],
-        function: cooked_ast.Function) -> bool:
+        function: objects.Function) -> bool:
     for node in all_nodes:
         jumped_from = (
             ref.objekt for ref in node.jumped_from

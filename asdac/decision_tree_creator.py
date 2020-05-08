@@ -5,7 +5,8 @@ import collections
 import copy
 import typing
 
-from asdac import cooked_ast, decision_tree, objects
+from asdac import ast, decision_tree
+from asdac.objects import Variable
 
 
 # the .type attribute of the variables doesn't contain info about
@@ -14,7 +15,7 @@ from asdac import cooked_ast, decision_tree, objects
 class _TreeCreator:
 
     def __init__(
-            self, local_vars: typing.Dict[str, cooked_ast.Variable]) -> None:
+            self, local_vars: typing.Dict[str, Variable]) -> None:
         self.local_vars = local_vars
 
         # why can't i assign in python lambda without dirty setattr haxor :(
@@ -30,17 +31,18 @@ class _TreeCreator:
         self.set_next_node(node)
         self.set_next_node = node.set_next_node
 
-    def do_function_call(self, call: cooked_ast.CallFunction) -> None:
+    def do_function_call(self, call: ast.CallFunction) -> None:
         for arg in call.args:
             self.do_expression(arg)
 
+        assert call.function is not None
         self.add_pass_through_node(decision_tree.CallFunction(
             call.function, len(call.args),
             (call.function.returntype is not None), location=call.location))
 
     def _do_if(
             self,
-            cond: cooked_ast.Expression,
+            cond: ast.Expression,
             if_callback: typing.Callable[['_TreeCreator'], None],
             else_callback: typing.Callable[['_TreeCreator'], None],
             **boilerplate: typing.Any) -> None:
@@ -63,22 +65,22 @@ class _TreeCreator:
         self.set_next_node(result)
         self.set_next_node = set_next_node_to_both
 
-    def do_expression(self, expression: cooked_ast.Expression) -> None:
+    def do_expression(self, expression: ast.Expression) -> None:
         assert expression.type is not None
         boilerplate = {'location': expression.location}
 
-        if isinstance(expression, cooked_ast.StrConstant):
+        if isinstance(expression, ast.StrConstant):
             self.add_pass_through_node(decision_tree.StrConstant(
                 expression.python_string, **boilerplate))
 
-        elif isinstance(expression, cooked_ast.IntConstant):
+        elif isinstance(expression, ast.IntConstant):
             self.add_pass_through_node(decision_tree.IntConstant(
                 expression.python_int, **boilerplate))
 
-        elif isinstance(expression, cooked_ast.GetVar):
+        elif isinstance(expression, ast.GetVar):
             raise NotImplementedError
 
-        elif isinstance(expression, cooked_ast.IfExpression):
+        elif isinstance(expression, ast.IfExpression):
             expression2 = expression    # mypy is fucking around with me
             self._do_if(
                 expression.cond,
@@ -86,29 +88,29 @@ class _TreeCreator:
                 lambda creator: creator.do_expression(expression2.false_expr),
                 **boilerplate)
 
-        elif isinstance(expression, cooked_ast.StrJoin):
+        elif isinstance(expression, ast.StrJoin):
             for part in expression.parts:
                 self.do_expression(part)
 
             self.add_pass_through_node(decision_tree.StrJoin(
                 len(expression.parts), **boilerplate))
 
-        elif isinstance(expression, cooked_ast.CallFunction):
+        elif isinstance(expression, ast.CallFunction):
             self.do_function_call(expression)
 
         else:
             assert False, expression    # pragma: no cover
 
-    def do_statement(self, statement: cooked_ast.Statement) -> None:
+    def do_statement(self, statement: ast.Statement) -> None:
         boilerplate = {'location': statement.location}
 
-        if isinstance(statement, cooked_ast.CallFunction):
+        if isinstance(statement, ast.CallFunction):
             self.do_function_call(statement)
             if statement.type is not None:
                 # not a void function, ignore return value
                 self.add_pass_through_node(decision_tree.PopOne(**boilerplate))
 
-        elif isinstance(statement, cooked_ast.IfStatement):
+        elif isinstance(statement, ast.IfStatement):
             statement2 = statement    # fuck you mypy
             self._do_if(
                 statement.cond,
@@ -116,7 +118,7 @@ class _TreeCreator:
                 lambda creator: creator.do_body(statement2.else_body),
                 **boilerplate)
 
-        elif isinstance(statement, cooked_ast.Loop):
+        elif isinstance(statement, ast.Loop):
             creator = self.subcreator()
             if statement.pre_cond is None:
                 creator.add_pass_through_node(
@@ -149,7 +151,7 @@ class _TreeCreator:
             self.set_next_node(creator.root_node)
             self.set_next_node = set_next_node_everywhere
 
-        elif isinstance(statement, cooked_ast.Return):
+        elif isinstance(statement, ast.Return):
             if statement.value is not None:
                 raise NotImplementedError
 
@@ -162,19 +164,20 @@ class _TreeCreator:
         else:
             assert False, type(statement)     # pragma: no cover
 
-    def do_body(self, statements: typing.List[cooked_ast.Statement]) -> None:
+    def do_body(self, statements: typing.List[ast.Statement]) -> None:
         for statement in statements:
             assert not isinstance(statement, list), statement
             self.do_statement(statement)
 
 
 def create_tree(
-    cooked_funcdefs: typing.List[cooked_ast.FuncDefinition]
-) -> typing.Dict[cooked_ast.Function, decision_tree.Start]:
+    cooked_funcdefs: typing.List[ast.FuncDefinition]
+) -> typing.Dict[ast.Function, decision_tree.Start]:
     function_trees = {}
     for funcdef in cooked_funcdefs:
         creator = _TreeCreator({})
 
+        assert funcdef.function is not None
         creator.add_pass_through_node(
             decision_tree.Start(funcdef.function.argvars.copy()))
         creator.do_body(funcdef.body)

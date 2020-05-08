@@ -8,11 +8,10 @@ import typing
 
 import colorama     # type: ignore
 
-from asdac import (bytecoder, common, cooked_ast, decision_tree_creator,
-                   optimizer, raw_ast)
+from asdac import (
+    common, ast, parser, typer, decision_tree_creator, optimizer, bytecoder)
 
 
-# TODO: error handling for bytecode_reader.RecompileFixableError
 def source2bytecode(compilation: common.Compilation) -> None:
     """Compiles a file and saves to compilation.compiled_path"""
     compilation.messager(0, 'Compiling to "%s"...' % common.path_string(
@@ -23,16 +22,15 @@ def source2bytecode(compilation: common.Compilation) -> None:
         source = file.read()
 
     compilation.messager(3, "Parsing")
-    raw = typing.cast(
-        typing.List[typing.Any],
-        typing.cast(typing.Any, raw_ast).parse(compilation, source))
+    ast_function_list = parser.parse(compilation, source)
 
     # TODO: better message for cooking?
-    compilation.messager(3, "Creating typed AST")
-    cooked = cooked_ast.cook(compilation, raw)
+    compilation.messager(3, "Checking types")
+    ast_function_list = typer.check_and_add_types(
+        compilation, ast_function_list)
 
     compilation.messager(3, "Creating a decision tree")
-    function_trees = decision_tree_creator.create_tree(cooked)
+    function_trees = decision_tree_creator.create_tree(ast_function_list)
 
     compilation.messager(3, "Optimizing")
     #decision_tree.graphviz(root_node, 'before_optimization')

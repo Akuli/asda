@@ -7,8 +7,6 @@ import pathlib
 import sys
 import typing
 
-from asdac import objects
-
 
 # TODO: on windows, relpath doesn't work for things that are on a different
 #       drive

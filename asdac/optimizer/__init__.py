@@ -1,7 +1,7 @@
 import itertools
 import typing
 
-from asdac import cooked_ast, decision_tree
+from asdac import ast, decision_tree, objects
 from asdac.optimizer import copy_pasta, decisions, functions, popone, variables
 
 
@@ -9,7 +9,7 @@ _optimizer_lists: typing.List[typing.List[typing.Callable[
     [
         decision_tree.Start,                # root node
         typing.Set[decision_tree.Node],    # all nodes
-        cooked_ast.Function,                # which function we are optimizing
+        objects.Function,                # which function we are optimizing
     ],
     bool,   # did it actually do something?
 ]]] = [
@@ -44,7 +44,7 @@ def _check_jumped_froms(all_nodes: typing.Set[decision_tree.Node]) -> None:
 
 
 def optimize(function_trees: typing.Dict[
-        cooked_ast.Function, decision_tree.Start]) -> None:
+        objects.Function, decision_tree.Start]) -> None:
 
     # optimize each function
     for function, root_node in function_trees.items():

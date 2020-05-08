@@ -1,13 +1,13 @@
 import typing
 
-from asdac import cooked_ast, decision_tree
+from asdac import decision_tree, objects
 
 
 # handles e.g. loops and ifs with TRUE or FALSE as a condition
 def optimize_truefalse_before_booldecision(
         start_node: decision_tree.Start,
         all_nodes: typing.Set[decision_tree.Node],
-        function: cooked_ast.Function) -> bool:
+        function: objects.Function) -> bool:
     for node in all_nodes:
         if (
           isinstance(node, decision_tree.GetBuiltinVar) and
@@ -25,7 +25,7 @@ def optimize_truefalse_before_booldecision(
 def optimize_booldecision_before_truefalse(
         start_node: decision_tree.Start,
         all_nodes: typing.Set[decision_tree.Node],
-        function: cooked_ast.Function) -> bool:
+        function: objects.Function) -> bool:
     for node in all_nodes:
         if (
           isinstance(node, decision_tree.BoolDecision) and

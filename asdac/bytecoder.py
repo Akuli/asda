@@ -8,7 +8,7 @@ import os
 import pathlib
 import typing
 
-from asdac import common, cooked_ast, decision_tree, objects
+from asdac import common, decision_tree, objects
 
 
 SET_LINENO = b'L'
@@ -92,7 +92,7 @@ class _ByteCodeCreator:
             compilation: common.Compilation,
             line_start_offsets: typing.List[int],
             current_lineno: int,
-            argvars: typing.List[cooked_ast.Variable]):
+            argvars: typing.List[objects.Variable]):
         self.byte_array = byte_array
         self.compilation = compilation
         self.line_start_offsets = line_start_offsets
@@ -101,11 +101,11 @@ class _ByteCodeCreator:
 
         # because functions may need to be referred to before they are written
         self.function_references: typing.Dict[
-            cooked_ast.Function,
+            objects.Function,
             typing.List[_UintInByteCode],   # uint16 referring to the function
         ] = {}
         self.function_definitions: typing.Dict[
-            cooked_ast.Function,
+            objects.Function,
             int,    # value to set to uint16
         ] = {}
 
@@ -212,11 +212,11 @@ class _ByteCodeCreator:
             return
 
         if isinstance(node, decision_tree.CallFunction):
-            if node.function.kind == cooked_ast.FunctionKind.BUILTIN:
+            if node.function.kind == objects.FunctionKind.BUILTIN:
                 self.write_opbyte(CALL_BUILTIN_FUNCTION)
                 # TODO: identify the function somehow instead of assuming that
                 #       it's print
-            elif node.function.kind == cooked_ast.FunctionKind.FILE:
+            elif node.function.kind == objects.FunctionKind.FILE:
                 self.write_opbyte(CALL_THIS_FILE_FUNCTION)
                 refs = self.function_references.setdefault(node.function, [])
                 refs.append(self.write_uint16(0))
@@ -330,9 +330,9 @@ class _ByteCodeCreator:
 
     def write_function_opcode(
             self,
-            function: cooked_ast.Function,
+            function: objects.Function,
             start_node: decision_tree.Start) -> None:
-        assert function.kind == cooked_ast.FunctionKind.FILE
+        assert function.kind == objects.FunctionKind.FILE
         self.function_definitions[function] = self.op_index
 
         op_count = self.write_uint16(0)
@@ -357,7 +357,7 @@ class _ByteCodeCreator:
 # the separator
 def create_bytecode(
         compilation: common.Compilation,
-        function_trees: typing.Dict[cooked_ast.Function, decision_tree.Start],
+        function_trees: typing.Dict[objects.Function, decision_tree.Start],
         source_code: str) -> bytearray:
     # TODO: are these counted in bytes or unicode characters?
     line_start_offsets = []

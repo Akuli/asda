@@ -5,40 +5,90 @@ they are here as well.
 """
 
 import collections
-import copy
+import enum
 import typing
 
-from asdac import common
+import attr
+
+from asdac.common import Location
 
 
-# non-settable attributes are aka read-only
-Attribute = collections.namedtuple('Attribute', ['tybe', 'settable'])
+class VariableKind(enum.Enum):
+    BUILTIN = 0
+    LOCAL = 1
 
 
+class FunctionKind(enum.Enum):
+    BUILTIN = 0
+    FILE = 1
+
+
+@attr.s(auto_attribs=True, cmp=False, frozen=True)
 class Type:
-
-    # if you want the name to change when the class is mutated, you can pass
-    # None for __init__'s name and override the name property
-    def __init__(self, name: str):
-        self.name = name
-
-    def __repr__(self) -> str:
-        return '<%s type %r>' % (__name__, self.name)
+    name: str
 
 
-BUILTIN_TYPES = collections.OrderedDict([
-    ('Object', Type('Object')),
-    ('Str', Type('Str')),
-    ('Int', Type('Int')),
-    ('Bool', Type('Bool')),
+# all variables are local variables for now.
+# note that there is code that uses copy.copy() with Variable objects
+@attr.s(auto_attribs=True, cmp=False, frozen=True)
+class Variable:
+    name: str
+    type: Type
+    kind: VariableKind
+    definition_location: typing.Optional[Location]
+
+
+@attr.s(auto_attribs=True, cmp=False, frozen=True)
+class Function:
+    name: str
+    argvars: typing.List[Variable]
+    returntype: typing.Optional[Type]
+    kind: FunctionKind
+    definition_location: typing.Optional[Location]
+    is_main: bool = False
+
+    def get_string(self) -> str:
+        return '%s(%s)' % (self.name, ', '.join(
+            var.type.name + ' ' + var.name
+            for var in self.argvars
+        ))
+            
+
+BUILTIN_TYPES = collections.OrderedDict((tybe.name, tybe) for tybe in [
+    Type('Object'),
+    Type('Str'),
+    Type('Int'),
+    Type('Bool'),
 ])
 
-BUILTIN_VARS = collections.OrderedDict([
-    ('TRUE', BUILTIN_TYPES['Bool']),
-    ('FALSE', BUILTIN_TYPES['Bool']),
+BUILTIN_VARS = collections.OrderedDict((var.name, var) for var in [
+    Variable(
+        name='TRUE',
+        type=BUILTIN_TYPES['Bool'],
+        kind=VariableKind.BUILTIN,
+        definition_location=None,
+    ),
+    Variable(
+        name='FALSE',
+        type=BUILTIN_TYPES['Bool'],
+        kind=VariableKind.BUILTIN,
+        definition_location=None,
+    ),
 ])
 
-# keys are name strings, values are (argtypes, returntype) pairs
-BUILTIN_FUNCS = collections.OrderedDict([
-    ('print', ([BUILTIN_TYPES['Str']], None)),
+BUILTIN_FUNCS = collections.OrderedDict((func.name, func) for func in [
+    Function(
+        name='print',
+        argvars=[
+            Variable(
+                name='message',
+                type=BUILTIN_TYPES['Str'],
+                kind=VariableKind.LOCAL,
+                definition_location=None,
+            ),
+        ],
+        returntype=None,
+        kind=FunctionKind.BUILTIN,
+        definition_location=None,
+    ),
 ])
