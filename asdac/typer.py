@@ -5,9 +5,22 @@ import typing
 import attr
 
 from asdac import ast
-from asdac.common import Compilation, CompileError
+from asdac.common import Compilation, CompileError, Location
 from asdac.objects import (
-    BUILTIN_FUNCS, BUILTIN_TYPES, Function, FunctionKind, Type, Variable)
+    BUILTIN_FUNCS, BUILTIN_TYPES, BUILTIN_VARS,
+    Function, FunctionKind, Variable, VariableKind, Type)
+
+
+def _duplicate_check(
+    iterable: typing.Iterable[typing.Tuple[str, typing.Optional[Location]]],
+    what_are_they: str,
+) -> None:
+    seen = set()
+    for name, location in iterable:
+        if name in seen:
+            raise CompileError(
+                f"repeated {what_are_they} name: {name}", location)
+        seen.add(name)
 
 
 def _do_type(tybe: ast.ParserType) -> Type:
@@ -39,7 +52,14 @@ def _find_function_dict(
                 f"there are two functions named '{header.name}' "
                 "in the same file", funcdef.location)
 
-        assert not header.args  # TODO
+        argvars = [
+            Variable(arg.name, _do_type(arg.type),
+                     VariableKind.LOCAL, arg.location)
+            for arg in header.args
+        ]
+        _duplicate_check(
+            ((var.name, var.definition_location) for var in argvars),
+            "argument")
 
         if header.returntype is None:
             returntype = None
@@ -47,7 +67,7 @@ def _find_function_dict(
             returntype = _do_type(header.returntype)
 
         result[header.name] = Function(
-            header.name, [], returntype, FunctionKind.FILE, funcdef.location)
+            header.name, argvars, returntype, FunctionKind.FILE, funcdef.location)
 
     if 'main' not in result:
         raise CompileError("""\
@@ -63,9 +83,13 @@ you must define a main function, e.g:
 
 class _FunctionBodyChecker:
 
-    def __init__(self, function_dict: typing.Dict[str, Function]):
+    def __init__(
+        self,
+        function_dict: typing.Dict[str, Function],
+        local_vars: typing.Dict[str, Variable],
+    ):
         self._function_dict = function_dict
-        self._local_vars: typing.Dict[str, Variable] = {}
+        self._local_vars = local_vars.copy()
 
     def do_statement(self, statement: ast.Statement) -> ast.Statement:
         if isinstance(statement, ast.CallFunction):
@@ -89,19 +113,43 @@ class _FunctionBodyChecker:
 
         raise NotImplementedError(statement)
 
-    def do_expression(self, expression: ast.Expression) -> ast.Expression:
+    def _do_expression_raw(self, expression: ast.Expression) -> ast.Expression:
         if isinstance(expression, ast.StrConstant):
             assert expression.type is not None
             return expression
 
+        if isinstance(expression, ast.GetVar):
+            name = expression.parser_var.name
+            if name in self._local_vars:
+                var = self._local_vars[name]
+            elif name in BUILTIN_VARS:
+                var = BUILTIN_VARS[name]
+            else:
+                raise CompileError(
+                    f"no variable named '{name}'", expression.location)
+
+            return ast.GetVar(
+                expression.location, var.type, var, expression.parser_var)
+
         raise NotImplementedError(expression)
+
+    def do_expression(self, expression: ast.Expression) -> ast.Expression:
+        result = self._do_expression_raw(expression)
+        assert result.type is not None
+        return result
 
 
 def _do_funcdef(
     funcdef: ast.FuncDefinition,
     function_dict: typing.Dict[str, Function],
 ) -> ast.FuncDefinition:
-    checker = _FunctionBodyChecker(function_dict)
+
+    assert funcdef.function is None
+    checker = _FunctionBodyChecker(function_dict, {
+        var.name: var
+        for var in function_dict[funcdef.parser_header.name].argvars
+    })
+
     return ast.FuncDefinition(
         funcdef.location,
         funcdef.parser_header,

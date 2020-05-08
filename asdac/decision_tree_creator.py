@@ -6,7 +6,7 @@ import copy
 import typing
 
 from asdac import ast, decision_tree
-from asdac.objects import Variable
+from asdac.objects import Function, Variable
 
 
 # the .type attribute of the variables doesn't contain info about
@@ -172,7 +172,7 @@ class _TreeCreator:
 
 def create_tree(
     cooked_funcdefs: typing.List[ast.FuncDefinition]
-) -> typing.Dict[ast.Function, decision_tree.Start]:
+) -> typing.Dict[Function, decision_tree.Start]:
     function_trees = {}
     for funcdef in cooked_funcdefs:
         creator = _TreeCreator({})

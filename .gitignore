@@ -5,6 +5,7 @@ htmlcov/
 .coverage
 env/
 .mypy_cache/
+monkeytype.sqlite3
 
 asdar/asdar
 asdar/obj/

@@ -10,18 +10,6 @@ from asdac.objects import BUILTIN_TYPES
 from asdac.tokenizer import Token, tokenize
 
 
-def _duplicate_check(
-    iterable: typing.Iterable[typing.Tuple[str, Location]],
-    what_are_they: str,
-) -> None:
-    seen = set()
-    for name, location in iterable:
-        if name in seen:
-            raise CompileError(
-                "repeated %s name: %s" % (what_are_they, name), location)
-        seen.add(name)
-
-
 def _to_string(parsed: ast.Expression) -> ast.Expression:
     raise NotImplementedError
 #    location = parsed.location      # because pep8 line length
@@ -136,9 +124,6 @@ class _FileParser(_ParserBase):
 
         lparen, args, rparen = self.parse_commasep_in_parens(
             self._parse_argument_definition)
-
-        _duplicate_check(
-            ((arg.name, arg.location) for arg in args), 'argument')
 
         arrow = self.tokens.next_token()
         if arrow.value != '->':

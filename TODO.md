@@ -1,3 +1,4 @@
+- attrs in asdac: replace deprecated `cmp=False` with `eq=False, order=False`
 - some example files don't compile, they are in `examples/broken`
 - when all example files compile, make sure that they run
 - asdac's bytecode reading stuff is broken
@@ -95,6 +96,10 @@
     - `const` for class members
     - `private` for class members and methods
     - `instanceof` or similar
+    - idea: add "anti-inheritance", creating class with everything from another
+      class except something that we don't want. Would be useful when you want to
+      construct an object by filling in only some properties of it and then the
+      rest later, such as when asda code gets first parsed and then type checked.
 - add syntax for specifying custom getters and setters of attributes
 - interfaces kinda like they are done in rust, e.g. if you are writing a
   JSON lib you could do something like
