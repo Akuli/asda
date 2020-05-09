@@ -9,7 +9,9 @@ import typing
 import colorama     # type: ignore
 
 from asdac import (
-    common, ast, parser, typer, decision_tree_creator, optimizer, bytecoder)
+    common, ast, parser, typer, decision_tree_creator,
+    #optimizer,
+    bytecoder)
 
 
 def source2bytecode(compilation: common.Compilation) -> None:

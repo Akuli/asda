@@ -123,8 +123,9 @@ class Node:
 #    something --> this node --> something
 class PassThroughNode(Node):
 
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any):
-        super().__init__(*args, **kwargs)
+    def __init__(
+            self, location: Location, *args: typing.Any, **kwargs: typing.Any):
+        super().__init__(location, *args, **kwargs)     # type: ignore
         self.next_node: typing.Optional[Node] = None
 
     def get_jumps_to_including_nones(
@@ -317,8 +318,9 @@ class StrJoin(PassThroughNode, _OneResult):
 
 class TwoWayDecision(Node):
 
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any):
-        super().__init__(*args, **kwargs)
+    def __init__(
+            self, location: Location, *args: typing.Any, **kwargs: typing.Any):
+        super().__init__(location, *args, **kwargs)     # type: ignore
         self.then: typing.Optional[Node] = None
         self.otherwise: typing.Optional[Node] = None
 
@@ -349,8 +351,7 @@ class StrEqualDecision(TwoWayDecision, _LhsRhs):
 
 def _get_debug_string(node: Node) -> typing.Optional[str]:
     if isinstance(node, GetBuiltinVar):
-        assert node.result_id.variable is not None
-        return node.result_id.variable.name
+        return node.var.name
     if isinstance(node, IntConstant):
         return str(node.python_int)
     if isinstance(node, StrConstant):

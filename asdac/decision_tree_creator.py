@@ -108,7 +108,7 @@ class _TreeCreator:
         else_callback: typing.Callable[['_TreeCreator'], None],
     ) -> None:
         cond_id = self.do_expression(cond)
-        result = dtree.BoolDecision(Location, cond_id)
+        result = dtree.BoolDecision(location, cond_id)
 
         if_creator = self.subcreator()
         if_creator.set_next_node = result.set_then
@@ -182,6 +182,7 @@ class _TreeCreator:
             self.set_next_node = lambda node: None
 
         elif isinstance(statement, ast.Let):
+            assert statement.var is not None
             self.local_vars[statement.var] = self.do_expression(
                 statement.initial_value)
 

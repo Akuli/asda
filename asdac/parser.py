@@ -427,8 +427,22 @@ class _FunctionContentParser(_ParserBase):
         if token.value != ';':
             raise CompileError("should be ';'", token.location)
 
-    # note that 'if x then y else z' is not a valid statement even though it
-    # is a valid expression
+    def _parse_if_statement(self) -> ast.IfStatement:
+        if_token = self.tokens.next_token()
+        assert if_token.value in {'if', 'elif'}
+        cond = self.parse_expression()
+        if_body = self.parse_block(consume_newline=True)
+
+        else_body: typing.List[ast.Statement] = []
+        if not self.tokens.eof():
+            if self.tokens.peek().value == 'elif':
+                else_body = [self._parse_if_statement()]
+            elif self.tokens.peek().value == 'else':
+                self.tokens.next_token()
+                else_body = self.parse_block(consume_newline=True)
+
+        return ast.IfStatement(if_token.location, cond, if_body, else_body)
+
     def parse_statement(
         self,
         *,
@@ -441,6 +455,11 @@ class _FunctionContentParser(_ParserBase):
 #            return Loop(
 #                while_location, cond, BUILTIN_VARIABLES['True'], [], body)
             raise NotImplementedError
+
+        # note that 'if x then y else z' is not a valid statement even though
+        # it is a valid expression
+        if self.tokens.peek().value == 'if':
+            return [self._parse_if_statement()]
 
         if self.tokens.peek().value == 'do':
             do = self.tokens.next_token()

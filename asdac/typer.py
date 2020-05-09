@@ -135,6 +135,7 @@ class _FunctionBodyChecker:
                     statement.location)
 
             for arg, argvar in zip(args, func.argvars):
+                assert arg.type is not None
                 if arg.type != argvar.type:
                     raise CompileError(
                         f"expected {argvar.type.name}, got {arg.type.name}",
@@ -149,11 +150,24 @@ class _FunctionBodyChecker:
             self._check_name_doesnt_exist(
                 statement.parser_var.name, statement.location)
             initial_value = self.do_expression(statement.initial_value)
+            assert initial_value.type is not None
             var = Variable(statement.parser_var.name, initial_value.type,
                            VariableKind.LOCAL, statement.location)
             self._local_vars[statement.parser_var.name] = var
             return ast.Let(
                 statement.location, var, statement.parser_var, initial_value)
+
+        if isinstance(statement, ast.IfStatement):
+            cond = self.do_expression(statement.cond)
+            assert cond.type is not None
+            if cond.type != BUILTIN_TYPES['Bool']:
+                raise CompileError(
+                    f"expected Bool, got {cond.type.name}", cond.location)
+
+            if_body = list(map(self.do_statement, statement.if_body))
+            else_body = list(map(self.do_statement, statement.else_body))
+            return ast.IfStatement(
+                statement.location, cond, if_body, else_body)
 
         raise NotImplementedError(statement)
 
