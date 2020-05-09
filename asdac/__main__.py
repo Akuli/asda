@@ -34,7 +34,7 @@ def source2bytecode(compilation: common.Compilation) -> None:
 
     compilation.messager(3, "Optimizing")
     #decision_tree.graphviz(root_node, 'before_optimization')
-    optimizer.optimize(function_trees)
+#    optimizer.optimize(function_trees)
     #decision_tree.graphviz(root_node, 'after_optimization')
 
     compilation.messager(3, "Creating bytecode")

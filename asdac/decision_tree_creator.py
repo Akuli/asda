@@ -1,12 +1,15 @@
 # converts cooked ast to a decision tree
-# this is in separate file because decision_tree.py became >1000 lines long
+# this is in separate file because dtree.py became >1000 lines long
 
 import collections
 import copy
+import functools
 import typing
 
-from asdac import ast, decision_tree
-from asdac.objects import Function, Variable
+from asdac import ast
+from asdac import decision_tree as dtree
+from asdac.common import Location
+from asdac.objects import Function, Variable, VariableKind
 
 
 # the .type attribute of the variables doesn't contain info about
@@ -14,40 +17,98 @@ from asdac.objects import Function, Variable
 
 class _TreeCreator:
 
-    def __init__(
-            self, local_vars: typing.Dict[str, Variable]) -> None:
+    def __init__(self, local_vars: typing.Dict[Variable, dtree.ObjectId]):
         self.local_vars = local_vars
 
         # why can't i assign in python lambda without dirty setattr haxor :(
-        self.set_next_node: typing.Callable[[decision_tree.Node], None] = (
+        self.set_next_node: typing.Callable[[dtree.Node], None] = (
             lambda node: setattr(self, 'root_node', node))
-        self.root_node: typing.Optional[decision_tree.Node] = None
+        self.root_node: typing.Optional[dtree.Node] = None
 
     def subcreator(self) -> '_TreeCreator':
         return _TreeCreator(self.local_vars)
 
-    def add_pass_through_node(self, node: decision_tree.Node) -> None:
-        assert isinstance(node, decision_tree.PassThroughNode)
+    def do_expression(self, expression: ast.Expression) -> dtree.ObjectId:
+        assert expression.type is not None
+
+        result_id = dtree.ObjectId()
+
+        if isinstance(expression, ast.StrConstant):
+            self.add_pass_through_node(dtree.StrConstant(
+                expression.location, expression.python_string, result_id))
+
+        elif isinstance(expression, ast.IntConstant):
+            self.add_pass_through_node(dtree.IntConstant(
+                expression.location, expression.python_int, result_id))
+
+        elif isinstance(expression, ast.GetVar):
+            assert expression.var is not None
+            if expression.var.kind == VariableKind.BUILTIN:
+                self.add_pass_through_node(dtree.GetBuiltinVar(
+                    expression.location, expression.var, result_id))
+            else:
+                assert expression.var.kind == VariableKind.LOCAL
+                result_id = self.local_vars[expression.var]
+
+        elif isinstance(expression, ast.IfExpression):
+            def callback(
+                    true_or_false_expr: ast.Expression,
+                    creator: _TreeCreator) -> None:
+                temp_id = creator.do_expression(true_or_false_expr)
+                creator.add_pass_through_node(dtree.Assign(
+                    true_or_false_expr.location, temp_id, result_id))
+
+            expression2 = expression    # mypy is fucking around with me
+            self._do_if(
+                expression.location,
+                expression.cond,
+                functools.partial(callback, expression.true_expr),
+                functools.partial(callback, expression.false_expr))
+
+        elif isinstance(expression, ast.StrJoin):
+            ids = list(map(self.do_expression, expression.parts))
+            self.add_pass_through_node(dtree.StrJoin(
+                expression.location, ids, result_id))
+
+        elif isinstance(expression, ast.CallFunction):
+            # weird variable name stuff needed because mypy
+            temp_result_id = self.do_function_call(expression)
+            assert temp_result_id is not None
+            result_id = temp_result_id
+
+        else:
+            assert False, expression    # pragma: no cover
+
+        return result_id
+
+    def add_pass_through_node(
+            self, node: dtree.PassThroughNode) -> None:
         self.set_next_node(node)
         self.set_next_node = node.set_next_node
 
-    def do_function_call(self, call: ast.CallFunction) -> None:
-        for arg in call.args:
-            self.do_expression(arg)
-
+    def do_function_call(
+            self, call: ast.CallFunction) -> typing.Optional[dtree.ObjectId]:
         assert call.function is not None
-        self.add_pass_through_node(decision_tree.CallFunction(
-            call.function, len(call.args),
-            (call.function.returntype is not None), location=call.location))
+        id_list = [self.do_expression(arg) for arg in call.args]
+        if call.function.returntype is None:
+            result_id = None
+        else:
+            result_id = dtree.ObjectId()
+
+        self.add_pass_through_node(dtree.CallFunction(
+            call.location, call.function, id_list, 
+            result_id))
+        return result_id
 
     def _do_if(
-            self,
-            cond: ast.Expression,
-            if_callback: typing.Callable[['_TreeCreator'], None],
-            else_callback: typing.Callable[['_TreeCreator'], None],
-            **boilerplate: typing.Any) -> None:
-        self.do_expression(cond)
-        result = decision_tree.BoolDecision(**boilerplate)
+        self,
+        location: Location,
+        cond: ast.Expression,
+        if_callback: typing.Callable[['_TreeCreator'], None],
+        else_callback: typing.Callable[['_TreeCreator'], None],
+    ) -> None:
+        cond_id = self.do_expression(cond)
+        result = dtree.BoolDecision(Location, cond_id)
 
         if_creator = self.subcreator()
         if_creator.set_next_node = result.set_then
@@ -57,7 +118,7 @@ class _TreeCreator:
         else_creator.set_next_node = result.set_otherwise
         else_callback(else_creator)
 
-        def set_next_node_to_both(next_node: decision_tree.Node) -> None:
+        def set_next_node_to_both(next_node: dtree.Node) -> None:
             if_creator.set_next_node(next_node)
             else_creator.set_next_node(next_node)
             return None
@@ -65,68 +126,27 @@ class _TreeCreator:
         self.set_next_node(result)
         self.set_next_node = set_next_node_to_both
 
-    def do_expression(self, expression: ast.Expression) -> None:
-        assert expression.type is not None
-        boilerplate = {'location': expression.location}
-
-        if isinstance(expression, ast.StrConstant):
-            self.add_pass_through_node(decision_tree.StrConstant(
-                expression.python_string, **boilerplate))
-
-        elif isinstance(expression, ast.IntConstant):
-            self.add_pass_through_node(decision_tree.IntConstant(
-                expression.python_int, **boilerplate))
-
-        elif isinstance(expression, ast.GetVar):
-            raise NotImplementedError
-
-        elif isinstance(expression, ast.IfExpression):
-            expression2 = expression    # mypy is fucking around with me
-            self._do_if(
-                expression.cond,
-                lambda creator: creator.do_expression(expression2.true_expr),
-                lambda creator: creator.do_expression(expression2.false_expr),
-                **boilerplate)
-
-        elif isinstance(expression, ast.StrJoin):
-            for part in expression.parts:
-                self.do_expression(part)
-
-            self.add_pass_through_node(decision_tree.StrJoin(
-                len(expression.parts), **boilerplate))
-
-        elif isinstance(expression, ast.CallFunction):
-            self.do_function_call(expression)
-
-        else:
-            assert False, expression    # pragma: no cover
-
     def do_statement(self, statement: ast.Statement) -> None:
-        boilerplate = {'location': statement.location}
-
         if isinstance(statement, ast.CallFunction):
             self.do_function_call(statement)
-            if statement.type is not None:
-                # not a void function, ignore return value
-                self.add_pass_through_node(decision_tree.PopOne(**boilerplate))
 
         elif isinstance(statement, ast.IfStatement):
             statement2 = statement    # fuck you mypy
             self._do_if(
+                statement.location,
                 statement.cond,
                 lambda creator: creator.do_body(statement2.if_body),
-                lambda creator: creator.do_body(statement2.else_body),
-                **boilerplate)
+                lambda creator: creator.do_body(statement2.else_body))
 
         elif isinstance(statement, ast.Loop):
             creator = self.subcreator()
             if statement.pre_cond is None:
                 creator.add_pass_through_node(
-                    decision_tree.GetBuiltinVar('TRUE'))
+                    dtree.GetBuiltinVar('TRUE'))
             else:
                 creator.do_expression(statement.pre_cond)
 
-            beginning_decision = decision_tree.BoolDecision(**boilerplate)
+            beginning_decision = dtree.BoolDecision(statement.location)
             creator.set_next_node(beginning_decision)
             creator.set_next_node = beginning_decision.set_then
 
@@ -135,15 +155,15 @@ class _TreeCreator:
 
             if statement.post_cond is None:
                 creator.add_pass_through_node(
-                    decision_tree.GetBuiltinVar('TRUE'))
+                    dtree.GetBuiltinVar('TRUE'))
             else:
                 creator.do_expression(statement.post_cond)
 
-            end_decision = decision_tree.BoolDecision(**boilerplate)
+            end_decision = dtree.BoolDecision(statement.location)
             end_decision.set_then(creator.root_node)
             creator.set_next_node(end_decision)
 
-            def set_next_node_everywhere(node: decision_tree.Node) -> None:
+            def set_next_node_everywhere(node: dtree.Node) -> None:
                 beginning_decision.set_otherwise(node)
                 end_decision.set_otherwise(node)
 
@@ -164,6 +184,12 @@ class _TreeCreator:
         else:
             assert False, type(statement)     # pragma: no cover
 
+    def do_start(
+            self, location: Location, argvars: typing.List[Variable]) -> None:
+        object_ids = [dtree.ObjectId(var) for var in argvars]
+        self.local_vars.update(zip(argvars, object_ids))
+        self.add_pass_through_node(dtree.Start(location, object_ids))
+
     def do_body(self, statements: typing.List[ast.Statement]) -> None:
         for statement in statements:
             assert not isinstance(statement, list), statement
@@ -172,23 +198,22 @@ class _TreeCreator:
 
 def create_tree(
     cooked_funcdefs: typing.List[ast.FuncDefinition]
-) -> typing.Dict[Function, decision_tree.Start]:
+) -> typing.Dict[Function, dtree.Start]:
     function_trees = {}
     for funcdef in cooked_funcdefs:
         creator = _TreeCreator({})
 
         assert funcdef.function is not None
-        creator.add_pass_through_node(
-            decision_tree.Start(funcdef.function.argvars.copy()))
+        creator.do_start(funcdef.location, funcdef.function.argvars)
         creator.do_body(funcdef.body)
 
-        assert isinstance(creator.root_node, decision_tree.Start)
+        assert isinstance(creator.root_node, dtree.Start)
 
         # there used to be code that handled this with a less dumb algorithm
         # than clean_all_unreachable_nodes, but it didn't work in corner cases
-        decision_tree.clean_all_unreachable_nodes(creator.root_node)
+        dtree.clean_all_unreachable_nodes(creator.root_node)
         function_trees[funcdef.function] = creator.root_node
 
-        decision_tree.graphviz(creator.root_node, funcdef.function.name)
+        dtree.graphviz(creator.root_node, funcdef.function.name)
 
     return function_trees

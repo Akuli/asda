@@ -8,7 +8,9 @@ import os
 import pathlib
 import typing
 
-from asdac import common, decision_tree, objects
+from asdac import common, objects
+from asdac import decision_tree as dtree
+from asdac.common import Compilation, CompileError, Location
 
 
 SET_LINENO = b'L'
@@ -17,18 +19,17 @@ GET_BUILTIN_VAR = b'U'
 SET_ATTR = b':'
 GET_ATTR = b'.'
 GET_FROM_MODULE = b'm'
-FUNCTION_BEGINS = b'f'
 STR_CONSTANT = b'"'
 NON_NEGATIVE_INT_CONSTANT = b'1'
 NEGATIVE_INT_CONSTANT = b'2'
 CALL_BUILTIN_FUNCTION = b'b'
 CALL_THIS_FILE_FUNCTION = b'('
 STR_JOIN = b'j'
-POP_ONE = b'P'
-THROW = b't'
-YIELD = b'Y'
-SET_METHODS_TO_CLASS = b'S'
 RETURN = b'r'
+
+DUP = b'D'
+SWAP = b'S'
+POP = b'P'
 
 JUMP = b'K'
 JUMP_IF = b'J'
@@ -77,27 +78,22 @@ class _UintInByteCode:
         try:
             bytez = number.to_bytes(self._size, 'little')
         except OverflowError:
-            raise common.CompileError(
+            raise CompileError(
                 "this number does not fit in an unsigned %d-bit integer: %d"
                 % (self._size * 8, number))
 
         self._byte_array[self._offset:self._offset+self._size] = bytez
 
 
-class _ByteCodeCreator:
+class _Writer:
 
-    def __init__(
-            self,
-            byte_array: bytearray,
-            compilation: common.Compilation,
-            line_start_offsets: typing.List[int],
-            current_lineno: int,
-            argvars: typing.List[objects.Variable]):
-        self.byte_array = byte_array
+    def __init__(self, compilation: Compilation,
+                 line_start_offsets: typing.List[int]):
+        self.byte_array = bytearray()
         self.compilation = compilation
         self.line_start_offsets = line_start_offsets
-        self.current_lineno = current_lineno
-        self.argvars = argvars
+        self.current_lineno = 1
+        self.ops_written = 0
 
         # because functions may need to be referred to before they are written
         self.function_references: typing.Dict[
@@ -107,12 +103,6 @@ class _ByteCodeCreator:
         self.function_definitions: typing.Dict[
             objects.Function,
             int,    # value to set to uint16
-        ] = {}
-
-        self.op_index = 0     # how many ops written so far, file specific
-        self.jump_cache: typing.Dict[
-            decision_tree.Node,
-            int,    # op_index value
         ] = {}
 
     def _write_uint(self, bits: int, number: int) -> _UintInByteCode:
@@ -155,11 +145,12 @@ class _ByteCodeCreator:
         # forward slash to make the compiled bytecodes cross-platform
         self.write_string(str(relative_path).replace(os.sep, '/'))
 
-    # returns line number so that 1 means first line
-    def _set_lineno(self, location: typing.Optional[common.Location]) -> None:
-        if location is None:
-            return
+    def write_opbyte(self, byte: bytes) -> None:
+        assert len(byte) == 1
+        self.byte_array.extend(byte)
+        self.ops_written += 1
 
+    def set_lineno(self, location: Location) -> None:
         #    >>> offsets = [0, 4, 10]
         #    >>> bisect.bisect(offsets, 0)
         #    1
@@ -173,81 +164,147 @@ class _ByteCodeCreator:
         #    2
         #    >>> bisect.bisect(offsets, 10)
         #    3
-        assert location.compilation == self.compilation
+        assert location.compilation is self.compilation
         lineno = bisect.bisect(self.line_start_offsets, location.offset)
         if lineno != self.current_lineno:
             self.byte_array.extend(SET_LINENO)
             self.write_uint32(lineno)
             self.current_lineno = lineno
 
-    def write_opbyte(self, byte: bytes) -> None:
-        assert len(byte) == 1
-        self.byte_array.extend(byte)
-        self.op_index += 1
+    def fix_function_references(self) -> None:
+        for func, refs in self.function_references.items():
+            for ref in refs:
+                ref.set(self.function_definitions[func])
 
-    def write_pass_through_node(
-            self, node: decision_tree.PassThroughNode) -> None:
-        if isinstance(node, decision_tree.StrConstant):
-            self.write_opbyte(STR_CONSTANT)
-            self.write_string(node.python_string)
+
+class _ByteCodeGen:
+
+    def __init__(self, writer: _Writer, arg_ids: typing.List[dtree.ObjectId]):
+        self.writer = writer
+        self.stack = list(arg_ids)
+        self.jump_cache: typing.Dict[dtree.Node, int] = {}
+
+    def _write_dup(self, id: dtree.ObjectId) -> None:
+        assert id in self.stack     # might be in it more than once
+        last_index_from_end = self.stack[::-1].index(id)
+        self.writer.write_opbyte(DUP)
+        self.writer.write_uint16(last_index_from_end)
+        self.stack.append(id)
+
+    def _write_swap(self, index1: int, index2: int) -> None:
+        if index1 == index2:
             return
 
-        if isinstance(node, decision_tree.IntConstant):
+        self.writer.write_opbyte(SWAP)
+        self.writer.write_uint16(index1)
+        self.writer.write_uint16(index2)
+
+        # assigning to self.stack[::-1][index1] doesn't work :(
+        i1 = len(self.stack) - index1 - 1
+        i2 = len(self.stack) - index2 - 1
+        self.stack[i1], self.stack[i2] = self.stack[i2], self.stack[i1]
+
+    def _get_objects_to_top_of_stack(
+        self,
+        current_node: dtree.Node,
+        want2top: typing.List[dtree.ObjectId],
+    ) -> None:
+        # sanity checks
+        for id in want2top:
+            assert id in self.stack
+        for id in self.stack:
+            assert self.stack.count(id) == 1
+
+        # which id's are used after running current_node?
+        needed_later = set()
+        for node in dtree.get_all_nodes(current_node, include_root=False):
+            needed_later.update(node.ids_read())
+
+        # put more of the same object on the stack as needed
+        for id in set(want2top):
+            if id in needed_later:
+                how_many_available = 0
+            else:
+                how_many_available = 1
+
+            while how_many_available < want2top.count(id):
+                self._write_dup(id)
+                how_many_available += 1
+            assert how_many_available == want2top.count(id)
+
+        # rearrange objects on stack
+        for new_index, id in enumerate(reversed(want2top)):
+            current_index = self.stack[::-1].index(id, new_index)
+            if new_index != current_index:
+                self._write_swap(current_index, new_index)
+
+    def _delete_n_topmost_from_stack(self, n: int) -> None:
+        # python slicing is fun: 'del self.stack[-0:]' deletes everything
+        if n > 0:
+            del self.stack[-n:]
+
+    def write_pass_through_node(
+            self, node: dtree.PassThroughNode) -> None:
+        if isinstance(node, dtree.StrConstant):
+            self.writer.write_opbyte(STR_CONSTANT)
+            self.writer.write_string(node.python_string)
+            self.stack.append(node.result_id)
+            return
+
+        if isinstance(node, dtree.IntConstant):
             if node.python_int >= 0:
-                self.write_opbyte(NON_NEGATIVE_INT_CONSTANT)
-                self.write_big_uint(node.python_int)
+                self.writer.write_opbyte(NON_NEGATIVE_INT_CONSTANT)
+                self.writer.write_big_uint(node.python_int)
             else:
                 # currently this code never runs because -2 is parsed as the
                 # prefix minus operator applied to the non-negative integer
                 # constant 2, but i'm planning on adding an optimizer that
                 # would output it as a thing that needs this code
-                self.write_opbyte(NEGATIVE_INT_CONSTANT)
-                self.write_big_uint(abs(node.python_int))
+                self.writer.write_opbyte(NEGATIVE_INT_CONSTANT)
+                self.writer.write_big_uint(abs(node.python_int))
+
+            self.stack.append(node.result_id)
             return
 
-        if isinstance(node, decision_tree.GetBuiltinVar):
-            self.write_opbyte(GET_BUILTIN_VAR)
-            names = list(objects.BUILTIN_VARS.keys())
-            self.write_uint8(names.index(node.varname))
+        if isinstance(node, dtree.GetBuiltinVar):
+            self.writer.write_opbyte(GET_BUILTIN_VAR)
+            self.writer.write_uint8(
+                list(objects.BUILTIN_VARS.values()).index(node.var))
+            self.stack.append(node.result_id)
             return
 
-        if isinstance(node, decision_tree.CallFunction):
+        if isinstance(node, dtree.CallFunction):
+            self._get_objects_to_top_of_stack(node, node.arg_ids)
+
             if node.function.kind == objects.FunctionKind.BUILTIN:
-                self.write_opbyte(CALL_BUILTIN_FUNCTION)
+                self.writer.write_opbyte(CALL_BUILTIN_FUNCTION)
                 # TODO: identify the function somehow instead of assuming that
                 #       it's print
             elif node.function.kind == objects.FunctionKind.FILE:
-                self.write_opbyte(CALL_THIS_FILE_FUNCTION)
-                refs = self.function_references.setdefault(node.function, [])
-                refs.append(self.write_uint16(0))
+                self.writer.write_opbyte(CALL_THIS_FILE_FUNCTION)
+                self.writer.function_references.setdefault(
+                    node.function, []).append(self.writer.write_uint16(0))
             else:
                 raise NotImplementedError
 
-            self.write_uint16(node.how_many_args)
+            self.writer.write_uint16(len(node.arg_ids))
+            self._delete_n_topmost_from_stack(len(node.arg_ids))
+
+            if node.result_id is not None:
+                self.stack.append(node.result_id)
             return
 
-        if isinstance(node, decision_tree.StrJoin):
-            self.write_opbyte(STR_JOIN)
-            self.write_uint16(node.how_many_strings)
+        if isinstance(node, dtree.StrJoin):
+            self._get_objects_to_top_of_stack(node, node.string_ids)
+            self.writer.write_opbyte(STR_JOIN)
+            self.writer.write_uint16(len(node.string_ids))
+            self._delete_n_topmost_from_stack(len(node.string_ids))
+            self.stack.append(node.result_id)
             return
-
-        simple_things = [
-            (decision_tree.PopOne, POP_ONE),
-            (decision_tree.Plus, PLUS),
-            (decision_tree.Minus, MINUS),
-            (decision_tree.PrefixMinus, PREFIX_MINUS),
-            (decision_tree.Times, TIMES),
-            # (decision_tree.Divide, DIVIDE),
-        ]
-
-        for klass, byte in simple_things:
-            if isinstance(node, klass):
-                self.write_opbyte(byte)
-                return
 
         assert False, node        # pragma: no cover
 
-    def write_2_way_decision(self, node: decision_tree.TwoWayDecision) -> None:
+    def write_2_way_decision(self, node: dtree.TwoWayDecision) -> None:
         # this does not output the same bytecode twice
         # for example, consider this code
         #
@@ -287,65 +344,59 @@ class _ByteCodeCreator:
         # this is not ideal, could be pseudo-optimized to do less jumps, but
         # that's likely not a bottleneck so why bother
 
-        if isinstance(node, decision_tree.BoolDecision):
-            self.write_opbyte(JUMP_IF)
-        elif isinstance(node, decision_tree.IntEqualDecision):
-            self.write_opbyte(JUMP_IF_INT_EQUAL)
-        elif isinstance(node, decision_tree.StrEqualDecision):
-            self.write_opbyte(JUMP_IF_STR_EQUAL)
+        if isinstance(node, dtree.BoolDecision):
+            self.writer.write_opbyte(JUMP_IF)
+        elif isinstance(node, dtree.IntEqualDecision):
+            self.writer.write_opbyte(JUMP_IF_INT_EQUAL)
+        elif isinstance(node, dtree.StrEqualDecision):
+            self.writer.write_opbyte(JUMP_IF_STR_EQUAL)
         else:  # pragma: no cover
             raise RuntimeError
-        then_jump = self.write_uint16(0)
+        then_jump = self.writer.write_uint16(0)
 
         self.write_tree(node.otherwise)
 
-        self.write_opbyte(JUMP)
-        done_jump = self.write_uint16(0)
+        self.writer.write_opbyte(JUMP)
+        done_jump = self.writer.write_uint16(0)
 
-        then_jump.set(self.op_index)
+        then_jump.set(self.writer.ops_written)
         self.write_tree(node.then)
-        done_jump.set(self.op_index)
+        done_jump.set(self.writer.ops_written)
 
-    def write_tree(self, node: typing.Optional[decision_tree.Node]) -> None:
+    def write_tree(self, node: typing.Optional[dtree.Node]) -> None:
         while node is not None:
             if node in self.jump_cache:
-                self.write_opbyte(JUMP)
-                self.write_uint16(self.jump_cache[node])
+                self.writer.write_opbyte(JUMP)
+                self.writer.write_uint16(self.jump_cache[node])
                 return
 
             if len(node.jumped_from) > 1:
-                self.jump_cache[node] = self.op_index
+                self.jump_cache[node] = self.writer.ops_written
 
-            self._set_lineno(node.location)
-            if isinstance(node, decision_tree.PassThroughNode):
+            self.writer.set_lineno(node.location)
+            if isinstance(node, dtree.PassThroughNode):
                 self.write_pass_through_node(node)
                 node = node.next_node
-            elif isinstance(node, decision_tree.TwoWayDecision):
+            elif isinstance(node, dtree.TwoWayDecision):
                 self.write_2_way_decision(node)
                 return
             else:
                 raise NotImplementedError("omg " + repr(node))
 
-        self.write_opbyte(RETURN)
+        self.writer.write_opbyte(RETURN)
 
     def write_function_opcode(
             self,
             function: objects.Function,
-            start_node: decision_tree.Start) -> None:
+            start_node: dtree.Start) -> None:
         assert function.kind == objects.FunctionKind.FILE
-        self.function_definitions[function] = self.op_index
+        self.writer.function_definitions[function] = self.writer.ops_written
 
-        op_count = self.write_uint16(0)
-        old_op_index = self.op_index
-        self.write_opbyte(FUNCTION_BEGINS)
-        self.write_uint16(decision_tree.get_max_stack_size(start_node))
+        op_count = self.writer.write_uint16(0)
+        old_op_index = self.writer.ops_written
+        self.stack.extend(start_node.arg_ids)
         self.write_tree(start_node.next_node)
-        op_count.set(self.op_index - old_op_index)
-
-    def fix_function_references(self) -> None:
-        for func, refs in self.function_references.items():
-            for ref in refs:
-                ref.set(self.function_definitions[func])
+        op_count.set(self.writer.ops_written - old_op_index)
 
 
 # structure of a bytecode file:
@@ -356,8 +407,8 @@ class _ByteCodeCreator:
 # all paths are relative to the bytecode file's directory and have '/' as
 # the separator
 def create_bytecode(
-        compilation: common.Compilation,
-        function_trees: typing.Dict[objects.Function, decision_tree.Start],
+        compilation: Compilation,
+        function_trees: typing.Dict[objects.Function, dtree.Start],
         source_code: str) -> bytearray:
     # TODO: are these counted in bytes or unicode characters?
     line_start_offsets = []
@@ -373,15 +424,14 @@ def create_bytecode(
     if len(funclist) >= 2:
         assert not funclist[1].is_main
 
-    creator = _ByteCodeCreator(
-        bytearray(), compilation, line_start_offsets, 1, [])
-
-    creator.byte_array.extend(b'asda\xA5\xDA')
-    creator.write_path(compilation.source_path)
-    creator.write_uint16(len(function_trees))
+    writer = _Writer(compilation, line_start_offsets)
+    writer.byte_array.extend(b'asda\xA5\xDA')
+    writer.write_path(compilation.source_path)
+    writer.write_uint16(len(function_trees))
 
     for func in funclist:
-        creator.write_function_opcode(func, function_trees[func])
-    creator.fix_function_references()
+        gen = _ByteCodeGen(writer, [])
+        gen.write_function_opcode(func, function_trees[func])
 
-    return creator.byte_array
+    writer.fix_function_references()
+    return writer.byte_array

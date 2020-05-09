@@ -23,9 +23,12 @@ enum CodeOpKind {
 	CODE_STRJOIN,
 	CODE_THROW,
 	CODE_SETMETHODS2CLASS,
-	CODE_POP1,
 	CODE_FUNCBEGINS,
 	CODE_RETURN,
+
+	CODE_DUP,
+	CODE_SWAP,
+	CODE_POP,
 
 	CODE_INT_ADD,   // x+y
 	CODE_INT_SUB,   // x-y
@@ -35,6 +38,8 @@ enum CodeOpKind {
 
 struct CodeOp;
 typedef union {   // TODO: remove typedef?
+	// jumps are relative to start of interp->code
+	// swap and dup indexes are so that 0 is end of objstack
 	uint16_t func_nargs;
 	size_t jump;
 	uint16_t strjoin_nstrs;
@@ -42,6 +47,8 @@ typedef union {   // TODO: remove typedef?
 	uint16_t objstackincr;  // how much more room in interp->objstack is needed
 	struct CodeCallData { size_t jump; uint16_t nargs; } call;
 	struct CodeAttrData { const struct Type *type; uint16_t index; } attr;
+	struct CodeSwapData { uint16_t index1, index2; } swap;
+	struct CodeDupData { uint16_t from, to; } dup;
 	Object *obj;
 } CodeData;
 

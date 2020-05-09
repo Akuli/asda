@@ -29,7 +29,6 @@
 #define CALL_BUILTIN_FUNCTION 'b'
 #define CALL_THIS_FILE_FUNCTION '('
 #define CALL_CONSTRUCTOR ')'
-#define POP_ONE 'P'
 #define JUMP 'K'
 #define JUMP_IF 'J'
 #define JUMP_IF_EQ_INT '='
@@ -38,11 +37,16 @@
 #define NON_NEGATIVE_INT_CONSTANT '1'
 #define NEGATIVE_INT_CONSTANT '2'
 #define THROW 't'
+#define RETURN 'r'
+
+#define POP 'P'
+#define SWAP 'S'
+#define DUP 'D'
+
 #define INT_ADD '+'
 #define INT_SUB '-'
 #define INT_NEG '_'
 #define INT_MUL '*'
-#define RETURN 'r'
 
 #define TYPEBYTE_ASDACLASS 'a'
 #define TYPEBYTE_BUILTIN 'b'
@@ -339,7 +343,7 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case CALL_THIS_FILE_FUNCTION:
 		res->kind = CODE_CALLCODEFUNC;
 		return read_jump(bcr, &res->data.call.jump, jumpstart)
-			&& read_uint16(bcr, &res->data.call.nargs);
+			&& read_uint16(bcr, &res->data.call.nargs);   // TODO: is this necessary?
 
 	case CALL_BUILTIN_FUNCTION:
 		// TODO: don't assume print
@@ -365,8 +369,18 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 		res->kind = CODE_STRJOIN;
 		return read_uint16(bcr, &res->data.strjoin_nstrs);
 
-	case POP_ONE: res->kind = CODE_POP1; return true;
 	case RETURN: res->kind = CODE_RETURN; return true;
+	case POP: res->kind = CODE_POP; return true;
+
+	case SWAP:
+		res->kind = CODE_SWAP;
+		return read_uint16(bcr, &res->data.swap.index1) &&
+				read_uint16(bcr, &res->data.swap.index2);
+
+	case DUP:
+		res->kind = CODE_DUP;
+		return read_uint16(bcr, &res->data.dup.from) &&
+				read_uint16(bcr, &res->data.dup.to);
 
 	case INT_ADD: res->kind = CODE_INT_ADD; return true;
 	case INT_SUB: res->kind = CODE_INT_SUB; return true;

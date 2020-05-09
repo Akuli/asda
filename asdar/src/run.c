@@ -5,7 +5,8 @@
 #include "objects/string.h"
 
 
-#define DEBUG(...) printf(__VA_ARGS__)
+//#define DEBUG(...) printf(__VA_ARGS__)
+#define DEBUG(...) (void)0
 
 static bool print_string(Interp *interp, StringObject *str)
 {
@@ -16,6 +17,13 @@ static bool print_string(Interp *interp, StringObject *str)
 
 	printf("%.*s\n", (int)len, s);
 	return true;
+}
+
+static void swap(Object **a, Object **b)
+{
+	Object *tmp = *a;
+	*a = *b;
+	*b = tmp;
 }
 
 bool run(Interp *interp, size_t startidx)
@@ -63,11 +71,28 @@ bool run(Interp *interp, size_t startidx)
 			ptr++;
 			break;
 
+		case CODE_CALLCODEFUNC:
+			DEBUG("Calling func\n");
+			if (!dynarray_push(interp, &interp->callstack, ptr))
+				goto error;
+			ptr = &interp->code.ptr[ptr->data.call.jump];
+			break;
+
 		case CODE_RETURN:
 			DEBUG("Return hurr durr. How much objstack: %zu\n", interp->objstack.len);
-			if (interp->callstack.len == 0)
+			if (interp->callstack.len == 0) {
+				DEBUG("return and no more callstack, so we are done\n");
 				return true;
+			}
 			ptr = dynarray_pop(&interp->callstack) + 1;
+			break;
+
+		case CODE_SWAP:
+			DEBUG("swappinggggg %d %d\n", (int)ptr->data.swap.index1, (int)ptr->data.swap.index2);
+			swap(
+				&interp->objstack.ptr[interp->objstack.len - ptr->data.swap.index1 - 1],
+				&interp->objstack.ptr[interp->objstack.len - ptr->data.swap.index2 - 1]);
+			ptr++;
 			break;
 
 		default:
