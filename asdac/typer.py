@@ -81,6 +81,12 @@ you must define a main function, e.g:
     return result
 
 
+def _arguments(n: int) -> str:
+    return ("no arguments" if n == 0 else
+            "1 argument" if n == 1 else
+            f"{n} arguments")
+
+
 class _FunctionBodyChecker:
 
     def __init__(
@@ -119,16 +125,25 @@ class _FunctionBodyChecker:
                     f"function not found: {statement.parser_ref.name}",
                     statement.location)
 
-            # TODO: check number of args
-            # TODO: check arg types
+            args = list(map(self.do_expression, statement.args))
+
+            if len(args) != len(func.argvars):
+                raise CompileError(
+                    f"{func.get_string()} wants "
+                    f"{_arguments(len(func.argvars))}, but it was called with "
+                    f"{_arguments(len(args))}",
+                    statement.location)
+
+            for arg, argvar in zip(args, func.argvars):
+                if arg.type != argvar.type:
+                    raise CompileError(
+                        f"expected {argvar.type.name}, got {arg.type.name}",
+                        arg.location)
+
             # TODO: warn about thrown away return value?
             return ast.CallFunction(
-                statement.location,
-                func.returntype,
-                statement.parser_ref,
-                func,
-                list(map(self.do_expression, statement.args)),
-            )
+                statement.location, func.returntype, statement.parser_ref,
+                func, args)
 
         if isinstance(statement, ast.Let):
             self._check_name_doesnt_exist(
@@ -144,7 +159,11 @@ class _FunctionBodyChecker:
 
     def _do_expression_raw(self, expression: ast.Expression) -> ast.Expression:
         if isinstance(expression, ast.StrConstant):
-            assert expression.type is not None
+            assert expression.type is BUILTIN_TYPES['Str']
+            return expression
+
+        if isinstance(expression, ast.IntConstant):
+            assert expression.type is BUILTIN_TYPES['Int']
             return expression
 
         if isinstance(expression, ast.GetVar):
