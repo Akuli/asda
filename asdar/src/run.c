@@ -5,8 +5,8 @@
 #include "objects/string.h"
 
 
-//#define DEBUG(...) printf(__VA_ARGS__)
-#define DEBUG(...) (void)0
+#define DEBUG(...) printf(__VA_ARGS__)
+//#define DEBUG(...) (void)0
 
 static bool print_string(Interp *interp, StringObject *str)
 {
@@ -28,8 +28,7 @@ static void swap(Object **a, Object **b)
 
 bool run(Interp *interp, size_t startidx)
 {
-	DEBUG("how much code: %zu\n", interp->code.len);
-	DEBUG("how much objstack: %zu\n", interp->objstack.len);
+	assert(interp->objstack.len == 0);
 	const struct CodeOp *ptr = &interp->code.ptr[startidx];
 
 	while(true){
@@ -45,7 +44,6 @@ bool run(Interp *interp, size_t startidx)
 
 		switch(ptr->kind) {
 		case CODE_FUNCBEGINS:
-			DEBUG("Function begins hurr durr %d\n", (int)ptr->data.objstackincr);
 			sz = interp->objstack.len + ptr->data.objstackincr;
 			if (!dynarray_alloc(interp, &interp->objstack, sz))
 				goto error;
@@ -53,7 +51,6 @@ bool run(Interp *interp, size_t startidx)
 			break;
 
 		case CODE_CONSTANT:
-			DEBUG("Constant hurr durr\n");
 			if (!dynarray_push(interp, &interp->objstack, ptr->data.obj))
 				goto error;
 			OBJECT_INCREF(ptr->data.obj);
@@ -61,7 +58,6 @@ bool run(Interp *interp, size_t startidx)
 			break;
 
 		case CODE_CALLBUILTINFUNC:
-			DEBUG("print hurr durr\n");
 			// TODO: don't assume print
 			obj = dynarray_pop(&interp->objstack);
 			ok = print_string( interp, (StringObject*)obj );
@@ -72,26 +68,32 @@ bool run(Interp *interp, size_t startidx)
 			break;
 
 		case CODE_CALLCODEFUNC:
-			DEBUG("Calling func\n");
 			if (!dynarray_push(interp, &interp->callstack, ptr))
 				goto error;
 			ptr = &interp->code.ptr[ptr->data.call.jump];
 			break;
 
 		case CODE_RETURN:
-			DEBUG("Return hurr durr. How much objstack: %zu\n", interp->objstack.len);
 			if (interp->callstack.len == 0) {
 				DEBUG("return and no more callstack, so we are done\n");
+				assert(interp->objstack.len == 0);
 				return true;
 			}
 			ptr = dynarray_pop(&interp->callstack) + 1;
 			break;
 
 		case CODE_SWAP:
-			DEBUG("swappinggggg %d %d\n", (int)ptr->data.swap.index1, (int)ptr->data.swap.index2);
 			swap(
 				&interp->objstack.ptr[interp->objstack.len - ptr->data.swap.index1 - 1],
 				&interp->objstack.ptr[interp->objstack.len - ptr->data.swap.index2 - 1]);
+			ptr++;
+			break;
+
+		case CODE_DUP:
+			obj = interp->objstack.ptr[interp->objstack.len - ptr->data.objstackidx - 1];
+			if (!dynarray_push(interp, &interp->objstack, obj))
+				goto error;
+			OBJECT_INCREF(obj);
 			ptr++;
 			break;
 

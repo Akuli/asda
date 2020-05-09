@@ -83,7 +83,15 @@ class GetVar(Expression):
 
 @attr.s(auto_attribs=True, cmp=False, frozen=True)
 class SetVar(Statement):
-    var: Variable
+    var: typing.Optional[Variable]          # added in asdac.typer
+    parser_var: ParserVariable
+
+
+@attr.s(auto_attribs=True, cmp=False, frozen=True)
+class Let(Statement):
+    var: typing.Optional[Variable]          # added in asdac.typer
+    parser_var: ParserVariable
+    initial_value: Expression
 
 
 @attr.s(auto_attribs=True, cmp=False, frozen=True)

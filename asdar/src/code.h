@@ -39,16 +39,15 @@ enum CodeOpKind {
 struct CodeOp;
 typedef union {   // TODO: remove typedef?
 	// jumps are relative to start of interp->code
-	// swap and dup indexes are so that 0 is end of objstack
+	// objstack indexes are so that 0 is end of objstack
 	uint16_t func_nargs;
 	size_t jump;
 	uint16_t strjoin_nstrs;
-	uint16_t localvaridx;
 	uint16_t objstackincr;  // how much more room in interp->objstack is needed
+	uint16_t objstackidx;
 	struct CodeCallData { size_t jump; uint16_t nargs; } call;
 	struct CodeAttrData { const struct Type *type; uint16_t index; } attr;
 	struct CodeSwapData { uint16_t index1, index2; } swap;
-	struct CodeDupData { uint16_t from, to; } dup;
 	Object *obj;
 } CodeData;
 

@@ -52,6 +52,8 @@
 #define TYPEBYTE_BUILTIN 'b'
 #define TYPEBYTE_VOID 'v'
 
+#define DEBUG(...) printf(__VA_ARGS__)
+
 
 struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname)
 {
@@ -334,6 +336,7 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case GET_BUILTIN_VAR:
 		return read_get_builtin_var(bcr, res);
 
+	// TODO: make the compiler emit info about stack sizes again
 	case FUNCTION_BEGINS: res->kind = CODE_FUNCBEGINS; return read_uint16(bcr, &res->data.objstackincr);
 
 	case CREATE_BOX: res->kind = CODE_CREATEBOX; return true;
@@ -369,23 +372,19 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 		res->kind = CODE_STRJOIN;
 		return read_uint16(bcr, &res->data.strjoin_nstrs);
 
-	case RETURN: res->kind = CODE_RETURN; return true;
-	case POP: res->kind = CODE_POP; return true;
-
 	case SWAP:
 		res->kind = CODE_SWAP;
 		return read_uint16(bcr, &res->data.swap.index1) &&
 				read_uint16(bcr, &res->data.swap.index2);
 
-	case DUP:
-		res->kind = CODE_DUP;
-		return read_uint16(bcr, &res->data.dup.from) &&
-				read_uint16(bcr, &res->data.dup.to);
+	case DUP: res->kind = CODE_DUP; return read_uint16(bcr, &res->data.objstackidx);
 
 	case INT_ADD: res->kind = CODE_INT_ADD; return true;
 	case INT_SUB: res->kind = CODE_INT_SUB; return true;
 	case INT_NEG: res->kind = CODE_INT_NEG; return true;
 	case INT_MUL: res->kind = CODE_INT_MUL; return true;
+	case RETURN:  res->kind = CODE_RETURN;  return true;
+	case POP:     res->kind = CODE_POP;     return true;
 
 	default:
 		errobj_set(bcr->interp, &errobj_type_value, "unknown op byte: %B", opbyte);
@@ -399,7 +398,7 @@ static bool read_function(struct BcReader *bcr, size_t jumpstart)
 	if (!read_uint16(bcr, &bodylen))
 		return false;
 
-	printf("bodylen = %d\n", (int)bodylen);
+	DEBUG("  bodylen = %d\n", (int)bodylen);
 
 	size_t oldlen = bcr->interp->code.len;
 	if (!dynarray_alloc(bcr->interp, &bcr->interp->code, oldlen + bodylen))
@@ -418,6 +417,8 @@ static bool read_function(struct BcReader *bcr, size_t jumpstart)
 
 		if (!read_op(bcr, ob, op, jumpstart))
 			goto error;
+		DEBUG("    opbyte: ");
+		codeop_debug(op->kind);
 	}
 
 	bcr->interp->code.len = oldlen + bodylen;
@@ -437,7 +438,7 @@ long bcreader_readcodepart(struct BcReader *bcr)
 	if (!read_uint16(bcr, &nfuncs))
 		return false;
 	assert(nfuncs >= 1);   // at least main
-	printf("nfuncs = %d\n", nfuncs);
+	DEBUG("nfuncs = %d\n", nfuncs);
 
 	for (uint16_t i = 0; i < nfuncs; i++) {
 		if (!read_function(bcr, jumpstart))

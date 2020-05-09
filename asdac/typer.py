@@ -91,6 +91,23 @@ class _FunctionBodyChecker:
         self._function_dict = function_dict
         self._local_vars = local_vars.copy()
 
+    def _check_name_doesnt_exist(self, name: str, location: Location) -> None:
+        if name in BUILTIN_FUNCS:
+            its = "a built-in function"
+        elif name in BUILTIN_TYPES:
+            its = "a built-in type"
+        elif name in BUILTIN_VARS:
+            its = "a built-in variable"
+        elif name in self._function_dict:
+            its = "a function"
+        elif name in self._local_vars:
+            its = "a variable"
+        else:
+            return
+
+        raise CompileError(
+            f"there's already {its} named '{name}'", location)
+
     def do_statement(self, statement: ast.Statement) -> ast.Statement:
         if isinstance(statement, ast.CallFunction):
             if statement.parser_ref.name in BUILTIN_FUNCS:
@@ -102,6 +119,8 @@ class _FunctionBodyChecker:
                     f"function not found: {statement.parser_ref.name}",
                     statement.location)
 
+            # TODO: check number of args
+            # TODO: check arg types
             # TODO: warn about thrown away return value?
             return ast.CallFunction(
                 statement.location,
@@ -110,6 +129,16 @@ class _FunctionBodyChecker:
                 func,
                 list(map(self.do_expression, statement.args)),
             )
+
+        if isinstance(statement, ast.Let):
+            self._check_name_doesnt_exist(
+                statement.parser_var.name, statement.location)
+            initial_value = self.do_expression(statement.initial_value)
+            var = Variable(statement.parser_var.name, initial_value.type,
+                           VariableKind.LOCAL, statement.location)
+            self._local_vars[statement.parser_var.name] = var
+            return ast.Let(
+                statement.location, var, statement.parser_var, initial_value)
 
         raise NotImplementedError(statement)
 

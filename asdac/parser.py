@@ -395,7 +395,22 @@ class _FunctionContentParser(_ParserBase):
 
             return ast.Return(return_keyword.location, value)
 
-        # TODO: let, outer let, export let
+        if self.tokens.peek().value == 'let':
+            # TODO: outer let, export let
+            let_keyword = self.tokens.next_token()
+            varname = self.tokens.next_token()
+            if varname.type != 'ID':
+                raise CompileError(
+                    "should be a variable name", varname.location)
+
+            equals_sign = self.tokens.next_token()
+            if equals_sign.value != '=':
+                raise CompileError("should be '='", equals_sign.location)
+
+            initial_value = self.parse_expression()
+            return ast.Let(
+                let_keyword.location, None, ast.ParserVariable(varname.value),
+                initial_value)
 
         result = self.parse_expression(it_should_be=it_should_be)
 

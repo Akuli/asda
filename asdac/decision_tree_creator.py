@@ -181,6 +181,10 @@ class _TreeCreator:
             # if it becomes unreachable, tree_creation_done() cleans it up
             self.set_next_node = lambda node: None
 
+        elif isinstance(statement, ast.Let):
+            self.local_vars[statement.var] = self.do_expression(
+                statement.initial_value)
+
         else:
             assert False, type(statement)     # pragma: no cover
 
