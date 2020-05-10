@@ -9,11 +9,13 @@ import typing
 from asdac import ast
 from asdac import decision_tree as dtree
 from asdac.common import Location
-from asdac.objects import Function, Variable, VariableKind
+from asdac.objects import (
+    BUILTIN_TYPES, BUILTIN_FUNCS, Function, Type, Variable, VariableKind)
 
 
 # the .type attribute of the variables doesn't contain info about
 # whether the variable is wrapped in a box object or not
+
 
 class _TreeCreator:
 
@@ -95,9 +97,10 @@ class _TreeCreator:
         else:
             result_id = dtree.ObjectId()
 
-        self.add_pass_through_node(dtree.CallFunction(
+        cf=dtree.CallFunction(
             call.location, call.function, id_list, 
-            result_id))
+            result_id)
+        self.add_pass_through_node(cf)
         return result_id
 
     def _do_if(

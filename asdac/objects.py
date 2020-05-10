@@ -55,10 +55,10 @@ class Function:
             
 
 BUILTIN_TYPES = collections.OrderedDict((tybe.name, tybe) for tybe in [
-    Type('Object'),
     Type('Str'),
     Type('Int'),
     Type('Bool'),
+    Type('Object'),
 ])
 
 BUILTIN_VARS = collections.OrderedDict((var.name, var) for var in [
@@ -76,19 +76,104 @@ BUILTIN_VARS = collections.OrderedDict((var.name, var) for var in [
     ),
 ])
 
+
+def _argvars(magic_string: str) -> typing.List[Variable]:
+    return [
+        Variable(
+            name=argname,
+            type=BUILTIN_TYPES[typename],
+            kind=VariableKind.LOCAL,
+            definition_location=None,
+        )
+        for typename, argname in map(str.split, magic_string.split(','))
+    ]
+
+
+_boilerplate: typing.Dict[str, typing.Any] = dict(
+    kind=FunctionKind.BUILTIN,
+    definition_location=None,
+)
+
 BUILTIN_FUNCS = collections.OrderedDict((func.name, func) for func in [
     Function(
         name='print',
-        argvars=[
-            Variable(
-                name='message',
-                type=BUILTIN_TYPES['Str'],
-                kind=VariableKind.LOCAL,
-                definition_location=None,
-            ),
-        ],
+        argvars=_argvars('Str message'),
         returntype=None,
-        kind=FunctionKind.BUILTIN,
-        definition_location=None,
+        **_boilerplate,
+    ),
+
+    Function(
+        name='not',
+        argvars=_argvars('Bool b'),
+        returntype=BUILTIN_TYPES['Bool'],
+        **_boilerplate,
+    ),
+
+    Function(
+        name='Str+Str',
+        argvars=_argvars('Str a, Str b'),
+        returntype=BUILTIN_TYPES['Str'],
+        **_boilerplate,
+    ),
+    Function(
+        name='Int+Int',
+        argvars=_argvars('Int a, Int b'),
+        returntype=BUILTIN_TYPES['Int'],
+        **_boilerplate,
+    ),
+    Function(
+        name='Int-Int',
+        argvars=_argvars('Int a, Int b'),
+        returntype=BUILTIN_TYPES['Int'],
+        **_boilerplate,
+    ),
+    Function(
+        name='Int*Int',
+        argvars=_argvars('Int a, Int b'),
+        returntype=BUILTIN_TYPES['Int'],
+        **_boilerplate,
+    ),
+    Function(
+        name='-Int',
+        argvars=_argvars('Int a'),
+        returntype=BUILTIN_TYPES['Int'],
+        **_boilerplate,
+    ),
+
+    Function(
+        name='Int==Int',
+        argvars=_argvars('Str a, Str b'),
+        returntype=BUILTIN_TYPES['Bool'],
+        **_boilerplate,
+    ),
+    Function(
+        name='Str==Str',
+        argvars=_argvars('Str a, Str b'),
+        returntype=BUILTIN_TYPES['Bool'],
+        **_boilerplate,
+    ),
+    Function(
+        name='Bool==Bool',
+        argvars=_argvars('Bool a, Bool b'),
+        returntype=BUILTIN_TYPES['Bool'],
+        **_boilerplate,
     ),
 ])
+
+BUILTIN_PREFIX_OPERATORS = {
+    ('-', BUILTIN_TYPES['Int']): BUILTIN_FUNCS['-Int'],
+}
+
+BUILTIN_BINARY_OPERATORS = {
+    (BUILTIN_TYPES[t1], op, BUILTIN_TYPES[t2]): BUILTIN_FUNCS[t1 + op + t2]
+    for t1, op, t2 in [
+        ('Str', '+', 'Str'),
+        ('Int', '+', 'Int'),
+        ('Int', '-', 'Int'),
+        ('Int', '*', 'Int'),
+
+        ('Str', '==', 'Str'),
+        ('Int', '==', 'Int'),
+        ('Bool', '==', 'Bool'),
+    ]
+}

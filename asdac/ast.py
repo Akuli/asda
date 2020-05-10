@@ -66,13 +66,37 @@ class StrConstant(Expression):
 
 
 @attr.s(auto_attribs=True, cmp=False, frozen=True)
+class IntConstant(Expression):
+    python_int: int
+
+
+@attr.s(auto_attribs=True, cmp=False, frozen=True)
 class StrJoin(Expression):
     parts: typing.List[Expression]
 
 
+# see precedence.PRECEDENCE_LIST for valid operator values
+
 @attr.s(auto_attribs=True, cmp=False, frozen=True)
-class IntConstant(Expression):
-    python_int: int
+class PrefixOperation(Expression):
+    operator: str
+    prefixed: Expression
+
+
+@attr.s(auto_attribs=True, cmp=False, frozen=True)
+class BinaryOperation(Expression):
+    lhs: Expression
+    operator: str
+    rhs: Expression
+
+
+@attr.s(auto_attribs=True, cmp=False, frozen=True)
+class TernaryOperation(Expression):
+    lhs: Expression
+    left_operator: str
+    mid: Expression
+    right_operator: str
+    rhs: Expression
 
 
 @attr.s(auto_attribs=True, cmp=False, frozen=True)
@@ -105,8 +129,9 @@ class FuncDefinition(Statement):
 # create an error when the AST is type checked.
 @attr.s(auto_attribs=True, cmp=False)
 class CallFunction(Expression, Statement):
-    parser_ref: ParserFunctionRef
-    function: typing.Optional[Function]     # added in asdac.typer
+    # asdac.typer turns parser_ref --> function
+    parser_ref: typing.Optional[ParserFunctionRef]  # missing for operators
+    function: typing.Optional[Function]
     args: typing.List[Expression]
 
 

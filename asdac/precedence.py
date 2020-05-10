@@ -3,30 +3,9 @@ import typing
 
 import attr
 
-from asdac.ast import Expression
+from asdac import ast
 from asdac.common import CompileError, Location
 from asdac.tokenizer import Token
-
-
-@attr.s(auto_attribs=True, cmp=False, frozen=True)
-class Operation:
-    location: Location
-    operator: str
-
-@attr.s(auto_attribs=True, cmp=False, frozen=True)
-class PrefixOperation(Operation):
-    expression: Expression
-
-@attr.s(auto_attribs=True, cmp=False, frozen=True)
-class BinaryOperation(Operation):
-    lhs: Expression
-    rhs: Expression
-
-@attr.s(auto_attribs=True, cmp=False, frozen=True)
-class TernaryOperation(Operation):
-    lhs: Expression
-    mid: Expression
-    rhs: Expression
 
 
 class Flags(enum.IntFlag):
@@ -73,21 +52,18 @@ class _PrecedenceHandler:
 
     def __init__(
         self,
-        parts: typing.List[typing.Union[Expression, Token]],
-        operation_to_expression: typing.Callable[[Operation], Expression],
+        parts: typing.List[typing.Union[ast.Expression, Token]],
     ):
         # this is the list that eventually contains only 1 expression
         self.parts = parts.copy()
         assert self.parts
-
-        self.operation_to_expression = operation_to_expression
 
     # there must not be two expressions next to each other without an
     # operator between
     def _check_no_adjacent_expressions(self) -> None:
         adjacent_expression_parts = _find_adjacent_items(self.parts, (
           lambda part1, part2: (
-            isinstance(part1, Expression) and isinstance(part2, Expression))))
+            isinstance(part1, ast.Expression) and isinstance(part2, ast.Expression))))
 
         if adjacent_expression_parts is not None:
             part1, part2 = adjacent_expression_parts
@@ -102,17 +78,16 @@ class _PrecedenceHandler:
         ops = [op for op, flags in op_flags_pairs]
 
         for parts_index, part in enumerate(self.parts):
-            if isinstance(part, Expression):
+            if isinstance(part, ast.Expression):
                 continue
-            token = typing.cast(Token, part.value)
 
             try:
-                op_index = ops.index(token.value)
+                op_index = ops.index(part.value)
             except ValueError:
                 continue
 
             flags = op_flags_pairs[op_index][1]
-            return (parts_index, flags, token)
+            return (parts_index, flags, part)
 
         return None
 
@@ -124,12 +99,12 @@ class _PrecedenceHandler:
 
     def _handle_ternary(
         self,
-        before: typing.Optional[Expression],
+        before: typing.Optional[ast.Expression],
         this_token: Token,
-        after: typing.Optional[Expression],
+        after: typing.Optional[ast.Expression],
         that_token: typing.Optional[Token],
-        more_after: typing.Optional[Expression],
-    ) -> typing.Tuple[int, int, TernaryOperation]:
+        more_after: typing.Optional[ast.Expression],
+    ) -> typing.Tuple[int, int, ast.TernaryOperation]:
         if (
           before is None or
           after is None or
@@ -151,8 +126,9 @@ class _PrecedenceHandler:
         # taking everything feels about right
         location = before.location + more_after.location
 
-        result = TernaryOperation(location, this_token.value, before, after,
-                                 more_after)
+        result = ast.TernaryOperation(
+            location, None,
+            before, this_token.value, after, that_token.value, more_after)
         return (1, 3, result)
 
     def _binary_is_chained_but_shouldnt_be(
@@ -167,19 +143,19 @@ class _PrecedenceHandler:
 
     def _handle_binary_or_prefix(
         self,
-        before: typing.Optional[Expression],
+        before: typing.Optional[ast.Expression],
         this_token: Token,
-        after: typing.Optional[Expression],
+        after: typing.Optional[ast.Expression],
         that_token: typing.Optional[Token],
         op_flags_pairs: typing.List[typing.Tuple[str, Flags]],
         flags: Flags,
-    ) -> typing.Tuple[int, int, Operation]:
+    ) -> typing.Tuple[int, int, ast.Expression]:
 
-        result: Operation
+        result: ast.Expression
 
         if before is None and after is not None and (flags & Flags.PREFIX):
-            result = PrefixOperation(
-                this_token.location, this_token.value, after)
+            result = ast.PrefixOperation(
+                this_token.location, None, this_token.value, after)
             return (0, 1, result)
 
         if before is not None and after is not None and (flags & Flags.BINARY):
@@ -193,18 +169,18 @@ class _PrecedenceHandler:
                     .format(this_token.value, that_token.value),
                     that_token.location)
 
-            result = BinaryOperation(
-                this_token.location, this_token.value, before, after)
+            result = ast.BinaryOperation(
+                this_token.location, None, before, this_token.value, after)
             return (1, 1, result)
 
         raise CompileError(
             "'%s' cannot be used like this" % this_token.value,
             this_token.location)
 
-    def _get_expression(self, index: int) -> typing.Optional[Expression]:
+    def _get_expression(self, index: int) -> typing.Optional[ast.Expression]:
         if 0 <= index < len(self.parts):
             value = self.parts[index]
-            if isinstance(value, Expression):
+            if isinstance(value, ast.Expression):
                 return value
         return None
 
@@ -215,7 +191,7 @@ class _PrecedenceHandler:
                 return value
         return None
 
-    def run(self) -> Expression:
+    def run(self) -> ast.Expression:
         self._check_no_adjacent_expressions()
 
         for op_flags_pairs in PRECEDENCE_LIST:
@@ -230,18 +206,16 @@ class _PrecedenceHandler:
                 that_token = self._get_token(index+2)
                 more_after = self._get_expression(index+3)
 
-                oper: Operation
+                result: ast.Expression
                 if flags & Flags.TERNARY:
                     assert flags == Flags.TERNARY     # no other flags
-                    before_count, after_count, oper = self._handle_ternary(
+                    before_count, after_count, result = self._handle_ternary(
                         before, this_token, after, that_token, more_after)
                 else:
-                    before_count, after_count, oper = (
+                    before_count, after_count, result = (
                         self._handle_binary_or_prefix(
                             before, this_token, after, that_token,
                             op_flags_pairs, flags))
-
-                result = self.operation_to_expression(oper)
 
                 start_index = index - before_count
                 end_index = index + 1 + after_count
@@ -250,12 +224,11 @@ class _PrecedenceHandler:
                 self.parts[start_index:end_index] = [result]
 
         [the_result] = self.parts
-        assert isinstance(the_result, Expression)
+        assert isinstance(the_result, ast.Expression)
         return the_result
 
 
 def handle_precedence(
-    parts: typing.List[typing.Union[Expression, Token]],
-    operation_to_expression: typing.Callable[[Operation], Expression],
-) -> Expression:
-    return _PrecedenceHandler(parts, operation_to_expression).run()
+    parts: typing.List[typing.Union[ast.Expression, Token]],
+) -> ast.Expression:
+    return _PrecedenceHandler(parts).run()

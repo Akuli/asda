@@ -41,6 +41,7 @@ operations on a stack of objects.
 import collections
 import functools
 import io
+import itertools
 import random
 import pathlib
 import subprocess
@@ -204,31 +205,6 @@ class GetBuiltinVar(PassThroughNode, _OneResult):
         self.var = var
 
 
-class BinaryOperation(PassThroughNode, _LhsRhs, _OneResult):
-
-    def __init__(
-            self,
-            location: Location,
-            operator: str,
-            lhs_id: ObjectId,
-            rhs_id: ObjectId,
-            result_id: ObjectId):
-        super().__init__(location, lhs_id, rhs_id, result_id)
-        self.operator = operator
-
-
-class UnaryOperation(PassThroughNode, _OneInputId, _OneResult):
-
-    def __init__(
-            self,
-            location: Location,
-            operator: str,
-            operand_id: ObjectId,
-            result_id: ObjectId):
-        super().__init__(location, operand_id, result_id)
-        self.operator = operator
-
-
 class StrConstant(PassThroughNode, _OneResult):
 
     def __init__(
@@ -261,7 +237,7 @@ class CallFunction(PassThroughNode):
 
         self.function = function
         self.arg_ids = arg_ids
-        self.result_id = None
+        self.result_id = result_id
         super().__init__(location)
 
     def ids_read(self) -> typing.Set[ObjectId]:
@@ -357,9 +333,7 @@ def _get_debug_string(node: Node) -> typing.Optional[str]:
     if isinstance(node, StrConstant):
         return repr(node.python_string)
     if isinstance(node, CallFunction):
-        return (
-            node.function.get_string()
-            + ', ' + ('%d args' % len(node.arg_ids)))
+        return node.function.get_string()
     return None
 
 
@@ -512,8 +486,13 @@ def _random_color() -> str:
     return '#%02x%02x%02x' % rgb
 
 
-def _graphviz_id(node: Node) -> str:
+def _graphviz_node_id(node: Node) -> str:
     return 'node' + str(id(node))
+
+
+@functools.lru_cache(maxsize=None)
+def _graphviz_object_id(id: ObjectId, *, counter=itertools.count(1)) -> str:
+    return '<' + str(next(counter)) + '>'
 
 
 def _graphviz_code(
@@ -533,39 +512,55 @@ def _graphviz_code(
         debug_string = _get_debug_string(node)
         if debug_string is not None:
             parts.append(debug_string)
-        parts.append('id=%#x' % id(node))
 
         if node in unreachable:
             parts.append('UNREACHABLE')
+
+        if isinstance(node, _OneInputId):
+            parts.append(f'input={_graphviz_object_id(node.input_id)}')
+        elif isinstance(node, _LhsRhs):
+            parts.append(f'lhs={_graphviz_object_id(node.lhs_id)} '
+                         f'rhs={_graphviz_object_id(node.rhs_id)}')
+        elif isinstance(node, CallFunction):
+            parts.append(
+                f'args=[{",".join(map(_graphviz_object_id, node.arg_ids))}]')
+            if node.result_id is None:
+                parts.append('result_id=None')
+            else:
+                parts.append(
+                    f'result_id={_graphviz_object_id(node.result_id)}')
+
+        if isinstance(node, _OneResult):
+            parts.append(f'result_id={_graphviz_object_id(node.result_id)}')
 
         for to in node.get_jumps_to():
             if node not in (ref.objekt for ref in to.jumped_from):
                 parts.append('HAS PROBLEMS with jumped_from stuff')
 
         yield '%s [label="%s"];\n' % (
-            _graphviz_id(node), '\n'.join(parts).replace('"', r'\"'))
+            _graphviz_node_id(node), '\n'.join(parts).replace('"', r'\"'))
 
 #        if isinstance(node, CreateFunction):
 #            color = _random_color()
-#            yield 'subgraph cluster%s {\n' % _graphviz_id(node)
+#            yield 'subgraph cluster%s {\n' % _graphviz_node_id(node)
 #            yield 'style=filled;\n'
 #            yield 'color="%s";\n' % color
 #            yield from _graphviz_code(node.body_root_node, "FUNCTION BODY")
 #            yield '}\n'
 #            yield '%s [style=filled, fillcolor="%s"];' % (
-#                _graphviz_id(node), color)
+#                _graphviz_node_id(node), color)
 
         if isinstance(node, TwoWayDecision):
             # color 'then' with green, 'otherwise' with red
             if node.then is not None:
                 yield '%s -> %s [color=green]\n' % (
-                    _graphviz_id(node), _graphviz_id(node.then))
+                    _graphviz_node_id(node), _graphviz_node_id(node.then))
             if node.otherwise is not None:
                 yield '%s -> %s [color=red]\n' % (
-                    _graphviz_id(node), _graphviz_id(node.otherwise))
+                    _graphviz_node_id(node), _graphviz_node_id(node.otherwise))
         else:
             for to in node.get_jumps_to():
-                yield '%s -> %s\n' % (_graphviz_id(node), _graphviz_id(to))
+                yield '%s -> %s\n' % (_graphviz_node_id(node), _graphviz_node_id(to))
 
 
 # for debugging, displays a visual representation of the tree

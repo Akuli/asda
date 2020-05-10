@@ -255,13 +255,14 @@ static bool read_get_builtin_var(struct BcReader *bcr, struct CodeOp *res)
 
 	switch(i) {
 	// FIXME: dis is stupid shit switch shit
-	case 1:
+	case 0:
 		res->data.obj = (Object *) &boolobj_true;
 		break;
-	case 2:
+	case 1:
 		res->data.obj = (Object *) &boolobj_false;
 		break;
 	default:
+		printf("wat %d\n", (int)i);
 		assert(0);
 		break;
 	}
@@ -326,6 +327,15 @@ static bool read_jump(struct BcReader *bcr, size_t *res, size_t jumpstart)
 	return true;
 }
 
+static const struct BuiltinFunc *
+read_builtin_func(struct BcReader *bcr)
+{
+	uint8_t i;
+	if (!read_bytes(bcr, &i, 1))
+		return NULL;
+	return &builtin_funcs[i];
+}
+
 static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *res, size_t jumpstart)
 {
 	switch(opbyte) {
@@ -349,9 +359,8 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 			&& read_uint16(bcr, &res->data.call.nargs);   // TODO: is this necessary?
 
 	case CALL_BUILTIN_FUNCTION:
-		// TODO: don't assume print
 		res->kind = CODE_CALLBUILTINFUNC;
-		return read_uint16(bcr, &res->data.func_nargs);
+		return !!( res->data.builtinfunc = read_builtin_func(bcr) );
 
 	case JUMP:           res->kind = CODE_JUMP;         return read_jump(bcr, &res->data.jump, jumpstart);
 	case JUMP_IF:        res->kind = CODE_JUMPIF;       return read_jump(bcr, &res->data.jump, jumpstart);

@@ -1,29 +1,54 @@
 #include "run.h"
+#include <assert.h>
 #include <stdio.h>
+#include "builtin.h"
 #include "code.h"
+#include "objects/bool.h"
 #include "objects/err.h"
 #include "objects/string.h"
 
 
-#define DEBUG(...) printf(__VA_ARGS__)
-//#define DEBUG(...) (void)0
-
-static bool print_string(Interp *interp, StringObject *str)
-{
-	const char *s;
-	size_t len;
-	if (!stringobj_toutf8(str, &s, &len))
-		return false;
-
-	printf("%.*s\n", (int)len, s);
-	return true;
-}
+//#define DEBUG(...) printf(__VA_ARGS__)
+#define DEBUG(...) (void)0
 
 static void swap(Object **a, Object **b)
 {
 	Object *tmp = *a;
 	*a = *b;
 	*b = tmp;
+}
+
+// TODO: look into python's new vectorcall stuff
+static bool call_builtin_function(Interp *interp, const struct BuiltinFunc *bfunc)
+{
+	assert(interp->objstack.len >= bfunc->nargs);
+	assert(&builtin_funcs[0] <= bfunc && bfunc < &builtin_funcs[builtin_nfuncs]);
+
+	bool ret = bfunc->ret;   // makes the compiler understand enough to not do warning
+	Object **args = &interp->objstack.ptr[interp->objstack.len - bfunc->nargs];
+	Object *retobj;
+	bool ok;
+
+	if (ret)
+		ok = !!( retobj = bfunc->func.ret(interp, args) );
+	else
+		ok = bfunc->func.noret(interp, args);
+
+	for (size_t i = 0; i < bfunc->nargs; i++)
+		OBJECT_DECREF(args[i]);
+	interp->objstack.len -= bfunc->nargs;
+
+	if (!ok)
+		return false;
+
+	if (ret){
+		if (!dynarray_push(interp, &interp->objstack, retobj)) {
+			OBJECT_DECREF(retobj);
+			return false;
+		}
+	}
+
+	return true;
 }
 
 bool run(Interp *interp, size_t startidx)
@@ -40,7 +65,6 @@ bool run(Interp *interp, size_t startidx)
 
 		size_t sz;
 		Object *obj;
-		bool ok;
 
 		switch(ptr->kind) {
 		case CODE_FUNCBEGINS:
@@ -58,11 +82,7 @@ bool run(Interp *interp, size_t startidx)
 			break;
 
 		case CODE_CALLBUILTINFUNC:
-			// TODO: don't assume print
-			obj = dynarray_pop(&interp->objstack);
-			ok = print_string( interp, (StringObject*)obj );
-			OBJECT_DECREF(obj);
-			if (!ok)
+			if (!call_builtin_function(interp, ptr->data.builtinfunc))
 				goto error;
 			ptr++;
 			break;
@@ -95,6 +115,15 @@ bool run(Interp *interp, size_t startidx)
 				goto error;
 			OBJECT_INCREF(obj);
 			ptr++;
+			break;
+
+		case CODE_JUMPIF:
+			obj = dynarray_pop(&interp->objstack);
+			if (boolobj_asda2c((BoolObject *) obj))
+				ptr = &interp->code.ptr[ptr->data.jump];
+			else
+				ptr++;
+			OBJECT_DECREF(obj);
 			break;
 
 		default:

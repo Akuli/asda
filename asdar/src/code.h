@@ -46,6 +46,7 @@ typedef union {   // TODO: remove typedef?
 	uint16_t objstackincr;  // how much more room in interp->objstack is needed
 	uint16_t objstackidx;
 	struct CodeCallData { size_t jump; uint16_t nargs; } call;
+	const struct BuiltinFunc *builtinfunc;
 	struct CodeAttrData { const struct Type *type; uint16_t index; } attr;
 	struct CodeSwapData { uint16_t index1, index2; } swap;
 	Object *obj;

@@ -2,6 +2,7 @@
 
 import bisect
 import collections
+import contextlib
 import functools
 import io
 import os
@@ -238,10 +239,19 @@ class _ByteCodeGen:
             if new_index != current_index:
                 self._write_swap(current_index, new_index)
 
-    def _delete_n_topmost_from_stack(self, n: int) -> None:
-        # python slicing is fun: 'del self.stack[-0:]' deletes everything
-        if n > 0:
-            del self.stack[-n:]
+    @contextlib.contextmanager
+    def _use_objects(
+        self,
+        current_node: dtree.Node,
+        want2top: typing.List[dtree.ObjectId],
+    ) -> typing.Generator[None, None, None]:
+
+        self._get_objects_to_top_of_stack(current_node, want2top)
+        yield
+
+        if want2top:    # because self.stack[-0:] refers to EVERYTHING
+            assert self.stack[-len(want2top):] == want2top
+            del self.stack[-len(want2top):]
 
     def write_pass_through_node(
             self, node: dtree.PassThroughNode) -> None:
@@ -274,31 +284,29 @@ class _ByteCodeGen:
             return
 
         if isinstance(node, dtree.CallFunction):
-            self._get_objects_to_top_of_stack(node, node.arg_ids)
-
-            if node.function.kind == objects.FunctionKind.BUILTIN:
-                self.writer.write_opbyte(CALL_BUILTIN_FUNCTION)
-                # TODO: identify the function somehow instead of assuming that
-                #       it's print
-            elif node.function.kind == objects.FunctionKind.FILE:
-                self.writer.write_opbyte(CALL_THIS_FILE_FUNCTION)
-                self.writer.function_references.setdefault(
-                    node.function, []).append(self.writer.write_uint16(0))
-            else:
-                raise NotImplementedError
-
-            self.writer.write_uint16(len(node.arg_ids))
-            self._delete_n_topmost_from_stack(len(node.arg_ids))
+            with self._use_objects(node, node.arg_ids):
+                if node.function.kind == objects.FunctionKind.BUILTIN:
+                    all_funcs = list(objects.BUILTIN_FUNCS.values())
+                    self.writer.write_opbyte(CALL_BUILTIN_FUNCTION)
+                    self.writer.write_uint8(all_funcs.index(node.function))
+                elif node.function.kind == objects.FunctionKind.FILE:
+                    self.writer.write_opbyte(CALL_THIS_FILE_FUNCTION)
+                    ref = self.writer.write_uint16(0)
+                    self.writer.function_references.setdefault(
+                        node.function, []).append(ref)
+                    self.writer.write_uint16(len(node.arg_ids))
+                else:
+                    raise NotImplementedError
 
             if node.result_id is not None:
                 self.stack.append(node.result_id)
             return
 
         if isinstance(node, dtree.StrJoin):
-            self._get_objects_to_top_of_stack(node, node.string_ids)
-            self.writer.write_opbyte(STR_JOIN)
-            self.writer.write_uint16(len(node.string_ids))
-            self._delete_n_topmost_from_stack(len(node.string_ids))
+            with self._use_objects(node, node.string_ids):
+                self.writer.write_opbyte(STR_JOIN)
+                self.writer.write_uint16(len(node.string_ids))
+
             self.stack.append(node.result_id)
             return
 
@@ -345,13 +353,17 @@ class _ByteCodeGen:
         # that's likely not a bottleneck so why bother
 
         if isinstance(node, dtree.BoolDecision):
-            self.writer.write_opbyte(JUMP_IF)
+            with self._use_objects(node, [node.input_id]):
+                self.writer.write_opbyte(JUMP_IF)
         elif isinstance(node, dtree.IntEqualDecision):
-            self.writer.write_opbyte(JUMP_IF_INT_EQUAL)
+            with self._use_objects(node, [node.lhs_id, node.rhs_id]):
+                self.writer.write_opbyte(JUMP_IF_INT_EQUAL)
         elif isinstance(node, dtree.StrEqualDecision):
-            self.writer.write_opbyte(JUMP_IF_STR_EQUAL)
+            with self._use_objects(node, [node.lhs_id, node.rhs_id]):
+                self.writer.write_opbyte(JUMP_IF_STR_EQUAL)
         else:  # pragma: no cover
             raise RuntimeError
+
         then_jump = self.writer.write_uint16(0)
 
         self.write_tree(node.otherwise)

@@ -348,10 +348,6 @@ class _FunctionContentParser(_ParserBase):
 
         return result
 
-    def operation2expression(
-            self, operation: precedence.Operation) -> ast.Expression:
-        raise NotImplementedError
-
     def parse_expression(
         self,
         *,
@@ -376,7 +372,7 @@ class _FunctionContentParser(_ParserBase):
             raise CompileError(
                 "should be %s" % it_should_be, not_expression.location)
 
-        return precedence.handle_precedence(parts, self.operation2expression)
+        return precedence.handle_precedence(parts)
 
     def parse_1line_statement(
         self,

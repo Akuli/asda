@@ -8,6 +8,7 @@ from asdac import ast
 from asdac.common import Compilation, CompileError, Location
 from asdac.objects import (
     BUILTIN_FUNCS, BUILTIN_TYPES, BUILTIN_VARS,
+    BUILTIN_PREFIX_OPERATORS, BUILTIN_BINARY_OPERATORS,
     Function, FunctionKind, Variable, VariableKind, Type)
 
 
@@ -87,7 +88,7 @@ def _arguments(n: int) -> str:
             f"{n} arguments")
 
 
-class _FunctionBodyChecker:
+class _FunctionBodyTyper:
 
     def __init__(
         self,
@@ -116,6 +117,7 @@ class _FunctionBodyChecker:
 
     def do_statement(self, statement: ast.Statement) -> ast.Statement:
         if isinstance(statement, ast.CallFunction):
+            assert statement.parser_ref is not None
             if statement.parser_ref.name in BUILTIN_FUNCS:
                 func = BUILTIN_FUNCS[statement.parser_ref.name]
             elif statement.parser_ref.name in self._function_dict:
@@ -172,6 +174,7 @@ class _FunctionBodyChecker:
         raise NotImplementedError(statement)
 
     def _do_expression_raw(self, expression: ast.Expression) -> ast.Expression:
+        # TODO: function call expressions (remember to check for void-return)
         if isinstance(expression, ast.StrConstant):
             assert expression.type is BUILTIN_TYPES['Str']
             return expression
@@ -193,6 +196,58 @@ class _FunctionBodyChecker:
             return ast.GetVar(
                 expression.location, var.type, var, expression.parser_var)
 
+        elif isinstance(expression, ast.PrefixOperation):
+            prefixed = self.do_expression(expression.prefixed)
+            assert prefixed.type is not None
+
+            try:
+                func = BUILTIN_PREFIX_OPERATORS[(
+                    expression.operator, prefixed.type)]
+            except KeyError:
+                raise CompileError(
+                    f"wrong types: {expression.operator}{prefixed.type.name}",
+                    expression.location)
+
+            assert func.returntype is not None
+            return ast.CallFunction(
+                expression.location, func.returntype, None, func, [prefixed])
+
+        elif isinstance(expression, ast.BinaryOperation):
+            lhs = self.do_expression(expression.lhs)
+            rhs = self.do_expression(expression.rhs)
+
+            if expression.operator == '!=':
+                operator = '=='
+                negate = True
+            else:
+                operator = expression.operator
+                negate = False
+
+            assert lhs.type is not None
+            assert rhs.type is not None
+            try:
+                func = BUILTIN_BINARY_OPERATORS[(
+                    lhs.type, operator, rhs.type)]
+            except KeyError:
+                print(BUILTIN_BINARY_OPERATORS.keys())
+                print(lhs.type, operator, rhs.type)
+                raise CompileError(
+                    f"wrong types: "
+                    f"{lhs.type.name} {expression.operator} {rhs.type.name}",
+                    expression.location)
+
+            assert func.returntype is not None
+            result = ast.CallFunction(
+                expression.location, func.returntype, None,
+                func, [expression.lhs, expression.rhs])
+
+            if negate:
+                n0t = BUILTIN_FUNCS['not']
+                result = ast.CallFunction(
+                    expression.location, n0t.returntype, None, n0t, [result])
+
+            return result
+
         raise NotImplementedError(expression)
 
     def do_expression(self, expression: ast.Expression) -> ast.Expression:
@@ -207,7 +262,7 @@ def _do_funcdef(
 ) -> ast.FuncDefinition:
 
     assert funcdef.function is None
-    checker = _FunctionBodyChecker(function_dict, {
+    checker = _FunctionBodyTyper(function_dict, {
         var.name: var
         for var in function_dict[funcdef.parser_header.name].argvars
     })
