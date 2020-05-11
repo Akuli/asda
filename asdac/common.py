@@ -1,7 +1,4 @@
-import collections
 import contextlib
-import enum
-import itertools
 import os
 import pathlib
 import sys
@@ -57,7 +54,8 @@ class Messager:
         return self.parent_messager(min_verbosity, message)
 
     @contextlib.contextmanager
-    def indented(self,
+    def indented(
+            self,
             min_verbosity: int,
             string: str) -> typing.Iterator[None]:
         if not self(min_verbosity, string):
@@ -86,7 +84,8 @@ class Messager:
 class Compilation:
     """Represents a source file and its corresponding bytecode file."""
 
-    def __init__(self,
+    def __init__(
+            self,
             source_path: pathlib.Path,
             compiled_dir: pathlib.Path,
             messager: Messager):

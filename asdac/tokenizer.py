@@ -1,4 +1,3 @@
-import collections
 import typing
 
 import attr
@@ -40,7 +39,7 @@ _KEYWORDS = {
 }
 
 
-@attr.s(auto_attribs=True, cmp=False, frozen=True)
+@attr.s(auto_attribs=True, eq=False, order=False, frozen=True)
 class Token:
     type: str      # TODO: enum
     value: str

@@ -1,4 +1,3 @@
-- attrs in asdac: replace deprecated `cmp=False` with `eq=False, order=False`
 - some example files don't compile, they are in `examples/broken`
 - when all example files compile, make sure that they run
 - asdac's bytecode reading stuff is broken

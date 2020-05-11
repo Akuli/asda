@@ -23,14 +23,14 @@ class FunctionKind(enum.Enum):
     FILE = 1
 
 
-@attr.s(auto_attribs=True, cmp=False, frozen=True)
+@attr.s(auto_attribs=True, eq=False, order=False, frozen=True)
 class Type:
     name: str
 
 
 # all variables are local variables for now.
 # note that there is code that uses copy.copy() with Variable objects
-@attr.s(auto_attribs=True, cmp=False, frozen=True)
+@attr.s(auto_attribs=True, eq=False, order=False, frozen=True)
 class Variable:
     name: str
     type: Type
@@ -38,7 +38,7 @@ class Variable:
     definition_location: typing.Optional[Location]
 
 
-@attr.s(auto_attribs=True, cmp=False, frozen=True)
+@attr.s(auto_attribs=True, eq=False, order=False, frozen=True)
 class Function:
     name: str
     argvars: typing.List[Variable]
@@ -52,7 +52,7 @@ class Function:
             var.type.name + ' ' + var.name
             for var in self.argvars
         ))
-            
+
 
 BUILTIN_TYPES = collections.OrderedDict((tybe.name, tybe) for tybe in [
     Type('Str'),

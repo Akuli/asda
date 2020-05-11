@@ -55,7 +55,7 @@ from asdac.common import Location
 from asdac.objects import Function, Variable, VariableKind
 
 
-@attr.s(auto_attribs=True, cmp=False, frozen=True)
+@attr.s(auto_attribs=True, eq=False, order=False, frozen=True)
 class ObjectId:
     variable: typing.Optional[Variable] = None
 
@@ -491,7 +491,9 @@ def _graphviz_node_id(node: Node) -> str:
 
 
 @functools.lru_cache(maxsize=None)
-def _graphviz_object_id(id: ObjectId, *, counter=itertools.count(1)) -> str:
+def _graphviz_object_id(
+        id: ObjectId, *,
+        counter: typing.Iterator[int] = itertools.count(1)) -> str:
     return '<' + str(next(counter)) + '>'
 
 
@@ -560,7 +562,8 @@ def _graphviz_code(
                     _graphviz_node_id(node), _graphviz_node_id(node.otherwise))
         else:
             for to in node.get_jumps_to():
-                yield '%s -> %s\n' % (_graphviz_node_id(node), _graphviz_node_id(to))
+                yield '%s -> %s\n' % (
+                    _graphviz_node_id(node), _graphviz_node_id(to))
 
 
 # for debugging, displays a visual representation of the tree

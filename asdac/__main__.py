@@ -9,7 +9,7 @@ import typing
 import colorama     # type: ignore
 
 from asdac import (
-    common, ast, parser, typer, decision_tree_creator,
+    common, parser, typer, decision_tree_creator,
     #optimizer,
     bytecoder)
 
@@ -26,7 +26,6 @@ def source2bytecode(compilation: common.Compilation) -> None:
     compilation.messager(3, "Parsing")
     ast_function_list = parser.parse(compilation, source)
 
-    # TODO: better message for cooking?
     compilation.messager(3, "Checking types")
     ast_function_list = typer.check_and_add_types(
         compilation, ast_function_list)

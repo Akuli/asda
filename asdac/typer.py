@@ -68,7 +68,8 @@ def _find_function_dict(
             returntype = _do_type(header.returntype)
 
         result[header.name] = Function(
-            header.name, argvars, returntype, FunctionKind.FILE, funcdef.location)
+            header.name, argvars, returntype,
+            FunctionKind.FILE, funcdef.location)
 
     if 'main' not in result:
         raise CompileError("""\

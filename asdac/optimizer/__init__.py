@@ -1,8 +1,8 @@
 import itertools
 import typing
 
-from asdac import ast, decision_tree, objects
-from asdac.optimizer import copy_pasta, decisions, functions, popone, variables
+from asdac import decision_tree, objects
+from asdac.optimizer import copy_pasta, decisions, functions, popone
 
 
 _optimizer_lists: typing.List[typing.List[typing.Callable[

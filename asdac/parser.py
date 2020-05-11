@@ -1,8 +1,5 @@
-import enum
 import itertools
 import typing
-
-import attr
 
 from asdac import ast, precedence, string_parser
 from asdac.common import Compilation, CompileError, Location
@@ -26,7 +23,7 @@ class _TokenIterator:
         return _TokenIterator(copy)
 
     def peek(self) -> Token:
-        return self.copy	().next_token()
+        return self.copy().next_token()
 
     def next_token(self) -> Token:
         try:
@@ -104,7 +101,6 @@ class _ParserBase:
             raise CompileError("invalid type", name.location)
 
         return ast.ParserType(name.location, name.value)
-
 
 
 class _FileParser(_ParserBase):
@@ -522,7 +518,9 @@ class _FunctionContentParser(_ParserBase):
         return result
 
 
-def parse(compilation: Compilation, code: str) -> typing.List[ast.FuncDefinition]:
+def parse(
+        compilation: Compilation,
+        code: str) -> typing.List[ast.FuncDefinition]:
     tokens = list(tokenize(compilation, code))
     file_parser = _FileParser(compilation, _TokenIterator(tokens))
     return list(file_parser.parse_file())    # must not be lazy iterator

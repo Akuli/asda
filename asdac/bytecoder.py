@@ -1,7 +1,6 @@
 # converts decision tree to bytes that can be written to file
 
 import bisect
-import collections
 import contextlib
 import functools
 import io

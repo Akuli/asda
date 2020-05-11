@@ -1,10 +1,8 @@
 import enum
 import typing
 
-import attr
-
 from asdac import ast
-from asdac.common import CompileError, Location
+from asdac.common import CompileError
 from asdac.tokenizer import Token
 
 
@@ -61,9 +59,11 @@ class _PrecedenceHandler:
     # there must not be two expressions next to each other without an
     # operator between
     def _check_no_adjacent_expressions(self) -> None:
-        adjacent_expression_parts = _find_adjacent_items(self.parts, (
-          lambda part1, part2: (
-            isinstance(part1, ast.Expression) and isinstance(part2, ast.Expression))))
+        adjacent_expression_parts = _find_adjacent_items(
+            self.parts, (
+                lambda part1, part2: (
+                    isinstance(part1, ast.Expression) and
+                    isinstance(part2, ast.Expression))))
 
         if adjacent_expression_parts is not None:
             part1, part2 = adjacent_expression_parts

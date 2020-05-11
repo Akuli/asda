@@ -1,16 +1,13 @@
 # converts cooked ast to a decision tree
 # this is in separate file because dtree.py became >1000 lines long
 
-import collections
-import copy
 import functools
 import typing
 
 from asdac import ast
 from asdac import decision_tree as dtree
 from asdac.common import Location
-from asdac.objects import (
-    BUILTIN_TYPES, BUILTIN_FUNCS, Function, Type, Variable, VariableKind)
+from asdac.objects import Function, Variable, VariableKind
 
 
 # the .type attribute of the variables doesn't contain info about
@@ -60,7 +57,6 @@ class _TreeCreator:
                 creator.add_pass_through_node(dtree.Assign(
                     true_or_false_expr.location, temp_id, result_id))
 
-            expression2 = expression    # mypy is fucking around with me
             self._do_if(
                 expression.location,
                 expression.cond,
@@ -97,10 +93,9 @@ class _TreeCreator:
         else:
             result_id = dtree.ObjectId()
 
-        cf=dtree.CallFunction(
-            call.location, call.function, id_list, 
-            result_id)
-        self.add_pass_through_node(cf)
+        self.add_pass_through_node(dtree.CallFunction(
+            call.location, call.function, id_list,
+            result_id))
         return result_id
 
     def _do_if(
