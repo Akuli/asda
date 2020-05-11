@@ -41,7 +41,7 @@ void interp_destroy(Interp *interp)
 	Object *next;
 	for (Object *obj = interp->objliststart; obj; obj = next){
 		//printf("refcount cycling object %p\n", (void*)obj);
-		next = obj->next;
+		next = obj->head.next;
 		object_destroy(obj, false, true);
 	}
 

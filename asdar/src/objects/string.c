@@ -11,7 +11,6 @@
 #include "../utf8.h"
 #include "../interp.h"
 #include "../object.h"
-#include "../type.h"
 
 
 static void destroy_string(Object *obj, bool decrefrefs, bool freenonrefs)
@@ -25,7 +24,7 @@ static void destroy_string(Object *obj, bool decrefrefs, bool freenonrefs)
 
 StringObject *stringobj_new_nocpy(Interp *interp, uint32_t *val, size_t len)
 {
-	StringObject *obj = object_new(interp, &stringobj_type, destroy_string, sizeof(*obj));
+	StringObject *obj = object_new(interp, destroy_string, sizeof(*obj));
 	if (!obj) {
 		free(val);
 		return NULL;
@@ -244,7 +243,7 @@ StringObject *stringobj_new_format(Interp *interp, const char *fmt, ...)
 bool stringobj_toutf8(StringObject *obj, const char **val, size_t *len)
 {
 	if( !obj->utf8cache &&
-		!utf8_encode(obj->interp, obj->val, obj->len, &obj->utf8cache, &obj->utf8cachelen) )
+		!utf8_encode(obj->head.interp, obj->val, obj->len, &obj->utf8cache, &obj->utf8cachelen) )
 	{
 		obj->utf8cache = NULL;
 		return false;
@@ -344,13 +343,3 @@ static bool getlength_cfunc(Interp *interp, struct ObjData data,
 	return !!( *result = (Object*)intobj_new_long(interp, (long) s->len) );
 }
 //FUNCOBJ_COMPILETIMECREATE(getlength, &stringobj_type, { &stringobj_type });
-
-/*static struct TypeAttr attrs[] = {
-	{ TYPE_ATTR_METHOD, &uppercase },
-	{ TYPE_ATTR_METHOD, &lowercase },
-	{ TYPE_ATTR_METHOD, &tostring },
-	{ TYPE_ATTR_METHOD, &getlength },
-};
-*/
-const struct Type stringobj_type = TYPE_BASIC_COMPILETIMECREATE(
-	NULL, NULL, /*attrs*/NULL, /*sizeof(attrs)/sizeof(attrs[0])*/0);

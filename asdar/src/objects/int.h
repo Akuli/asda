@@ -8,13 +8,11 @@
 
 #include "../interp.h"
 #include "../object.h"
-#include "../type.h"
 #include "string.h"
 
-extern const struct Type intobj_type;
 
 typedef struct IntObject {
-	OBJECT_HEAD
+	struct ObjectHead head;
 
 	// don't use any of this stuff outside int.c
 

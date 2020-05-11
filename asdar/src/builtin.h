@@ -6,9 +6,6 @@
 #include "interp.h"
 #include "object.h"
 
-extern const struct Type* const builtin_types[];
-extern const size_t builtin_ntypes;
-
 
 struct BuiltinFunc {
 	bool ret;

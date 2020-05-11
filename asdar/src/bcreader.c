@@ -9,7 +9,6 @@
 #include "interp.h"
 #include "object.h"
 #include "path.h"
-#include "type.h"
 #include "objects/bool.h"
 #include "objects/err.h"
 #include "objects/int.h"
@@ -179,51 +178,6 @@ bool bcreader_readsourcepath(struct BcReader *bcr)
 	return true;
 }
 
-static bool read_type(struct BcReader *bcr, const struct Type **typ, bool allowvoid)
-{
-	unsigned char byte;
-	if(!read_bytes(bcr, &byte, 1))
-		return false;
-
-	switch(byte) {
-	case TYPEBYTE_BUILTIN:
-	{
-		uint8_t i;
-		if (!read_bytes(bcr, &i, 1))
-			return false;
-		assert(i < builtin_ntypes);
-		*typ = builtin_types[i];
-		return true;
-	}
-
-	case TYPEBYTE_VOID:
-		if (allowvoid) {
-			*typ = NULL;
-			return true;
-		}
-
-		errobj_set(bcr->interp, &errobj_type_value, "unexpected void type byte: %B", byte);
-		return false;
-
-	default:
-		errobj_set(bcr->interp, &errobj_type_value, "unknown type byte: %B", byte);
-		return false;
-	}
-}
-
-// TODO: include types of constructor arguments everywhere, including non-asdaclass types?
-static struct TypeAsdaClass *read_asda_class_type(struct BcReader *bcr)
-{
-	uint16_t nasdaattribs, nmethods;
-	if (!read_uint16(bcr, &nasdaattribs) ||
-		!read_uint16(bcr, &nmethods))
-	{
-		return NULL;
-	}
-
-	return type_asdaclass_new(bcr->interp, nasdaattribs, nmethods);
-}
-
 static bool read_opbyte(struct BcReader *bcr, unsigned char *ob)
 {
 	if (!read_bytes(bcr, ob, 1)) return false;
@@ -298,16 +252,6 @@ static bool read_int_constant(struct BcReader *bcr, Object **objptr, bool negate
 	return !!*objptr;
 }
 
-static bool read_attribute(struct BcReader *bcr, struct CodeOp *res) {
-	if(!read_type(bcr, &res->data.attr.type, false))
-		return false;
-	if (!read_uint16(bcr, &res->data.attr.index))
-		return false;
-
-	assert(res->data.attr.index < res->data.attr.type->nattrs);
-	return true;
-}
-
 static bool read_jump(struct BcReader *bcr, size_t *res, size_t jumpstart)
 {
 	uint16_t offset;
@@ -362,11 +306,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case NEGATIVE_INT_CONSTANT:
 		res->kind = CODE_CONSTANT;
 		return read_int_constant(bcr, &res->data.obj, opbyte==NEGATIVE_INT_CONSTANT);
-
-	case GET_ATTR: res->kind = CODE_GETATTR; return read_attribute(bcr, res);
-	case SET_ATTR:
-		res->kind = CODE_SETATTR;
-		return read_attribute(bcr, res);
 
 	case STRING_JOIN:
 		res->kind = CODE_STRJOIN;

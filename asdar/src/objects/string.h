@@ -7,30 +7,31 @@
 #include <stdint.h>
 #include "../interp.h"
 #include "../object.h"
-#include "../type.h"
 
-extern const struct Type stringobj_type;
+
+// TODO: switch to utf8 strings, and convert to unicode only when needed?
 
 typedef struct StringObject {
-	OBJECT_HEAD
+	struct ObjectHead head;
 
 	uint32_t *val;
 	size_t len;
 
 	// use stringobj_toutf8() instead of accessing these directly
-	char *utf8cache;      // NULL if not cached yet
+	char *utf8cache;      // NULL if not cached yet, otherwise ends with '\0'
 	size_t utf8cachelen;
 } StringObject;
 
 // this is kind of painful to use
-// you need to do e.g. STRINGOBJDATA_COMPILETIMECREATE('h','e','l','l','o')
+// example:  struct StringObject hello = STRINGOBJ_COMPILETIMECREATE('h','e','l','l','o');
 // only ascii supported
-#define STRINGOBJ_COMPILETIMECREATE(...) OBJECT_COMPILETIMECREATE(&stringobj_type, \
+#define STRINGOBJ_COMPILETIMECREATE(...) { \
+	.head = object_compiletime_head, \
 	.val = (uint32_t[]){__VA_ARGS__}, \
 	.len = sizeof( (uint32_t[]){__VA_ARGS__} ) / sizeof(uint32_t), \
-	.utf8cache = (char[]){__VA_ARGS__, 0}, \
+	.utf8cache = (char[]){__VA_ARGS__, '\0'}, \
 	.utf8cachelen = sizeof( (char[]){__VA_ARGS__} ), \
-)
+}
 
 // creates a copy of the val and uses that
 StringObject *stringobj_new(Interp *interp, const uint32_t *val, size_t len);

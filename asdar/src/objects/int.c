@@ -9,7 +9,6 @@
 
 #include "../interp.h"
 #include "../object.h"
-#include "../type.h"
 #include "err.h"
 #include "int.h"
 #include "string.h"
@@ -65,7 +64,7 @@ IntObject *intobj_new_long(Interp *interp, long l)
 		cacheidx = -1;
 	}
 
-	IntObject *obj = object_new(interp, &intobj_type, destroy_intobj, sizeof(*obj));
+	IntObject *obj = object_new(interp, destroy_intobj, sizeof(*obj));
 	if (!obj)
 		return NULL;
 
@@ -89,7 +88,7 @@ static IntObject *new_from_mpzt(Interp *interp, mpz_t mpz)
 		return intobj_new_long(interp, value);
 	}
 
-	IntObject *obj = object_new(interp, &intobj_type, destroy_intobj, sizeof(*obj));
+	IntObject *obj = object_new(interp, destroy_intobj, sizeof(*obj));
 	if (!obj) {
 		mpz_clear(mpz);
 		return NULL;
@@ -313,5 +312,3 @@ const char *intobj_tocstr(Interp *interp, IntObject *x)
 
 	return ok ? res : NULL;
 }
-
-const struct Type intobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, NULL, NULL, 0);

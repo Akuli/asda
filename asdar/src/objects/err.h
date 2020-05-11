@@ -5,8 +5,10 @@
 #include <stddef.h>
 #include "../interp.h"
 #include "../object.h"
-#include "../type.h"
 #include "string.h"
+
+// FIXME
+struct Type {};
 
 extern const struct Type
 	errobj_type_error,   // base class for other errors
@@ -16,7 +18,7 @@ extern const struct Type
 	errobj_type_os;
 
 typedef struct ErrObject {
-	OBJECT_HEAD
+	struct ObjectHead head;
 	StringObject *msgstr;
 	// TODO: chained errors
 	//       but maybe not as linked list?

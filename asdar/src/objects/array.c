@@ -4,7 +4,6 @@
 #include "../dynarray.h"
 #include "../interp.h"
 #include "../object.h"
-#include "../type.h"
 #include "err.h"
 #include "int.h"
 #include "string.h"
@@ -22,7 +21,7 @@ static void destroy_array(Object *obj, bool decrefrefs, bool freenonrefs)
 
 static struct Object* array_constructor(Interp *interp, const struct Type *arrtype, struct Object *const *args, size_t nargs)
 {
-	ArrayObject *res = object_new(interp, arrtype, destroy_array, sizeof(*res));
+	ArrayObject *res = object_new(interp, destroy_array, sizeof(*res));
 	if (!res)
 		return NULL;
 
@@ -81,15 +80,3 @@ static bool get_cfunc(Interp *interp, struct ObjData data, Object *const *args, 
 	return true;
 }
 //FUNCOBJ_COMPILETIMECREATE(get, &type_object, { &arrayobj_type, &intobj_type });
-
-/*
-static struct TypeAttr attrs[] = {
-	{ TYPE_ATTR_METHOD, &length },
-	{ TYPE_ATTR_METHOD, &push },
-	{ TYPE_ATTR_METHOD, &pop },
-	{ TYPE_ATTR_METHOD, &get },
-};
-*/
-
-const struct Type arrayobj_type = TYPE_BASIC_COMPILETIMECREATE(
-	NULL, array_constructor, /*attrs*/NULL, /*sizeof(attrs)/sizeof(attrs[0])*/0);

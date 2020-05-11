@@ -3,7 +3,6 @@
 #include <stddef.h>
 #include "../interp.h"
 #include "../object.h"
-#include "../type.h"
 
 
 static void destroy_box(Object *obj, bool decrefrefs, bool freenonrefs)
@@ -16,7 +15,7 @@ static void destroy_box(Object *obj, bool decrefrefs, bool freenonrefs)
 
 BoxObject *boxobj_new(Interp *interp)
 {
-	BoxObject *obj = object_new(interp, &boxobj_type, destroy_box, sizeof(*obj));
+	BoxObject *obj = object_new(interp, destroy_box, sizeof(*obj));
 	if (!obj)
 		return NULL;
 	obj->val = NULL;
@@ -30,5 +29,3 @@ void boxobj_set(BoxObject *box, Object *val)
 	box->val = val;
 	OBJECT_INCREF(val);
 }
-
-const struct Type boxobj_type = TYPE_BASIC_COMPILETIMECREATE(NULL, NULL, NULL, 0);

@@ -9,7 +9,6 @@
 #include "string.h"
 #include "../interp.h"
 #include "../object.h"
-#include "../type.h"
 
 /*
 for (superstitious pseudo-)optimization, i think there are 3 ways to deal with errors:
@@ -51,12 +50,13 @@ static void destroy_error(Object *obj, bool decrefrefs, bool freenonrefs)
 
 static StringObject nomemerr_string = STRINGOBJ_COMPILETIMECREATE(
 	'n','o','t',' ','e','n','o','u','g','h',' ','m','e','m','o','r','y');
-static ErrObject nomemerr = OBJECT_COMPILETIMECREATE(&errobj_type_nomem,
+static ErrObject nomemerr = {
+	.head = object_compiletime_head,
 	.msgstr = &nomemerr_string,
 	.stack = NULL,
 	.stacklen = 0,
 	.ownstack = false,
-);
+};
 
 static ErrObject *compile_time_created_errors[] = { &nomemerr };
 
@@ -86,7 +86,7 @@ void errobj_set_nomem(Interp *interp)
 
 static ErrObject *create_error_from_string(Interp *interp, const struct Type *errtype, StringObject *str)
 {
-	ErrObject *obj = object_new(interp, errtype, destroy_error, sizeof(*obj));
+	ErrObject *obj = object_new(interp, destroy_error, sizeof(*obj));
 	if (!obj)     // refactoring note: MAKE SURE that errobj_set_nomem() doesn't recurse here
 		return NULL;
 
@@ -152,7 +152,7 @@ static void freeing_cb(void)
 {
 	for (size_t i = 0; i < sizeof(compile_time_created_errors)/sizeof(compile_time_created_errors[0]); i++)
 	{
-		assert(compile_time_created_errors[i]->refcount == 1);
+		assert(compile_time_created_errors[i]->head.refcount == 1);
 		if (compile_time_created_errors[i]->ownstack)
 			free(compile_time_created_errors[i]->stack);
 	}
@@ -216,12 +216,8 @@ static struct TypeAttr attrs[] = {
 };
 */
 
-#define BOILERPLATE(NAME, BASE, CONSTRUCTOR) \
-	const struct Type NAME = TYPE_BASIC_COMPILETIMECREATE((BASE), (CONSTRUCTOR), \
-		/*attrs*/NULL, /*sizeof(attrs)/sizeof(attrs[0])*/0)
-BOILERPLATE(errobj_type_error, NULL, NULL);
-BOILERPLATE(errobj_type_nomem, &errobj_type_error, NULL);
-BOILERPLATE(errobj_type_variable, &errobj_type_error, error_string_constructor);
-BOILERPLATE(errobj_type_value, &errobj_type_error, error_string_constructor);
-BOILERPLATE(errobj_type_os, &errobj_type_error, error_string_constructor);
-#undef BOILERPLATE
+const struct Type errobj_type_error = {0};
+const struct Type errobj_type_nomem = {0};
+const struct Type errobj_type_variable = {0};
+const struct Type errobj_type_value = {0};
+const struct Type errobj_type_os = {0};

@@ -3,41 +3,39 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include "interp.h"
-#include "type.h"
 #include "objects/err.h"
 
 
 void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs)
 {
+	Interp *interp = obj->head.interp;
+
 	/*
 	if this fails, a compile-time created object is being decreffed too
 	much (or not increffed enough, or ->interp of a runtime-created object
 	has been set to NULL which should never happen)
 	*/
-	assert(obj->interp);
+	assert(interp);
 
-	if (obj->destroy) {
-		obj->destroy(obj, decrefrefs, freenonrefs);
-	}
+	if (obj->head.destroy)
+		obj->head.destroy(obj, decrefrefs, freenonrefs);
 
 	if (freenonrefs) {
-		if (obj->prev) {
-			assert(obj != obj->interp->objliststart);
-			obj->prev->next = obj->next;   // may be NULL
+		if (obj->head.prev) {
+			assert(obj != interp->objliststart);
+			obj->head.prev->head.next = obj->head.next;   // may be NULL
 		} else {
-			assert(obj == obj->interp->objliststart);
-			obj->interp->objliststart = obj->next;   // may be NULL
+			assert(obj == interp->objliststart);
+			interp->objliststart = obj->head.next;   // may be NULL
 		}
-		if(obj->next)
-			obj->next->prev = obj->prev;   // may be NULL
+		if(obj->head.next)
+			obj->head.next->head.prev = obj->head.prev;   // may be NULL
 
 		free(obj);
 	}
 }
 
-void *object_new(Interp *interp, const struct Type *type,
-	void (*destroy)(Object *, bool, bool),
-	size_t sz)
+void *object_new(Interp *interp, void (*destroy)(Object *, bool, bool), size_t sz)
 {
 	assert(interp);
 
@@ -50,17 +48,16 @@ void *object_new(Interp *interp, const struct Type *type,
 		return NULL;
 	}
 
-	obj->type = type;
-	obj->destroy = destroy;
-	obj->refcount = 1;
-	// gcflag left uninitialized
-	obj->interp = interp;
+	obj->head = (struct ObjectHead) {
+		.destroy = destroy,   // may be NULL
+		.interp = interp,
+		.refcount = 1,
+		.next = interp->objliststart,   // may be NULL
+	};
 
-	obj->prev = NULL;
-	obj->next = interp->objliststart;
+	if (interp->objliststart)
+		interp->objliststart->head.prev = obj;
 	interp->objliststart = obj;
-	if(obj->next)
-		obj->next->prev = obj;
 
 	return obj;
 }

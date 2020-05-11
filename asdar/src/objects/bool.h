@@ -4,12 +4,10 @@
 #include <assert.h>
 #include <stdbool.h>
 #include "../object.h"
-#include "../type.h"
 
-extern const struct Type boolobj_type;
 
 typedef struct BoolObject {
-	OBJECT_HEAD
+	struct ObjectHead head;
 } BoolObject;
 
 extern BoolObject boolobj_true, boolobj_false;

@@ -17,12 +17,10 @@ this puts 123 inside a box, and passes the box to the increment_n function with 
 
 #include "../interp.h"
 #include "../object.h"
-#include "../type.h"
 
-extern const struct Type boxobj_type;
 
 typedef struct BoxObject {
-	OBJECT_HEAD
+	struct ObjectHead head;
 	Object *val;
 } BoxObject;
 
