@@ -31,15 +31,15 @@ void assert_strobj_eq_cstr(StringObject *obj, const char *s)
 
 void assert_error_matches_and_clear(Interp *interp, const struct Type *errtype, const char *cstr)
 {
-	assert(interp->err);
-	assert(interp->err->type == errtype);
+	assert(interp->errstack.len == 1);
+	ErrObject *err = dynarray_pop(&interp->errstack);
+	assert(err->type == errtype);
 
 	if (errtype == &errobj_type_nomem)
-		assert(interp->err->refcount == 2);   // interp->err and wherever the global nomemerr is stored
+		assert(err->refcount == 2);   // nomemerr is stored in a static variable
 	else
-		assert(interp->err->refcount == 1);
-	assert_strobj_eq_cstr(interp->err->msgstr, cstr);
+		assert(err->refcount == 1);
+	assert_strobj_eq_cstr(err->msgstr, cstr);
 
-	OBJECT_DECREF(interp->err);
-	interp->err = NULL;
+	OBJECT_DECREF(err);
 }
