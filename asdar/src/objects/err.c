@@ -9,7 +9,6 @@
 #include "string.h"
 #include "../interp.h"
 #include "../object.h"
-#include "../path.h"
 #include "../type.h"
 
 /*

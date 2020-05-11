@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <src/dynarray.h>
 #include <src/interp.h>
 #include <src/object.h>
 #include <src/type.h>

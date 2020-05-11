@@ -5,11 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "bcreader.h"
-#include "code.h"
 #include "interp.h"
 #include "path.h"
 #include "run.h"
-#include "type.h"
 #include "objects/err.h"
 
 bool import(Interp *interp, const char *bcpath)
@@ -57,13 +55,11 @@ bool import(Interp *interp, const char *bcpath)
 	run(interp, (size_t)mainidx);
 
 	// srcpath not freed here, the code needs it
-	bcreader_destroy(&bcr);
 	free(dir);
 	fclose(f);
 	return true;
 
 error:
-	bcreader_destroy(&bcr);   // frees bcr.imports and the contents
 	free(dir);
 	fclose(f);
 	return false;

@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include "import.h"
 #include "interp.h"
-#include "object.h"
 #include "path.h"
 #include "objects/err.h"
 

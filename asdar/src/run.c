@@ -1,11 +1,13 @@
 #include "run.h"
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include "builtin.h"
 #include "code.h"
+#include "dynarray.h"
+#include "interp.h"
+#include "object.h"
 #include "objects/bool.h"
-#include "objects/err.h"
-#include "objects/string.h"
 
 
 //#define DEBUG(...) printf(__VA_ARGS__)

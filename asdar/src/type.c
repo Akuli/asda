@@ -2,7 +2,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include "interp.h"
-#include "object.h"
 #include "objects/asdainst.h"
 #include "objects/err.h"
 

@@ -65,15 +65,6 @@ struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname)
 	return res;
 }
 
-void bcreader_destroy(const struct BcReader *bcr)
-{
-	if (bcr->imports) {
-		for (size_t i = 0; bcr->imports[i]; i++)
-			free(bcr->imports[i]);
-		free(bcr->imports);
-	}
-}
-
 
 static bool read_bytes(struct BcReader *bcr, unsigned char *buf, size_t n)
 {

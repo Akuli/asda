@@ -1,6 +1,5 @@
 #include "code.h"
 #include <stdio.h>
-#include <stdlib.h>
 #include "object.h"
 
 void codeop_debug(enum CodeOpKind k)

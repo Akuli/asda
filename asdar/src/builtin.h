@@ -1,7 +1,9 @@
 #ifndef BUILTINS_H
 #define BUILTINS_H
 
-#include "type.h"
+#include <stddef.h>
+#include <stdbool.h>
+#include "interp.h"
 #include "object.h"
 
 extern const struct Type* const builtin_types[];

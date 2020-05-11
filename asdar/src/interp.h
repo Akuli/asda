@@ -1,7 +1,6 @@
 #ifndef INTERP_H
 #define INTERP_H
 
-#include <stddef.h>
 #include "dynarray.h"
 
 // forward declarations needed because many things need an Interp
