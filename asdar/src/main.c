@@ -41,6 +41,29 @@ static bool print_source_line(const char *path, size_t lineno)
 	return true;
 }
 
+static void print_op_stuff(const char *basedir, const struct CodeOp *op, const char *word)
+{
+	if (!op)
+		return;
+
+	// TODO: figure out how to do this without symlink issues and ".."
+	char *fullpath = NULL;
+	if (basedir)
+		fullpath = path_concat_dotdot(basedir, op->srcpath);   // may be NULL
+
+	fprintf(stderr, "  %s ", word);
+	if (fullpath)
+		fprintf(stderr, "file \"%s\"", fullpath);
+	else
+		fprintf(stderr, "file \"%s\" (could not get full path)", op->srcpath);
+	fprintf(stderr, ", line %zu\n    ", op->lineno);
+
+	if (!print_source_line(fullpath, op->lineno))
+		printf("(error while reading source file)\n");
+
+	free(fullpath);
+}
+
 // iesi = InterpErrStackItem
 static void print_stack_of_iesi(const char *basedir, struct InterpErrStackItem iesi)
 {
@@ -54,31 +77,14 @@ static void print_stack_of_iesi(const char *basedir, struct InterpErrStackItem i
 	fwrite(msg, 1, len, stderr);
 	fprintf(stderr, "\n");
 
+	print_op_stuff(basedir, iesi.op, "at");
 	for (long i = (long)iesi.callstacklen - 1; i >= 0; i--) {
 		if (iesi.callstackskip != 0 &&
 			i == ( sizeof(iesi.callstack)/sizeof(iesi.callstack[0]) )/2)
 		{
 			fprintf(stderr, "...%zu items more...\n", iesi.callstackskip);
 		}
-
-		const struct CodeOp *op = iesi.callstack[i];
-
-		// TODO: figure out how to do this without symlink issues and ".."
-		char *fullpath = NULL;
-		if (basedir)
-			fullpath = path_concat_dotdot(basedir, op->srcpath);   // may be NULL
-
-		const char *word = (i == (long)iesi.callstacklen - 1) ? "in" : "by";
-		if (fullpath)
-			fprintf(stderr, "  %s file \"%s\"", word, fullpath);
-		else
-			fprintf(stderr, "  %s file \"%s\" (could not get full path)", word, op->srcpath);
-		fprintf(stderr, ", line %zu\n    ", op->lineno);
-
-		if (!print_source_line(fullpath, op->lineno))
-			printf("(error while reading source file)\n");
-
-		free(fullpath);
+		print_op_stuff(basedir, iesi.callstack[i], "by");
 	}
 }
 

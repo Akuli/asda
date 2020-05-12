@@ -54,6 +54,42 @@ static bool call_builtin_function(Interp *interp, const struct BuiltinFunc *bfun
 	return true;
 }
 
+#define ARRAY_COPY(DST, SRC, N) do{ \
+	assert( sizeof((SRC)[0]) == sizeof((DST)[0]) ); \
+	memcpy((DST), (SRC), (N)*sizeof((SRC)[0])); \
+} while(0)
+
+/*
+When setting an error, the error setting functions don't know which part of the
+code was actually running when the error occured. That's why this is here.
+*/
+static void set_error_info(Interp *interp, const struct CodeOp *op)
+{
+	assert(interp->errstack.len != 0);
+	struct InterpErrStackItem *iesi = &interp->errstack.ptr[interp->errstack.len - 1];
+
+	assert(iesi->errobj != NULL);
+	assert(iesi->op == NULL);
+	assert(iesi->callstacklen == 0);
+	assert(iesi->callstackskip == 0);
+
+	size_t maxlen = sizeof(iesi->callstack) / sizeof(iesi->callstack[0]);
+	assert(maxlen % 2 == 0);
+
+	if (interp->callstack.len > maxlen) {
+		iesi->callstacklen = maxlen;
+		iesi->callstackskip = interp->callstack.len - maxlen;
+		ARRAY_COPY(iesi->callstack, interp->callstack.ptr, maxlen/2);
+		ARRAY_COPY(iesi->callstack + maxlen/2, interp->callstack.ptr + interp->callstack.len - maxlen/2, maxlen/2);
+	} else {
+		iesi->callstacklen = interp->callstack.len;
+		iesi->callstackskip = 0;
+		ARRAY_COPY(iesi->callstack, interp->callstack.ptr, interp->callstack.len);
+	}
+
+	iesi->op = op;
+}
+
 bool run(Interp *interp, size_t startidx)
 {
 	assert(interp->objstack.len == 0);
@@ -144,6 +180,8 @@ bool run(Interp *interp, size_t startidx)
 	}
 
 error:
+	set_error_info(interp, ptr);
 	// TODO: look for 'try' blocks
+
 	return false;
 }

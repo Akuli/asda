@@ -17,6 +17,9 @@ struct is an error object and the call stack leading to the line that threw up.
 struct InterpErrStackItem {
 	struct ErrObject *errobj;
 
+	// what were we doing when we got error?
+	const struct CodeOp *op;
+
 	/*
 	If the callstack is too long for this, then we ignore some of it in the
 	middle. Generally the start and end of long stack traces are worth looking at,
@@ -28,7 +31,7 @@ struct InterpErrStackItem {
 	the callstack associated with each error before the error actually happens,
 	and we don't know yet how much space we need.
 	*/
-	struct CodeOp *callstack[200];
+	const struct CodeOp *callstack[200];
 	size_t callstacklen;
 	size_t callstackskip;   // how many items missing from middle of callstack
 };

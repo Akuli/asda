@@ -29,30 +29,10 @@ static ErrObject nomemerr = {
 };
 
 
-#define ARRAY_COPY(DST, SRC, N) do{ \
-	assert( sizeof((SRC)[0]) == sizeof((DST)[0]) ); \
-	memcpy((DST), (SRC), (N)*sizeof((SRC)[0])); \
-} while(0)
-
 void errobj_set_obj(Interp *interp, ErrObject *err)
 {
-	struct InterpErrStackItem insi;
-
-	size_t maxlen = sizeof(insi.callstack) / sizeof(insi.callstack[0]);
-	assert(maxlen % 2 == 0);
-
-	if (interp->callstack.len > maxlen) {
-		insi.callstacklen = maxlen;
-		insi.callstackskip = interp->callstack.len - maxlen;
-		ARRAY_COPY(insi.callstack, interp->callstack.ptr, maxlen/2);
-		ARRAY_COPY(insi.callstack + maxlen/2, interp->callstack.ptr + interp->callstack.len - maxlen/2, maxlen/2);
-	} else {
-		insi.callstacklen = interp->callstack.len;
-		insi.callstackskip = 0;
-		ARRAY_COPY(insi.callstack, interp->callstack.ptr, interp->callstack.len);
-	}
-
-	insi.errobj = err;
+	// most of InterpErrStackItem is filled in run.c
+	struct InterpErrStackItem insi = { .errobj = err };
 	OBJECT_INCREF(err);
 
 	// error handling code must ensure that there's always room for one more error
