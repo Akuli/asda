@@ -14,6 +14,7 @@ bool import(Interp *interp, const char *bcpath)
 {
 	assert(bcpath[0]);
 
+	// for fopen() below
 	char *fullbcpath = path_concat(interp->basedir, bcpath);
 	if (!fullbcpath) {
 		errobj_set_oserr(interp, "getting the full path to '%s' failed", bcpath);
@@ -52,7 +53,8 @@ bool import(Interp *interp, const char *bcpath)
 
 	// TODO: handle import cycles
 
-	run(interp, (size_t)mainidx);
+	if (!run(interp, (size_t)mainidx))
+		goto error;
 
 	// srcpath not freed here, the code needs it
 	free(dir);

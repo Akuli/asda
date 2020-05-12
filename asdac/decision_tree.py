@@ -193,6 +193,15 @@ class Start(PassThroughNode):
         return set(self.arg_ids)
 
 
+class Throw(Node):
+
+    def __init__(self, location: Location):
+        super().__init__(location)
+
+    def get_jumps_to_including_nones(self):
+        return []
+
+
 class Assign(PassThroughNode, _OneInputId, _OneResult):
     pass
 

@@ -26,6 +26,7 @@ CALL_BUILTIN_FUNCTION = b'b'
 CALL_THIS_FILE_FUNCTION = b'('
 STR_JOIN = b'j'
 RETURN = b'r'
+THROW = b't'
 
 DUP = b'D'
 SWAP = b'S'
@@ -390,6 +391,9 @@ class _ByteCodeGen:
                 node = node.next_node
             elif isinstance(node, dtree.TwoWayDecision):
                 self.write_2_way_decision(node)
+                return
+            elif isinstance(node, dtree.Throw):
+                self.writer.write_opbyte(THROW)
                 return
             else:
                 raise NotImplementedError("omg " + repr(node))

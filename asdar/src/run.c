@@ -8,6 +8,7 @@
 #include "interp.h"
 #include "object.h"
 #include "objects/bool.h"
+#include "objects/err.h"
 
 
 //#define DEBUG(...) printf(__VA_ARGS__)
@@ -92,6 +93,8 @@ bool run(Interp *interp, size_t startidx)
 		case CODE_CALLCODEFUNC:
 			if (!dynarray_push(interp, &interp->callstack, ptr))
 				goto error;
+			// fall through
+		case CODE_JUMP:
 			ptr = &interp->code.ptr[ptr->data.call.jump];
 			break;
 
@@ -103,6 +106,10 @@ bool run(Interp *interp, size_t startidx)
 			}
 			ptr = dynarray_pop(&interp->callstack) + 1;
 			break;
+
+		case CODE_THROW:
+			errobj_set(interp, &errtype_value, "oh no");			// TODO
+			goto error;
 
 		case CODE_SWAP:
 			swap(
@@ -137,5 +144,6 @@ bool run(Interp *interp, size_t startidx)
 	}
 
 error:
-	assert(0);  // TODO
+	// TODO: look for 'try' blocks
+	return false;
 }

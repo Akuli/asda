@@ -64,13 +64,7 @@ here is spec:
 StringObject *stringobj_new_format(Interp *interp, const char *fmt, ...);
 StringObject *stringobj_new_vformat(Interp *interp, const char *fmt, va_list ap);
 
-/*
-behaves like utf8_encode
-DON'T FREE the val
-
-note: you need to change this to take an interp as argument if if you add
-strings that have interp==NULL (i.e. strings created at compile time)
-*/
+// behaves like utf8_encode.  DON'T FREE the val.
 bool stringobj_toutf8(StringObject *obj, const char **val, size_t *len);
 
 // checks if strings are equal

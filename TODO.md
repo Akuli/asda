@@ -1,3 +1,8 @@
+- refuse to read source if it's newer than compiled
+- check that all loops work
+- pass statements instead of void statements, to make it familiar for python users and avoid reusing same keyword for multiple different things
+- keyboard interrupt handling idea: can't `catch` but `finally` works anyhow
+- make sure that the incr part of `for init; cond; incr:` gets parsed after body
 - some example files don't compile, they are in `examples/broken`
 - when all example files compile, make sure that they run
 - asdac's bytecode reading stuff is broken

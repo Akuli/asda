@@ -51,7 +51,8 @@
 #define TYPEBYTE_BUILTIN 'b'
 #define TYPEBYTE_VOID 'v'
 
-#define DEBUG(...) printf(__VA_ARGS__)
+//#define DEBUG(...) printf(__VA_ARGS__)
+#define DEBUG(...) (void)0
 
 
 struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname)
@@ -126,7 +127,7 @@ static bool read_string0(struct BcReader *bcr, char **str)
 	(*str)[len] = 0;
 	if (strlen(*str) < (size_t)len) {
 		// TODO: maybe a separate error type for bytecode errors?
-		errobj_set(bcr->interp, &errobj_type_value, "unexpected 0 byte in string");
+		errobj_set(bcr->interp, &errtype_value, "unexpected 0 byte in string");
 		free(*str);
 		return false;
 	}
@@ -165,7 +166,7 @@ bool bcreader_readasdabytes(struct BcReader *bcr)
 
 	if (memcmp(buf, asda, sizeof asda) == 0)
 		return true;
-	errobj_set(bcr->interp, &errobj_type_value, "the file doesn't seem to be a compiled asda file");
+	errobj_set(bcr->interp, &errtype_value, "the file doesn't seem to be a compiled asda file");
 	return false;
 }
 
@@ -185,7 +186,7 @@ static bool read_opbyte(struct BcReader *bcr, unsigned char *ob)
 		if (!read_uint32(bcr, &bcr->lineno)) return false;
 		if (!read_bytes(bcr, ob, 1)) return false;
 		if (*ob == SET_LINENO) {
-			errobj_set(bcr->interp, &errobj_type_value, "repeated lineno byte: %B", SET_LINENO);
+			errobj_set(bcr->interp, &errtype_value, "repeated lineno byte: %B", SET_LINENO);
 			return false;
 		}
 	}
@@ -323,10 +324,11 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 	case INT_NEG: res->kind = CODE_INT_NEG; return true;
 	case INT_MUL: res->kind = CODE_INT_MUL; return true;
 	case RETURN:  res->kind = CODE_RETURN;  return true;
+	case THROW:   res->kind = CODE_THROW;   return true;
 	case POP:     res->kind = CODE_POP;     return true;
 
 	default:
-		errobj_set(bcr->interp, &errobj_type_value, "unknown op byte: %B", opbyte);
+		errobj_set(bcr->interp, &errtype_value, "unknown op byte: %B", opbyte);
 		return false;
 	}
 }
@@ -357,7 +359,7 @@ static bool read_function(struct BcReader *bcr, size_t jumpstart)
 		if (!read_op(bcr, ob, op, jumpstart))
 			goto error;
 		DEBUG("    opbyte: ");
-		codeop_debug(op->kind);
+		//codeop_debug(op->kind);
 	}
 
 	bcr->interp->code.len = oldlen + bodylen;

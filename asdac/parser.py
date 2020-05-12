@@ -370,10 +370,10 @@ class _FunctionContentParser(_ParserBase):
 
         return precedence.handle_precedence(parts)
 
-    def parse_1line_statement(
+    def parse_one_line_ish_statement(
         self,
         *,
-        it_should_be: str = 'a one-line statament',
+        it_should_be: str = 'a one-line-ish statament',
     ) -> typing.Optional[ast.Statement]:
         if self.tokens.peek().value == 'void':
             return None
@@ -386,6 +386,9 @@ class _FunctionContentParser(_ParserBase):
                 value = self.parse_expression()
 
             return ast.Return(return_keyword.location, value)
+
+        if self.tokens.peek().value == 'throw':
+            return ast.Throw(self.tokens.next_token().location)
 
         if self.tokens.peek().value == 'let':
             # TODO: outer let, export let
@@ -473,17 +476,17 @@ class _FunctionContentParser(_ParserBase):
 
         if self.tokens.peek().value == 'for':
             for_location = self.tokens.next_token().location
-            init = self.parse_1line_statement()
+            init = self.parse_one_line_ish_statement()
             self.consume_semicolon_token()
             cond = self.parse_expression()
             self.consume_semicolon_token()
-            incr = self.parse_1line_statement()
+            incr = self.parse_one_line_ish_statement()
             body = self.parse_block(consume_newline=True)
 
             #return [incr, Loop(for_location, cond, TRUE, incr, body)]
             raise NotImplementedError
 
-        result = self.parse_1line_statement(it_should_be='a statement')
+        result = self.parse_one_line_ish_statement(it_should_be='a statement')
 
         newline = self.tokens.next_token()
         if newline.type != 'NEWLINE':

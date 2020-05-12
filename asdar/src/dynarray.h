@@ -33,8 +33,14 @@ after a successful dynarray_alloc(&da, N), da can hold N items without allocatin
 i.e. dynarray_push will always succeed and 'da.ptr[da.len++] = item' is also valid
 dynarray_alloc returns a success bool
 */
-#define dynarray_alloc(INTERP, DAP, N) \
-	dynarray_alloc_internal((INTERP), (void**) &(DAP)->ptr, &(DAP)->alloc, sizeof((DAP)->ptr[0]), (N))
+#define dynarray_alloc(INTERP, DAP, N) ( \
+	dynarray_alloc_noerr((DAP), (N)) || \
+	( dynarray_nomem_internal((INTERP)), false ) \
+)
+
+// like dynarray_alloc but doesn't set an error to an interpreter on failure
+#define dynarray_alloc_noerr(DAP, N) \
+	dynarray_alloc_internal((void**) &(DAP)->ptr, &(DAP)->alloc, sizeof((DAP)->ptr[0]), (N))
 
 // returns a success bool
 #define dynarray_push(INTERP, DAP, OBJ) ( \
@@ -73,6 +79,10 @@ to ignore popped value and avoid compiler warning:
 struct Interp;
 
 // like the name says, don't use this outside this h file and the related c file
-bool dynarray_alloc_internal(struct Interp *interp, void **ptr, size_t *alloc, size_t itemsz, size_t enough);
+bool dynarray_alloc_internal(void **ptr, size_t *alloc, size_t itemsz, size_t enough);
+
+// calls errobj_set_nomem(), because can't include err.h to this file
+// also can't include "interp.h"
+void dynarray_nomem_internal(void *interp);
 
 #endif    // DYNARRAY_H

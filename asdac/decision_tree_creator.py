@@ -179,6 +179,15 @@ class _TreeCreator:
             # if it becomes unreachable, tree_creation_done() cleans it up
             self.set_next_node = lambda node: None
 
+        elif isinstance(statement, ast.Throw):
+            self.set_next_node(dtree.Throw(statement.location))
+
+            # the next node might or might not become unreachable, because
+            # multiple nodes can jump to the same node
+            #
+            # if it becomes unreachable, tree_creation_done() cleans it up
+            self.set_next_node = lambda node: None
+
         elif isinstance(statement, ast.Let):
             assert statement.var is not None
             self.local_vars[statement.var] = self.do_expression(

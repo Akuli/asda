@@ -10,69 +10,54 @@
 #include "../interp.h"
 #include "../object.h"
 
-/*
-for (superstitious pseudo-)optimization, i think there are 3 ways to deal with errors:
-	1. error caught but stack trace not used for anything
-
-		try:
-			outer let value = parse_string_to_integer(user_input)
-		catch ValueError:
-			print("Please give a valid integer.")
-			return
-
-	2. error caught and stack trace needed
-
-		try:
-			download_file()
-		catch HttpError e:
-			write_stack_trace_to_file(e, log_file)
-			return
-
-	3. error never caught, so stack trace is displayed
-
-ideally 1 should be fast, so this could be optimized by not copying the stack trace anywhere in that case
-currently that's not implemented because it would be kinda complicated
-*/
 
 static void destroy_error(Object *obj, bool decrefrefs, bool freenonrefs)
 {
 	ErrObject *err = (ErrObject *)obj;
 	if (decrefrefs)
 		OBJECT_DECREF(err->msgstr);
-	if (freenonrefs) {
-		if (err->ownstack)
-			free(err->stack);
-	}
 }
 
 
 // nomemerr is not created with malloc() because ... you know
-
 static StringObject nomemerr_string = STRINGOBJ_COMPILETIMECREATE(
 	'n','o','t',' ','e','n','o','u','g','h',' ','m','e','m','o','r','y');
 static ErrObject nomemerr = {
 	.head = object_compiletime_head,
+	.type = &errtype_nomem,
 	.msgstr = &nomemerr_string,
-	.stack = NULL,
-	.stacklen = 0,
-	.ownstack = false,
 };
 
-static ErrObject *compile_time_created_errors[] = { &nomemerr };
 
+#define ARRAY_COPY(DST, SRC, N) do{ \
+	assert( sizeof((SRC)[0]) == sizeof((DST)[0]) ); \
+	memcpy((DST), (SRC), (N)*sizeof((SRC)[0])); \
+} while(0)
 
 void errobj_set_obj(Interp *interp, ErrObject *err)
 {
-	const char *s;
-	size_t len;
-	if (!stringobj_toutf8(err->msgstr, &s, &len)) {
-		s = "<could not get string>";
-		len = strlen(s);
+	struct InterpErrStackItem insi;
+
+	size_t maxlen = sizeof(insi.callstack) / sizeof(insi.callstack[0]);
+	assert(maxlen % 2 == 0);
+
+	if (interp->callstack.len > maxlen) {
+		insi.callstacklen = maxlen;
+		insi.callstackskip = interp->callstack.len - maxlen;
+		ARRAY_COPY(insi.callstack, interp->callstack.ptr, maxlen/2);
+		ARRAY_COPY(insi.callstack + maxlen/2, interp->callstack.ptr + interp->callstack.len - maxlen/2, maxlen/2);
+	} else {
+		insi.callstacklen = interp->callstack.len;
+		insi.callstackskip = 0;
+		ARRAY_COPY(insi.callstack, interp->callstack.ptr, interp->callstack.len);
 	}
 
-	// TODO: nicer error handling
-	printf("OMG ERROR WTF: %.*s\n", (int)len, s);
-	abort();
+	insi.errobj = err;
+	OBJECT_INCREF(err);
+
+	// error handling code must ensure that there's always room for one more error
+	assert(interp->errstack.alloc >= interp->errstack.len + 1);
+	dynarray_push_itwillfit(&interp->errstack, insi);
 }
 
 void errobj_set_nomem(Interp *interp)
@@ -84,21 +69,19 @@ void errobj_set_nomem(Interp *interp)
 // error setting functions don't do error handling with different return values, because who
 // cares if they fail to set the requested error and instead set NoMemError or something :D
 
-static ErrObject *create_error_from_string(Interp *interp, const struct Type *errtype, StringObject *str)
+static ErrObject *create_error_from_string(Interp *interp, const struct ErrType *et, StringObject *str)
 {
 	ErrObject *obj = object_new(interp, destroy_error, sizeof(*obj));
 	if (!obj)     // refactoring note: MAKE SURE that errobj_set_nomem() doesn't recurse here
 		return NULL;
 
 	obj->msgstr = str;
-	obj->stack = NULL;
-	obj->stacklen = 0;
-	obj->ownstack = false;
 	OBJECT_INCREF(str);
+	obj->type = et;
 	return obj;
 }
 
-static void set_from_string_obj(Interp *interp, const struct Type *errtype, StringObject *str)
+static void set_from_string_obj(Interp *interp, const struct ErrType *errtype, StringObject *str)
 {
 	ErrObject *obj = create_error_from_string(interp, errtype, str);
 	if (!obj)
@@ -107,7 +90,7 @@ static void set_from_string_obj(Interp *interp, const struct Type *errtype, Stri
 	OBJECT_DECREF(obj);
 }
 
-void errobj_set(Interp *interp, const struct Type *errtype, const char *fmt, ...)
+void errobj_set(Interp *interp, const struct ErrType *errtype, const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
@@ -132,70 +115,30 @@ void errobj_set_oserr(Interp *interp, const char *fmt, ...)
 		return;
 
 	if (savno)
-		errobj_set(interp, &errobj_type_os, "%S: %s (errno %d)", str, strerror(savno), savno);
+		errobj_set(interp, &errtype_os, "%S: %s (errno %d)", str, strerror(savno), savno);
 	else
-		set_from_string_obj(interp, &errobj_type_os, str);
+		set_from_string_obj(interp, &errtype_os, str);
 	OBJECT_DECREF(str);
 }
 
 
-static Object *error_string_constructor(Interp *interp, const struct Type *errtype, struct Object *const *args, size_t nargs)
+static Object *error_string_constructor(Interp *interp, const struct ErrType *errtype, struct Object *const *args, size_t nargs)
 {
 	assert(nargs == 1);
 	return (Object *) create_error_from_string(interp, errtype, (StringObject *) args[0]);
 }
 
-
-// if the ->stack of a compile-time created error is set, then this free()s it
-static bool freeing_cb_added = false;
-static void freeing_cb(void)
+bool errobj_begintry(Interp *interp)
 {
-	for (size_t i = 0; i < sizeof(compile_time_created_errors)/sizeof(compile_time_created_errors[0]); i++)
-	{
-		assert(compile_time_created_errors[i]->head.refcount == 1);
-		if (compile_time_created_errors[i]->ownstack)
-			free(compile_time_created_errors[i]->stack);
-	}
+	/*
+	There must be enough room for 2 errors, because we can have an error in try
+	and then another error while handling that in 'catch'.
+
+	FIXME: this should allocate room for more than 2 errors with nested trys
+	*/
+	return dynarray_alloc(interp, &interp->errstack, interp->errstack.len + 2);
 }
 
-void errobj_beginhandling(Interp *interp, ErrObject *err)
-{
-	assert(0);   // TODO
-}
-
-
-static bool print_source_line(const char *path, size_t lineno)
-{
-	FILE *f = fopen(path, "r");
-	if (!f)
-		return false;
-
-	int c;
-
-	while (--lineno) {
-		// skip line
-		while ((c = fgetc(f)) != EOF && c != '\n')
-			;
-		if (c == EOF) {
-			fclose(f);
-			return false;
-		}
-	}
-
-	// skip spaces
-	c = EOF;
-	while ((c = getc(f)) == ' ')
-		;
-	if (c != EOF)
-		ungetc(c, f);
-
-	while ((c = fgetc(f)) != EOF && c != '\n')
-		putc(c, stderr);
-	putc('\n', stderr);
-
-	fclose(f);
-	return true;
-}
 
 void errobj_printstack(Interp *interp, ErrObject *err)
 {
@@ -209,15 +152,14 @@ static bool tostring_cfunc(Interp *interp, struct ObjData data, Object *const *a
 	*result = (Object *)s;
 	return true;
 }
-/*FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &errobj_type_error });
+/*FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &errtype_error });
 
 static struct TypeAttr attrs[] = {
 	{ TYPE_ATTR_METHOD, &tostring },
 };
 */
 
-const struct Type errobj_type_error = {0};
-const struct Type errobj_type_nomem = {0};
-const struct Type errobj_type_variable = {0};
-const struct Type errobj_type_value = {0};
-const struct Type errobj_type_os = {0};
+const struct ErrType errtype_nomem = { "NoMemError" };
+const struct ErrType errtype_variable = { "VariableError" };
+const struct ErrType errtype_value = { "ValueError" };
+const struct ErrType errtype_os = { "OsError" };

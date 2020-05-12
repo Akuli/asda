@@ -172,6 +172,9 @@ class _FunctionBodyTyper:
             return ast.IfStatement(
                 statement.location, cond, if_body, else_body)
 
+        if isinstance(statement, ast.Throw):
+            return statement
+
         raise NotImplementedError(statement)
 
     def _do_expression_raw(self, expression: ast.Expression) -> ast.Expression:

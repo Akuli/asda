@@ -10,27 +10,30 @@
 #include "objects/int.h"
 
 
-void interp_init(Interp *interp, const char *argv0)
+bool interp_init(Interp *interp, const char *argv0)
 {
 	interp->argv0 = argv0;
 	interp->objliststart = NULL;
 	interp->basedir = NULL;
 
-	memset(interp->intcache, 0, sizeof(interp->intcache));  // not strictly standard compliant but simpler than a loop
+	// not strictly standard compliant but simpler than a loop
+	memset(interp->intcache, 0, sizeof(interp->intcache));
 
 	dynarray_init(&interp->callstack);
 	dynarray_init(&interp->objstack);
 	dynarray_init(&interp->errstack);
 	dynarray_init(&interp->code);
-	//dynarray_init(&interp->funcinfo);
+
+	// there must be always room for one more error to occur
+	return dynarray_alloc_noerr(&interp->errstack, 1);
 }
 
-// FIXME
 void interp_destroy(Interp *interp)
 {
-	for (size_t i = 0; i < sizeof(interp->intcache)/sizeof(interp->intcache[0]); i++)
+	for (size_t i = 0; i < sizeof(interp->intcache)/sizeof(interp->intcache[0]); i++) {
 		if (interp->intcache[i])
 			OBJECT_DECREF(interp->intcache[i]);
+	}
 
 	for (size_t i = 0; i < interp->code.len; i++) {
 		codeop_destroy(interp->code.ptr[i]);
@@ -49,5 +52,4 @@ void interp_destroy(Interp *interp)
 	free(interp->objstack.ptr);
 	free(interp->errstack.ptr);
 	free(interp->code.ptr);
-	//free(interp->funcinfo.ptr);
 }

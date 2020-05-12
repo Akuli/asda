@@ -52,7 +52,7 @@ static bool pop_cfunc(Interp *interp, struct ObjData data, Object *const *args, 
 	ArrayObject *arr = (ArrayObject *)args[0];
 
 	if (arr->da.len == 0) {
-		errobj_set(interp, &errobj_type_value, "cannot pop from an empty array");
+		errobj_set(interp, &errtype_value, "cannot pop from an empty array");
 		return false;
 	}
 
@@ -69,7 +69,7 @@ static bool get_cfunc(Interp *interp, struct ObjData data, Object *const *args, 
 	if (i->spilled || i->val.lon < 0 || i->val.lon >= (long)arr->da.len) {
 		StringObject *istr = intobj_tostrobj(interp, i);
 		if (istr) {   // an error has been already set if intobj_tostrobj() failed
-			errobj_set(interp, &errobj_type_value, "cannot do get element %S from an array of length %zu", istr, arr->da.len);
+			errobj_set(interp, &errtype_value, "cannot do get element %S from an array of length %zu", istr, arr->da.len);
 			OBJECT_DECREF(istr);
 		}
 		return false;

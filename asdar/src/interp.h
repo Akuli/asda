@@ -9,11 +9,34 @@ struct Object;
 struct ErrObject;
 struct IntObject;
 
+/*
+Call stacks are not attached to error objects because the same error object may
+get thrown twice, and in that case it should have different call stacks. This
+struct is an error object and the call stack leading to the line that threw up.
+*/
+struct InterpErrStackItem {
+	struct ErrObject *errobj;
+
+	/*
+	If the callstack is too long for this, then we ignore some of it in the
+	middle. Generally the start and end of long stack traces are worth looking at,
+	and the middle of a stack trace is often uninteresting.
+
+	Having to allocate these when starting error handling could mean that we fail
+	to handle an error without being able to print a stack trace, which is what we
+	really want to avoid the most. This means that we need to allocate space for
+	the callstack associated with each error before the error actually happens,
+	and we don't know yet how much space we need.
+	*/
+	struct CodeOp *callstack[200];
+	size_t callstacklen;
+	size_t callstackskip;   // how many items missing from middle of callstack
+};
+
 typedef struct Interp {
 	const char *argv0;
 
-	// the only object created at runtime that has ->prev == NULL
-	// all (not yet destroyed) runtime created objects can be found from here with ->next
+	// Start of linked list of all runtime-created objects
 	struct Object *objliststart;
 
 	/*
@@ -48,21 +71,24 @@ typedef struct Interp {
 	// this is for local variables and arguments
 	DynArray(struct Object *) objstack;
 
-	// see objects/err.h
-	DynArray(struct ErrObject *) errstack;
+	/*
+	The purpose of this is that when an error happens while handling another
+	error, both errors are shown in the error message. For example, let's say
+	that error1 happens. Then while handling that, we get error2, and while
+	handling error2 we get error3. Then all the errors go to errstack, and the
+	error message printing code finds them from there.
+	*/
+	DynArray(struct InterpErrStackItem) errstack;
 
 	// code being ran, from all imported modules
 	DynArray(struct CodeOp) code;
-
-	// always sorted by CodeFuncInfo.startptr for binary seraching
-	//DynArray(struct CodeFuncInfo *) funcinfo;
 } Interp;
 
 
-// never fails
-void interp_init(Interp *interp, const char *argv0);
+// may fail for no memory, then this returns false
+bool interp_init(Interp *interp, const char *argv0);
 
-// never fails, always leaves errstr untouched
+// never fails
 void interp_destroy(Interp *interp);
 
 #endif   // INTERP_H

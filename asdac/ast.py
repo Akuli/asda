@@ -134,6 +134,11 @@ class CallFunction(Expression, Statement):
 
 
 @attr.s(auto_attribs=True, eq=False, order=False, frozen=True)
+class Throw(Statement):
+    pass
+
+
+@attr.s(auto_attribs=True, eq=False, order=False, frozen=True)
 class Return(Statement):
     value: typing.Optional[Expression]
 

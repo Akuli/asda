@@ -36,7 +36,7 @@ void assert_error_matches_and_clear(Interp *interp, const struct Type *errtype, 
 	ErrObject *err = dynarray_pop(&interp->errstack);
 	assert(err->type == errtype);
 
-	if (errtype == &errobj_type_nomem)
+	if (errtype == &errtype_nomem)
 		assert(err->refcount == 2);   // nomemerr is stored in a static variable
 	else
 		assert(err->refcount == 1);
