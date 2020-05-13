@@ -3,9 +3,8 @@
 - pass statements instead of void statements, to make it familiar for python users and avoid reusing same keyword for multiple different things
 - keyboard interrupt handling idea: can't `catch` but `finally` works anyhow
 - make sure that the incr part of `for init; cond; incr:` gets parsed after body
-- some example files don't compile, they are in `examples/broken`
-- when all example files compile, make sure that they run
-- asdac's bytecode reading stuff is broken
+- get all example files to compile and run
+- come up with a nicer alternative for `functype{(A, B) -> C}` syntax
 - simpler import syntax
 
     ```
@@ -18,56 +17,74 @@
 
     (I have no idea what I've been thinking when I wrote the above example code)
 
-- reimplement try,catch,finally in a LOT simpler way... I have an idea
-- maybe the interpreter shouldn't know anything about types, other than how to decref?
+    Honestly I think the following import syntax would be best:
+
+    ```
+    import blah from some/path/blah.asda
+    ```
+
+    Most of the time you can read this as just `import blah`, but if the imports
+    don't work, then you can read the rest of the import to figure out what it's
+    trying to do.
+
+- add suport for closure vars
+
+    ```
+    function f() -> functype{() -> Int}
+    let f = () -> functype{() -> Int}:
+        let i = 0
+        return () -> Int:
+            i += 1
+            return i
+
+    let g = f()
+    print("{g()} {g()} {g()}")
+    ```
+
+    This should print `1 2 3`, and for that, the `g` function needs
+    to hold the `i` value somehow. Can be solved by wrapping `i` into a
+    "container" object that the returned function would hold a reference to.
+
 - add yields back, were removed in b0e0fbb because they hadn't been
   maintained in a while and would have made the code more complicated
-- add a way to forward-declare variables for e.g. functions that call each other?
-
-    alternatively could cook in two steps instead, first signatures and then definitions,
-    but it would lead to weird javascripty hoisting stuff.
-    For example, if this is allowed
-
-    ```
-    let f = () -> void:
-        g()
-
-    let g = () -> void:
-        ...
-    ```
-
-    then how about this?
-
-    ```
-    let a = b
-    let b = 123
-    ```
-
-    or this?
-
-    ```
-    print(message)
-    let message = "hello"
-    ```
+- finish implementing try,catch,finally
+- implicitly put stuff to a `main()` function
 
 - cyclic import, must choose one:
     - disallow? (add error message to compiler)
     - allow (design semantics and implement)
 - some kind of C extension api?
-- generic types in nested functions bug
-    is this fixed now? it could be
-- docs for Str, Int, Bool and friends
+- implement generic types, careful with nested functions
+- docs for everything
 - update asdac tests, go for 100% coverage
-- update asdar tests, check coverages with printf or find better coverage tool
-- union types (may be hard to implement):
+- check asdar test coverages with printf or find better coverage tool
+- union types:
 
-        func debug_print(Union[Str, Int] obj):
-            print(obj.to_debug_string())
+        union Foo:
+            Str a
+            Str b
+            Int c
 
-    are they even necessary though?
+        function bar(Foo foo):
+            switch foo:
+                case a:
+                    # foo is a string
+                case b:
+                    # foo is a string
+                case c:
+                    # foo is an integer
 
-- to_debug_string method to all objects
-- oopy subclassy stuff:
+        bar(123)                # foo.c will be 123
+        bar("hello")            # error
+        bar(Foo.b("hello"))     # foo.b will be hello
+
+    compiler doesn't know about types, but it must know which member of the union
+    is being used. Instead of identifying union members by type, we can identify
+    them with their names (or after compiling, integer ID's corresponding to the
+    names). This is good because it might be useful to put the same type in the
+    union twice.
+
+- oopy subclassy stuff, to_debug_string method to all objects?
 
         func debug_print(Object obj) -> void:
             print(obj.to_debug_string())
@@ -97,7 +114,7 @@
 - classes and oop:
     - add a way to create class members without taking more arguments in class
     - add some way to run code whenever a new instance is created, maybe a method named `setup()`?
-    - `const` for class members
+    - `const` for class members (but no `const` for local variables, C has that and I don't use it)
     - `private` for class members and methods
     - `instanceof` or similar
     - idea: add "anti-inheritance", creating class with everything from another
@@ -121,9 +138,7 @@
 
         implement JsonObject for List[JsonObject]:
             toJson = (List[JsonObject] list) -> Str:
-                return "[" + list.map((JsonObject jo) -> Str:
-                    return jo.to_json()
-                ).join(",") + "]"
+                return "[" + list.map(jo => jo.to_json()).join(",") + "]"
 
     this would not pollute namespace, so `"hello".to_json()` would not
     work, but `cast[JsonObject]("hello").to_json()` or similar would be
@@ -150,13 +165,22 @@
     easier to implement in a language with reference objects, so should
     wait until compiler is written in asda
 
-- array literals: `["a", "b"]`, type of `[]` could be `Array[auto]`
+- array literals: `["a", "b"]`, type of `[]` could be `Array[auto]` (and automatic
+  types should work well enough for this to be actually useful, unlike with mypy)
 
 - design a concept of "common baseclass" or similar, useful for e.g.
-  `[x, y]` when `x` and `y` have different types. Should never fall back
-  to `Object`, e.g. `[1, "a"]` is compile error and not array of
-  `Object`. For the object array you could do
-  `[cast[Object](1), cast[Object]("a")]` (but why?)
+  `[x, y]` when `x` and `y` have different types. The interpreter shouldn't know
+  much about types, so having an `Object` type or similar makes no sense in asda.
+  This means that `[1, "a"]` should be a compile error. If you really want to mix
+  strings and integers, you would need to use a Union for that:
+
+    ```
+    union Mixed:
+        Str s
+        Int i
+
+    let foo = [Mixed.i(1), Mixed.s("a")]
+    ```
 
 - one-liner lambdas: if `run_callback` wants an argument of type
   `functype{(Int) -> Str}`, then `run_callback(x => x.to_string())`
@@ -172,8 +196,7 @@
             return x.to_string()
         )
 
-    Feels weird to use `->` and `=>` for different things, but I don't
-    have better ideas
+    Feels weird to use `->` and `=>` for different things?
 
 - relpath and different drives
 - how should compiler and interpreter treat symlinks?
@@ -202,32 +225,7 @@ isn't.
   that fits into a long without any allocations, maybe change Object to
   be something like `union { long intval; struct HeapObject *heapobj; }`
   for this? `HeapObject` would be like all objects are now (reference
-  counted etc)
+  counted etc). Currently only very small integers can be created without
+  allocating, because they are cached.
 
-- allocate less `Scope` objects by putting local vars to the runner stack
-    - may need to add an optimizer to the compiler to make this useful
-    - problem: how to ensure that variables defined in closures work?
-
-        ```
-        let f = () -> functype{() -> Int}:
-            let i = 0
-            return () -> Int:
-                i += 1
-                return i
-
-        let g = f()
-        print("{g()} {g()} {g()}")
-        ```
-
-        this should print `1 2 3`, and for that, the `g` function needs
-        to hold the `i` value somehow (currently with definition scopes
-        and parent scopes)
-
-        maybe could be solved by wrapping `i` into a "container" object
-        that the returned function would hold a reference to
-
-- create less runners by inlining functions in compiler
-- make the runners use the same stack? this seems complicated, could be
-  better to just inline
-- asdac: new compile step, a directed graph of possible code
-  paths that could run
+- inline functions in compiler
