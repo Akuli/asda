@@ -14,42 +14,21 @@
 #include "objects/int.h"
 #include "objects/string.h"
 
-#define TYPE_LIST_SECTION 'y'
-
 #define SET_LINENO 'L'
 #define GET_BUILTIN_VAR 'U'
-#define CREATE_BOX '0'
-#define SET_TO_BOX 'O'
-#define UNBOX 'o'
-#define SET_ATTR ':'
-#define GET_ATTR '.'
 #define STR_CONSTANT '"'
-#define FUNCTION_BEGINS 'f'
 #define CALL_BUILTIN_FUNCTION 'b'
 #define CALL_THIS_FILE_FUNCTION '('
-#define CALL_CONSTRUCTOR ')'
 #define JUMP 'K'
 #define JUMP_IF 'J'
-#define JUMP_IF_EQ_INT '='
-#define JUMP_IF_EQ_STR 'q'
 #define STRING_JOIN 'j'
 #define NON_NEGATIVE_INT_CONSTANT '1'
 #define NEGATIVE_INT_CONSTANT '2'
 #define THROW 't'
 #define RETURN 'r'
-
 #define POP 'P'
 #define SWAP 'S'
 #define DUP 'D'
-
-#define INT_ADD '+'
-#define INT_SUB '-'
-#define INT_NEG '_'
-#define INT_MUL '*'
-
-#define TYPEBYTE_ASDACLASS 'a'
-#define TYPEBYTE_BUILTIN 'b'
-#define TYPEBYTE_VOID 'v'
 
 //#define DEBUG(...) printf(__VA_ARGS__)
 #define DEBUG(...) (void)0
@@ -272,6 +251,7 @@ read_builtin_func(struct BcReader *bcr)
 	return &builtin_funcs[i];
 }
 
+// TODO: when function begin, grow the stack to required size
 static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *res, size_t jumpstart)
 {
 	switch(opbyte) {
@@ -281,13 +261,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 
 	case GET_BUILTIN_VAR:
 		return read_get_builtin_var(bcr, res);
-
-	// TODO: make the compiler emit info about stack sizes again
-	case FUNCTION_BEGINS: res->kind = CODE_FUNCBEGINS; return read_uint16(bcr, &res->data.objstackincr);
-
-	case CREATE_BOX: res->kind = CODE_CREATEBOX; return true;
-	case SET_TO_BOX: res->kind = CODE_SET2BOX;   return true;
-	case UNBOX:      res->kind = CODE_UNBOX;     return true;
 
 	case CALL_THIS_FILE_FUNCTION:
 		res->kind = CODE_CALLCODEFUNC;
@@ -300,8 +273,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 
 	case JUMP:           res->kind = CODE_JUMP;         return read_jump(bcr, &res->data.jump, jumpstart);
 	case JUMP_IF:        res->kind = CODE_JUMPIF;       return read_jump(bcr, &res->data.jump, jumpstart);
-	case JUMP_IF_EQ_INT: res->kind = CODE_JUMPIFEQ_INT; return read_jump(bcr, &res->data.jump, jumpstart);
-	case JUMP_IF_EQ_STR: res->kind = CODE_JUMPIFEQ_STR; return read_jump(bcr, &res->data.jump, jumpstart);
 
 	case NON_NEGATIVE_INT_CONSTANT:
 	case NEGATIVE_INT_CONSTANT:
@@ -319,10 +290,6 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 
 	case DUP: res->kind = CODE_DUP; return read_uint16(bcr, &res->data.objstackidx);
 
-	case INT_ADD: res->kind = CODE_INT_ADD; return true;
-	case INT_SUB: res->kind = CODE_INT_SUB; return true;
-	case INT_NEG: res->kind = CODE_INT_NEG; return true;
-	case INT_MUL: res->kind = CODE_INT_MUL; return true;
 	case RETURN:  res->kind = CODE_RETURN;  return true;
 	case THROW:   res->kind = CODE_THROW;   return true;
 	case POP:     res->kind = CODE_POP;     return true;

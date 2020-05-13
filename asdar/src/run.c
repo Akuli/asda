@@ -174,13 +174,6 @@ bool run(Interp *interp, size_t startidx)
 		Object *obj;
 
 		switch(ptr->kind) {
-		case CODE_FUNCBEGINS:
-			sz = state.objstack.len + ptr->data.objstackincr;
-			if (!dynarray_alloc(interp, &state.objstack, sz))
-				goto error;
-			ptr++;
-			break;
-
 		case CODE_CONSTANT:
 			if (!dynarray_push(interp, &state.objstack, ptr->data.obj))
 				goto error;
