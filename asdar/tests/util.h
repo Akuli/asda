@@ -4,13 +4,13 @@
 // stdio.h is here to allow debugging tests by adding printf
 #include <stdio.h>   // IWYU pragma: keep
 #include <src/interp.h>
-#include <src/type.h>
+#include <src/objects/err.h>
 #include <src/objects/string.h>
 
 #define TEST(NAME) void test_##NAME(Interp *interp)
 
 void assert_cstr_eq_cstr(const char *s1, const char *s2);
 void assert_strobj_eq_cstr(StringObject *obj, const char *s);
-void assert_error_matches_and_clear(Interp *interp, const struct Type *errtype, const char *cstr);
+void assert_error_matches_and_clear(Interp *interp, const struct ErrType *errtype, const char *cstr);
 
 #endif   // TESTS_UTIL_H

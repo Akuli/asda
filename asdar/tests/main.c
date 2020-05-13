@@ -56,8 +56,7 @@ int main(int argc, char **argv)
 		printf("  Running test: %s\n", #NAME); \
 		void test_##NAME(Interp *); \
 		test_##NAME(&interp); \
-		assert(interp.errstack.len == 0); \
-		assert(interp.objstack.len == 0); \
+		assert(!interp.err); \
 	} \
 } while(0)
 #include "runcalls.h"

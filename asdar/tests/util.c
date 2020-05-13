@@ -7,7 +7,6 @@
 #include <src/dynarray.h>
 #include <src/interp.h>
 #include <src/object.h>
-#include <src/type.h>
 #include <src/objects/err.h>
 #include <src/objects/string.h>
 
@@ -30,16 +29,17 @@ void assert_strobj_eq_cstr(StringObject *obj, const char *s)
 	assert_cstr_eq_cstr(objstr, s);
 }
 
-void assert_error_matches_and_clear(Interp *interp, const struct Type *errtype, const char *cstr)
+void assert_error_matches_and_clear(Interp *interp, const struct ErrType *errtype, const char *cstr)
 {
-	assert(interp->errstack.len == 1);
-	ErrObject *err = dynarray_pop(&interp->errstack);
-	assert(err->type == errtype);
+	assert(interp->err);
+	ErrObject *err = interp->err;
+	interp->err = NULL;
 
+	assert(err->type == errtype);
 	if (errtype == &errtype_nomem)
-		assert(err->refcount == 2);   // nomemerr is stored in a static variable
+		assert(err->head.refcount == 2);   // nomemerr is stored in a static variable
 	else
-		assert(err->refcount == 1);
+		assert(err->head.refcount == 1);
 	assert_strobj_eq_cstr(err->msgstr, cstr);
 
 	OBJECT_DECREF(err);
