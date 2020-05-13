@@ -52,8 +52,5 @@ example:
 */
 void errobj_set_oserr(Interp *interp, const char *fmt, ...);
 
-// Get ready for running catch statements. May fail.
-bool errobj_begintry(Interp *interp);
-
 
 #endif   // OBJECTS_ERR_H

@@ -19,7 +19,7 @@ static void destroy_array(Object *obj, bool decrefrefs, bool freenonrefs)
 		free(arr->da.ptr);
 }
 
-static struct Object* array_constructor(Interp *interp, const struct Type *arrtype, struct Object *const *args, size_t nargs)
+static struct Object* array_constructor(Interp *interp, struct Object *const *args, size_t nargs)
 {
 	ArrayObject *res = object_new(interp, destroy_array, sizeof(*res));
 	if (!res)

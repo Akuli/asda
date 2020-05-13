@@ -31,13 +31,10 @@ static ErrObject nomemerr = {
 
 void errobj_set_obj(Interp *interp, ErrObject *err)
 {
-	// most of InterpErrStackItem is filled in run.c
-	struct InterpErrStackItem insi = { .errobj = err };
+	assert(err);
+	assert(!interp->err);   // run.c should handle this
+	interp->err = err;
 	OBJECT_INCREF(err);
-
-	// error handling code must ensure that there's always room for one more error
-	assert(interp->errstack.alloc >= interp->errstack.len + 1);
-	dynarray_push_itwillfit(&interp->errstack, insi);
 }
 
 void errobj_set_nomem(Interp *interp)
@@ -106,23 +103,6 @@ static Object *error_string_constructor(Interp *interp, const struct ErrType *er
 {
 	assert(nargs == 1);
 	return (Object *) create_error_from_string(interp, errtype, (StringObject *) args[0]);
-}
-
-bool errobj_begintry(Interp *interp)
-{
-	/*
-	There must be enough room for 2 errors, because we can have an error in try
-	and then another error while handling that in 'catch'.
-
-	FIXME: this should allocate room for more than 2 errors with nested trys
-	*/
-	return dynarray_alloc(interp, &interp->errstack, interp->errstack.len + 2);
-}
-
-
-void errobj_printstack(Interp *interp, ErrObject *err)
-{
-	assert(0);   // TODO
 }
 
 static bool tostring_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)

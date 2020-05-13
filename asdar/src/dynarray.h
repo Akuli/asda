@@ -48,9 +48,9 @@ dynarray_alloc returns a success bool
 	( ((DAP)->ptr[(DAP)->len++] = (OBJ)) , true ) \
 )
 
-// you can use this instead of dynarray_push when you know that there is room in the dynarray
-// this returns nothing
+// You can use this instead of dynarray_push when you know that there is room
 #define dynarray_push_itwillfit(DAP, OBJ) do { \
+	assert((DAP)->alloc > (DAP)->len); \
 	(DAP)->ptr[(DAP)->len++] = (OBJ); \
 } while(0)
 
