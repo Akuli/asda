@@ -6,11 +6,11 @@
 #include <string.h>
 
 #if defined(_WIN32) || defined(_WIN64)
-#define WINDOWS
-#include <direct.h>
+	#define WINDOWS
+	#include <direct.h>
 #else
-#undef WINDOWS
-#include <unistd.h>
+	#undef WINDOWS
+	#include <unistd.h>
 #endif
 
 
@@ -46,10 +46,11 @@ char *path_getcwd(void)
 			return NULL;
 		}
 
-		// got the cwd, need to remove trailing slashes
+		// got the cwd, need to remove trailing slashes but not strip "/" to ""
 		size_t len = strlen(buf);
-		while (buf[len-1] == PATH_SLASH && len > 0)
+		while (len >= 2 && buf[len-1] == PATH_SLASH)
 			len--;
+		buf[len] = '\0';
 		return buf;
 	}
 

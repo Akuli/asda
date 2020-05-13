@@ -1,3 +1,14 @@
+#if defined(_WIN32) || defined(_WIN64)
+	#define WINDOWS
+#else
+	#undef WINDOWS
+
+	// for chdir()
+	#define _POSIX_C_SOURCE 200809L
+	#include <unistd.h>
+#endif
+
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -36,13 +47,27 @@ TEST(path_isabsolute)
 	}
 }
 
-TEST(path_getcwd)
+static void getcwd_stuff(void)
 {
 	char *cwd = path_getcwd();
 	assert(cwd);
 	assert(strlen(cwd) > 0);
 	assert(path_isabsolute(cwd));
 	free(cwd);
+}
+
+TEST(path_getcwd)
+{
+	getcwd_stuff();
+
+#if !defined(WINDOWS)
+	printf("doing weird stuff...\n");
+	char *old = path_getcwd();
+	chdir("/");
+	getcwd_stuff();
+	chdir(old);
+	free(old);
+#endif
 }
 
 TEST(path_toabsolute)
