@@ -4,6 +4,8 @@
 
 #ifdef __cplusplus
 extern "C" {
+#else
+#define noexcept
 #endif
 
 #include <stdbool.h>
@@ -33,22 +35,22 @@ enum PathConcatFlags {
 // sets errno and returns NULL on error
 // if this runs out of mem, errno is set to ENOMEM and NULL is returned
 // ENOMEM is not in C99, but windows and posix have it
-char *path_getcwd(void);
+char *path_getcwd(void) noexcept;
 
 // check if a path is absolute
 // example: on non-Windows, /home/akuli/ö/src is absolute and ö/src is not
-bool path_isabsolute(const char *path);
+bool path_isabsolute(const char *path) noexcept;
 
 // join a NULL-terminated array of paths by PATH_SLASH
 // sets errno to ENOMEM and returns NULL on no mem
 // return value must be free()'d
-char *path_concat(const char *const *paths, enum PathConcatFlags flags);
+char *path_concat(const char *const *paths, enum PathConcatFlags flags) noexcept;
 
 // find absolute path, then split "/foo/bar/baz" into "/foo/bar" and "baz"
-bool path_split(const char *in, char **dirname, char **basename);
+bool path_split(const char *in, char **dirname, char **basename) noexcept;
 
 // Is a newer than b? Returns 1 for newer, 0 for older or equally old, -1 for error.
-int path_isnewerthan(const char *a, const char *b);
+int path_isnewerthan(const char *a, const char *b) noexcept;
 
 #ifdef __cplusplus
 }   // extern "C"

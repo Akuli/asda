@@ -52,7 +52,7 @@ std::filesystem::path remove_dotdots_dumbly(const std::filesystem::path& p)
 
 extern "C" {
 
-char *path_getcwd(void)
+char *path_getcwd(void) noexcept
 {
 	try {
 		std::filesystem::path path = std::filesystem::current_path();
@@ -62,7 +62,7 @@ char *path_getcwd(void)
 	catch (std::bad_alloc& e) { errno = ENOMEM; return nullptr; }
 }
 
-bool path_isabsolute(const char *pathstr)
+bool path_isabsolute(const char *pathstr) noexcept
 {
 	try {
 		std::filesystem::path path(pathstr);
@@ -72,7 +72,7 @@ bool path_isabsolute(const char *pathstr)
 	catch (std::bad_alloc& e) { errno = ENOMEM; return false; }
 }
 
-char *path_concat(const char *const *paths, enum PathConcatFlags flags)
+char *path_concat(const char *const *paths, enum PathConcatFlags flags) noexcept
 {
 	assert(paths[0]);
 
@@ -81,10 +81,8 @@ char *path_concat(const char *const *paths, enum PathConcatFlags flags)
 		if (flags & PATH_FIRSTPARENT)
 			path = path.parent_path();
 
-		for (size_t i = 1; paths[i]; i++) {
-			std::filesystem::path add(paths[i]);
-			path /= add;
-		}
+		for (size_t i = 1; paths[i]; i++)
+			path /= paths[i];
 
 		if ((flags & PATH_RMDOTDOT) || (flags & PATH_RMDOTDOT_DUMB)) {
 			try {
@@ -101,32 +99,29 @@ char *path_concat(const char *const *paths, enum PathConcatFlags flags)
 	catch (std::bad_alloc& e) { errno = ENOMEM; return nullptr; }
 }
 
-bool path_split(const char *in, char **dirname, char **basename)
-{
-	*dirname = NULL;
-	*basename = NULL;
 
+
+typedef std::unique_ptr<char[], void(*)(void *)> MallocedCstr;
+
+bool path_split(const char *in, char **dirname, char **basename) noexcept
+{
+	MallocedCstr parent_path(nullptr, free), filename(nullptr, free);
 	try {
 		std::filesystem::path path(in);
 		path = std::filesystem::canonical(path);
-		*dirname = cppstring_to_cstring(path.parent_path());
-		*basename = cppstring_to_cstring(path.filename());
+		parent_path.reset(cppstring_to_cstring(path.parent_path()));
+		filename.reset(cppstring_to_cstring(path.filename()));
 	}
-	catch (std::system_error& e) { handle_system_error(e); goto error; }
-	catch (std::bad_alloc& e) { errno = ENOMEM; goto error; }
+	catch (std::system_error& e) { handle_system_error(e); return false; }
+	catch (std::bad_alloc& e) { errno = ENOMEM; return false; }
 
-	assert(*dirname);
-	assert(*basename);
+	*dirname = parent_path.release();
+	*basename = filename.release();
 	return true;
-
-error:
-	free(*dirname);
-	free(*basename);
-	return false;
 }
 
 
-int path_isnewerthan(const char *a, const char *b)
+int path_isnewerthan(const char *a, const char *b) noexcept
 {
 	try {
 		std::filesystem::file_time_type
