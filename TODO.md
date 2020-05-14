@@ -1,4 +1,4 @@
-- refuse to read source if it's newer than compiled
+- `func` instead of `function`? nobody wants to type `function`. similarly `meth` instead of `method`?
 - check that all loops work
 - pass statements instead of void statements, to make it familiar for python users and avoid reusing same keyword for multiple different things
 - keyboard interrupt handling idea: can't `catch` but `finally` works anyhow
@@ -30,8 +30,7 @@
 - add suport for closure vars
 
     ```
-    function f() -> functype{() -> Int}
-    let f = () -> functype{() -> Int}:
+    function f() -> functype{() -> Int}:
         let i = 0
         return () -> Int:
             i += 1
