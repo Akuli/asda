@@ -5,7 +5,9 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "object.h"
+
+// forward declaring because this file gets included early in compilation
+struct Object;
 
 enum CodeOpKind {
 	CODE_CONSTANT,
@@ -35,13 +37,13 @@ typedef union {   // TODO: remove typedef?
 	const struct BuiltinFunc *builtinfunc;
 	struct CodeAttrData { const struct Type *type; uint16_t index; } attr;
 	struct CodeSwapData { uint16_t index1, index2; } swap;
-	Object *obj;
+	struct Object *obj;
 } CodeData;
 
 struct CodeOp {
 	enum CodeOpKind kind;
 	CodeData data;
-	const char *srcpath;   // relative to interp->basedir
+	size_t modidx;   // index into interp->mods
 	unsigned long lineno;
 };
 

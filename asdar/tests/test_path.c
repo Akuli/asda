@@ -61,7 +61,6 @@ TEST(path_getcwd)
 	getcwd_stuff();
 
 #if !defined(WINDOWS)
-	printf("doing weird stuff...\n");
 	char *old = path_getcwd();
 	chdir("/");
 	getcwd_stuff();
@@ -88,47 +87,51 @@ TEST(path_toabsolute)
 
 TEST(path_concat)
 {
-	char *s = path_concat("a", "b");
+	char *s = path_concat((const char *[]){ "a", "b", NULL }, 0);
 	assert_cstr_eq_cstr(s, "a" PATH_SLASHSTR "b");
 	free(s);
 
-	s = path_concat("a", "");
-	assert_cstr_eq_cstr(s, "a" PATH_SLASHSTR);
+	s = path_concat((const char *[]){ "a", "", NULL }, 0);
+	assert_cstr_eq_cstr(s, "a");
 	free(s);
 
-	s = path_concat("", "b");
+	s = path_concat((const char *[]){ "", "b", NULL }, 0);
 	assert_cstr_eq_cstr(s, "b");
 	free(s);
 
-	s = path_concat("a", ".." PATH_SLASHSTR "b");
-	assert_cstr_eq_cstr(s, "a" PATH_SLASHSTR ".." PATH_SLASHSTR "b");
-	free(s);
-
-	s = path_concat("a" PATH_SLASHSTR "..", "b");
+	s = path_concat((const char *[]){ "a", "..", "b", NULL }, 0);
 	assert_cstr_eq_cstr(s, "a" PATH_SLASHSTR ".." PATH_SLASHSTR "b");
 	free(s);
 }
 
 TEST(path_concat_dotdot)
 {
-	char *s = path_concat_dotdot("a" PATH_SLASHSTR "b", ".." PATH_SLASHSTR "c");
-	assert_cstr_eq_cstr(s, "a" PATH_SLASHSTR "c");
-	free(s);
-
-	s = path_concat_dotdot("a", ".." PATH_SLASHSTR "b");
-	assert_cstr_eq_cstr(s, "b");
-	free(s);
-
-	s = path_concat_dotdot("a", "b");
+	char *s = path_concat((const char *[]){ "a", "b", NULL }, PATH_RMDOTDOT);
 	assert_cstr_eq_cstr(s, "a" PATH_SLASHSTR "b");
 	free(s);
 
-	s = path_concat_dotdot("a", ".." PATH_SLASHSTR "b");
+	s = path_concat((const char *[]){ "a", "..", "b", NULL }, PATH_RMDOTDOT);
 	assert_cstr_eq_cstr(s, "b");
 	free(s);
 
-	s = path_concat_dotdot("a", ".." PATH_SLASHSTR ".." PATH_SLASHSTR "b");
-	assert_cstr_eq_cstr(s, ".." PATH_SLASHSTR "b");
+	s = path_concat((const char *[]){ "a", "..", NULL }, PATH_RMDOTDOT);
+	assert_cstr_eq_cstr(s, "");
+	free(s);
+
+	s = path_concat((const char *[]){ "a", "..", "..", "..", "b", NULL }, PATH_RMDOTDOT);
+	assert_cstr_eq_cstr(s, "b");
+	free(s);
+
+	s = path_concat((const char *[]){ "a", "b", "..", "c", NULL }, PATH_RMDOTDOT);
+	assert_cstr_eq_cstr(s, "a" PATH_SLASHSTR "c");
+	free(s);
+
+	s = path_concat((const char *[]){ "a", "b", "c", ".."PATH_SLASHSTR".."PATH_SLASHSTR"foo", NULL }, PATH_RMDOTDOT);
+	assert_cstr_eq_cstr(s, "a"PATH_SLASHSTR"foo");
+	free(s);
+
+	s = path_concat((const char *[]){ "a", ".."PATH_SLASHSTR".."PATH_SLASHSTR"foo", NULL }, PATH_RMDOTDOT);
+	assert_cstr_eq_cstr(s, ".."PATH_SLASHSTR"foo");
 	free(s);
 }
 
@@ -139,4 +142,18 @@ TEST(path_findlastslash)
 	assert(path_findlastslash("asd" PATH_SLASHSTR "blah") == 3);
 	assert(path_findlastslash("asd" PATH_SLASHSTR "blah" PATH_SLASHSTR) == 3);
 	assert(path_findlastslash("asd" PATH_SLASHSTR "blah" PATH_SLASHSTR PATH_SLASHSTR) == 3);
+}
+
+TEST(path_isnewerthan)
+{
+	const char *path = "temp file for tests";
+	fclose(fopen(path, "w"));
+
+	assert(path_isnewerthan(path, "README.md") == 1);
+	assert(path_isnewerthan("README.md", path) == 0);
+	assert(path_isnewerthan("README.md", "README.md") == 0);
+	assert(path_isnewerthan("this doesnt exist", "README.md") == -1);
+	assert(path_isnewerthan("README.md", "this doesnt exist") == -1);
+
+	remove(path);
 }

@@ -156,7 +156,7 @@ static bool call_builtin_function(Interp *interp, struct State *state, const str
 	return true;
 }
 
-bool run(Interp *interp, size_t startidx)
+static bool run(Interp *interp, size_t startidx)
 {
 	struct State state;
 	if (!init_state(&state, interp))
@@ -255,4 +255,9 @@ error:
 
 	deinit_state(&state);
 	return false;
+}
+
+bool run_module(Interp *interp, const struct InterpModInfo *mod)
+{
+	run(interp, mod->startidx);
 }

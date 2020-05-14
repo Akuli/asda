@@ -47,12 +47,15 @@ Here is a complete usage example (with includes omitted):
 #include <stddef.h>
 #include "interp.h"
 
+// forward declare because this file gets included early in compilation
+struct Interp;
+
 // FIXME
 struct ObjData {};
 
 struct ObjectHead {
 	void (*destroy)(struct Object *obj, bool decrefrefs, bool freenonrefs);
-	Interp *interp;              // NULL for OBJECT_COMPILETIMECREATE objects
+	struct Interp *interp;       // NULL for OBJECT_COMPILETIMECREATE objects
 	struct Object *prev, *next;  // a doubly-linked list so that removing objects is fast
 	unsigned int refcount;       // access this only with OBJECT_INCREF and OBJECT_DECREF.  TODO: atomic?
 	unsigned int gcflag;         // for gc.c, don't use elsewhere
@@ -78,7 +81,6 @@ this is static because it has to be defined in .h file for the above to work in 
 */
 static const struct ObjectHead object_compiletime_head = { .refcount = 1 };
 
-
 // decref evaluates the arg multiple times
 // incref doesn't, but i don't recommend relying on it, might change in the future
 #define OBJECT_INCREF(obj) ((obj)->head.refcount++)
@@ -95,7 +97,7 @@ destroy can be NULL
 return type declared as void* to avoid a cast when calling object_new()
 */
 void *object_new(
-	Interp *interp,
+	struct Interp *interp,
 	void (*destroy)(Object *obj, bool decrefrefs, bool freenonrefs),
 	size_t sz);
 

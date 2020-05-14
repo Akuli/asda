@@ -15,6 +15,7 @@ void interp_init(Interp *interp, const char *argv0)
 	*interp = (Interp){0};
 	interp->argv0 = argv0;
 	dynarray_init(&interp->code);
+	dynarray_init(&interp->mods);
 }
 
 void interp_destroy(Interp *interp)
@@ -37,5 +38,12 @@ void interp_destroy(Interp *interp)
 		object_destroy(obj, false, true);
 	}
 
+	for (size_t i = 0; i < interp->mods.len; i++) {
+		free(interp->mods.ptr[i].srcpathabs);
+		free(interp->mods.ptr[i].bcpathabs);
+		free(interp->mods.ptr[i].bcpathrel);
+	}
+
 	free(interp->code.ptr);
+	free(interp->mods.ptr);
 }

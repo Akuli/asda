@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include "interp.h"
 
-bool run(Interp *interp, size_t startidx);
+bool run_module(Interp *interp, const struct InterpModInfo *mod);
 
 
 #endif   // RUN_H

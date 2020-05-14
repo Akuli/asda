@@ -1,13 +1,26 @@
 #include "path.h"
+#include <assert.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+/*
+the order of these matters, at least according to windows docs: "Because STAT.H
+uses the _dev_t type that is defined in TYPES.H, you must include TYPES.H before
+STAT.H in your code."
+*/
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 	#define WINDOWS
 	#include <direct.h>
+
+	// this works for the function named _stat AND the struct named _stat
+	#define stat _stat
 #else
 	#undef WINDOWS
 	#include <unistd.h>
@@ -75,6 +88,64 @@ bool path_isabsolute(const char *path)
 #endif
 }
 
+static inline bool is_dotdot(const char *s)
+{
+	return (strcmp(s, "..") == 0);
+}
+
+static inline bool starts_with_dotdotslash(const char *s)
+{
+	return (strncmp(s, ".." PATH_SLASHSTR, 3) == 0);
+}
+
+char *path_concat(const char *const *paths, enum PathConcatFlags flags)
+{
+	size_t sz = 1;   // for '\0'
+	for (size_t i = 0; paths[i]; i++) {
+		sz += strlen(paths[i]) + 1;   // +1 for PATH_SLASH
+	}
+
+	char *res = malloc(sz);
+	if (!res) {
+		errno = ENOMEM;
+		return NULL;
+	}
+
+	res[0] = '\0';
+
+	for (size_t i = 0; paths[i]; i++) {
+		const char *add = paths[i];
+
+		if ( flags & PATH_RMDOTDOT ){
+			while (res[0] && (is_dotdot(add) || starts_with_dotdotslash(add)))
+			{
+				size_t k = path_findlastslash(res);
+				if (k == 0 && path_isabsolute(res))  // avoid "/foo" --> "/" --> "". TODO: windows
+					break;
+
+				res[k] = '\0';
+				if (is_dotdot(add))
+					add = "";
+				else
+					add += strlen("../");
+			}
+		}
+
+		if (add[0]) {
+			if (res[0] && res[strlen(res) - 1] != PATH_SLASH)
+				strcat(res, PATH_SLASHSTR);
+			strcat(res, add);
+		}
+	}
+
+	if (flags & PATH_RMDOTDOT) {
+		// free up any memory that we didn't end up needing after all
+		res = realloc(res, strlen(res) + 1);
+		assert(res);
+	}
+	return res;
+}
+
 // strdup is non-standard
 static char *duplicate_string(const char *src)
 {
@@ -97,61 +168,9 @@ char *path_toabsolute(const char *path)
 		return NULL;
 
 	// TODO: figure out how to do this without symlink issues and ".."
-	char *res = path_concat_dotdot(cwd, path);
+	char *res = path_concat((const char *[]){cwd, path, NULL}, PATH_RMDOTDOT);
 	free(cwd);
-	if (!res)
-		errno = ENOMEM;
 	return res;
-}
-
-char *path_concat(const char *path1, const char *path2)
-{
-	size_t len1 = strlen(path1);
-	size_t len2 = strlen(path2);
-
-	if (len1 == 0)
-		return duplicate_string(path2);
-	// python returns 'asd/' for os.path.join('asd', ''), maybe that's good
-
-	bool needslash = (path1[len1-1] != PATH_SLASH);
-	char *res = malloc(len1 + (size_t)needslash + len2 + 1 /* for \0 */);
-	if (!res) {
-		errno = ENOMEM;
-		return NULL;
-	}
-
-	memcpy(res, path1, len1);
-	if (needslash) {
-		res[len1] = PATH_SLASH;
-		memcpy(res+len1+1, path2, len2+1);
-	} else
-		memcpy(res+len1, path2, len2+1);
-	return res;
-}
-
-static inline bool starts_with_dotdotslash(const char *s)
-{
-	return s[0] == '.' && s[1] == '.' && s[2] == '/';
-}
-
-char *path_concat_dotdot(const char *path1, const char *path2)
-{
-	if (!starts_with_dotdotslash(path2))
-		return path_concat(path1, path2);
-
-	char *prefix = duplicate_string(path1);
-	if (!prefix)
-		return NULL;
-
-	// must stop when prefix is empty string, otherwise "a" joined with "../../b" becomes "b"
-	while (prefix[0] && starts_with_dotdotslash(path2)) {
-		path2 += 3;    // 3 = length of "../"
-		prefix[path_findlastslash(prefix)] = 0;
-	}
-
-	char *res = path_concat(prefix, path2);
-	free(prefix);
-	return res;   // may be NULL
 }
 
 size_t path_findlastslash(const char *path)
@@ -172,4 +191,28 @@ size_t path_findlastslash(const char *path)
 			return i;
 	}
 	return 0;
+}
+
+
+// this is borrowed from libbsd-dev, file /usr/include/bsd/sys/time.h
+#define	timespeccmp(tsp, usp, cmp)					\
+	(((tsp)->tv_sec == (usp)->tv_sec) ?				\
+	    ((tsp)->tv_nsec cmp (usp)->tv_nsec) :			\
+	    ((tsp)->tv_sec cmp (usp)->tv_sec))
+
+int path_isnewerthan(const char *a, const char *b)
+{
+	struct stat astat, bstat;
+	if (stat(a, &astat) != 0 || stat(b, &bstat) != 0)
+		return -1;
+
+// look carefully, st_mtim and st_mtime are different things
+#if defined(st_mtime)
+	/*	We have nanosecond precision st_mtim, and st_mtime is a backwards
+		compatibility alias. This is the case on e.g. Linux. */
+	return timespeccmp(astat.st_mtim, bstat.st_mtim, >);
+#else
+	// e.g. windows
+	return difftime(astat.st_mtime, bstat.st_mtime) > 0;
+#endif
 }

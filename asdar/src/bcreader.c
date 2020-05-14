@@ -34,24 +34,22 @@
 #define DEBUG(...) (void)0
 
 
-struct BcReader bcreader_new(Interp *interp, FILE *in, const char *indirname)
-{
-	struct BcReader res = {0};  // most things to 0 for bcreader_destroy() and stuff
-	res.interp = interp;
-	res.in = in;
-	res.indirname = indirname;
-	res.lineno = 1;
-	return res;
-}
+struct BcReader {
+	Interp *interp;
+	FILE *file;
+	uint32_t lineno;
+	const char *bcpathabs;
+	size_t modidx;
+};
 
 
 static bool read_bytes(struct BcReader *bcr, unsigned char *buf, size_t n)
 {
-	if (fread(buf, 1, n, bcr->in) == n)
+	if (fread(buf, 1, n, bcr->file) == n)
 		return true;
 
-	// TODO: include file name in error msg?
-	if (feof(bcr->in))   // feof does not set errno
+	// TODO: include file name file error msg?
+	if (feof(bcr->file))   // feof does not set errno
 		errobj_set_oserr(bcr->interp, "unexpected end of file");
 	else
 		errobj_set_oserr(bcr->interp, "reading failed");
@@ -84,7 +82,7 @@ static bool read_string(struct BcReader *bcr, char **str, uint32_t *len)
 		return false;
 
 	// len+1 so that adding 0 byte will be easy if needed, and empty string is not a special case
-	if (!( *str = malloc((*len)+1) )) {
+	if (!( *str = malloc((*len) + 1) )) {
 		*len = 0;
 		errobj_set_nomem(bcr->interp);
 		return false;
@@ -106,7 +104,7 @@ static bool read_string0(struct BcReader *bcr, char **str)
 	(*str)[len] = 0;
 	if (strlen(*str) < (size_t)len) {
 		// TODO: maybe a separate error type for bytecode errors?
-		errobj_set(bcr->interp, &errtype_value, "unexpected 0 byte in string");
+		errobj_set(bcr->interp, &errtype_value, "unexpected 0 byte file string");
 		free(*str);
 		return false;
 	}
@@ -115,30 +113,26 @@ static bool read_string0(struct BcReader *bcr, char **str)
 
 static bool read_path(struct BcReader *bcr, char **resptr)
 {
+	// "foo" --> "/some/path/blah.asdac/../foo" --> "/some/path/foo"
+
 	char *path;
 	if (!read_string0(bcr, &path))
 		return false;
 
-	// compiler lowercases all the paths, that's not needed here
+	*resptr = path_concat(
+		(const char*[]){ bcr->bcpathabs, "..", path, NULL },
+		PATH_RMDOTDOT);
 
-	if (PATH_SLASH != '/') {
-		char *p = path;
-		while (( p = strchr(p, '/') ))
-			*p++ = PATH_SLASH;
-	}
-
-	*resptr = path_concat_dotdot(bcr->indirname, path);
 	if (!*resptr)
 		errobj_set_oserr(bcr->interp, "cannot create absolute path of '%s'", path);
 	free(path);
 	return !!*resptr;
 }
 
-
-static const unsigned char asda[6] = { 'a', 's', 'd', 'a', 0xA5, 0xDA };
-
-bool bcreader_readasdabytes(struct BcReader *bcr)
+bool read_asda_bytes(struct BcReader *bcr)
 {
+	static const unsigned char asda[] = { 'a', 's', 'd', 'a', 0xA5, 0xDA };
+
 	unsigned char buf[sizeof asda];
 	if (!read_bytes(bcr, buf, sizeof buf))
 		return false;
@@ -147,15 +141,6 @@ bool bcreader_readasdabytes(struct BcReader *bcr)
 		return true;
 	errobj_set(bcr->interp, &errtype_value, "the file doesn't seem to be a compiled asda file");
 	return false;
-}
-
-bool bcreader_readsourcepath(struct BcReader *bcr)
-{
-	char *res;
-	if (!read_path(bcr, &res))
-		return NULL;
-	bcr->srcpath = res;
-	return true;
 }
 
 static bool read_opbyte(struct BcReader *bcr, unsigned char *ob)
@@ -320,7 +305,7 @@ static bool read_function(struct BcReader *bcr, size_t jumpstart)
 
 		struct CodeOp *op = &bcr->interp->code.ptr[oldlen + i];
 		op->lineno = bcr->lineno;
-		op->srcpath = bcr->srcpath;
+		op->modidx = bcr->modidx;
 		// data and kind are filled by read_op()
 
 		if (!read_op(bcr, ob, op, jumpstart))
@@ -333,12 +318,12 @@ static bool read_function(struct BcReader *bcr, size_t jumpstart)
 	return true;
 
 error:
-	// let bcreader_readcodepart() handle it all
+	// let read_code_part() handle it all
 	bcr->interp->code.len = oldlen + i;
 	return false;
 }
 
-long bcreader_readcodepart(struct BcReader *bcr)
+static long read_code_part(struct BcReader *bcr)
 {
 	size_t jumpstart = bcr->interp->code.len;
 
@@ -360,4 +345,55 @@ error:
 	while (bcr->interp->code.len > jumpstart)
 		codeop_destroy(dynarray_pop(&bcr->interp->code));
 	return -1;
+}
+
+bool bcreader_read(Interp *interp, char *bcpathrel)
+{
+	// make sure there's enough room for modinfo when cleaning up on error is easy
+	size_t modidx = interp->mods.len;
+	if (!dynarray_alloc(interp, &interp->mods, modidx + 1)) {
+		free(bcpathrel);
+		return false;
+	}
+
+	struct InterpModInfo *mod = &interp->mods.ptr[modidx];
+	mod->bcpathrel = bcpathrel;
+	mod->bcpathabs = NULL;
+	mod->srcpathabs = NULL;
+
+	if (!( mod->bcpathabs = path_concat((const char*[]){interp->basedir, bcpathrel, NULL}, 0) )) {
+		errobj_set_oserr(interp, "cannot get absolute path of '%s'", bcpathrel);
+		goto error;
+	}
+
+	struct BcReader bcr = {
+		.interp = interp,
+		.lineno = 1,
+		.bcpathabs = mod->bcpathabs,
+		.modidx = modidx,
+	};
+
+	if (!( bcr.file = fopen(mod->bcpathabs, "rb") )) {
+		errobj_set_oserr(interp, "cannot open '%s'", mod->bcpathabs);
+		goto error;
+	}
+
+	long startidx;
+	bool ok =
+		read_asda_bytes(&bcr) &&
+		read_path(&bcr, &mod->srcpathabs) &&
+		(startidx = read_code_part(&bcr)) != -1;
+	fclose(bcr.file);
+	if (!ok)
+		goto error;
+
+	mod->startidx = (size_t)startidx;
+	interp->mods.len++;
+	return true;
+
+error:
+	free(mod->bcpathrel);
+	free(mod->bcpathabs);
+	free(mod->srcpathabs);
+	return false;
 }

@@ -82,6 +82,12 @@ void errobj_set(Interp *interp, const struct ErrType *errtype, const char *fmt, 
 
 void errobj_set_oserr(Interp *interp, const char *fmt, ...)
 {
+	if (errno == ENOMEM) {
+		// message and stuff ignored to avoid allocations
+		errobj_set_nomem(interp);
+		return;
+	}
+
 	int savno = errno;
 
 	va_list ap;

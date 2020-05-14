@@ -1,13 +1,23 @@
 #ifndef INTERP_H
 #define INTERP_H
 
+#include "code.h"
 #include "dynarray.h"
 
 // forward declarations needed because many things need an Interp
-struct CodeOp;
 struct Object;
 struct ErrObject;
 struct IntObject;
+
+struct InterpModInfo {
+	char *srcpathabs;
+	char *bcpathabs;
+	char *bcpathrel;   // relative to interp->basedir
+
+	// index into interp->code
+	size_t startidx;
+};
+
 
 typedef struct Interp {
 	const char *argv0;
@@ -43,6 +53,9 @@ typedef struct Interp {
 
 	// code being ran, from all imported modules
 	DynArray(struct CodeOp) code;
+
+	// info about imported modules
+	DynArray(struct InterpModInfo) mods;
 } Interp;
 
 

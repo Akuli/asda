@@ -26,10 +26,17 @@ int main(int argc, char **argv)
 		goto error;
 	}
 
+	size_t fullen = strlen(basedir);
 	size_t i = path_findlastslash(basedir);
 	basedir[i] = 0;
 	interp.basedir = basedir;
-	const char *relative = basedir + (i+1);
+
+	char *relative = malloc(fullen - i);
+	if (!relative) {
+		errobj_set_nomem(&interp);
+		goto error;
+	}
+	strcpy(relative, basedir + (i+1));
 
 	if (!import(&interp, relative))
 		goto error;
@@ -40,7 +47,7 @@ int main(int argc, char **argv)
 	return 0;
 
 error:
-	// if a stack trace was printed, then interp.err is NULL
+	// if a stack trace was printed already, then interp.err is NULL
 	if (interp.err) {
 		stacktrace_print_raw(interp.err);
 		OBJECT_DECREF(interp.err);

@@ -10,59 +10,14 @@
 #include "run.h"
 #include "objects/err.h"
 
-bool import(Interp *interp, const char *bcpath)
+bool import(Interp *interp, char *bcpath)
 {
 	assert(bcpath[0]);
-
-	// for fopen() below
-	char *fullbcpath = path_concat(interp->basedir, bcpath);
-	if (!fullbcpath) {
-		errobj_set_oserr(interp, "getting the full path to '%s' failed", bcpath);
+	bool ok = bcreader_read(interp, bcpath);
+	if (!ok)
 		return false;
-	}
-
-	size_t i = path_findlastslash(bcpath);
-	char *dir = malloc(i+1);
-	if (!dir) {
-		free(fullbcpath);
-		errobj_set_nomem(interp);
-		return false;
-	}
-	memcpy(dir, bcpath, i);
-	dir[i] = 0;
-
-	FILE *f = fopen(fullbcpath, "rb");
-	if (!f) {
-		errobj_set_oserr(interp, "cannot open '%s'", fullbcpath);
-		free(dir);
-		free(fullbcpath);
-		return false;
-	}
-	free(fullbcpath);
-
-	struct BcReader bcr = bcreader_new(interp, f, dir);
-
-	long mainidx;
-	if (!bcreader_readasdabytes(&bcr)
-		|| !bcreader_readsourcepath(&bcr)
-		|| (mainidx = bcreader_readcodepart(&bcr)) < 0
-		)
-	{
-		goto error;
-	}
 
 	// TODO: handle import cycles
 
-	if (!run(interp, (size_t)mainidx))
-		goto error;
-
-	// srcpath not freed here, the code needs it
-	free(dir);
-	fclose(f);
-	return true;
-
-error:
-	free(dir);
-	fclose(f);
-	return false;
+	return run_module(interp, &interp->mods.ptr[interp->mods.len - 1]);
 }
