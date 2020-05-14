@@ -3,8 +3,8 @@
 #include <stddef.h>
 #include "../object.h"
 
-BoolObject boolobj_true = { .head = object_compiletime_head };
-BoolObject boolobj_false = { .head = object_compiletime_head };
+BoolObject boolobj_true = { .head = OBJECT_COMPILETIME_HEAD };
+BoolObject boolobj_false = { .head = OBJECT_COMPILETIME_HEAD };
 
 // https://stackoverflow.com/a/18636323
 extern inline BoolObject *boolobj_c2asda(bool cbool);

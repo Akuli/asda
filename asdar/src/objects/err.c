@@ -23,7 +23,7 @@ static void destroy_error(Object *obj, bool decrefrefs, bool freenonrefs)
 static StringObject nomemerr_string = STRINGOBJ_COMPILETIMECREATE(
 	'n','o','t',' ','e','n','o','u','g','h',' ','m','e','m','o','r','y');
 static ErrObject nomemerr = {
-	.head = object_compiletime_head,
+	.head = OBJECT_COMPILETIME_HEAD,
 	.type = &errtype_nomem,
 	.msgstr = &nomemerr_string,
 };

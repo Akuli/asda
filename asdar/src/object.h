@@ -72,14 +72,14 @@ typedef struct Object { struct ObjectHead head; } Object;
 Usage:
 
 	ExampleObject obj = {
-		.head = object_compiletime_head,
+		.head = OBJECT_COMPILETIME_HEAD,
 		.customfield = 1,
 		.anotherfield = 2,
 	);
 
-this is static because it has to be defined in .h file for the above to work in .c files
+this is a weird macro because that's the only way for it to work in gcc and clang
 */
-static const struct ObjectHead object_compiletime_head = { .refcount = 1 };
+#define OBJECT_COMPILETIME_HEAD { .refcount = 1 }
 
 // decref evaluates the arg multiple times
 // incref doesn't, but i don't recommend relying on it, might change in the future

@@ -26,7 +26,7 @@ typedef struct StringObject {
 // example:  struct StringObject hello = STRINGOBJ_COMPILETIMECREATE('h','e','l','l','o');
 // only ascii supported
 #define STRINGOBJ_COMPILETIMECREATE(...) { \
-	.head = object_compiletime_head, \
+	.head = OBJECT_COMPILETIME_HEAD, \
 	.val = (uint32_t[]){__VA_ARGS__}, \
 	.len = sizeof( (uint32_t[]){__VA_ARGS__} ) / sizeof(uint32_t), \
 	.utf8cache = (char[]){__VA_ARGS__, '\0'}, \
