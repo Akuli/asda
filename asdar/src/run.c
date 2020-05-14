@@ -259,5 +259,5 @@ error:
 
 bool run_module(Interp *interp, const struct InterpModInfo *mod)
 {
-	run(interp, mod->startidx);
+	return run(interp, mod->startidx);
 }
