@@ -46,4 +46,5 @@ void interp_destroy(Interp *interp)
 
 	free(interp->code.ptr);
 	free(interp->mods.ptr);
+	free(interp->basedir);
 }

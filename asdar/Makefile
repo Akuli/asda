@@ -2,12 +2,18 @@ CFLAGS += -std=c99 -Wall -Wextra -Wpedantic -Wconversion -Werror=incompatible-po
 CFLAGS += -Wno-unused-parameter -Wno-address
 #CFLAGS += -Werror=stack-usage=16384   # BUFSIZ is 8192 on my system
 CFLAGS += -g
+CXXFLAGS += -g
 CFLAGS += -O0
-LDFLAGS += -lgmp
+CXXFLAGS += -O0
+
+CXXFLAGS += -std=c++17 -Wall -Wextra -Wpedantic -Wconversion
+
+LDFLAGS += -lgmp -lstdc++ -lstdc++fs
 IWYUFLAGS += -Xiwyu --no_fwd_decl
 
-SRC := $(filter-out src/main.c, $(wildcard src/*.c src/objects/*.c))
-OBJ := $(SRC:src/%.c=obj/%.o)
+SRC := $(filter-out src/main.c, $(wildcard src/*.c src/*.cpp src/objects/*.c))
+OBJ_TMP := $(SRC:src/%.c=obj/%.o)
+OBJ := $(OBJ_TMP:src/%.cpp=obj/%.o)
 HEADERS := $(wildcard src/*.h src/objects/*.h)
 TESTS_SRC := $(wildcard tests/*.c tests/objects/*.c)
 TESTS_HEADERS := $(filter-out tests/runcalls.h, $(wildcard tests/*.h)) tests/runcalls.h
@@ -17,6 +23,7 @@ IWYU_SRC := src/main.c $(filter-out src/dynarray.c, $(SRC) $(TESTS_SRC))
 
 ifdef NDEBUG
 	CFLAGS += -DNDEBUG
+	CXXFLAGS += -DNDEBUG
 endif
 
 all: asdar
@@ -28,6 +35,9 @@ clean:
 
 obj/%.o: src/%.c $(HEADERS)
 	mkdir -p $(@D) && $(CC) -c -o $@ $< $(CFLAGS)
+
+obj/%.o: src/%.cpp $(HEADERS)
+	mkdir -p $(@D) && $(CXX) -c -o $@ $< $(CXXFLAGS)
 
 asdar: src/main.c $(OBJ) $(HEADERS)
 	$(CC) $(CFLAGS) $< $(OBJ) -o $@ $(LDFLAGS)

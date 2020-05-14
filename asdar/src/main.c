@@ -11,8 +11,6 @@
 
 int main(int argc, char **argv)
 {
-	char *basedir = NULL;
-
 	if (argc != 2) {
 		fprintf(stderr, "Usage: %s bytecodefile\n", argv[0]);
 		return 2;
@@ -21,22 +19,11 @@ int main(int argc, char **argv)
 	Interp interp;
 	interp_init(&interp, argv[0]);
 
-	if (!( basedir = path_toabsolute(argv[1]) )) {
-		errobj_set_oserr(&interp, "finding absolute path of '%s' failed", argv[1]);
+	char *basedir = NULL, *relative = NULL;
+	if (!path_split(argv[1], &interp.basedir, &relative)) {
+		errobj_set_oserr(&interp, "finding or splitting absolute path of '%s' failed", argv[1]);
 		goto error;
 	}
-
-	size_t fullen = strlen(basedir);
-	size_t i = path_findlastslash(basedir);
-	basedir[i] = 0;
-	interp.basedir = basedir;
-
-	char *relative = malloc(fullen - i);
-	if (!relative) {
-		errobj_set_nomem(&interp);
-		goto error;
-	}
-	strcpy(relative, basedir + (i+1));
 
 	if (!import(&interp, relative))
 		goto error;

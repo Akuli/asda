@@ -43,7 +43,7 @@ typedef struct Interp {
 
 	This is an absolute path and it's set in main.c, but interp_init() sets it to NULL temporarily
 	*/
-	const char *basedir;
+	char *basedir;
 
 	// optimization for Int objects, contains integers 0, 1, 2, ...
 	struct IntObject* intcache[20];

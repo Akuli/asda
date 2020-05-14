@@ -52,7 +52,7 @@ static bool read_bytes(struct BcReader *bcr, unsigned char *buf, size_t n)
 	if (feof(bcr->file))   // feof does not set errno
 		errobj_set_oserr(bcr->interp, "unexpected end of file");
 	else
-		errobj_set_oserr(bcr->interp, "reading failed");
+		errobj_set_oserr(bcr->interp, "reading '%s' failed", bcr->bcpathabs);
 	return false;
 }
 
@@ -120,11 +120,13 @@ static bool read_path(struct BcReader *bcr, char **resptr)
 		return false;
 
 	*resptr = path_concat(
-		(const char*[]){ bcr->bcpathabs, "..", path, NULL },
-		PATH_RMDOTDOT);
+		(const char*[]){ bcr->bcpathabs, path, NULL },
+		PATH_FIRSTPARENT | PATH_RMDOTDOT_DUMB);
 
-	if (!*resptr)
+	if (!*resptr) {
+		printf("%s\n", bcr->interp->basedir);
 		errobj_set_oserr(bcr->interp, "cannot create absolute path of '%s'", path);
+	}
 	free(path);
 	return !!*resptr;
 }

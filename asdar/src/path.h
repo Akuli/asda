@@ -2,6 +2,10 @@
 #ifndef PATH_H
 #define PATH_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -14,8 +18,15 @@
 #endif
 
 enum PathConcatFlags {
-	// Handle paths starting with ".." components and do funny stuff with symlinks.
+	// If possible, remove ".." components without doing funny stuff with symlinks.
 	PATH_RMDOTDOT = 1 << 0,
+
+	// Always remove ".." components, but do funny stuff with symlinks when the
+	// path doesn't exist.
+	PATH_RMDOTDOT_DUMB = 1 << 1,
+
+	// Use the parent of the fistr path instead of the first path
+	PATH_FIRSTPARENT = 1 << 2,
 };
 
 // return current working directory as a \0-terminated string that must be free()'d
@@ -28,22 +39,19 @@ char *path_getcwd(void);
 // example: on non-Windows, /home/akuli/ö/src is absolute and ö/src is not
 bool path_isabsolute(const char *path);
 
-// return a copy of path if it's absolute, otherwise path joined with current working directory
-// return value must be free()'d
-// returns NULL and sets errno on error (ENOMEM if malloc() fails)
-char *path_toabsolute(const char *path);
-
 // join a NULL-terminated array of paths by PATH_SLASH
 // sets errno to ENOMEM and returns NULL on no mem
 // return value must be free()'d
 char *path_concat(const char *const *paths, enum PathConcatFlags flags);
 
-// on non-windows, path_findlastslash("a/b/c.ö) returns the index of "/" before "c"
-// on windows, same gibberish with backslashes
-// useful for separating dirnames and basenames
-size_t path_findlastslash(const char *path);
+// find absolute path, then split "/foo/bar/baz" into "/foo/bar" and "baz"
+bool path_split(const char *in, char **dirname, char **basename);
 
 // Is a newer than b? Returns 1 for newer, 0 for older or equally old, -1 for error.
 int path_isnewerthan(const char *a, const char *b);
+
+#ifdef __cplusplus
+}   // extern "C"
+#endif
 
 #endif    // PATH_H
