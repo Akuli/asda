@@ -12,12 +12,15 @@
 
 static bool print_func(Interp *interp, Object *const *args)
 {
-	const char *s;
-	size_t len;
-	if (!stringobj_toutf8((StringObject *) args[0], &s, &len))
-		return false;
+	StringObject *sobj = (StringObject*)args[0];
+	const char *utf8 = stringobj_getutf8(sobj);
 
-	printf("%.*s\n", (int)len, s);
+	if (fwrite(utf8, 1, sobj->utf8len, stdout) != sobj->utf8len
+		|| putchar('\n') == EOF)
+	{
+		errobj_set_oserr(interp, "cannot write to stdout");
+		return false;
+	};
 	return true;
 }
 

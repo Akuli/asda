@@ -75,9 +75,6 @@ to ignore popped value and avoid compiler warning:
 	} \
 } while(0)
 
-// forward declare because interp.h includes this file
-struct Interp;
-
 // like the name says, don't use this outside this h file and the related c file
 bool dynarray_alloc_internal(void **ptr, size_t *alloc, size_t itemsz, size_t enough);
 

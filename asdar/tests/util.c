@@ -22,11 +22,8 @@ void assert_cstr_eq_cstr(const char *s1, const char *s2)
 
 void assert_strobj_eq_cstr(StringObject *obj, const char *s)
 {
-	const char *objstr;
-	size_t junk;
-	bool ok = stringobj_toutf8(obj, &objstr, &junk);
-	assert(ok);
-	assert_cstr_eq_cstr(objstr, s);
+	assert(strlen(stringobj_getutf8(obj)) == obj->utf8len);   // '\0' bytes not allowed
+	assert_cstr_eq_cstr(stringobj_getutf8(obj), s);
 }
 
 void assert_error_matches_and_clear(Interp *interp, const struct ErrType *errtype, const char *cstr)

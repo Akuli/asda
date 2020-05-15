@@ -58,15 +58,7 @@ static void print_op_stuff(Interp *interp, const char *word, const struct CodeOp
 
 void stacktrace_print_raw(ErrObject *err)
 {
-	fprintf(stderr, "%s: ", err->type->name);
-
-	// TODO: create a stringobj_toutf8 that doesn't do mallocs
-	const char *msg;
-	size_t len;
-	bool ok = stringobj_toutf8(err->msgstr, &msg, &len);
-	assert(ok);   // FIXME
-	fwrite(msg, 1, len, stderr);
-	fprintf(stderr, "\n");
+	fprintf(stderr, "%s: %s\n", err->type->name, stringobj_getutf8(err->msgstr));
 }
 
 void stacktrace_print(Interp *interp, const struct StackTrace *st)

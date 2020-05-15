@@ -8,66 +8,59 @@
 #include "../interp.h"
 #include "../object.h"
 
-
-// TODO: switch to utf8 strings, and convert to unicode only when needed?
-
-typedef struct StringObject {
+typedef struct {
 	struct ObjectHead head;
+	size_t utf8len;
 
-	uint32_t *val;
-	size_t len;
-
-	// use stringobj_toutf8() instead of accessing these directly
-	char *utf8cache;      // NULL if not cached yet, otherwise ends with '\0'
-	size_t utf8cachelen;
+	// utf8 is always '\0' terminated, but may contain other '\0' bytes too
+	// ct = compile time, rt = run time
+	const char *utf8ct;  // content of the string for CT strings, NULL for RT strings
+	char utf8rt[];       // not used for CT strings because there's no way to initialize this at CT
 } StringObject;
 
-// this is kind of painful to use
-// example:  struct StringObject hello = STRINGOBJ_COMPILETIMECREATE('h','e','l','l','o');
-// only ascii supported
-#define STRINGOBJ_COMPILETIMECREATE(...) { \
+// s must be a string literal and valid utf-8
+#define STRINGOBJ_COMPILETIMECREATE(s) { \
 	.head = OBJECT_COMPILETIME_HEAD, \
-	.val = (uint32_t[]){__VA_ARGS__}, \
-	.len = sizeof( (uint32_t[]){__VA_ARGS__} ) / sizeof(uint32_t), \
-	.utf8cache = (char[]){__VA_ARGS__, '\0'}, \
-	.utf8cachelen = sizeof( (char[]){__VA_ARGS__} ), \
+	.utf8len = sizeof(s) - 1, \
+	.utf8ct = s, \
 }
 
-// creates a copy of the val and uses that
-StringObject *stringobj_new(Interp *interp, const uint32_t *val, size_t len);
+// string creation functions try to make sure that this the only empty string
+extern StringObject stringobj_empty;
 
-// the val will be freed (if error then immediately, otherwise whenever the object is destroyed)
-StringObject *stringobj_new_nocpy(Interp *interp, uint32_t *val, size_t len);
+// never fails
+const char *stringobj_getutf8(StringObject *s);
 
-// if your utf8 is 0 terminated, pass strlen(utf8) for utflen
-StringObject *stringobj_new_utf8(Interp *interp, const char *utf, size_t utflen);
+// creates a copy of the utf8 and uses that
+// utf8 doesn't need to be '\0' terminated
+// make sure that you are not passing in invalid utf8 (use utf8_validate with user inputs)
+// if utf8 is NULL, then the content is left uninitialized, must get filled immediately after calling
+StringObject *stringobj_new(Interp *interp, const char *utf8, size_t utf8len);
+
+// like stringobj_new, but never copies utf8, always frees it
+StringObject *stringobj_new_nocp(Interp *interp, char *utf8, size_t utf8len);
 
 /*
 printf-like string creating
 
-format string must not come from user input:
-- error handling may be assert() or missing
-- constructing the string must not mean joining insanely many parts (see .c file for details)
+format string must not come from user input, because error handling may be assert() or missing
 
 here is spec:
 
 	fmt part  argument type    description
 	========  =============    ===========
-	%s        const char *     \0 terminated utf-8 string
+	%s        const char *     \0 terminated utf-8 string (it gets validated)
 	%d        int              base 10
 	%zu       size_t           base 10
 	%S        StringObject *   string object
-	%U        uint32_t         Unicode code point, e.g. "U+007A 'z'" for (uint32_t)'z'
+	%U        uint32_t         Unicode codepoint (possibly invalid), e.g. "U+007a 'z'" for (uint32_t)'z'
 	%B        unsigned char    byte with non-whitespace ascii character if any, e.g. "0x01" or "0x7a 'z'"
 	%%        no argument      literal % character added to output
 */
 StringObject *stringobj_new_format(Interp *interp, const char *fmt, ...);
 StringObject *stringobj_new_vformat(Interp *interp, const char *fmt, va_list ap);
 
-// behaves like utf8_encode.  DON'T FREE the val.
-bool stringobj_toutf8(StringObject *obj, const char **val, size_t *len);
-
-// checks if strings are equal
+// checks if strings are equal, never fails
 bool stringobj_eq(StringObject *a, StringObject *b);
 
 // joins all da strings

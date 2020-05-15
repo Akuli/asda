@@ -288,9 +288,10 @@ StringObject *intobj_tostrobj(Interp *interp, IntObject *x)
 		str = buf;
 	}
 
-	x->str = stringobj_new_utf8(interp, str, strlen(str));   // may be NULL
-	if (str != buf)
-		free(str);
+	if (str == buf)
+		x->str = stringobj_new(interp, str, strlen(str));
+	else
+		x->str = stringobj_new_nocp(interp, str, strlen(str));
 
 	if (x->str) {
 		OBJECT_INCREF(x->str);
@@ -304,11 +305,5 @@ const char *intobj_tocstr(Interp *interp, IntObject *x)
 	StringObject *obj = intobj_tostrobj(interp, x);
 	if (!obj)
 		return NULL;
-
-	const char *res;
-	size_t junk;
-	bool ok = stringobj_toutf8(obj, &res, &junk);
-	OBJECT_DECREF(obj);
-
-	return ok ? res : NULL;
+	return stringobj_getutf8(obj);
 }

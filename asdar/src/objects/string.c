@@ -12,110 +12,67 @@
 #include "../interp.h"
 #include "../object.h"
 
+StringObject stringobj_empty = STRINGOBJ_COMPILETIMECREATE("");
 
-static void destroy_string(Object *obj, bool decrefrefs, bool freenonrefs)
+
+static void setup_string_object(StringObject *obj, size_t utf8len)
 {
-	StringObject *str = (StringObject *)obj;
-	if (freenonrefs) {
-		free(str->utf8cache);
-		free(str->val);
-	}
+	obj->utf8len = utf8len;
+	obj->utf8ct = NULL;
+	obj->utf8rt[utf8len] = '\0';
 }
 
-StringObject *stringobj_new_nocpy(Interp *interp, uint32_t *val, size_t len)
+// creates a copy of the utf8 and uses that
+// utf8 doesn't need to be '\0' terminated
+// make sure that you are not passing in invalid utf8 (use utf8_validate with user inputs)
+// if utf8 is NULL, then the content is left uninitialized, must get filled immediately after calling
+StringObject *stringobj_new(Interp *interp, const char *utf8, size_t utf8len)
 {
-	StringObject *obj = object_new(interp, destroy_string, sizeof(*obj));
-	if (!obj) {
-		free(val);
-		return NULL;
+	if (utf8)
+		assert(utf8_validate(NULL, utf8, utf8len));
+	if (utf8len == 0) {
+		OBJECT_INCREF(&stringobj_empty);
+		return &stringobj_empty;
 	}
 
-	obj->val = val;
-	obj->len = len;
-	obj->utf8cache = NULL;
+	StringObject *obj = object_new(interp, NULL, sizeof(*obj) + utf8len + 1);
+	if (!obj)
+		return NULL;
+
+	if (utf8)
+		memcpy(obj->utf8rt, utf8, utf8len);
+	setup_string_object(obj, utf8len);
 	return obj;
 }
 
-StringObject *stringobj_new(Interp *interp, const uint32_t *val, size_t len)
+StringObject *stringobj_new_nocp(Interp *interp, char *utf8, size_t utf8len)
 {
-	uint32_t *valcp = malloc(sizeof(uint32_t)*len);
-	if (len && !valcp) {   // malloc(0) is special
+	if (utf8len == 0 || !utf8) {
+		free(utf8);
+		return stringobj_new(interp, NULL, utf8len);
+	}
+
+	// make room for object stuff
+	void *ptr = realloc(utf8, sizeof(StringObject) + utf8len + 1);
+	if (!ptr) {
+		free(utf8);
 		errobj_set_nomem(interp);
 		return NULL;
 	}
+	utf8 = ptr;
 
-	memcpy(valcp, val, sizeof(uint32_t)*len);
-	return stringobj_new_nocpy(interp, valcp, len);
+	// add object stuff to beginning of utf8
+	memmove(utf8 + sizeof(StringObject), utf8, utf8len);
+	object_init(interp, NULL, ptr);
+	setup_string_object(ptr, utf8len);
+	return ptr;
 }
 
-StringObject *stringobj_new_utf8(Interp *interp, const char *utf, size_t utflen)
+const char *stringobj_getutf8(StringObject *s)
 {
-	uint32_t *uni;
-	size_t unilen;
-	if (!utf8_decode(interp, utf, utflen, &uni, &unilen))
-		return NULL;
-	return stringobj_new_nocpy(interp, uni, unilen);
-}
-
-
-#define SMALL_SIZE 64
-enum PartValKind { PVK_BIG_CONST, PVK_BIG_MALLOC, PVK_SMALL };
-struct Part {
-	enum PartValKind valkind;
-	union {
-		uint32_t small[SMALL_SIZE];
-		const uint32_t *bigconst;
-		uint32_t *bigmalloc;
-	} val;
-	size_t len;
-};
-
-static void destroy_part(struct Part part)
-{
-	if (part.valkind == PVK_BIG_MALLOC)
-		free(part.val.bigmalloc);
-}
-
-// frees the bigmalloc vals of the parts
-static StringObject *create_new_string_from_parts(Interp *interp, const struct Part *parts, size_t nparts)
-{
-	size_t lensum = 0;
-	for (size_t i=0; i < nparts; i++)
-		lensum += parts[i].len;
-
-	if (lensum == 0) {
-		for (size_t i=0; i < nparts; i++)
-			destroy_part(parts[i]);
-		return stringobj_new_nocpy(interp, NULL, 0);
-	}
-
-	uint32_t *buf = malloc(lensum * sizeof(buf[0]));
-	if (!buf) {
-		errobj_set_nomem(interp);
-		goto error;
-	}
-
-	uint32_t *p = buf;
-	for (size_t i=0; i < nparts; i++) {
-		const uint32_t *val = NULL;   // initial value never used, silences warning
-		switch(parts[i].valkind) {
-			case PVK_BIG_MALLOC: val = parts[i].val.bigmalloc; break;
-			case PVK_BIG_CONST:  val = parts[i].val.bigconst;  break;
-			case PVK_SMALL:      val = parts[i].val.small;     break;
-		}
-
-		memcpy(p, val, parts[i].len * sizeof(p[0]));
-		destroy_part(parts[i]);
-		p += parts[i].len;
-	}
-
-	assert(p == buf+lensum);
-	return stringobj_new_nocpy(interp, buf, lensum);
-
-error:
-	for (size_t i=0; i < nparts; i++)
-		destroy_part(parts[i]);
-	return NULL;
+	if (s->utf8ct)
+		return s->utf8ct;
+	return s->utf8rt;
 }
 
 
@@ -123,110 +80,112 @@ error:
 // from those, you see that '!' is first and '~' is last non-whitespace ascii char
 #define IS_ASCII_PRINTABLE_NONWS(c) ('!' <= (c) && (c) <= '~')
 
-static void short_ascii_to_part(const char *ascii, struct Part *part)
+
+// typedef needed because every occurence of DynArray(char) is a new, different type
+typedef DynArray(char) Buf;   // NOT necessarily '\0'-terminated
+
+static bool chars_to_buf(Interp *interp, Buf *buf, const char *chars, size_t len)
 {
-	part->valkind = PVK_SMALL;
-	uint32_t *dst = part->val.small;
-	const char *src = ascii;
-	while (( *dst++ = (unsigned char)*src ))
-		src++;
-	part->len = (size_t)(src - ascii);
+	if (!dynarray_alloc(interp, buf, buf->len + len))
+		return false;
+	memcpy(&buf->ptr[buf->len], chars, len);
+	buf->len += len;
+	return true;
 }
 
 StringObject *stringobj_new_vformat(Interp *interp, const char *fmt, va_list ap)
 {
-	struct Part parts[20];
-	size_t nparts = 0;
+	Buf buf;
+	dynarray_init(&buf);
 
 	while (*fmt) {
 		if (fmt[0] != '%') {
 			const char *end = strchr(fmt, '%');
-			if (!end)
-				end = fmt + strlen(fmt);
-
-			parts[nparts].valkind = PVK_BIG_MALLOC;
-			if (!utf8_decode(interp, fmt, (size_t)(end - fmt), &parts[nparts].val.bigmalloc, &parts[nparts].len))
+			size_t len = end ? (size_t)(end - fmt) : strlen(fmt);
+			if (!chars_to_buf(interp, &buf, fmt, len))
 				goto error;
-			fmt = end;
-			nparts++;
+
+			fmt += len;
 			continue;
 		}
 
-		char ascii[SMALL_SIZE];
-
 		fmt++;   // skip '%'
-		switch (*fmt++) {
+
+		unsigned char uc;
+		char c;
+		char smol[64];
+		const char *str;
+		StringObject *strobj;
+		int i;
+		size_t sz;
+		unsigned long ul;
+
+		switch(*fmt++) {
 		case 's':
-		{
-			const char *str = va_arg(ap, const char *);
-			parts[nparts].valkind = PVK_BIG_MALLOC;
-			if (!utf8_decode(interp, str, strlen(str), &parts[nparts].val.bigmalloc, &parts[nparts].len))
+			str = va_arg(ap, const char*);
+			sz = strlen(str);
+			if (!utf8_validate(interp, str, sz) || !chars_to_buf(interp, &buf, str, sz))
 				goto error;
 			break;
-		}
 
 		case 'd':
-			sprintf(ascii, "%d", va_arg(ap, int));
-			short_ascii_to_part(ascii, &parts[nparts]);
+			i = sprintf(smol, "%d", va_arg(ap, int));
+			assert(0 < i && i < (int)sizeof(smol));
+			if (!chars_to_buf(interp, &buf, smol, (size_t)i))
+				goto error;
 			break;
 
 		case 'z':
-		{
-			char next = *fmt++;
-			assert(next == 'u');
-			sprintf(ascii, "%zu", va_arg(ap, size_t));
-			short_ascii_to_part(ascii, &parts[nparts]);
+			c = *fmt++;
+			assert(c == 'u');
+
+			i = sprintf(smol, "%zu", va_arg(ap, size_t));
+			assert(0 < i && i < (int)sizeof(smol));
+			if (!chars_to_buf(interp, &buf, smol, (size_t)i))
+				goto error;
 			break;
-		}
 
 		case 'S':
-		{
-			StringObject *obj = va_arg(ap, StringObject *);
-			parts[nparts].valkind = PVK_BIG_CONST;
-			parts[nparts].val.bigconst = obj->val;
-			parts[nparts].len = obj->len;
+			strobj = va_arg(ap, StringObject *);
+			if (!chars_to_buf(interp, &buf, stringobj_getutf8(strobj), strobj->utf8len))
+				goto error;
 			break;
-		}
-
-		case 'U':
-		{
-			unsigned long u = va_arg(ap, uint32_t);
-			if (IS_ASCII_PRINTABLE_NONWS(u))
-				sprintf(ascii, "U+%04lX '%c'", u, (char)u);
-			else
-				sprintf(ascii, "U+%04lX", u);
-			short_ascii_to_part(ascii, &parts[nparts]);
-			break;
-		}
 
 		case 'B':
-		{
-			unsigned char b = (unsigned char) va_arg(ap, int);   // https://stackoverflow.com/q/28054194
-			if (IS_ASCII_PRINTABLE_NONWS(b))
-				sprintf(ascii, "0x%02x '%c'", (int)b, (char)b);
+			uc = (unsigned char) va_arg(ap, int);   // https://stackoverflow.com/q/28054194
+			if (IS_ASCII_PRINTABLE_NONWS(uc))
+				i = sprintf(smol, "0x%02x '%c'", (int)uc, (char)uc);
 			else
-				sprintf(ascii, "0x%02x", (int)b);
+				i = sprintf(smol, "0x%02x", (int)uc);
 
-			short_ascii_to_part(ascii, &parts[nparts]);
+			assert(0 < i && i < (int)sizeof(smol));
+			if (!chars_to_buf(interp, &buf, smol, (size_t)i))
+				goto error;
 			break;
-		}
+
+		case 'U':
+			ul = va_arg(ap, uint32_t);
+			if (IS_ASCII_PRINTABLE_NONWS(ul))
+				i = sprintf(smol, "U+%04lX '%c'", ul, (char)ul);
+			else
+				i = sprintf(smol, "U+%04lX", ul);
+
+			assert(0 < i && i < (int)sizeof(smol));
+			if (!chars_to_buf(interp, &buf, smol, (size_t)i))
+				goto error;
+			break;
 
 		case '%':
-			short_ascii_to_part("%", &parts[nparts]);
+			if (!dynarray_push(interp, &buf, '%'))
+				goto error;
 			break;
-
-		default:
-			assert(0);
 		}
-
-		nparts++;
 	}
 
-	return create_new_string_from_parts(interp, parts, nparts);
+	return stringobj_new_nocp(interp, buf.ptr, buf.len);   // may be NULl
 
 error:
-	for (size_t i = 0; i < nparts; i++)
-		destroy_part(parts[i]);
+	free(buf.ptr);
 	return NULL;
 }
 
@@ -240,54 +199,41 @@ StringObject *stringobj_new_format(Interp *interp, const char *fmt, ...)
 }
 
 
-bool stringobj_toutf8(StringObject *obj, const char **val, size_t *len)
-{
-	if( !obj->utf8cache &&
-		!utf8_encode(obj->head.interp, obj->val, obj->len, &obj->utf8cache, &obj->utf8cachelen) )
-	{
-		obj->utf8cache = NULL;
-		return false;
-	}
-
-	*val = obj->utf8cache;
-	*len = obj->utf8cachelen;
-	return true;
-}
-
 bool stringobj_eq(StringObject *a, StringObject *b)
 {
-	if (a->len != b->len)
+	if (a->utf8len != b->utf8len)
 		return false;
-	return memcmp(a->val, b->val, a->len * sizeof(a->val[0])) == 0;
+	return memcmp(stringobj_getutf8(a), stringobj_getutf8(b), a->utf8len) == 0;
 }
 
 StringObject *stringobj_join(Interp *interp, StringObject *const *strs, size_t nstrs)
 {
-	if(nstrs == 0)
-		return stringobj_new_nocpy(interp, NULL, 0);
-	if(nstrs == 1) {
-		OBJECT_INCREF(strs[0]);
-		return strs[0];
+	if(nstrs == 0) {
+		OBJECT_INCREF(&stringobj_empty);
+		return &stringobj_empty;
 	}
 
-	struct Part *parts = malloc(nstrs * sizeof(parts[0]));
-	if (!parts) {
-		errobj_set_nomem(interp);
+	size_t totlen = 0;
+	for (size_t i = 0; i < nstrs; i++)
+		totlen += strs[i]->utf8len;
+
+	StringObject *res = stringobj_new(interp, NULL, totlen);
+	if (!res)
 		return NULL;
-	}
 
+	char *ptr = res->utf8rt;
+	assert(ptr);
 	for (size_t i = 0; i < nstrs; i++) {
-		parts[i].valkind = PVK_BIG_CONST;
-		parts[i].val.bigconst = strs[i]->val;
-		parts[i].len = strs[i]->len;
+		memcpy(ptr, stringobj_getutf8(strs[i]), strs[i]->utf8len);
+		ptr += strs[i]->utf8len;
 	}
+	assert(ptr == res->utf8rt + totlen);
 
-	StringObject *res = create_new_string_from_parts(interp, parts, nstrs);
-	free(parts);
-	return res;   // may be NULL
+	return res;
 }
 
 
+/*
 static StringObject *change_case(Interp *interp, StringObject *src, bool upper)
 {
 	if (src->len == 0) {
@@ -343,3 +289,4 @@ static bool getlength_cfunc(Interp *interp, struct ObjData data,
 	return !!( *result = (Object*)intobj_new_long(interp, (long) s->len) );
 }
 //FUNCOBJ_COMPILETIMECREATE(getlength, &stringobj_type, { &stringobj_type });
+*/

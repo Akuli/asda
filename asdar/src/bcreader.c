@@ -189,8 +189,7 @@ static bool read_string_constant(struct BcReader *bcr, Object **objptr)
 	if (!read_string(bcr, &str, &len))
 		return false;
 
-	*objptr = (Object *)stringobj_new_utf8(bcr->interp, str, len);
-	free(str);
+	*objptr = (Object *)stringobj_new_nocp(bcr->interp, str, len);
 	return !!*objptr;
 }
 

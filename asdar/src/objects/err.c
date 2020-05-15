@@ -20,8 +20,7 @@ static void destroy_error(Object *obj, bool decrefrefs, bool freenonrefs)
 
 
 // nomemerr is not created with malloc() because ... you know
-static StringObject nomemerr_string = STRINGOBJ_COMPILETIMECREATE(
-	'n','o','t',' ','e','n','o','u','g','h',' ','m','e','m','o','r','y');
+static StringObject nomemerr_string = STRINGOBJ_COMPILETIMECREATE("not enough memory");
 static ErrObject nomemerr = {
 	.head = OBJECT_COMPILETIME_HEAD,
 	.type = &errtype_nomem,

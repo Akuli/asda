@@ -86,10 +86,33 @@ TEST(utf8_encode)
 			break;
 		case FAIL:
 			assert(!ok);
-			assert_error_matches_and_clear(interp, &errobj_type_value, ex.errstr);
+			assert_error_matches_and_clear(interp, &errtype_value, ex.errstr);
 			break;
 		case SKIP:
 			assert(0);
+		}
+	}
+}
+
+TEST(utf8_validate)
+{
+	for (size_t i = 0; i < sizeof(examples)/sizeof(examples[0]); i++) {
+		const struct Utf8Example ex = examples[i];
+
+		switch(ex.decodew2d) {
+		case SUCCEED:
+			assert(utf8_validate(NULL, (const char *)ex.utf8, ex.utf8len));
+			assert(utf8_validate(interp, (const char *)ex.utf8, ex.utf8len));
+			assert(!interp->err);
+			break;
+		case FAIL:
+			assert(!utf8_validate(NULL, (const char *)ex.utf8, ex.utf8len));
+			assert(!interp->err);
+			assert(!utf8_validate(interp, (const char *)ex.utf8, ex.utf8len));
+			assert_error_matches_and_clear(interp, &errtype_value, ex.errstr);
+			break;
+		case SKIP:
+			break;
 		}
 	}
 }
@@ -98,29 +121,18 @@ TEST(utf8_decode)
 {
 	for (size_t i = 0; i < sizeof(examples)/sizeof(examples[0]); i++) {
 		const struct Utf8Example ex = examples[i];
-		if (ex.decodew2d == SKIP)
+		if (ex.decodew2d != SUCCEED)
 			continue;
 
 		uint32_t *uni;
 		size_t unilen;
 		bool ok = utf8_decode(interp, (const char *)ex.utf8, ex.utf8len, &uni, &unilen);
+		assert(ok);
+		assert(unilen == ex.unilen);
 
-		switch(ex.decodew2d) {
-		case SUCCEED:
-			assert(ok);
-			assert(unilen == ex.unilen);
-			// memcmp will do the right thing because uint32_t exists and CHAR_BIT == 8
-			// if those assumptions aren't true, then your platform is unsupported, sorry
-			// i support only posix (and maybe windows in the future)
-			assert(memcmp(uni, ex.uni, unilen * sizeof(uint32_t)) == 0);
-			free(uni);
-			break;
-		case FAIL:
-			assert(!ok);
-			assert_error_matches_and_clear(interp, &errobj_type_value, ex.errstr);
-			break;
-		case SKIP:
-			assert(0);
-		}
+		// memcmp will do the right thing because uint32_t exists and CHAR_BIT == 8
+		// if those assumptions aren't true, then your platform is unsupported, sorry
+		assert(memcmp(uni, ex.uni, unilen * sizeof(uint32_t)) == 0);
+		free(uni);
 	}
 }

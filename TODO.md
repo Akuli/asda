@@ -204,6 +204,7 @@
     that if you e.g. have a compiled asda file a symlink to it, and a
     different compiled file that imports both, the imported code will
     run twice (but in separate namespaces).
+- strings: add a way to iterate through unicode code points forwards and backwards, and convert between unicode code points and (utf-8) strings
 
 
 ## Optimization Ideas
@@ -213,12 +214,6 @@ that I won't forget the ideas.
 
 The goal is to make asda at least as fast as python, which it currently
 isn't.
-
-- strings: use utf-8 as internal representation
-    - most code inputs and outputs utf-8 anyway so this will mean less conversions
-    - add a way to iterate through the code points (when iterators exist)
-    - add a way to iterate through the code points backwards
-    - add a way to convert a code point to utf-8 (may be more than 1 byte)
 
 - integers: should be possible to create a new integer from anything
   that fits into a long without any allocations, maybe change Object to

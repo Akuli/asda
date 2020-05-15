@@ -35,18 +35,12 @@ void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs)
 	}
 }
 
-void *object_new(Interp *interp, void (*destroy)(Object *, bool, bool), size_t sz)
+void object_init(
+	struct Interp *interp,
+	void (*destroy)(Object *obj, bool decrefrefs, bool freenonrefs),
+	Object *obj)
 {
 	assert(interp);
-
-	assert(sz >= sizeof(Object));
-	Object *obj = malloc(sz);
-	if (!obj) {
-		// errobj_set_nomem does NOT create an object with object_new for this
-		// ituses a statically allocated no mem error object and does no allocations
-		errobj_set_nomem(interp);
-		return NULL;
-	}
 
 	obj->head = (struct ObjectHead) {
 		.destroy = destroy,   // may be NULL
@@ -58,6 +52,19 @@ void *object_new(Interp *interp, void (*destroy)(Object *, bool, bool), size_t s
 	if (interp->objliststart)
 		interp->objliststart->head.prev = obj;
 	interp->objliststart = obj;
+}
 
+void *object_new(Interp *interp, void (*destroy)(Object *, bool, bool), size_t sz)
+{
+	assert(sz >= sizeof(Object));
+	Object *obj = malloc(sz);
+	if (!obj) {
+		// errobj_set_nomem does NOT create an object with object_new for this
+		// ituses a statically allocated no mem error object and does no allocations
+		errobj_set_nomem(interp);
+		return NULL;
+	}
+
+	object_init(interp, destroy, obj);
 	return obj;
 }

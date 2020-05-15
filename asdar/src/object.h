@@ -101,6 +101,12 @@ void *object_new(
 	void (*destroy)(Object *obj, bool decrefrefs, bool freenonrefs),
 	size_t sz);
 
+// like object_new, but takes in already allocated pointer and never fails
+void object_init(
+	struct Interp *interp,
+	void (*destroy)(Object *obj, bool decrefrefs, bool freenonrefs),
+	Object *obj);
+
 // use decref instead of calling this yourself
 void object_destroy(Object *obj, bool decrefrefs, bool freenonrefs);
 
