@@ -99,35 +99,55 @@ class _FunctionBodyTyper:
         self._function_dict = function_dict
         self._local_vars = local_vars.copy()
 
-    def _check_name_doesnt_exist(self, name: str, location: Location) -> None:
+    def _what_is_name(self, name: str) -> str:
         if name in BUILTIN_FUNCS:
-            its = "a built-in function"
-        elif name in BUILTIN_TYPES:
-            its = "a built-in type"
-        elif name in BUILTIN_VARS:
-            its = "a built-in variable"
-        elif name in self._function_dict:
-            its = "a function"
-        elif name in self._local_vars:
-            its = "a variable"
-        else:
-            return
+            return "a built-in function"
+        if name in BUILTIN_TYPES:
+            return "a built-in type"
+        if name in BUILTIN_VARS:
+            return "a built-in variable"
+        if name in self._function_dict:
+            return "a function"
+        if name in self._local_vars:
+            return "a variable"
+        return None
 
+    def _check_name_doesnt_exist(self, name: str, location: Location) -> None:
+        a_something = self._what_is_name(name)
+        if a_something is not None:
+            raise CompileError(
+                f"there's already {a_something} named '{name}'", location)
+
+    def _find_var(self, name: str) -> Variable:
+        if name in self._local_vars:
+            return self._local_vars[name]
+        if name in BUILTIN_VARS:
+            return BUILTIN_VARS[name]
+
+        a_something = self._what_is_name(name)
+        if a_something is None:
+            raise CompileError(
+                f"'{name}' is {a_something}, not a variable", location)
         raise CompileError(
-            f"there's already {its} named '{name}'", location)
+            f"no variable named '{name}'", expression.location)
+
+    def _find_func(self, name: str) -> Variable:
+        if name in self._function_dict:
+            return self._function_dict[name]
+        if name in BUILTIN_FUNCS:
+            return BUILTIN_FUNCS[name]
+
+        a_something = self._what_is_name(name)
+        if a_something is None:
+            raise CompileError(
+                f"'{name}' is {a_something}, not a function name", location)
+        raise CompileError(
+            f"no function named '{name}'", expression.location)
 
     def do_statement(self, statement: ast.Statement) -> ast.Statement:
         if isinstance(statement, ast.CallFunction):
             assert statement.parser_ref is not None
-            if statement.parser_ref.name in BUILTIN_FUNCS:
-                func = BUILTIN_FUNCS[statement.parser_ref.name]
-            elif statement.parser_ref.name in self._function_dict:
-                func = self._function_dict[statement.parser_ref.name]
-            else:
-                raise CompileError(
-                    f"function not found: {statement.parser_ref.name}",
-                    statement.location)
-
+            func = self._find_func(statement.parser_ref.name)
             args = list(map(self.do_expression, statement.args))
 
             if len(args) != len(func.argvars):
@@ -174,6 +194,18 @@ class _FunctionBodyTyper:
 
         if isinstance(statement, ast.Throw):
             return statement
+
+        if isinstance(statement, ast.SetVar):
+            var = self._find_var(statement.parser_var.name)
+            value = self.do_expression(statement.value)
+            if value.type != var.type:
+                raise CompileError(
+                    f"wrong types: "
+                    f"{var.type.name} = {value.type.name}",
+                    statement.location)
+
+            return ast.SetVar(
+                statement.location, var, statement.parser_var, value)
 
         raise NotImplementedError(statement)
 
@@ -233,8 +265,6 @@ class _FunctionBodyTyper:
                 func = BUILTIN_BINARY_OPERATORS[(
                     lhs.type, operator, rhs.type)]
             except KeyError:
-                print(BUILTIN_BINARY_OPERATORS.keys())
-                print(lhs.type, operator, rhs.type)
                 raise CompileError(
                     f"wrong types: "
                     f"{lhs.type.name} {expression.operator} {rhs.type.name}",
@@ -242,8 +272,7 @@ class _FunctionBodyTyper:
 
             assert func.returntype is not None
             result = ast.CallFunction(
-                expression.location, func.returntype, None,
-                func, [expression.lhs, expression.rhs])
+                expression.location, func.returntype, None, func, [lhs, rhs])
 
             if negate:
                 n0t = BUILTIN_FUNCS['not']

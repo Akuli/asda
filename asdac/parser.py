@@ -409,8 +409,14 @@ class _FunctionContentParser(_ParserBase):
 
         result = self.parse_expression(it_should_be=it_should_be)
 
-        # TODO: assignments
-        #if (not self.tokens.eof()) and self.tokens.peek().value == '=':
+        if (not self.tokens.eof()) and self.tokens.peek().value == '=':
+            equal_sign = self.tokens.next_token()
+            value = self.parse_expression()
+
+            if isinstance(result, ast.GetVar):
+                return ast.SetVar(
+                    equal_sign.location, None, result.parser_var, value)
+            raise CompileError("can only assign to variables", result.location)
 
         if isinstance(result, ast.CallFunction):
             return result

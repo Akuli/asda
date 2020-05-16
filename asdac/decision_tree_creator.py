@@ -190,8 +190,15 @@ class _TreeCreator:
 
         elif isinstance(statement, ast.Let):
             assert statement.var is not None
+            assert statement.var not in self.local_vars
             self.local_vars[statement.var] = self.do_expression(
                 statement.initial_value)
+
+        elif isinstance(statement, ast.SetVar):
+            assert statement.var is not None
+            assert statement.var in self.local_vars
+            self.local_vars[statement.var] = self.do_expression(
+                statement.value)
 
         else:
             assert False, type(statement)     # pragma: no cover

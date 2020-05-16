@@ -107,6 +107,7 @@ class GetVar(Expression):
 class SetVar(Statement):
     var: typing.Optional[Variable]          # added in asdac.typer
     parser_var: ParserVariable
+    value: Expression
 
 
 @attr.s(auto_attribs=True, eq=False, order=False, frozen=True)
