@@ -32,13 +32,25 @@ extern StringObject stringobj_empty;
 // never fails
 const char *stringobj_getutf8(StringObject *s);
 
-// creates a copy of the utf8 and uses that
-// utf8 doesn't need to be '\0' terminated
-// make sure that you are not passing in invalid utf8 (use utf8_validate with user inputs)
-// if utf8 is NULL, then the content is left uninitialized, must get filled immediately after calling
+/*
+Creates a copy of the utf8 and uses that.
+
+The utf8 doesn't need to be '\0' terminated. Make sure that you are not passing in
+invalid utf8 (use utf8_validate with user inputs).
+
+If utf8 is NULL, then the content is left uninitialized. After a succesful call
+
+	StringObject *str = stringobject_new(interp, NULL, n);
+
+you must immediately fill the first n bytes of str->utf8rt. The n'th byte is
+already to set to '\0' for you, so don't overwrite that. This is the most efficient
+way to create a string, because it doesn't involve reallocing or memmoving. The
+downside is that you need to know beforehand how long the string will be. Use
+stringobj_new_nocp() if you already have a malloc()ed char* string.
+*/
 StringObject *stringobj_new(Interp *interp, const char *utf8, size_t utf8len);
 
-// like stringobj_new, but never copies utf8, always frees it
+// Create a string from a malloc()ed char* utf8 string
 StringObject *stringobj_new_nocp(Interp *interp, char *utf8, size_t utf8len);
 
 /*

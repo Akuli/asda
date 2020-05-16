@@ -175,17 +175,10 @@ bool utf8_validate(Interp *interp, const char *utf8, size_t utf8len)
 	return true;
 }
 
-#include <stdio.h>
 bool utf8_decode(Interp *interp, const char *utf8, size_t utf8len, uint32_t **unicode, size_t *unicodelen)
 {
 	assert(interp);
 	assert(utf8_validate(NULL, utf8, utf8len));
-
-	if (utf8len == 0) {
-		*unicodelen = 0;
-		*unicode = NULL;
-		return true;
-	}
 
 	// each utf8 byte is at most 1 unicode code point
 	// this is realloc'd later to the correct size, feels better than many reallocs

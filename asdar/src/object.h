@@ -78,14 +78,17 @@ this is a weird macro because that's the only way for it to work in gcc and clan
 */
 #define OBJECT_COMPILETIME_HEAD { .refcount = 1 }
 
-// decref evaluates the arg multiple times
-// incref doesn't, but i don't recommend relying on it, might change in the future
-#define OBJECT_INCREF(obj) ((obj)->head.refcount++)
-#define OBJECT_DECREF(obj) do{  \
-	if (--(obj)->head.refcount == 0) { \
-		/* this should never happen for compiletime objects */ \
+// arg maybe evaluated multiple times
+// these don't touch tagged pointers, useful for e.g. intobject
+#define OBJECT_INCREF(obj) do { \
+	if (!( ((uintptr_t)(obj)) & 1 )) \
+		((obj)->head.refcount++); \
+} while(0)
+
+#define OBJECT_DECREF(obj) do { \
+	if ( !( ((uintptr_t)(obj)) & 1 ) && --(obj)->head.refcount == 0 ) \
 		object_destroy((Object *)(obj), true, true); \
-	} \
+	\
 } while(0)
 
 /*

@@ -2,9 +2,22 @@
 #include <stdbool.h>
 #include <src/object.h>
 #include <src/objects/int.h>
+#include <src/objects/string.h>
 #include "../util.h"
 
 #define MAX_ABS_VALUE 50
+
+StringObject hello = STRINGOBJ_COMPILETIMECREATE("hello");
+
+TEST(assumptions)
+{
+	StringObject *foo = stringobj_new(interp, "foo", 3);
+
+	assert(!( ((intptr_t)&hello) & 1 ));
+	assert(!( ((intptr_t)foo) & 1 ));
+
+	OBJECT_DECREF(foo);
+}
 
 TEST(intobj_new_long_and_cmp)
 {

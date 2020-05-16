@@ -23,10 +23,6 @@ static void setup_string_object(StringObject *obj, size_t utf8len)
 	obj->utf8rt[utf8len] = '\0';
 }
 
-// creates a copy of the utf8 and uses that
-// utf8 doesn't need to be '\0' terminated
-// make sure that you are not passing in invalid utf8 (use utf8_validate with user inputs)
-// if utf8 is NULL, then the content is left uninitialized, must get filled immediately after calling
 StringObject *stringobj_new(Interp *interp, const char *utf8, size_t utf8len)
 {
 	if (utf8)
@@ -48,10 +44,13 @@ StringObject *stringobj_new(Interp *interp, const char *utf8, size_t utf8len)
 
 StringObject *stringobj_new_nocp(Interp *interp, char *utf8, size_t utf8len)
 {
-	if (utf8len == 0 || !utf8) {
+	if (utf8len == 0) {
 		free(utf8);
-		return stringobj_new(interp, NULL, utf8len);
+		OBJECT_INCREF(&stringobj_empty);
+		return &stringobj_empty;
 	}
+	assert(utf8);
+	assert(utf8_validate(NULL, utf8, utf8len));
 
 	// make room for object stuff
 	void *ptr = realloc(utf8, sizeof(StringObject) + utf8len + 1);

@@ -61,16 +61,24 @@ static Object *get_cfunc(Interp *interp, Object *const *args)
 	ArrayObject *arr = (ArrayObject *)args[0];
 	IntObject *i = (IntObject *)args[1];
 
-	if (i->spilled || i->val.lon < 0 || i->val.lon >= (long)arr->da.len) {
-		const char *istr = intobj_tocstr(interp, i);
-		if (istr)   // if intobj_tostrobj() failed then error has been set
-			errobj_set(interp, &errtype_value, "cannot do get element %s from an array of length %zu", istr, arr->da.len);
-		return false;
-	}
+	if (!intobj_fits2long(i))
+		goto bad_index;
 
-	Object *res = arr->da.ptr[i->val.lon];
+	long val = intobj_getlong(i);
+	if (val < 0 || val >= (long)arr->da.len)
+		goto bad_index;
+
+	Object *res = arr->da.ptr[val];
 	OBJECT_INCREF(res);
 	return res;
+
+bad_index:
+	(void)0;   // because c syntax
+	char tmp[INTOBJ_TOCSTR_TMPSZ];
+	const char *istr = intobj_tocstr(interp, i, tmp);
+	if (istr)   // if intobj_tostrobj() failed then error has been set
+		errobj_set(interp, &errtype_value, "cannot do get element %s from an array of length %zu", istr, arr->da.len);
+	return false;
 }
 
 const struct CFunc arrayobj_cfuncs[] = {
