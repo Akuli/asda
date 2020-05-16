@@ -1,6 +1,7 @@
 #include "array.h"
 #include <stdbool.h>
 #include <stdlib.h>
+#include "../cfunc.h"
 #include "../dynarray.h"
 #include "../interp.h"
 #include "../object.h"
@@ -19,7 +20,7 @@ static void destroy_array(Object *obj, bool decrefrefs, bool freenonrefs)
 		free(arr->da.ptr);
 }
 
-static struct Object* array_constructor(Interp *interp, struct Object *const *args, size_t nargs)
+static Object *new_cfunc(Interp *interp, Object *const *args)
 {
 	ArrayObject *res = object_new(interp, destroy_array, sizeof(*res));
 	if (!res)
@@ -29,54 +30,54 @@ static struct Object* array_constructor(Interp *interp, struct Object *const *ar
 	return (Object *)res;
 }
 
-static bool length_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
+static Object *getlength_cfunc(Interp *interp, Object *const *args)
 {
 	ArrayObject *arr = (ArrayObject *)args[0];
-	return !!( *result = (Object *) intobj_new_long(interp, (long)arr->da.len) );
+	return (Object *) intobj_new_long(interp, (long)arr->da.len);
 }
-//FUNCOBJ_COMPILETIMECREATE(length, &intobj_type, { &arrayobj_type });
 
-static bool push_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
+static bool push_cfunc(Interp *interp, Object *const *args)
 {
 	if (dynarray_push(interp, &( (ArrayObject *)args[0] )->da, args[1])) {
 		OBJECT_INCREF(args[1]);
-		*result = NULL;
 		return true;
 	}
 	return false;
 }
-//FUNCOBJ_COMPILETIMECREATE(push, NULL, { &arrayobj_type, &type_object });
 
-static bool pop_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
+static Object *pop_cfunc(Interp *interp, Object *const *args)
 {
 	ArrayObject *arr = (ArrayObject *)args[0];
 
 	if (arr->da.len == 0) {
 		errobj_set(interp, &errtype_value, "cannot pop from an empty array");
-		return false;
+		return NULL;
 	}
-
-	*result = dynarray_pop(&arr->da);
-	return true;
+	return dynarray_pop(&arr->da);
 }
-//FUNCOBJ_COMPILETIMECREATE(pop, &type_object, { &arrayobj_type });
 
-static bool get_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
+static Object *get_cfunc(Interp *interp, Object *const *args)
 {
 	ArrayObject *arr = (ArrayObject *)args[0];
 	IntObject *i = (IntObject *)args[1];
 
 	if (i->spilled || i->val.lon < 0 || i->val.lon >= (long)arr->da.len) {
-		StringObject *istr = intobj_tostrobj(interp, i);
-		if (istr) {   // an error has been already set if intobj_tostrobj() failed
-			errobj_set(interp, &errtype_value, "cannot do get element %S from an array of length %zu", istr, arr->da.len);
-			OBJECT_DECREF(istr);
-		}
+		const char *istr = intobj_tocstr(interp, i);
+		if (istr)   // if intobj_tostrobj() failed then error has been set
+			errobj_set(interp, &errtype_value, "cannot do get element %s from an array of length %zu", istr, arr->da.len);
 		return false;
 	}
 
-	*result = arr->da.ptr[i->val.lon];
-	OBJECT_INCREF(*result);
-	return true;
+	Object *res = arr->da.ptr[i->val.lon];
+	OBJECT_INCREF(res);
+	return res;
 }
-//FUNCOBJ_COMPILETIMECREATE(get, &type_object, { &arrayobj_type, &intobj_type });
+
+const struct CFunc arrayobj_cfuncs[] = {
+	{ "Array.new", 1, true, { .ret = new_cfunc }},
+	{ "Array.get_length", 1, true, { .ret = getlength_cfunc }},
+	{ "Array.push", 2, false, { .noret = push_cfunc }},
+	{ "Array.pop", 1, true, { .ret = pop_cfunc }},
+	{ "Array.get", 2, true, { .ret = get_cfunc }},
+	{0},
+};

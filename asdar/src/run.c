@@ -3,7 +3,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "builtin.h"
 #include "code.h"
 #include "dynarray.h"
 #include "interp.h"
@@ -124,24 +123,23 @@ static bool begin_try(Interp *interp, struct State *state)
 
 
 // TODO: look into python's new vectorcall stuff
-static bool call_builtin_function(Interp *interp, struct State *state, const struct BuiltinFunc *bfunc)
+static bool call_cfunc(Interp *interp, struct State *state, const struct CFunc *cfunc)
 {
-	assert(state->objstack.len >= bfunc->nargs);
-	assert(&builtin_funcs[0] <= bfunc && bfunc < &builtin_funcs[builtin_nfuncs]);
+	assert(state->objstack.len >= cfunc->nargs);
 
-	bool ret = bfunc->ret;   // makes the compiler understand enough to not do warning
-	Object **args = &state->objstack.ptr[state->objstack.len - bfunc->nargs];
+	bool ret = cfunc->ret;   // makes the compiler understand enough to not do warning
+	Object **args = &state->objstack.ptr[state->objstack.len - cfunc->nargs];
 	Object *retobj;
 	bool ok;
 
 	if (ret)
-		ok = !!( retobj = bfunc->func.ret(interp, args) );
+		ok = !!( retobj = cfunc->func.ret(interp, args) );
 	else
-		ok = bfunc->func.noret(interp, args);
+		ok = cfunc->func.noret(interp, args);
 
-	for (size_t i = 0; i < bfunc->nargs; i++)
+	for (size_t i = 0; i < cfunc->nargs; i++)
 		OBJECT_DECREF(args[i]);
-	state->objstack.len -= bfunc->nargs;
+	state->objstack.len -= cfunc->nargs;
 
 	if (!ok)
 		return false;
@@ -182,7 +180,7 @@ static bool run(Interp *interp, size_t startidx)
 			break;
 
 		case CODE_CALLBUILTINFUNC:
-			if (!call_builtin_function(interp, &state, ptr->data.builtinfunc))
+			if (!call_cfunc(interp, &state, ptr->data.cfunc))
 				goto error;
 			ptr++;
 			break;

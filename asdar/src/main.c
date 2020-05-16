@@ -1,11 +1,16 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "cfunc.h"
 #include "code.h"
 #include "import.h"
 #include "interp.h"
 #include "path.h"
+#include "objects/array.h"
+#include "objects/bool.h"
 #include "objects/err.h"
+#include "objects/int.h"
+#include "objects/string.h"
 #include "stacktrace.h"
 
 
@@ -37,6 +42,16 @@ int main(int argc, char **argv)
 		goto error;
 	}
 	strcpy(relative, basedir + (i+1));
+
+	if (!cfunc_addmany(&interp, arrayobj_cfuncs)
+		|| !cfunc_addmany(&interp, boolobj_cfuncs)
+		|| !cfunc_addmany(&interp, errobj_cfuncs)
+		|| !cfunc_addmany(&interp, intobj_cfuncs)
+		|| !cfunc_addmany(&interp, stringobj_cfuncs)
+		)
+	{
+		goto error;
+	}
 
 	if (!import(&interp, relative))
 		goto error;

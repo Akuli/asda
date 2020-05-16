@@ -50,9 +50,6 @@ Here is a complete usage example (with includes omitted):
 // forward declare because this file gets included early in compilation
 struct Interp;
 
-// FIXME
-struct ObjData {};
-
 struct ObjectHead {
 	void (*destroy)(struct Object *obj, bool decrefrefs, bool freenonrefs);
 	struct Interp *interp;       // NULL for OBJECT_COMPILETIMECREATE objects

@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include "builtin.h"
+#include "cfunc.h"
 #include "code.h"
 #include "dynarray.h"
 #include "interp.h"
@@ -226,13 +226,18 @@ static bool read_jump(struct BcReader *bcr, size_t *res, size_t jumpstart)
 	return true;
 }
 
-static const struct BuiltinFunc *
-read_builtin_func(struct BcReader *bcr)
+static const struct CFunc *read_cfunc(struct BcReader *bcr)
 {
-	uint8_t i;
-	if (!read_bytes(bcr, &i, 1))
+	char *name;
+	if (!read_string0(bcr, &name))
 		return NULL;
-	return &builtin_funcs[i];
+
+	const struct CFunc *res = cfunc_get(bcr->interp, name);
+	if (!res)
+		errobj_set(bcr->interp, &errtype_value, "cannot find cfunc named '%s'", name);
+
+	free(name);
+	return res;  // may be NULL
 }
 
 // TODO: when function begin, grow the stack to required size
@@ -253,7 +258,7 @@ static bool read_op(struct BcReader *bcr, unsigned char opbyte, struct CodeOp *r
 
 	case CALL_BUILTIN_FUNCTION:
 		res->kind = CODE_CALLBUILTINFUNC;
-		return !!( res->data.builtinfunc = read_builtin_func(bcr) );
+		return !!( res->data.cfunc = read_cfunc(bcr) );
 
 	case JUMP:           res->kind = CODE_JUMP;         return read_jump(bcr, &res->data.jump, jumpstart);
 	case JUMP_IF:        res->kind = CODE_JUMPIF;       return read_jump(bcr, &res->data.jump, jumpstart);

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "bool.h"
 #include "err.h"
 #include "int.h"
 #include "../utf8.h"
@@ -233,60 +234,45 @@ StringObject *stringobj_join(Interp *interp, StringObject *const *strs, size_t n
 }
 
 
-/*
-static StringObject *change_case(Interp *interp, StringObject *src, bool upper)
+// not strictly a string function, but there's not much more io stuff than this yet
+static bool print_cfunc(Interp *interp, Object *const *args)
 {
-	if (src->len == 0) {
-		OBJECT_INCREF(src);
-		return src;
-	}
+	StringObject *sobj = (StringObject*)args[0];
+	const char *utf8 = stringobj_getutf8(sobj);
 
-	uint32_t *val = malloc(sizeof(uint32_t) * src->len);
-	if (!val) {
-		errobj_set_nomem(interp);
-		return NULL;
-	}
-
-	memcpy(val, src->val, sizeof(uint32_t) * src->len);
-	for (size_t i = 0; i < src->len; i++) {
-		// TODO: non-ascii conversions
-		if (upper && 'a' <= val[i] && val[i] <= 'z')
-			val[i] -= 0x20;
-		if (!upper && 'A' <= val[i] && val[i] <= 'Z')
-			val[i] += 0x20;
-	}
-
-	return stringobj_new_nocpy(interp, val, src->len);
-}
-
-static bool uppercase_cfunc(Interp *interp, struct ObjData data,
-	Object *const *args, size_t nargs, Object **result)
-{
-	return !!( *result = (Object *)change_case(interp, (StringObject *)args[0], true) );
-}
-//FUNCOBJ_COMPILETIMECREATE(uppercase, &stringobj_type, { &stringobj_type });
-
-static bool lowercase_cfunc(Interp *interp, struct ObjData data,
-	Object *const *args, size_t nargs, Object **result)
-{
-	return !!( *result = (Object *)change_case(interp, (StringObject *)args[0], false) );
-}
-//FUNCOBJ_COMPILETIMECREATE(lowercase, &stringobj_type, { &stringobj_type });
-
-static bool tostring_cfunc(Interp *interp, struct ObjData data,
-	Object *const *args, size_t nargs, Object **result)
-{
-	OBJECT_INCREF(args[0]);
-	*result = args[0];
+	if (fwrite(utf8, 1, sobj->utf8len, stdout) != sobj->utf8len
+		|| putchar('\n') == EOF)
+	{
+		errobj_set_oserr(interp, "cannot write to stdout");
+		return false;
+	};
 	return true;
 }
-//FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &stringobj_type });
 
-static bool getlength_cfunc(Interp *interp, struct ObjData data,
-	Object *const *args, size_t nargs, Object **result)
+static Object *eq_cfunc(Interp *interp, Object *const *args)
+{
+	return (Object *) boolobj_c2asda(stringobj_eq((StringObject *) args[0], (StringObject *) args[1]));
+}
+
+static Object *plus_cfunc(Interp *interp, Object *const *args)
+{
+	return (Object *) stringobj_join(interp, (StringObject *const *) args, 2);
+}
+
+// TODO: should calculate unicode length? or display length with wcwidth?
+// i wouldn't want to depend on the current locale......
+/*
+static Object *getlength_cfunc(Interp *interp,	Object *const *args)
 {
 	StringObject *s = (StringObject *) args[0];
-	return !!( *result = (Object*)intobj_new_long(interp, (long) s->len) );
+	return (Object*)intobj_new_long(interp, (long) s->len);
 }
-//FUNCOBJ_COMPILETIMECREATE(getlength, &stringobj_type, { &stringobj_type });
 */
+
+const struct CFunc stringobj_cfuncs[] = {
+	{ "print", 1, false, { .noret = print_cfunc }},
+	{ "Str==Str", 2, true, { .ret = eq_cfunc }},
+	{ "Str+Str", 2, true, { .ret = plus_cfunc }},
+	//{ "Str.get_length", 1, true, { .ret = getlength_cfunc }},
+	{0},
+};

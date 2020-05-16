@@ -52,5 +52,7 @@ example:
 */
 void errobj_set_oserr(Interp *interp, const char *fmt, ...);
 
+// for cfunc_addmany
+extern const struct CFunc errobj_cfuncs[];
 
 #endif   // OBJECTS_ERR_H

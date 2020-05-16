@@ -16,6 +16,7 @@ void interp_init(Interp *interp, const char *argv0)
 	interp->argv0 = argv0;
 	dynarray_init(&interp->code);
 	dynarray_init(&interp->mods);
+	dynarray_init(&interp->cfuncs);
 }
 
 void interp_destroy(Interp *interp)
@@ -46,4 +47,5 @@ void interp_destroy(Interp *interp)
 
 	free(interp->code.ptr);
 	free(interp->mods.ptr);
+	free(interp->cfuncs.ptr);
 }

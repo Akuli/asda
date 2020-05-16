@@ -104,27 +104,22 @@ void errobj_set_oserr(Interp *interp, const char *fmt, ...)
 }
 
 
-static Object *error_string_constructor(Interp *interp, const struct ErrType *errtype, struct Object *const *args, size_t nargs)
-{
-	assert(nargs == 1);
-	return (Object *) create_error_from_string(interp, errtype, (StringObject *) args[0]);
-}
+// TODO: figure out how to create error objects from asda code so that errtype gets passed
 
-static bool tostring_cfunc(Interp *interp, struct ObjData data, Object *const *args, size_t nargs, Object **result)
+// TODO: rename from to_string to get_string or something?
+static Object *tostring_cfunc(Interp *interp, Object *const *args)
 {
 	StringObject *s = ((ErrObject *) args[0])->msgstr;
 	OBJECT_INCREF(s);
-	*result = (Object *)s;
-	return true;
+	return (Object *) s;
 }
-/*FUNCOBJ_COMPILETIMECREATE(tostring, &stringobj_type, { &errtype_error });
-
-static struct TypeAttr attrs[] = {
-	{ TYPE_ATTR_METHOD, &tostring },
-};
-*/
 
 const struct ErrType errtype_nomem = { "NoMemError" };
 const struct ErrType errtype_variable = { "VariableError" };
 const struct ErrType errtype_value = { "ValueError" };
 const struct ErrType errtype_os = { "OsError" };
+
+const struct CFunc errobj_cfuncs[] = {
+	{ "to_string", 1, true, { .ret = tostring_cfunc }},
+	{0},
+};

@@ -50,4 +50,7 @@ StringObject *intobj_tostrobj(Interp *interp, IntObject *x);
 // returns NULL on error, return value is \0 terminated and must NOT be free()d
 const char *intobj_tocstr(Interp *interp, IntObject *x);
 
+// for cfunc_addmany
+extern const struct CFunc intobj_cfuncs[];
+
 #endif   // OBJECTS_INT_H

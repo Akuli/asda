@@ -286,9 +286,8 @@ class _ByteCodeGen:
         if isinstance(node, dtree.CallFunction):
             with self._use_objects(node, node.arg_ids):
                 if node.function.kind == objects.FunctionKind.BUILTIN:
-                    all_funcs = list(objects.BUILTIN_FUNCS.values())
                     self.writer.write_opbyte(CALL_BUILTIN_FUNCTION)
-                    self.writer.write_uint8(all_funcs.index(node.function))
+                    self.writer.write_string(node.function.name)
                 elif node.function.kind == objects.FunctionKind.FILE:
                     self.writer.write_opbyte(CALL_THIS_FILE_FUNCTION)
                     ref = self.writer.write_uint16(0)

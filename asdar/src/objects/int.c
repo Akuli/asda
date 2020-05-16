@@ -1,3 +1,5 @@
+#include "int.h"
+
 #include <assert.h>
 #include <limits.h>
 #include <stdbool.h>
@@ -9,8 +11,8 @@
 
 #include "../interp.h"
 #include "../object.h"
+#include "bool.h"
 #include "err.h"
-#include "int.h"
 #include "string.h"
 
 /*
@@ -307,3 +309,38 @@ const char *intobj_tocstr(Interp *interp, IntObject *x)
 		return NULL;
 	return stringobj_getutf8(obj);
 }
+
+
+static Object *plus_cfunc(Interp *interp, Object *const *args)
+{
+	return (Object *) intobj_add(interp, (IntObject *) args[0], (IntObject *) args[1]);
+}
+
+static Object *minus_cfunc(Interp *interp, Object *const *args)
+{
+	return (Object *) intobj_sub(interp, (IntObject *) args[0], (IntObject *) args[1]);
+}
+
+static Object *times_cfunc(Interp *interp, Object *const *args)
+{
+	return (Object *) intobj_mul(interp, (IntObject *) args[0], (IntObject *) args[1]);
+}
+
+static Object *prefix_minus_cfunc(Interp *interp, Object *const *args)
+{
+	return (Object *) intobj_neg(interp, (IntObject *) args[0]);
+}
+
+static Object *eq_cfunc(Interp *interp, Object *const *args)
+{
+	return (Object *) boolobj_c2asda( intobj_cmp((IntObject *) args[0], (IntObject *) args[1])==0 );
+}
+
+const struct CFunc intobj_cfuncs[] = {
+	{ "Int+Int", 2, true, { .ret = plus_cfunc }},
+	{ "Int-Int", 2, true, { .ret = minus_cfunc }},
+	{ "Int*Int", 2, true, { .ret = times_cfunc }},
+	{ "-Int", 1, true, { .ret = prefix_minus_cfunc }},
+	{ "Int==Int", 2, true, { .ret = eq_cfunc }},
+	{0},
+};

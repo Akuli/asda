@@ -94,7 +94,7 @@ _boilerplate: typing.Dict[str, typing.Any] = dict(
     definition_location=None,
 )
 
-BUILTIN_FUNCS = collections.OrderedDict((func.name, func) for func in [
+BUILTIN_FUNCS = {func.name: func for func in [
     Function(
         name='print',
         argvars=_argvars('Str message'),
@@ -158,7 +158,7 @@ BUILTIN_FUNCS = collections.OrderedDict((func.name, func) for func in [
         returntype=BUILTIN_TYPES['Bool'],
         **_boilerplate,
     ),
-])
+]}
 
 BUILTIN_PREFIX_OPERATORS = {
     ('-', BUILTIN_TYPES['Int']): BUILTIN_FUNCS['-Int'],

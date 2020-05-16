@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "../cfunc.h"
 #include "../interp.h"
 #include "../object.h"
 
@@ -65,5 +66,8 @@ bool stringobj_eq(StringObject *a, StringObject *b);
 
 // joins all da strings
 StringObject *stringobj_join(Interp *interp, StringObject *const *strs, size_t nstrs);
+
+// methods and '+' operator, for cfunc_addmany()
+extern const struct CFunc stringobj_cfuncs[];
 
 #endif   // OBJECTS_STRING_H

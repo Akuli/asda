@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include "../object.h"
+#include "../cfunc.h"
 
 
 typedef struct BoolObject {
@@ -27,5 +28,7 @@ inline bool boolobj_asda2c(BoolObject *asdabool)
 	assert(asdabool == &boolobj_true || asdabool == &boolobj_false);
 	return (asdabool == &boolobj_true);
 }
+
+extern const struct CFunc boolobj_cfuncs[];
 
 #endif   // OBJECTS_BOOL_H

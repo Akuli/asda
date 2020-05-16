@@ -56,6 +56,19 @@ typedef struct Interp {
 
 	// info about imported modules
 	DynArray(struct InterpModInfo) mods;
+
+	/*
+	functions written in c, sorted by name.
+
+	Why this data structure out of all the possible choices? Because then finding
+	something from this while reading bytecode will be quick even though this is
+	not that difficult to implement.
+
+	Some day there may be a way to put c functions into asda libraries, and if
+	shifting the items of this array turns out to be too slow, then I can change
+	this. I don't think it will be that slow.
+	*/
+	DynArray(const struct CFunc *) cfuncs;
 } Interp;
 
 
