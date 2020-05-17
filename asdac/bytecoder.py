@@ -18,9 +18,6 @@ from asdac.common import Compilation, CompileError, Location
 SET_LINENO = b'L'
 
 GET_BUILTIN_VAR = b'U'
-SET_ATTR = b':'
-GET_ATTR = b'.'
-GET_FROM_MODULE = b'm'
 STR_CONSTANT = b'"'
 NON_NEGATIVE_INT_CONSTANT = b'1'
 NEGATIVE_INT_CONSTANT = b'2'
@@ -29,33 +26,11 @@ CALL_THIS_FILE_FUNCTION = b'('
 STR_JOIN = b'j'
 RETURN = b'r'
 THROW = b't'
-
 DUP = b'D'
 SWAP = b'S'
 POP = b'P'
-
 JUMP = b'K'
 JUMP_IF = b'J'
-JUMP_IF_INT_EQUAL = b'='
-JUMP_IF_STR_EQUAL = b'q'
-
-PLUS = b'+'
-MINUS = b'-'
-PREFIX_MINUS = b'_'
-TIMES = b'*'
-# DIVIDE = b'/'
-
-EXPORT_OBJECT = b'x'
-
-# these are used when bytecoding a type
-TYPE_ASDA_CLASS = b'a'
-TYPE_BUILTIN = b'b'
-TYPE_FUNCTION = b'f'
-TYPE_VOID = b'v'
-
-IMPORT_SECTION = b'i'
-EXPORT_SECTION = b'e'
-TYPE_LIST_SECTION = b'y'
 
 
 def _bit_storing_size(n: int) -> int:
