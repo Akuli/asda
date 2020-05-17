@@ -7,7 +7,7 @@ import typing
 from asdac import ast
 from asdac import decision_tree as dtree
 from asdac.common import Location
-from asdac.objects import Function, Variable, VariableKind
+from asdac.objects import BUILTIN_VARS, Function, Variable, VariableKind
 
 
 # the .type attribute of the variables doesn't contain info about
@@ -138,32 +138,37 @@ class _TreeCreator:
 
         elif isinstance(statement, ast.Loop):
             creator = self.subcreator()
-            if statement.pre_cond is None:
-                creator.add_pass_through_node(
-                    dtree.GetBuiltinVar('TRUE'))
-            else:
-                creator.do_expression(statement.pre_cond)
 
-            beginning_decision = dtree.BoolDecision(statement.location)
-            creator.set_next_node(beginning_decision)
-            creator.set_next_node = beginning_decision.set_then
+            if statement.pre_cond is None:
+                pre_cond_id = dtree.ObjectId()
+                creator.add_pass_through_node(dtree.GetBuiltinVar(
+                    None, BUILTIN_VARS['TRUE'], pre_cond_id))
+            else:
+                pre_cond_id = creator.do_expression(statement.pre_cond)
+
+            pre_decision = dtree.BoolDecision(
+                statement.location, pre_cond_id)
+            creator.set_next_node(pre_decision)
+            creator.set_next_node = pre_decision.set_then
 
             creator.do_body(statement.body)
             creator.do_body(statement.incr)
 
             if statement.post_cond is None:
-                creator.add_pass_through_node(
-                    dtree.GetBuiltinVar('TRUE'))
+                post_cond_id = dtree.ObjectId()
+                creator.add_pass_through_node(dtree.GetBuiltinVar(
+                    None, BUILTIN_VARS['TRUE'], post_cond_id))
             else:
-                creator.do_expression(statement.post_cond)
+                post_cond_id = creator.do_expression(statement.post_cond)
 
-            end_decision = dtree.BoolDecision(statement.location)
-            end_decision.set_then(creator.root_node)
-            creator.set_next_node(end_decision)
+            post_decision = dtree.BoolDecision(
+                statement.location, post_cond_id)
+            post_decision.set_then(creator.root_node)
+            creator.set_next_node(post_decision)
 
             def set_next_node_everywhere(node: dtree.Node) -> None:
-                beginning_decision.set_otherwise(node)
-                end_decision.set_otherwise(node)
+                pre_decision.set_otherwise(node)
+                post_decision.set_otherwise(node)
 
             assert creator.root_node is not None
             self.set_next_node(creator.root_node)
@@ -196,9 +201,10 @@ class _TreeCreator:
 
         elif isinstance(statement, ast.SetVar):
             assert statement.var is not None
-            assert statement.var in self.local_vars
-            self.local_vars[statement.var] = self.do_expression(
-                statement.value)
+            new_value_id = self.do_expression(statement.value)
+            self.add_pass_through_node(dtree.Assign(
+                statement.location, new_value_id,
+                self.local_vars[statement.var]))
 
         else:
             assert False, type(statement)     # pragma: no cover

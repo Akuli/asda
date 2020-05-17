@@ -158,6 +158,12 @@ BUILTIN_FUNCS = {func.name: func for func in [
         returntype=BUILTIN_TYPES['Bool'],
         **_boilerplate,
     ),
+    Function(
+        name='int_to_string',
+        argvars=_argvars('Int i'),
+        returntype=BUILTIN_TYPES['Str'],
+        **_boilerplate,
+    ),
 ]}
 
 BUILTIN_PREFIX_OPERATORS = {

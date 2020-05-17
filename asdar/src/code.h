@@ -54,7 +54,7 @@ struct CodeFunctionInfo {
 };
 
 // dumps to stdout
-void codeop_debug(enum CodeOpKind k);
+void codeop_debug(struct CodeOp op);
 
 // called for each op when interpreter quits
 void codeop_destroy(struct CodeOp op);

@@ -160,7 +160,8 @@ class IfExpression(Expression):
 
 @attr.s(auto_attribs=True, eq=False, order=False, frozen=True)
 class Loop(Statement):
-    pre_cond: Expression
-    post_cond: Expression
-    incr: typing.List[Statement]
+    # the default for conditions is TRUE
+    pre_cond: typing.Optional[Expression]
+    post_cond: typing.Optional[Expression]
     body: typing.List[Statement]
+    incr: typing.List[Statement]

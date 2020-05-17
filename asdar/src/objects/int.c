@@ -76,7 +76,7 @@ INTPTR_MIN/2. So, we could do this:
 
 However, it's handy to negate small numbers by putting minuses in front of them.
 We want to ensure that doing that always gives a small number. This means that we
-need SMALL_MAX = -SMALL_MIN.
+need SMALL_MIN = -SMALL_MAX.
 */
 #define min(a, b) ((a)<(b) ? (a) : (b))
 #define SMALL_MAX min( ((long)INTPTR_MAX - 1L)/2L, -( ((long)INTPTR_MIN)/2L ) )
@@ -391,11 +391,17 @@ static Object *eq_cfunc(Interp *interp, Object *const *args)
 	return (Object *) boolobj_c2asda( intobj_cmp((IntObject *) args[0], (IntObject *) args[1])==0 );
 }
 
+static Object *tostring_cfunc(Interp *interp, Object *const *args)
+{
+	return (Object *) intobj_tostrobj(interp, (IntObject*) args[0]);
+}
+
 const struct CFunc intobj_cfuncs[] = {
 	{ "Int+Int", 2, true, { .ret = plus_cfunc }},
 	{ "Int-Int", 2, true, { .ret = minus_cfunc }},
 	{ "Int*Int", 2, true, { .ret = times_cfunc }},
 	{ "-Int", 1, true, { .ret = prefix_minus_cfunc }},
 	{ "Int==Int", 2, true, { .ret = eq_cfunc }},
+	{ "int_to_string", 1, true, { .ret = tostring_cfunc }},
 	{0},
 };

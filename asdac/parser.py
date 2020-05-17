@@ -489,8 +489,10 @@ class _FunctionContentParser(_ParserBase):
             incr = self.parse_one_line_ish_statement()
             body = self.parse_block(consume_newline=True)
 
-            #return [incr, Loop(for_location, cond, TRUE, incr, body)]
-            raise NotImplementedError
+            init_list = [] if init is None else [init]
+            incr_list = [] if incr is None else [incr]
+            return init_list + [
+                ast.Loop(for_location, cond, None, body, incr_list)]
 
         result = self.parse_one_line_ish_statement(it_should_be='a statement')
 

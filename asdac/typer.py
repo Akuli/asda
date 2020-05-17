@@ -99,7 +99,7 @@ class _FunctionBodyTyper:
         self._function_dict = function_dict
         self._local_vars = local_vars.copy()
 
-    def _what_is_name(self, name: str) -> str:
+    def _what_is_name(self, name: str) -> typing.Optional[str]:
         if name in BUILTIN_FUNCS:
             return "a built-in function"
         if name in BUILTIN_TYPES:
@@ -118,7 +118,7 @@ class _FunctionBodyTyper:
             raise CompileError(
                 f"there's already {a_something} named '{name}'", location)
 
-    def _find_var(self, name: str) -> Variable:
+    def _find_var(self, name: str, location: Location) -> Variable:
         if name in self._local_vars:
             return self._local_vars[name]
         if name in BUILTIN_VARS:
@@ -127,11 +127,11 @@ class _FunctionBodyTyper:
         a_something = self._what_is_name(name)
         if a_something is None:
             raise CompileError(
-                f"'{name}' is {a_something}, not a variable", location)
+                f"no variable named '{name}'", location)
         raise CompileError(
-            f"no variable named '{name}'", expression.location)
+            f"'{name}' is {a_something}, not a variable", location)
 
-    def _find_func(self, name: str) -> Variable:
+    def _find_func(self, name: str, location: Location) -> Function:
         if name in self._function_dict:
             return self._function_dict[name]
         if name in BUILTIN_FUNCS:
@@ -140,34 +140,36 @@ class _FunctionBodyTyper:
         a_something = self._what_is_name(name)
         if a_something is None:
             raise CompileError(
-                f"'{name}' is {a_something}, not a function name", location)
+                f"no function named '{name}'", location)
         raise CompileError(
-            f"no function named '{name}'", expression.location)
+            f"'{name}' is {a_something}, not a function name", location)
+
+    def _do_function_call(self, call: ast.CallFunction) -> ast.CallFunction:
+        assert call.parser_ref is not None
+        func = self._find_func(call.parser_ref.name, call.location)
+        args = list(map(self.do_expression, call.args))
+
+        if len(args) != len(func.argvars):
+            raise CompileError(
+                f"{func.get_string()} wants "
+                f"{_arguments(len(func.argvars))}, but it was called with "
+                f"{_arguments(len(args))}",
+                call.location)
+
+        for arg, argvar in zip(args, func.argvars):
+            assert arg.type is not None
+            if arg.type != argvar.type:
+                raise CompileError(
+                    f"expected {argvar.type.name}, got {arg.type.name}",
+                    arg.location)
+
+        return ast.CallFunction(
+            call.location, func.returntype, call.parser_ref, func, args)
 
     def do_statement(self, statement: ast.Statement) -> ast.Statement:
         if isinstance(statement, ast.CallFunction):
-            assert statement.parser_ref is not None
-            func = self._find_func(statement.parser_ref.name)
-            args = list(map(self.do_expression, statement.args))
-
-            if len(args) != len(func.argvars):
-                raise CompileError(
-                    f"{func.get_string()} wants "
-                    f"{_arguments(len(func.argvars))}, but it was called with "
-                    f"{_arguments(len(args))}",
-                    statement.location)
-
-            for arg, argvar in zip(args, func.argvars):
-                assert arg.type is not None
-                if arg.type != argvar.type:
-                    raise CompileError(
-                        f"expected {argvar.type.name}, got {arg.type.name}",
-                        arg.location)
-
             # TODO: warn about thrown away return value?
-            return ast.CallFunction(
-                statement.location, func.returntype, statement.parser_ref,
-                func, args)
+            return self._do_function_call(statement)
 
         if isinstance(statement, ast.Let):
             self._check_name_doesnt_exist(
@@ -196,8 +198,9 @@ class _FunctionBodyTyper:
             return statement
 
         if isinstance(statement, ast.SetVar):
-            var = self._find_var(statement.parser_var.name)
+            var = self._find_var(statement.parser_var.name, statement.location)
             value = self.do_expression(statement.value)
+            assert value.type is not None
             if value.type != var.type:
                 raise CompileError(
                     f"wrong types: "
@@ -206,6 +209,24 @@ class _FunctionBodyTyper:
 
             return ast.SetVar(
                 statement.location, var, statement.parser_var, value)
+
+        if isinstance(statement, ast.Loop):
+            # TODO: scope
+            if statement.pre_cond is None:
+                pre_cond = None
+            else:
+                pre_cond = self.do_expression(statement.pre_cond)
+
+            body = list(map(self.do_statement, statement.body))
+
+            if statement.post_cond is None:
+                post_cond = None
+            else:
+                post_cond = self.do_expression(statement.post_cond)
+
+            incr = list(map(self.do_statement, statement.incr))
+            return ast.Loop(
+                statement.location, pre_cond, post_cond, body, incr)
 
         raise NotImplementedError(statement)
 
@@ -280,6 +301,9 @@ class _FunctionBodyTyper:
                     expression.location, n0t.returntype, None, n0t, [result])
 
             return result
+
+        elif isinstance(expression, ast.CallFunction):
+            return self._do_function_call(expression)
 
         raise NotImplementedError(expression)
 

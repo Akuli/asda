@@ -1,3 +1,4 @@
+- add function names to error messages
 - `func` instead of `function`? nobody wants to type `function`. similarly `meth` instead of `method`?
 - check that all loops work
 - pass statements instead of void statements, to make it familiar for python users and avoid reusing same keyword for multiple different things
@@ -214,12 +215,5 @@ that I won't forget the ideas.
 
 The goal is to make asda at least as fast as python, which it currently
 isn't.
-
-- integers: should be possible to create a new integer from anything
-  that fits into a long without any allocations, maybe change Object to
-  be something like `union { long intval; struct HeapObject *heapobj; }`
-  for this? `HeapObject` would be like all objects are now (reference
-  counted etc). Currently only very small integers can be created without
-  allocating, because they are cached.
 
 - inline functions in compiler

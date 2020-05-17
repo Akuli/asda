@@ -30,8 +30,8 @@
 #define SWAP 'S'
 #define DUP 'D'
 
-//#define DEBUG(...) printf(__VA_ARGS__)
-#define DEBUG(...) (void)0
+#define DEBUG(...) printf(__VA_ARGS__)
+//#define DEBUG(...) (void)0
 
 
 struct BcReader {
@@ -314,8 +314,8 @@ static bool read_function(struct BcReader *bcr, size_t jumpstart)
 
 		if (!read_op(bcr, ob, op, jumpstart))
 			goto error;
-		DEBUG("    opbyte: ");
-		//codeop_debug(op->kind);
+		DEBUG("    opbyte %zu: ", oldlen + i);
+		codeop_debug(*op);
 	}
 
 	bcr->interp->code.len = oldlen + bodylen;

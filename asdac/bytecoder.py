@@ -8,6 +8,8 @@ import os
 import pathlib
 import typing
 
+import attr
+
 from asdac import common, objects
 from asdac import decision_tree as dtree
 from asdac.common import Compilation, CompileError, Location
@@ -151,7 +153,10 @@ class _Writer:
         self.byte_array.extend(byte)
         self.ops_written += 1
 
-    def set_lineno(self, location: Location) -> None:
+    def set_lineno(self, location: typing.Optional[Location]) -> None:
+        if location is None:
+            return
+
         #    >>> offsets = [0, 4, 10]
         #    >>> bisect.bisect(offsets, 0)
         #    1
@@ -178,12 +183,23 @@ class _Writer:
                 ref.set(self.function_definitions[func])
 
 
+@attr.s(auto_attribs=True, eq=False, order=False, frozen=True)
+class JumpInfo:
+    jump_index: int
+
+    # must make sure that stack before and after jump matches
+    stack: typing.Tuple[dtree.ObjectId, ...]
+
+
 class _ByteCodeGen:
 
     def __init__(self, writer: _Writer, arg_ids: typing.List[dtree.ObjectId]):
         self.writer = writer
+
+        # most of the time no duplicates, but can have dupes temporarily
         self.stack = list(arg_ids)
-        self.jump_cache: typing.Dict[dtree.Node, int] = {}
+
+        self.jump_cache: typing.Dict[dtree.Node, JumpInfo] = {}
 
     def _write_dup(self, id: dtree.ObjectId) -> None:
         assert id in self.stack     # might be in it more than once
@@ -192,7 +208,8 @@ class _ByteCodeGen:
         self.writer.write_uint16(last_index_from_end)
         self.stack.append(id)
 
-    def _write_swap(self, index1: int, index2: int) -> None:
+    def _write_swap(self, index1: int, index2: int, *,
+                    change_self_dot_stack: bool = True) -> None:
         if index1 == index2:
             return
 
@@ -200,10 +217,23 @@ class _ByteCodeGen:
         self.writer.write_uint16(index1)
         self.writer.write_uint16(index2)
 
-        # assigning to self.stack[::-1][index1] doesn't work :(
-        i1 = len(self.stack) - index1 - 1
-        i2 = len(self.stack) - index2 - 1
-        self.stack[i1], self.stack[i2] = self.stack[i2], self.stack[i1]
+        if change_self_dot_stack:
+            # assigning to self.stack[::-1][index1] doesn't work :(
+            i1 = len(self.stack) - index1 - 1
+            i2 = len(self.stack) - index2 - 1
+            self.stack[i1], self.stack[i2] = self.stack[i2], self.stack[i1]
+
+    def _write_pop(self, index: int) -> None:
+        self._write_swap(index, 0)      # faster than shifting everything
+        self.writer.write_opbyte(POP)
+        del self.stack[-1]
+
+    # which id's are used after running current_node?
+    def _needed_later(self, node: dtree.Node) -> typing.Set[dtree.ObjectId]:
+        result = set()
+        for node in dtree.get_all_nodes(node, include_root=False):
+            result.update(node.ids_read())
+        return result
 
     def _get_objects_to_top_of_stack(
         self,
@@ -216,10 +246,7 @@ class _ByteCodeGen:
         for id in self.stack:
             assert self.stack.count(id) == 1
 
-        # which id's are used after running current_node?
-        needed_later = set()
-        for node in dtree.get_all_nodes(current_node, include_root=False):
-            needed_later.update(node.ids_read())
+        needed_later = self._needed_later(current_node)
 
         # put more of the same object on the stack as needed
         for id in set(want2top):
@@ -261,6 +288,27 @@ class _ByteCodeGen:
             self.stack.append(node.result_id)
             return
 
+        if isinstance(node, dtree.Assign):
+            need_later = self._needed_later(node)
+
+            # put new value to top of stack, copying if needed
+            # TODO: share code with _get_objects_to_top_of_stack?
+            assert self.stack.count(node.input_id) == 1
+            if node.input_id in need_later:
+                self._write_dup(node.input_id)
+                value_index = 0
+            else:
+                value_index = self.stack[::-1].index(node.input_id)
+
+            # swap that to where we want it
+            dest_variable_index = self.stack[::-1].index(node.result_id)
+            self._write_swap(dest_variable_index, value_index,
+                             change_self_dot_stack=False)
+
+            # swapping brought old value to wherever the value was, delete that
+            self._write_pop(value_index)
+            return
+
         if isinstance(node, dtree.IntConstant):
             if node.python_int >= 0:
                 self.writer.write_opbyte(NON_NEGATIVE_INT_CONSTANT)
@@ -298,6 +346,7 @@ class _ByteCodeGen:
                     raise NotImplementedError
 
             if node.result_id is not None:
+                assert node.result_id not in self.stack   # TODO
                 self.stack.append(node.result_id)
             return
 
@@ -312,61 +361,13 @@ class _ByteCodeGen:
         assert False, node        # pragma: no cover
 
     def write_2_way_decision(self, node: dtree.TwoWayDecision) -> None:
-        # this does not output the same bytecode twice
-        # for example, consider this code
-        #
-        #    a
-        #    if b:
-        #        c
-        #    else:
-        #        d
-        #    e
-        #
-        # it creates a tree like this
-        #
-        #     a
-        #     |
-        #     b
-        #    / \
-        #   c   d
-        #    \ /
-        #     e
-        #
-        # and opcode like this
-        #
-        #    a
-        #    b
-        #    if b is true, jump to then_marker
-        #    d
-        #    e
-        #    jump to done_marker
-        #    then_marker
-        #    c
-        #    jump to e
-        #    done_marker
-        #
-        # the 'jump to e' part gets added by jump_cache stuff, because e has
-        # already gotten opcoded once and can be reused
-        #
-        # this is not ideal, could be pseudo-optimized to do less jumps, but
-        # that's likely not a bottleneck so why bother
-
-        if isinstance(node, dtree.BoolDecision):
-            with self._use_objects(node, [node.input_id]):
-                self.writer.write_opbyte(JUMP_IF)
-        elif isinstance(node, dtree.IntEqualDecision):
-            with self._use_objects(node, [node.lhs_id, node.rhs_id]):
-                self.writer.write_opbyte(JUMP_IF_INT_EQUAL)
-        elif isinstance(node, dtree.StrEqualDecision):
-            with self._use_objects(node, [node.lhs_id, node.rhs_id]):
-                self.writer.write_opbyte(JUMP_IF_STR_EQUAL)
-        else:  # pragma: no cover
-            raise RuntimeError
+        # this does not output the same bytecode twice because jump_cache
+        assert isinstance(node, dtree.BoolDecision)     # TODO: clean up
+        with self._use_objects(node, [node.input_id]):
+            self.writer.write_opbyte(JUMP_IF)
 
         then_jump = self.writer.write_uint16(0)
-
         self.write_tree(node.otherwise)
-
         self.writer.write_opbyte(JUMP)
         done_jump = self.writer.write_uint16(0)
 
@@ -374,15 +375,34 @@ class _ByteCodeGen:
         self.write_tree(node.then)
         done_jump.set(self.writer.ops_written)
 
+    def _make_stack_to_be(
+            self, wanted_stack: typing.Sequence[dtree.ObjectId]) -> None:
+        for item in wanted_stack:
+            assert self.stack.count(item) == 1
+
+        # swap the items we want to the bottom of the stack
+        for index, id in enumerate(wanted_stack):
+            index_from_end = len(self.stack) - index - 1
+            where_is_it = self.stack[::-1].index(id)
+            self._write_swap(index_from_end, where_is_it)
+
+        # delete everything else
+        while len(self.stack) > len(wanted_stack):
+            self._write_pop(0)
+
+        assert self.stack == list(wanted_stack)
+
     def write_tree(self, node: typing.Optional[dtree.Node]) -> None:
         while node is not None:
             if node in self.jump_cache:
+                self._make_stack_to_be(self.jump_cache[node].stack)
                 self.writer.write_opbyte(JUMP)
-                self.writer.write_uint16(self.jump_cache[node])
+                self.writer.write_uint16(self.jump_cache[node].jump_index)
                 return
 
             if len(node.jumped_from) > 1:
-                self.jump_cache[node] = self.writer.ops_written
+                self.jump_cache[node] = JumpInfo(
+                    self.writer.ops_written, tuple(self.stack))
 
             self.writer.set_lineno(node.location)
             if isinstance(node, dtree.PassThroughNode):

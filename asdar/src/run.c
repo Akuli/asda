@@ -14,6 +14,7 @@
 
 //#define DEBUG(...) printf(__VA_ARGS__)
 #define DEBUG(...) (void)0
+#define codeop_debug(op) (void)0
 
 
 #define ARRAY_COPY(DST, SRC, N) do{ \
@@ -162,15 +163,14 @@ static bool run(Interp *interp, size_t startidx)
 	const struct CodeOp *ptr = &interp->code.ptr[startidx];
 
 	while(true){
-		DEBUG("start=%p ptr=start+%p diff=%d\n",
-			(void*)interp->code.ptr,
-			(void*)ptr,
-			(int)(ptr - interp->code.ptr));
 		assert(interp->code.ptr <= ptr && ptr < &interp->code.ptr[interp->code.len]);
+		DEBUG("run: opbyte %d, ", (int)(ptr - interp->code.ptr));
+		codeop_debug(*ptr);
+		DEBUG("     objstack.len = %zu\n", state.objstack.len);
 
-		size_t sz;
 		Object *obj;
 
+		// when you add stuff here, don't forget ptr++
 		switch(ptr->kind) {
 		case CODE_CONSTANT:
 			if (!dynarray_push(interp, &state.objstack, ptr->data.obj))
@@ -188,9 +188,11 @@ static bool run(Interp *interp, size_t startidx)
 		case CODE_CALLCODEFUNC:
 			if (!dynarray_push(interp, &state.callstack, ptr))
 				goto error;
-			// fall through
-		case CODE_JUMP:
 			ptr = &interp->code.ptr[ptr->data.call.jump];
+			break;
+
+		case CODE_JUMP:
+			ptr = &interp->code.ptr[ptr->data.jump];
 			break;
 
 		case CODE_RETURN:
@@ -231,12 +233,21 @@ static bool run(Interp *interp, size_t startidx)
 			OBJECT_DECREF(obj);
 			break;
 
+		case CODE_POP:
+			assert(state.objstack.len != 0);
+			obj = dynarray_pop(&state.objstack);
+			OBJECT_DECREF(obj);
+			ptr++;
+			break;
+
 		default:
 			printf("TODO: ");
-			codeop_debug(ptr->kind);
+			codeop_debug(*ptr);
 			ptr++;
 			break;
 		}
+
+		DEBUG("     objstack.len --> %zu\n", state.objstack.len);
 	}
 
 error:

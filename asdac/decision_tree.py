@@ -55,14 +55,28 @@ from asdac.common import Location
 from asdac.objects import Function, Variable, VariableKind
 
 
-@attr.s(auto_attribs=True, eq=False, order=False, frozen=True)
+@attr.s(auto_attribs=True, eq=False, order=False, frozen=True, repr=False)
 class ObjectId:
     variable: typing.Optional[Variable] = None
+
+    def __repr__(self):
+        # is short, but is good
+        result = _objectid_debug_counter(self)
+        if self.variable is not None:
+            result += ' ' + self.variable.name
+        return f'<{result}>'
+
+
+@functools.lru_cache(maxsize=None)
+def _objectid_debug_counter(
+        id: ObjectId, *,
+        counter: typing.Iterator[int] = itertools.count(1)) -> str:
+    return str(next(counter))
 
 
 class Node:
 
-    def __init__(self, location: Location):
+    def __init__(self, location: typing.Optional[Location]):
         # number of elements has nothing to do with the type of the node
         # more than 1 means e.g. beginning of loop, 0 means unreachable code
         self.jumped_from: typing.Set[
@@ -125,7 +139,8 @@ class Node:
 class PassThroughNode(Node):
 
     def __init__(
-            self, location: Location, *args: typing.Any, **kwargs: typing.Any):
+            self, location: typing.Optional[Location],
+            *args: typing.Any, **kwargs: typing.Any):
         super().__init__(location, *args, **kwargs)     # type: ignore
         self.next_node: typing.Optional[Node] = None
 
@@ -142,7 +157,7 @@ class _LhsRhs(Node):
 
     def __init__(
             self,
-            location: Location,
+            location: typing.Optional[Location],
             lhs_id: ObjectId,
             rhs_id: ObjectId,
             *args: typing.Any, **kwargs: typing.Any):
@@ -158,7 +173,7 @@ class _OneResult(Node):
 
     def __init__(
             self,
-            location: Location,
+            location: typing.Optional[Location],
             result_id: ObjectId,
             *args: typing.Any, **kwargs: typing.Any):
         super().__init__(location, *args, **kwargs)     # type: ignore
@@ -172,7 +187,7 @@ class _OneInputId(Node):
 
     def __init__(
             self,
-            location: Location,
+            location: typing.Optional[Location],
             input_id: ObjectId,
             *args: typing.Any, **kwargs: typing.Any):
         super().__init__(location, *args, **kwargs)     # type: ignore
@@ -185,7 +200,10 @@ class _OneInputId(Node):
 # execution begins here, having this avoids weird special cases
 class Start(PassThroughNode):
 
-    def __init__(self, location: Location, arg_ids: typing.List[ObjectId]):
+    def __init__(
+            self,
+            location: typing.Optional[Location],
+            arg_ids: typing.List[ObjectId]):
         self.arg_ids = arg_ids
         super().__init__(location)
 
@@ -195,7 +213,9 @@ class Start(PassThroughNode):
 
 class Throw(Node):
 
-    def __init__(self, location: Location):
+    def __init__(
+            self,
+            location: typing.Optional[Location]):
         super().__init__(location)
 
     def get_jumps_to_including_nones(self):
@@ -208,7 +228,11 @@ class Assign(PassThroughNode, _OneInputId, _OneResult):
 
 class GetBuiltinVar(PassThroughNode, _OneResult):
 
-    def __init__(self, location: Location, var: Variable, result_id: ObjectId):
+    def __init__(
+            self,
+            location: typing.Optional[Location],
+            var: Variable,
+            result_id: ObjectId):
         super().__init__(location, result_id)
         assert var.kind == VariableKind.BUILTIN
         self.var = var
@@ -218,7 +242,7 @@ class StrConstant(PassThroughNode, _OneResult):
 
     def __init__(
             self,
-            location: Location,
+            location: typing.Optional[Location],
             python_string: str,
             result_id: ObjectId):
         super().__init__(location, result_id)
@@ -228,7 +252,10 @@ class StrConstant(PassThroughNode, _OneResult):
 class IntConstant(PassThroughNode, _OneResult):
 
     def __init__(
-            self, location: Location, python_int: int, result_id: ObjectId):
+            self,
+            location: typing.Optional[Location],
+            python_int: int,
+            result_id: ObjectId):
         super().__init__(location, result_id)
         self.python_int = python_int
 
@@ -236,9 +263,13 @@ class IntConstant(PassThroughNode, _OneResult):
 # can't use _OneResult because result_id is Optional
 class CallFunction(PassThroughNode):
 
-    def __init__(self, location: Location,
-                 function: Function, arg_ids: typing.List[ObjectId],
-                 result_id: typing.Optional[ObjectId] = None):
+    def __init__(
+            self,
+            location: typing.Optional[Location],
+            function: Function,
+            arg_ids: typing.List[ObjectId],
+            result_id: typing.Optional[ObjectId] = None):
+
         if result_id is None:
             assert function.returntype is None
         else:
@@ -292,7 +323,9 @@ class CallFunction(PassThroughNode):
 class StrJoin(PassThroughNode, _OneResult):
 
     def __init__(
-            self, location: Location, string_ids: typing.List[ObjectId],
+            self,
+            location: typing.Optional[Location],
+            string_ids: typing.List[ObjectId],
             result_id: ObjectId):
         super().__init__(location, result_id)
         self.string_ids = string_ids
@@ -304,7 +337,9 @@ class StrJoin(PassThroughNode, _OneResult):
 class TwoWayDecision(Node):
 
     def __init__(
-            self, location: Location, *args: typing.Any, **kwargs: typing.Any):
+            self,
+            location: typing.Optional[Location],
+            *args: typing.Any, **kwargs: typing.Any):
         super().__init__(location, *args, **kwargs)     # type: ignore
         self.then: typing.Optional[Node] = None
         self.otherwise: typing.Optional[Node] = None
@@ -323,14 +358,6 @@ class TwoWayDecision(Node):
 
 
 class BoolDecision(TwoWayDecision, _OneInputId):
-    pass
-
-
-class IntEqualDecision(TwoWayDecision, _LhsRhs):
-    pass
-
-
-class StrEqualDecision(TwoWayDecision, _LhsRhs):
     pass
 
 
@@ -499,13 +526,6 @@ def _graphviz_node_id(node: Node) -> str:
     return 'node' + str(id(node))
 
 
-@functools.lru_cache(maxsize=None)
-def _graphviz_object_id(
-        id: ObjectId, *,
-        counter: typing.Iterator[int] = itertools.count(1)) -> str:
-    return '<' + str(next(counter)) + '>'
-
-
 def _graphviz_code(
         root_node: Node,
         label_extra: str = '') -> typing.Iterator[str]:
@@ -528,21 +548,20 @@ def _graphviz_code(
             parts.append('UNREACHABLE')
 
         if isinstance(node, _OneInputId):
-            parts.append(f'input={_graphviz_object_id(node.input_id)}')
+            parts.append(f'input={repr(node.input_id)}')
         elif isinstance(node, _LhsRhs):
-            parts.append(f'lhs={_graphviz_object_id(node.lhs_id)} '
-                         f'rhs={_graphviz_object_id(node.rhs_id)}')
+            parts.append(f'lhs={repr(node.lhs_id)} '                         f'rhs={repr(node.rhs_id)}')
         elif isinstance(node, CallFunction):
             parts.append(
-                f'args=[{",".join(map(_graphviz_object_id, node.arg_ids))}]')
+                f'args=[{",".join(map(repr, node.arg_ids))}]')
             if node.result_id is None:
                 parts.append('result_id=None')
             else:
                 parts.append(
-                    f'result_id={_graphviz_object_id(node.result_id)}')
+                    f'result_id={repr(node.result_id)}')
 
         if isinstance(node, _OneResult):
-            parts.append(f'result_id={_graphviz_object_id(node.result_id)}')
+            parts.append(f'result_id={repr(node.result_id)}')
 
         for to in node.get_jumps_to():
             if node not in (ref.objekt for ref in to.jumped_from):
