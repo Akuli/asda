@@ -11,7 +11,7 @@ import colorama     # type: ignore
 from asdac import (
     common, parser, typer, decision_tree_creator,
     #optimizer,
-    bytecoder)
+    opcode_creator, bytecoder)
 
 
 def source2bytecode(compilation: common.Compilation) -> None:
@@ -38,8 +38,15 @@ def source2bytecode(compilation: common.Compilation) -> None:
 #    optimizer.optimize(function_trees)
     #decision_tree.graphviz(root_node, 'after_optimization')
 
+    compilation.messager(3, "Creating opcode")
+    opcodes = opcode_creator.create_opcode(function_trees)
+    for func, opcode in opcodes.items():
+        # f-string inside f-string
+        print(f'\n\n{f" {func.name} ".center(50, "=")}\n')
+        __import__('pprint').pprint(opcode)
+
     compilation.messager(3, "Creating bytecode")
-    bytecode = bytecoder.create_bytecode(compilation, function_trees, source)
+    bytecode = bytecoder.create_bytecode(compilation, opcodes, source)
 
     compilation.messager(3, 'Writing bytecode to "%s"' % common.path_string(
         compilation.compiled_path))

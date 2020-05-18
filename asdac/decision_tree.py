@@ -93,19 +93,9 @@ class Node:
         """Which object IDs does this node change when it runs?"""
         return set()
 
-    def get_jumps_to_including_nones(
-            self) -> typing.Iterable[typing.Optional['Node']]:
-        """Return iterable of nodes that may be ran after running this node.
-
-        If execution (of the function or file) may end at this node, the
-        resulting iterable contains one or more Nones.
-        """
+    def get_jumps_to(self) -> typing.List['Node']:
+        """Nodes that may be ran after running this node."""
         raise NotImplementedError
-
-    def get_jumps_to(self) -> typing.Iterable['Node']:
-        """Return iterable of nodes that may be ran after running this node."""
-        return (node for node in self.get_jumps_to_including_nones()
-                if node is not None)
 
     def change_jump_to(
             self,
@@ -144,8 +134,9 @@ class PassThroughNode(Node):
         super().__init__(location, *args, **kwargs)     # type: ignore
         self.next_node: typing.Optional[Node] = None
 
-    def get_jumps_to_including_nones(
-            self) -> typing.List[typing.Optional[Node]]:
+    def get_jumps_to(self) -> typing.List[Node]:
+        if self.next_node is None:
+            return []
         return [self.next_node]
 
     def set_next_node(self, next_node: Node) -> None:
@@ -213,9 +204,7 @@ class Start(PassThroughNode):
 
 class Throw(Node):
 
-    # i hate pep8 line length but i stick with it anyway because pep8 is law
-    def get_jumps_to_including_nones(
-            self) -> typing.List[typing.Optional[Node]]:
+    def get_jumps_to(self) -> typing.List[Node]:
         return []
 
 
@@ -233,8 +222,7 @@ class Return(Node):
             return set()
         return {self.value_id}
 
-    def get_jumps_to_including_nones(
-            self) -> typing.List[typing.Optional[Node]]:
+    def get_jumps_to(self) -> typing.List[Node]:
         return []
 
 
@@ -350,7 +338,7 @@ class StrJoin(PassThroughNode, _OneResult):
         return set(self.string_ids)
 
 
-class TwoWayDecision(Node):
+class BoolDecision(_OneInputId):
 
     def __init__(
             self,
@@ -360,9 +348,13 @@ class TwoWayDecision(Node):
         self.then: typing.Optional[Node] = None
         self.otherwise: typing.Optional[Node] = None
 
-    def get_jumps_to_including_nones(
-            self) -> typing.List[typing.Optional[Node]]:
-        return [self.then, self.otherwise]
+    def get_jumps_to(self) -> typing.List[Node]:
+        result = []
+        if self.then is not None:
+            result.append(self.then)
+        if self.otherwise is not None:
+            result.append(self.otherwise)
+        return result
 
     def set_then(self, value: typing.Optional[Node]) -> None:
         self.change_jump_to(
@@ -371,10 +363,6 @@ class TwoWayDecision(Node):
     def set_otherwise(self, value: typing.Optional[Node]) -> None:
         self.change_jump_to(
             utils.AttributeReference(self, 'otherwise'), value)
-
-
-class BoolDecision(TwoWayDecision, _OneInputId):
-    pass
 
 
 def _get_debug_string(node: Node) -> typing.Optional[str]:
@@ -590,7 +578,7 @@ def _graphviz_code(
 #            yield '%s [style=filled, fillcolor="%s"];' % (
 #                _graphviz_node_id(node), color)
 
-        if isinstance(node, TwoWayDecision):
+        if isinstance(node, BoolDecision):
             # color 'then' with green, 'otherwise' with red
             if node.then is not None:
                 yield '%s -> %s [color=green]\n' % (

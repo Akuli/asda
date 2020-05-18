@@ -229,32 +229,30 @@ class _FunctionBodyTyper:
                 statement.location, pre_cond, post_cond, body, incr)
 
         if isinstance(statement, ast.Return):
-            # i hate mypy for not allowing me to call this 'value'.....
-            value2: typing.Optional[ast.Expression]
-
             if statement.value is None:
                 if self._this_function.returntype is not None:
                     raise CompileError(
-                        "this function must return a value",
+                        f"this function must return a value "
+                        f"of type {self._this_function.returntype.name}",
                         statement.location)
-                value2 = None
+                return ast.Return(statement.location, None)
 
-            else:
-                if self._this_function.returntype is None:
-                    raise CompileError(
-                        "this function must not return a value",
-                        statement.location)
+            if self._this_function.returntype is None:
+                raise CompileError(
+                    "this function must not return a value "
+                    "because it has been defined with '-> void'",
+                    statement.value.location)
 
-                value2 = self.do_expression(statement.value)
-                assert value2.type is not None
-                if value2.type != self._this_function.returntype:
-                    raise CompileError(
-                        f"should return a value of type "
-                        f"{self._this_function.returntype.name}, "
-                        f"not {value2.type.name}",
-                        statement.location)
+            value = self.do_expression(statement.value)
+            assert value.type is not None
+            if value.type != self._this_function.returntype:
+                raise CompileError(
+                    f"should return a value of type "
+                    f"{self._this_function.returntype.name}, "
+                    f"not {value.type.name}",
+                    statement.location)
 
-            return ast.Return(statement.location, value2)
+            return ast.Return(statement.location, value)
 
         raise NotImplementedError(statement)
 

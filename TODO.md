@@ -1,3 +1,4 @@
+- scala-style `option_array()` method: `null.option_array() = []`, and `a.option_array() = [a]` for any non-null option `a`
 - ternary: `` a `f` b `` is same as `f(a, b)`
 - add function names to error messages
 - `func` instead of `function`? nobody wants to type `function`. similarly `meth` instead of `method`?

@@ -38,7 +38,7 @@ class Variable:
     definition_location: typing.Optional[Location]
 
 
-@attr.s(auto_attribs=True, eq=False, order=False, frozen=True)
+@attr.s(auto_attribs=True, eq=False, order=False, frozen=True, repr=False)
 class Function:
     name: str
     argvars: typing.List[Variable]
@@ -46,6 +46,9 @@ class Function:
     kind: FunctionKind
     definition_location: typing.Optional[Location]
     is_main: bool = False
+
+    def __repr__(self):
+        return f'<{__name__}.Function {repr(self.name)}>'
 
     def get_string(self) -> str:
         return '%s(%s)' % (self.name, ', '.join(
