@@ -246,9 +246,9 @@ class _OpCodeCreator:
             self.opcode.append(opcode.CallFunction(
                 node.location, node.function))
             _delete_top(self.stack, node.arg_ids)
+
             if node.result_id is not None:
                 self._put_id_to_stack(node.location, node.result_id)
-            print('node after CallFunction:', node.next_node)
             self.node2opcode(node.next_node)
 
         elif isinstance(node, dtree.Return):
@@ -262,6 +262,7 @@ class _OpCodeCreator:
             popped = self.stack.pop()
             assert popped is node.input_id
             self._put_id_to_stack(node.location, node.result_id)
+            self.node2opcode(node.next_node)
 
         elif isinstance(node, dtree.BoolDecision):
             then_marker = opcode.JumpMarker()
