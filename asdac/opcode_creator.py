@@ -12,22 +12,6 @@ from asdac.objects import Function
 T = typing.TypeVar('T')
 
 
-def _list_intersection(
-        a: typing.List[T], b: typing.List[T]) -> typing.List[T]:
-    """Like '&' for sets, but maintains an order.
-
-    Most importantly, if a == b, then this returns the input unchanged. The
-    items on the stack won't need to be reordered at all in that case. Our goal
-    is to avoid unnecessary reordering.
-    """
-    # uniqueness sanity checks
-    assert len(a) == len(set(a))
-    assert len(b) == len(set(b))
-
-    return sorted(set(a) & set(b),
-                  key=(lambda item: a.index(item) + b.index(item)))
-
-
 # lizt[-n:] doesn't do the right thing when n=0
 def _delete_top(lizt: typing.List[T], top: typing.List[T]) -> None:
     if top:
