@@ -93,9 +93,11 @@ class _FunctionBodyTyper:
 
     def __init__(
         self,
+        this_function: Function,
         function_dict: typing.Dict[str, Function],
         local_vars: typing.Dict[str, Variable],
     ):
+        self._this_function = this_function
         self._function_dict = function_dict
         self._local_vars = local_vars.copy()
 
@@ -126,8 +128,7 @@ class _FunctionBodyTyper:
 
         a_something = self._what_is_name(name)
         if a_something is None:
-            raise CompileError(
-                f"no variable named '{name}'", location)
+            raise CompileError(f"no variable named '{name}'", location)
         raise CompileError(
             f"'{name}' is {a_something}, not a variable", location)
 
@@ -139,8 +140,7 @@ class _FunctionBodyTyper:
 
         a_something = self._what_is_name(name)
         if a_something is None:
-            raise CompileError(
-                f"no function named '{name}'", location)
+            raise CompileError(f"no function named '{name}'", location)
         raise CompileError(
             f"'{name}' is {a_something}, not a function name", location)
 
@@ -228,6 +228,34 @@ class _FunctionBodyTyper:
             return ast.Loop(
                 statement.location, pre_cond, post_cond, body, incr)
 
+        if isinstance(statement, ast.Return):
+            # i hate mypy for not allowing me to call this 'value'.....
+            value2: typing.Optional[ast.Expression]
+
+            if statement.value is None:
+                if self._this_function.returntype is not None:
+                    raise CompileError(
+                        "this function must return a value",
+                        statement.location)
+                value2 = None
+
+            else:
+                if self._this_function.returntype is None:
+                    raise CompileError(
+                        "this function must not return a value",
+                        statement.location)
+
+                value2 = self.do_expression(statement.value)
+                assert value2.type is not None
+                if value2.type != self._this_function.returntype:
+                    raise CompileError(
+                        f"should return a value of type "
+                        f"{self._this_function.returntype.name}, "
+                        f"not {value2.type.name}",
+                        statement.location)
+
+            return ast.Return(statement.location, value2)
+
         raise NotImplementedError(statement)
 
     def _do_expression_raw(self, expression: ast.Expression) -> ast.Expression:
@@ -312,14 +340,32 @@ class _FunctionBodyTyper:
         assert result.type is not None
         return result
 
+    def do_function_body(
+        self, statements: typing.List[ast.Statement],
+    ) -> typing.List[ast.Statement]:
+
+        result = list(map(self.do_statement, statements))
+        if self._this_function.returntype is None:
+            assert self._this_function.definition_location is not None
+            result.append(ast.Return(
+                self._this_function.definition_location, None))
+        else:
+            # TODO: put here something that triggers CompileError if it's ever
+            #       reached
+            pass
+
+        return result
+
 
 def _do_funcdef(
     funcdef: ast.FuncDefinition,
     function_dict: typing.Dict[str, Function],
 ) -> ast.FuncDefinition:
 
+    function_object = function_dict[funcdef.parser_header.name]
+
     assert funcdef.function is None
-    checker = _FunctionBodyTyper(function_dict, {
+    checker = _FunctionBodyTyper(function_object, function_dict, {
         var.name: var
         for var in function_dict[funcdef.parser_header.name].argvars
     })
@@ -327,8 +373,8 @@ def _do_funcdef(
     return ast.FuncDefinition(
         funcdef.location,
         funcdef.parser_header,
-        function_dict[funcdef.parser_header.name],
-        list(map(checker.do_statement, funcdef.body)),
+        function_object,
+        checker.do_function_body(funcdef.body),
     )
 
 

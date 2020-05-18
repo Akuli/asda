@@ -217,7 +217,7 @@ class _ByteCodeGen:
     ) -> None:
         # sanity checks
         for id in want2top:
-            assert id in self.stack
+            assert id in self.stack, id
         for id in self.stack:
             assert self.stack.count(id) == 1
 
@@ -389,8 +389,29 @@ class _ByteCodeGen:
             elif isinstance(node, dtree.Throw):
                 self.writer.write_opbyte(THROW)
                 return
+            elif isinstance(node, dtree.Return):
+                if node.value_id is None:
+                    # clear stack
+                    while self.stack:
+                        self._write_pop(0)
+
+                else:
+                    assert node.value_id in self.stack
+                    assert self.stack.count(node.value_id) == 1
+
+                    # bring return value to bottom of stack
+                    self._write_swap(
+                        self.stack[::-1].index(node.value_id),
+                        len(self.stack) - 1)
+
+                    # pop away everything else
+                    while self.stack != [node.value_id]:
+                        self._write_pop(0)
+
+                self.writer.write_opbyte(RETURN)
+                return
             else:
-                raise NotImplementedError("omg " + repr(node))
+                raise NotImplementedError(node)
 
         self.writer.write_opbyte(RETURN)
 

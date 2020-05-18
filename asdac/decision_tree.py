@@ -59,7 +59,7 @@ from asdac.objects import Function, Variable, VariableKind
 class ObjectId:
     variable: typing.Optional[Variable] = None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         # is short, but is good
         result = _objectid_debug_counter(self)
         if self.variable is not None:
@@ -130,8 +130,8 @@ class Node:
         debug_string = _get_debug_string(self)
         if debug_string is None:
             return super().__repr__()
-        return '<%s: %s, at %#x>' % (type(self).__name__, debug_string,
-                                     id(self))
+        return '<dtree.%s: %s, at %#x>' % (type(self).__name__, debug_string,
+                                           id(self))
 
 
 # a node that can be used like:
@@ -213,12 +213,28 @@ class Start(PassThroughNode):
 
 class Throw(Node):
 
+    # i hate pep8 line length but i stick with it anyway because pep8 is law
+    def get_jumps_to_including_nones(
+            self) -> typing.List[typing.Optional[Node]]:
+        return []
+
+
+class Return(Node):
+
     def __init__(
             self,
-            location: typing.Optional[Location]):
+            location: typing.Optional[Location],
+            value_id: typing.Optional[ObjectId]):
         super().__init__(location)
+        self.value_id = value_id
 
-    def get_jumps_to_including_nones(self):
+    def ids_read(self) -> typing.Set[ObjectId]:
+        if self.value_id is None:
+            return set()
+        return {self.value_id}
+
+    def get_jumps_to_including_nones(
+            self) -> typing.List[typing.Optional[Node]]:
         return []
 
 
@@ -369,7 +385,7 @@ def _get_debug_string(node: Node) -> typing.Optional[str]:
     if isinstance(node, StrConstant):
         return repr(node.python_string)
     if isinstance(node, CallFunction):
-        return node.function.get_string()
+        return f'{node.function.get_string()}'
     return None
 
 
@@ -535,10 +551,7 @@ def _graphviz_code(
 
     for node in (reachable | unreachable):
         parts = [type(node).__name__]
-        # TODO: display location somewhat nicely
-        # .lineno attribute was replaced with .location attribute
-#            if node.lineno is not None:
-#                parts[0] += ', line %d' % node.lineno
+        # TODO: display location?
 
         debug_string = _get_debug_string(node)
         if debug_string is not None:
@@ -548,20 +561,17 @@ def _graphviz_code(
             parts.append('UNREACHABLE')
 
         if isinstance(node, _OneInputId):
-            parts.append(f'input={repr(node.input_id)}')
+            parts.append(f'input={node.input_id}')
         elif isinstance(node, _LhsRhs):
-            parts.append(f'lhs={repr(node.lhs_id)} '                         f'rhs={repr(node.rhs_id)}')
+            parts.append(f'lhs={node.lhs_id} rhs={node.rhs_id}')
         elif isinstance(node, CallFunction):
-            parts.append(
-                f'args=[{",".join(map(repr, node.arg_ids))}]')
-            if node.result_id is None:
-                parts.append('result_id=None')
-            else:
-                parts.append(
-                    f'result_id={repr(node.result_id)}')
+            parts.append(f'args={node.arg_ids}')
+            parts.append(f'result_id={node.result_id}')
+        elif isinstance(node, Start):
+            parts.append(f'arg_ids={node.arg_ids}')
 
         if isinstance(node, _OneResult):
-            parts.append(f'result_id={repr(node.result_id)}')
+            parts.append(f'result_id={node.result_id}')
 
         for to in node.get_jumps_to():
             if node not in (ref.objekt for ref in to.jumped_from):

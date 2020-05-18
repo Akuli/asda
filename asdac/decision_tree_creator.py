@@ -175,8 +175,12 @@ class _TreeCreator:
             self.set_next_node = set_next_node_everywhere
 
         elif isinstance(statement, ast.Return):
-            if statement.value is not None:
-                raise NotImplementedError
+            if statement.value is None:
+                value_id = None
+            else:
+                value_id = self.do_expression(statement.value)
+
+            self.set_next_node(dtree.Return(statement.location, value_id))
 
             # the next node might or might not become unreachable, because
             # multiple nodes can jump to the same node
@@ -186,11 +190,6 @@ class _TreeCreator:
 
         elif isinstance(statement, ast.Throw):
             self.set_next_node(dtree.Throw(statement.location))
-
-            # the next node might or might not become unreachable, because
-            # multiple nodes can jump to the same node
-            #
-            # if it becomes unreachable, tree_creation_done() cleans it up
             self.set_next_node = lambda node: None
 
         elif isinstance(statement, ast.Let):
