@@ -451,12 +451,10 @@ class _FunctionContentParser(_ParserBase):
         allow_classes: bool = False,
     ) -> typing.List[ast.Statement]:
         if self.tokens.peek().value == 'while':
-            while_location = self.tokens.next_token().location
+            whale = self.tokens.next_token()
             cond = self.parse_expression()
             body = self.parse_block(consume_newline=True)
-#            return Loop(
-#                while_location, cond, BUILTIN_VARIABLES['True'], [], body)
-            raise NotImplementedError
+            return [ast.Loop(whale.location, cond, None, body, [])]
 
         # note that 'if x then y else z' is not a valid statement even though
         # it is a valid expression
@@ -477,19 +475,17 @@ class _FunctionContentParser(_ParserBase):
                 raise CompileError(
                     "should be a newline", newline.location)
 
-#            return Loop(
-#                do.location, GetVar(BUILTIN_VARIABLES['True'], cond, [], body)
-            raise NotImplementedError
+            return [ast.Loop(do.location, None, cond, body, [])]
 
         if self.tokens.peek().value == 'for':
-            for_location = self.tokens.next_token().location
+            four = self.tokens.next_token()
             init = self.parse_one_line_ish_statement()
             self.consume_semicolon_token()
             cond = self.parse_expression()
             self.consume_semicolon_token()
             incr = self.parse_one_line_ish_statement()
             body = self.parse_block(consume_newline=True)
-            return init + [ast.Loop(for_location, cond, None, body, incr)]
+            return init + [ast.Loop(four.location, cond, None, body, incr)]
 
         result = self.parse_one_line_ish_statement(it_should_be='a statement')
 
