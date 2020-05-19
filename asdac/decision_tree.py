@@ -313,7 +313,7 @@ class BoolDecision(_OneInputId):
             self,
             location: typing.Optional[Location],
             *args: typing.Any, **kwargs: typing.Any):
-        super().__init__(location, *args, **kwargs)     # type: ignore
+        super().__init__(location, *args, **kwargs)
         self.then: typing.Optional[Node] = None
         self.otherwise: typing.Optional[Node] = None
 

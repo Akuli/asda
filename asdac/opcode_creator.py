@@ -70,7 +70,7 @@ class JumpInfo:
 
 class _OpCodeCreator:
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.opcode: opcode.OpCode = []
         self.stack: typing.List[dtree.ObjectId] = []
         self.jump_cache: typing.Dict[dtree.Node, JumpInfo] = {}
@@ -168,7 +168,7 @@ class _OpCodeCreator:
 
     def make_stack_to_be(
             self, loc: typing.Optional[Location],
-            new_stack: typing.List[dtree.ObjectId]):
+            new_stack: typing.List[dtree.ObjectId]) -> None:
 
         self._rearrange_stack_top_or_bottom(loc, new_stack, top=False)
         while self.stack != new_stack:
@@ -237,9 +237,9 @@ class _OpCodeCreator:
 
         elif isinstance(node, dtree.Return):
             if node.value_id is None:
-                self.make_stack_to_be(node, [])
+                self.make_stack_to_be(node.location, [])
             else:
-                self.make_stack_to_be(node, [node.value_id])
+                self.make_stack_to_be(node.location, [node.value_id])
             self.opcode.append(opcode.Return(node.location))
 
         elif isinstance(node, dtree.Assign):

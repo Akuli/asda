@@ -1,18 +1,14 @@
 # converts decision tree to bytes that can be written to file
 
 import bisect
-import contextlib
 import functools
 import io
 import os
 import pathlib
 import typing
 
-import attr
-
 from asdac import common, objects, opcode
-from asdac import decision_tree as dtree
-from asdac.common import Compilation, CompileError, Location
+from asdac.common import Compilation, Location
 
 
 SET_LINENO = b'L'
@@ -162,7 +158,7 @@ class _ByteCodeGen:
         ] = {}
         self._marker2index: typing.Dict[opcode.JumpMarker, int] = {}
 
-    def write_op(self, op: typing.Union[opcode.Op, opcode.JumpMarker]):
+    def write_op(self, op: typing.Union[opcode.Op, opcode.JumpMarker]) -> None:
         if isinstance(op, opcode.JumpMarker):
             self._marker2index[op] = self.writer.ops_written
             return
@@ -244,7 +240,7 @@ class _ByteCodeGen:
             self.write_op(op)
         op_count.set(self.writer.ops_written - old_op_index)
 
-    def fix_jump_references(self):
+    def fix_jump_references(self) -> None:
         for marker, uints in self._marker2uintlist.items():
             for uint in uints:
                 uint.set(self._marker2index[marker])

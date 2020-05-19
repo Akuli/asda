@@ -11,7 +11,7 @@ _jumpmarker_debug_ids: typing.Dict['JumpMarker', int] = {}
 
 class JumpMarker:
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self not in _jumpmarker_debug_ids:
             _jumpmarker_debug_ids[self] = len(_jumpmarker_debug_ids)
         return f"<{__name__}.JumpMarker {_jumpmarker_debug_ids[self]}>"

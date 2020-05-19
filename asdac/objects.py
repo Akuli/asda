@@ -47,7 +47,7 @@ class Function:
     definition_location: typing.Optional[Location]
     is_main: bool = False
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'<{__name__}.Function {repr(self.name)}>'
 
     def get_string(self) -> str:

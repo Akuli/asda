@@ -374,9 +374,10 @@ class _FunctionContentParser(_ParserBase):
         self,
         *,
         it_should_be: str = 'a one-line-ish statament',
-    ) -> typing.Optional[ast.Statement]:
+    ) -> typing.List[ast.Statement]:
         if self.tokens.peek().value == 'void':
-            return None
+            self.tokens.next_token()
+            return []
 
         if self.tokens.peek().value == 'return':
             return_keyword = self.tokens.next_token()
@@ -385,10 +386,10 @@ class _FunctionContentParser(_ParserBase):
             else:
                 value = self.parse_expression()
 
-            return ast.Return(return_keyword.location, value)
+            return [ast.Return(return_keyword.location, value)]
 
         if self.tokens.peek().value == 'throw':
-            return ast.Throw(self.tokens.next_token().location)
+            return [ast.Throw(self.tokens.next_token().location)]
 
         if self.tokens.peek().value == 'let':
             # TODO: outer let, export let
@@ -403,9 +404,9 @@ class _FunctionContentParser(_ParserBase):
                 raise CompileError("should be '='", equals_sign.location)
 
             initial_value = self.parse_expression()
-            return ast.Let(
+            return [ast.Let(
                 let_keyword.location, None, ast.ParserVariable(varname.value),
-                initial_value)
+                initial_value)]
 
         result = self.parse_expression(it_should_be=it_should_be)
 
@@ -414,12 +415,12 @@ class _FunctionContentParser(_ParserBase):
             value = self.parse_expression()
 
             if isinstance(result, ast.GetVar):
-                return ast.SetVar(
-                    equal_sign.location, None, result.parser_var, value)
+                return [ast.SetVar(
+                    equal_sign.location, None, result.parser_var, value)]
             raise CompileError("can only assign to variables", result.location)
 
         if isinstance(result, ast.CallFunction):
-            return result
+            return [result]
 
         raise CompileError("invalid statement", result.location)
 
@@ -488,11 +489,7 @@ class _FunctionContentParser(_ParserBase):
             self.consume_semicolon_token()
             incr = self.parse_one_line_ish_statement()
             body = self.parse_block(consume_newline=True)
-
-            init_list = [] if init is None else [init]
-            incr_list = [] if incr is None else [incr]
-            return init_list + [
-                ast.Loop(for_location, cond, None, body, incr_list)]
+            return init + [ast.Loop(for_location, cond, None, body, incr)]
 
         result = self.parse_one_line_ish_statement(it_should_be='a statement')
 
@@ -500,9 +497,7 @@ class _FunctionContentParser(_ParserBase):
         if newline.type != 'NEWLINE':
             raise CompileError("should be a newline", newline.location)
 
-        if result is None:
-            return []
-        return [result]
+        return result
 
     def parse_block(
         self,
