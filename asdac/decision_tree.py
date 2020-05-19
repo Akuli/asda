@@ -293,37 +293,6 @@ class CallFunction(PassThroughNode):
         return {self.result_id}
 
 
-# TODO: read my wall of text, does it still apply?
-#
-# you might be thinking of implementing 'return blah' so that it leaves 'blah'
-# on the stack and exits the function, but I thought about that for about 30
-# minutes straight and it turned out to be surprisingly complicated
-#
-# there may be local variables (including the function's arguments) in the
-# bottom of the stack, and they are cleared with nodes like
-# PopOne(is_popping_a_dummy=True) when the function exits
-#
-# the return value must go before the local variables in the stack, because
-# otherwise every PopOne(is_popping_a_dummy=True) has to move the return value
-# object in the stack by one, which feels dumb (but maybe not too inefficient):
-#
-#   [var1, var2, var3, result]      # Function is running 'return result'
-#   [var1, var2, result]            # PopOne(is_popping_a_dummy=True) ran
-#
-# i.e. PopOne, which used to be just decrementing stack top pointer (and
-# possibly a decref), is now a more complicated thing that can in some cases
-# delete stuff BEFORE the stack top? wtf. i don't like this
-#
-# I also thought about creating a special variable that would always go first
-# in the stack and would hold the return value, but function arguments go first
-# in the stack, so this would conflict with the first argument of the function.
-# Unless I make the function arguments start at index 1 for value-returning
-# functions and at index 0 for other functions. Would be a messy piece of shit.
-#
-# The solution is to store the return value into a special place outside the
-# stack before local variables are popped off.
-
-
 class StrJoin(PassThroughNode, _OneResult):
 
     def __init__(
