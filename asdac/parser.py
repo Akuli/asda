@@ -4,13 +4,11 @@ import typing
 from asdac import ast, precedence, string_parser
 from asdac.common import Compilation, CompileError, Location
 from asdac.objects import BUILTIN_TYPES
-from asdac.tokenizer import Token, tokenize
+from asdac.tokenizer import Token, TokenType, tokenize
 
 
 def _to_string(parsed: ast.Expression) -> ast.Expression:
-    raise NotImplementedError
-#    location = parsed.location      # because pep8 line length
-#    return CallFunction(location, GetAttr(location, parsed, 'to_string'), [])
+    return parsed    # TODO
 
 
 class _TokenIterator:
@@ -97,7 +95,7 @@ class _ParserBase:
     def parse_type(self) -> ast.ParserType:
         # TODO: functype, something from module, generics
         name = self.tokens.next_token()
-        if name.type != 'ID':
+        if name.type != TokenType.ID:
             raise CompileError("invalid type", name.location)
 
         return ast.ParserType(name.location, name.value)
@@ -108,14 +106,14 @@ class _FileParser(_ParserBase):
     def _parse_argument_definition(self) -> ast.ParserFunctionHeaderArg:
         tybe = self.parse_type()
         name = self.tokens.next_token()
-        if name.type != 'ID':
+        if name.type != TokenType.ID:
             raise CompileError("invalid variable name", name.location)
         location = tybe.location + name.location
         return ast.ParserFunctionHeaderArg(location, tybe, name.value)
 
     def _parse_function_header(self) -> ast.ParserFunctionHeader:
         name = self.tokens.next_token()
-        if name.type != 'ID':
+        if name.type != TokenType.ID:
             raise CompileError("should be a function name", name.location)
 
         lparen, args, rparen = self.parse_commasep_in_parens(
@@ -168,11 +166,11 @@ class _FunctionContentParser(_ParserBase):
         parts: typing.List[ast.Expression] = []
         for kind, value, part_location in string_parser.parse(
                 content, content_location):
-            if kind == 'string':
+            if kind == string_parser.ContentKind.STRING:
                 parts.append(ast.StrConstant(
                     part_location, BUILTIN_TYPES['Str'], value))
 
-            elif kind == 'code':
+            elif kind == string_parser.ContentKind.CODE:
                 if not allow_curly_braces:
                     raise CompileError(
                         "cannot use {...} strings here", part_location)
@@ -190,13 +188,14 @@ class _FunctionContentParser(_ParserBase):
 
                 expression = parser.parse_expression()
                 newline = parser.tokens.next_token()    # added by tokenizer
-                if newline.type != 'NEWLINE' or not parser.tokens.eof():
+                if (newline.type != TokenType.NEWLINE
+                        or not parser.tokens.eof()):
                     # find the part that was not a part of the expression
                     token_list = [newline]
                     while not parser.tokens.eof():
                         token_list.append(parser.tokens.next_token())
 
-                    assert token_list[-1].type == 'NEWLINE'
+                    assert token_list[-1].type == TokenType.NEWLINE
                     raise CompileError(
                         "invalid syntax",
                         token_list[0].location + token_list[-2].location)
@@ -224,19 +223,21 @@ class _FunctionContentParser(_ParserBase):
         #
         # 'if' is a part of an if expression: 'if foo then bar else baz'
         # (doesn't conflict with if statements)
-        if self.tokens.peek().value in {'(', 'if', 'new', 'this'}:
-            return True
-
-        if self.tokens.peek().type in {'INTEGER', 'STRING', 'ID',
-                                       'MODULEFUL_ID'}:
-            return True
-
-        return False
+        return (
+            self.tokens.peek().value in {'(', 'if', 'new', 'this'}
+        ) or (
+            self.tokens.peek().type in {
+                TokenType.INTEGER,
+                TokenType.STRING,
+                TokenType.ID,
+                TokenType.MODULEFUL_ID,
+            }
+        )
 
     # remember to update expression_without_operators_coming_up()
     # whenever you change this method!
     def parse_expression_without_operators_or_calls(self) -> ast.Expression:
-        if self.tokens.peek().type == 'ID':
+        if self.tokens.peek().type == TokenType.ID:
             token = self.tokens.next_token()
             return ast.GetVar(
                 location=token.location,
@@ -275,12 +276,12 @@ class _FunctionContentParser(_ParserBase):
 
                 return result
 
-        if self.tokens.peek().type == 'INTEGER':
+        if self.tokens.peek().type == TokenType.INTEGER:
             token = self.tokens.next_token()
             return ast.IntConstant(token.location, BUILTIN_TYPES['Int'],
                                    int(token.value))
 
-        if self.tokens.peek().type == 'STRING':
+        if self.tokens.peek().type == TokenType.STRING:
             token = self.tokens.next_token()
             parts = self._handle_string_literal(
                 token.value, token.location, allow_curly_braces=True)
@@ -381,7 +382,7 @@ class _FunctionContentParser(_ParserBase):
 
         if self.tokens.peek().value == 'return':
             return_keyword = self.tokens.next_token()
-            if self.tokens.eof() or self.tokens.peek().type == 'NEWLINE':
+            if self.tokens.eof() or self.tokens.peek().type == TokenType.NEWLINE:
                 value = None
             else:
                 value = self.parse_expression()
@@ -395,7 +396,7 @@ class _FunctionContentParser(_ParserBase):
             # TODO: outer let, export let
             let_keyword = self.tokens.next_token()
             varname = self.tokens.next_token()
-            if varname.type != 'ID':
+            if varname.type != TokenType.ID:
                 raise CompileError(
                     "should be a variable name", varname.location)
 
@@ -471,7 +472,7 @@ class _FunctionContentParser(_ParserBase):
             cond = self.parse_expression()
 
             newline = self.tokens.next_token()
-            if newline.type != 'NEWLINE':
+            if newline.type != TokenType.NEWLINE:
                 raise CompileError(
                     "should be a newline", newline.location)
 
@@ -490,7 +491,7 @@ class _FunctionContentParser(_ParserBase):
         result = self.parse_one_line_ish_statement(it_should_be='a statement')
 
         newline = self.tokens.next_token()
-        if newline.type != 'NEWLINE':
+        if newline.type != TokenType.NEWLINE:
             raise CompileError("should be a newline", newline.location)
 
         return result
@@ -501,21 +502,21 @@ class _FunctionContentParser(_ParserBase):
         consume_newline: bool = False,
     ) -> typing.List[ast.Statement]:
         indent = self.tokens.next_token()
-        if indent.type != 'INDENT':
+        if indent.type != TokenType.INDENT:
             # there was no colon, tokenizer replaces 'colon indent' with
             # just 'indent' to make parsing a bit simpler
             raise CompileError("should be ':'", indent.location)
 
         result = []
-        while self.tokens.peek().type != 'DEDENT':
+        while self.tokens.peek().type != TokenType.DEDENT:
             result.extend(self.parse_statement())
 
         dedent = self.tokens.next_token()
-        assert dedent.type == 'DEDENT'
+        assert dedent.type == TokenType.DEDENT
 
         if consume_newline:
             newline = self.tokens.next_token()
-            assert newline.type == 'NEWLINE', "tokenizer doesn't work"
+            assert newline.type == TokenType.NEWLINE, "tokenizer doesn't work"
 
         return result
 

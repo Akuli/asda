@@ -331,7 +331,19 @@ class _FunctionBodyTyper:
         elif isinstance(expression, ast.CallFunction):
             return self._do_function_call(expression)
 
-        raise NotImplementedError(expression)
+        elif isinstance(expression, ast.StrJoin):
+            parts = list(map(self.do_expression, expression.parts))
+            for part in parts:
+                if part.type != BUILTIN_TYPES['Str']:
+                    raise CompileError(
+                        f"should have type Str, not {part.type.name}",
+                        part.type.location)
+
+            return ast.StrJoin(
+                expression.location, BUILTIN_TYPES['Str'], parts)
+
+        else:
+            raise NotImplementedError(expression)
 
     def do_expression(self, expression: ast.Expression) -> ast.Expression:
         result = self._do_expression_raw(expression)

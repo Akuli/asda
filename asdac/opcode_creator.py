@@ -235,6 +235,15 @@ class _OpCodeCreator:
                 self._put_id_to_stack(node.location, node.result_id)
             self.node2opcode(node.next_node)
 
+        elif isinstance(node, dtree.StrJoin):
+            self.get_ids_to_top_or_bottom_of_stack(
+                node, node.string_ids, top=True)
+            self.opcode.append(opcode.StrJoin(
+                node.location, len(node.string_ids)))
+            _delete_top(self.stack, node.string_ids)
+            self._put_id_to_stack(node.location, node.result_id)
+            self.node2opcode(node.next_node)
+
         elif isinstance(node, dtree.Return):
             if node.value_id is None:
                 self.make_stack_to_be(node.location, [])

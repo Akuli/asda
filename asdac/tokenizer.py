@@ -1,3 +1,4 @@
+import enum
 import typing
 
 import attr
@@ -24,26 +25,45 @@ _TOKEN_REGEX = '|'.join('(?P<%s>%s)' % pair for pair in [
     ('ERROR', '.'),
 ])
 
-# keep this up to date! this is what prevents these from being valid
-# variable names
-_KEYWORDS = {
-    'if', 'then', 'elif', 'else',
-    'while', 'for', 'do',
-    'void', 'pass',
-    'func', 'return',
-    'outer', 'export', 'let',
-    'import', 'as',
-    'throw', 'catch', 'try', 'finally',
-    'class', 'method', 'this', 'new',
-    'functype',
-}
+
+class TokenType(enum.Enum):
+    OPERATOR = enum.auto()
+    INTEGER = enum.auto()
+    MODULEFUL_ID = enum.auto()
+    ID = enum.auto()
+    KEYWORD = enum.auto()
+    STRING = enum.auto()
+    NEWLINE = enum.auto()
+    INDENT = enum.auto()
+    DEDENT = enum.auto()
 
 
 @attr.s(auto_attribs=True, eq=False, order=False, frozen=True)
 class Token:
-    type: str      # TODO: enum
+    type: TokenType
     value: str
     location: common.Location
+
+
+class Keyword(enum.Enum):
+    # TODO: outer let, export let, import
+    IF = 'if'
+    THEN = 'then'
+    ELIF = 'elif'
+    ELSE = 'else'
+    WHILE = 'while'
+    FOR = 'for'
+    DO = 'do'
+    VOID = 'void'
+    PASS = 'pass'
+    FUNC = 'func'
+    RETURN = 'return'
+    LET = 'let'
+    THROW = 'throw'
+    CATCH = 'catch'
+    TRY = 'try'
+    FINALLY = 'finally'
+    # TODO: class, meth or method, this, new
 
 
 # tabs are disallowed because they aren't used for indentation and you can use
@@ -72,13 +92,13 @@ def _raw_tokenize(
         code += '\n'
 
     for match in regex.finditer(_TOKEN_REGEX, code):
-        token_type = match.lastgroup
+        token_type_name = match.lastgroup
         location = common.Location(
             compilation, match.start() + initial_offset,
             match.end() - match.start())
         value = match.group(0)
 
-        if token_type == 'ERROR':
+        if token_type_name == 'ERROR':
             if value == '"':
                 raise common.CompileError(
                     "invalid string", location)
@@ -90,12 +110,14 @@ def _raw_tokenize(
             raise common.CompileError(
                 "unexpected character U+%04X" % ord(value), location)
 
-        if token_type.startswith('IGNORE_'):
+        if token_type_name.startswith('IGNORE_'):
             continue
 
-        if value in _KEYWORDS:
-            assert token_type == 'ID'
-            token_type = 'KEYWORD'
+        token_type = TokenType[token_type_name]
+
+        if value in (keyword.value for keyword in Keyword):
+            assert token_type == TokenType.ID
+            token_type = TokenType.KEYWORD
 
         yield Token(token_type, value, location)
 
@@ -144,16 +166,17 @@ def _handle_indents_and_dedents_and_unwanted_whitespace(
     for token in tokens:
         assert token is not None
 
-        if token.type in {'NEWLINE', 'INDENT'} and space_ignore_stack[-1]:
+        if (token.type in {TokenType.NEWLINE, TokenType.INDENT}
+                and space_ignore_stack[-1]):
             continue
 
-        if token.type == 'NEWLINE':
+        if token.type == TokenType.NEWLINE:
             assert not new_line_starting, "_raw_tokenize() doesn't work"
             new_line_starting = True
             yield token
 
         elif new_line_starting:
-            if token.type == 'INDENT':
+            if token.type == TokenType.INDENT:
                 indent_level = len(token.value)
             else:
                 indent_level = 0
@@ -162,7 +185,7 @@ def _handle_indents_and_dedents_and_unwanted_whitespace(
                 token.location.compilation, token.location.offset, 0)
 
             if indent_level > indent_levels[-1]:
-                assert token.type == 'INDENT'
+                assert token.type == TokenType.INDENT
                 yield token
                 indent_levels.append(indent_level)
 
@@ -174,15 +197,15 @@ def _handle_indents_and_dedents_and_unwanted_whitespace(
                     del indent_levels[-1]
                     was_ignoring_spaces = space_ignore_stack.pop()
                     assert not was_ignoring_spaces
-                    yield Token('DEDENT', '', fake_token_location)
+                    yield Token(TokenType.DEDENT, '', fake_token_location)
 
                     if not space_ignore_stack[-1]:
                         # this is why you shouldn't check if the value of a
                         # token is '\n', you should instead check if the type
                         # of the token is 'NEWLINE'
-                        yield Token('NEWLINE', '', fake_token_location)
+                        yield Token(TokenType.NEWLINE, '', fake_token_location)
 
-            if token.type != 'INDENT':
+            if token.type != TokenType.INDENT:
                 yield token
 
             new_line_starting = False
@@ -210,8 +233,8 @@ def _handle_indents_and_dedents_and_unwanted_whitespace(
         token.location.offset + token.location.length, 0)
 
     while indent_levels != [0]:
-        yield Token('DEDENT', '', fake_token_location)
-        yield Token('NEWLINE', '', fake_token_location)
+        yield Token(TokenType.DEDENT, '', fake_token_location)
+        yield Token(TokenType.NEWLINE, '', fake_token_location)
         del indent_levels[-1]
 
     assert space_ignore_stack
@@ -229,17 +252,18 @@ def _check_colons(tokens: typing.Iterable[Token]) -> typing.Iterable[Token]:
     for token1, token2, token3 in staggered:
         assert token3 is not None
 
-        if token3.type == 'INDENT':
+        if token3.type == TokenType.INDENT:
             if (token1 is None or
                     token2 is None or
                     token1.value != ':' or
-                    token2.type != 'NEWLINE'):
+                    token2.type != TokenType.NEWLINE):
                 raise common.CompileError(
                     "indent without : and newline", token3.location)
 
         if token1 is not None and token1.value == ':':
             assert token2 is not None and token3 is not None
-            if token2.type != 'NEWLINE' or token3.type != 'INDENT':
+            if (token2.type != TokenType.NEWLINE
+                    or token3.type != TokenType.INDENT):
                 raise common.CompileError(
                     ": without newline and indent", token1.location)
 
@@ -259,8 +283,8 @@ def _remove_colons(tokens: typing.Iterable[Token]) -> typing.Iterable[Token]:
         assert token1 is not None
         # that is, ignore some stuff that comes before indents
         if (
-          (token2 is None or token2.type != 'INDENT') and
-          (token3 is None or token3.type != 'INDENT')):
+          (token2 is None or token2.type != TokenType.INDENT) and
+          (token3 is None or token3.type != TokenType.INDENT)):
             yield token1
 
 

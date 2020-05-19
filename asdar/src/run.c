@@ -14,7 +14,6 @@
 
 //#define DEBUG(...) printf(__VA_ARGS__)
 #define DEBUG(...) (void)0
-#define codeop_debug(op) (void)0
 
 
 #define ARRAY_COPY(DST, SRC, N) do{ \
@@ -165,7 +164,7 @@ static bool run(Interp *interp, size_t startidx)
 	while(true){
 		assert(interp->code.ptr <= ptr && ptr < &interp->code.ptr[interp->code.len]);
 		DEBUG("run: opbyte %d, ", (int)(ptr - interp->code.ptr));
-		codeop_debug(*ptr);
+		//codeop_debug(*ptr);
 		DEBUG("     objstack.len = %zu\n", state.objstack.len);
 
 		Object *obj;
@@ -240,10 +239,30 @@ static bool run(Interp *interp, size_t startidx)
 			ptr++;
 			break;
 
+		case CODE_STRJOIN:
+			assert(state.objstack.len >= ptr->data.strjoin_nstrs);
+			state.objstack.len -= ptr->data.strjoin_nstrs;
+
+			obj = (Object *) stringobj_join(
+				interp,
+				(StringObject**) &state.objstack.ptr[state.objstack.len],
+				ptr->data.strjoin_nstrs);
+			for (size_t i = 0; i < ptr->data.strjoin_nstrs; i++)
+				OBJECT_DECREF(state.objstack.ptr[state.objstack.len + i]);
+
+			if (!obj)
+				goto error;
+			if (!dynarray_push(interp, &state.objstack, obj))  {
+				OBJECT_DECREF(obj);
+				goto error;
+			}
+			ptr++;
+			break;
+
 		default:
 			printf("TODO: ");
 			codeop_debug(*ptr);
-			ptr++;
+			abort();
 			break;
 		}
 

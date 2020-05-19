@@ -1,18 +1,19 @@
 import collections
+import enum
 import re
 import typing
 
 from asdac import common
 
 # keys are valid regex syntax AND valid asda string content syntax, lol
-_BACKSLASHED = collections.OrderedDict([
-    (r'\n', '\n'),
-    (r'\t', '\t'),
-    (r'\\', '\\'),
-    (r'\"', '"'),
-    (r'\{', '{'),
-    (r'\}', '}'),
-])
+_BACKSLASHED = {
+    r'\n': '\n',
+    r'\t': '\t',
+    r'\\': '\\',
+    r'\"': '"',
+    r'\{': '{',
+    r'\}': '}',
+}
 
 _NOT_SPECIAL = r'[^{}\\"\n]'
 _REGEXES = [
@@ -28,6 +29,11 @@ _PARSING_REGEX = '|'.join(
     '(?P<%s>%s)' % pair for pair in (_REGEXES + [('error', '.')]))
 
 
+class ContentKind(enum.Enum):
+    STRING = enum.auto()
+    CODE = enum.auto()
+
+
 # the string and location must NOT include the beginning and ending "
 #
 # the result may be e.g. this for "a\nb":
@@ -38,13 +44,10 @@ _PARSING_REGEX = '|'.join(
 #
 # but that should get optimized away later
 def parse(
-        string: str,
-        string_location: common.Location,
-) -> typing.Iterator[typing.Tuple[
-    str,                # 'string' or 'code'. TODO: use enums
-    str,                # code or string contents
-    common.Location,
-]]:
+    string: str,
+    string_location: common.Location,
+) -> typing.Iterator[typing.Tuple[ContentKind, str, common.Location]]:
+
     # this assumes that the string is one-line
     assert '\n' not in string       # but may contain '\\n', aka r'\n'
     assert len(string) == string_location.length
@@ -60,15 +63,15 @@ def parse(
         value = match.group(kind)
 
         if kind == 'escape':
-            yield ('string', _BACKSLASHED[value],
+            yield (ContentKind.STRING, _BACKSLASHED[value],
                    create_location(match.start(), match.end()))
 
         elif kind == 'interpolate':
-            yield (('code', value[1:-1], create_location(
+            yield ((ContentKind.CODE, value[1:-1], create_location(
                 match.start() + 1, match.end() - 1)))
 
         elif kind == 'text':
-            yield ('string', value,
+            yield (ContentKind.STRING, value,
                    create_location(match.start(), match.end()))
 
         else:

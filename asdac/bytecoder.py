@@ -199,6 +199,10 @@ class _ByteCodeGen:
             else:
                 raise NotImplementedError
 
+        elif isinstance(op, opcode.StrJoin):
+            self.writer.write_opbyte(STR_JOIN)
+            self.writer.write_uint16(op.how_many_strings)
+
         elif isinstance(op, opcode.Jump):
             self.writer.write_opbyte(JUMP)
             uint = self.writer.write_uint16(0)
