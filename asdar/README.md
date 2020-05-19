@@ -190,24 +190,24 @@ $ valgrind ./asdar ../asda-compiled/something.asdac
 
 ## C Standard
 
-C99.
+C11.
 
 If you know that something works basically everywhere, you can use it in this
 project. For example, you can assume that:
 
 - `char` is 8 bits.
 - `intN_t` and `uintN_t` exist for `N` values 8, 16, 32 and 64.
-- `int`, `long` or some similar type is two's complement (but please check it at
-  compile-time using the preprocessor as is done in `objects/int.c`).
 - Code like `int i; memset(&i, 0, sizeof(i));` sets `i` to zero.
+
+Use the C11 `static_assert` macro when appropriate.
 
 
 ## Code Style
 
 The coding style is Linux kernel style-ish. The "-ish" stands for two things:
 1. I'm not nit-picky; it's ok if you don't follow the style exactly. I will likely accept your
-   code as it is without complaining about style. (I don't have many
-   contributors yet, but I would like to have more people working on this with me.)
+   code as it is without complaining about style.
+   (I would like to have someone working on this with me.)
 2. Some things are done differently than in the kernel style:
 
     - Long lines are allowed. There is no limit. Break stuff to multiple lines
@@ -219,7 +219,7 @@ The coding style is Linux kernel style-ish. The "-ish" stands for two things:
           name, because those can be forward-declared (see `interp.h`).
         - `Interp`. Similar to the objects: has struct with same name and used
           a lot in function declarations.
-        - Callback functions with long signatures. See `objects/func.h`.
+        - Callback functions with long signatures.
     - There are probably some other things that I forgot to mention here. Again,
       don't be nit-picky when it comes to style.
 

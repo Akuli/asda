@@ -145,7 +145,7 @@ BUILTIN_FUNCS = {func.name: func for func in [
 
     Function(
         name='Int==Int',
-        argvars=_argvars('Str a, Str b'),
+        argvars=_argvars('Int a, Int b'),
         returntype=BUILTIN_TYPES['Bool'],
         **_boilerplate,
     ),

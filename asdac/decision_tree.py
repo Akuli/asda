@@ -557,6 +557,8 @@ def _graphviz_code(
             parts.append(f'result_id={node.result_id}')
         elif isinstance(node, Start):
             parts.append(f'arg_ids={node.arg_ids}')
+        elif isinstance(node, Return):
+            parts.append(f'value_id={node.value_id}')
 
         if isinstance(node, _OneResult):
             parts.append(f'result_id={node.result_id}')
