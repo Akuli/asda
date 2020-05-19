@@ -135,9 +135,9 @@ class _FileParser(_ParserBase):
 
     def _parse_func_definition(self) -> ast.FuncDefinition:
         function_keyword = self.tokens.next_token()
-        if function_keyword.value != 'function':
+        if function_keyword.value != 'func':
             raise CompileError(
-                "should be 'function'", function_keyword.location)
+                "should be 'func'", function_keyword.location)
 
         header = self._parse_function_header()
         body_parser = _FunctionContentParser(self.compilation, self.tokens)
@@ -375,7 +375,7 @@ class _FunctionContentParser(_ParserBase):
         *,
         it_should_be: str = 'a one-line-ish statament',
     ) -> typing.List[ast.Statement]:
-        if self.tokens.peek().value == 'void':
+        if self.tokens.peek().value == 'pass':
             self.tokens.next_token()
             return []
 
